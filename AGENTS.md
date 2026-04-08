@@ -70,6 +70,7 @@ xcodebuild -project ReadPaper.xcodeproj -scheme ReadPaper -destination 'platform
 - OpenAI-compatible API 配置存于 `AppSettings`，API key 存在 Keychain，日志、错误和测试输出中不要泄露真实 key。
 - `ChatTranslationClient` 统一调用 `/chat/completions`，按 `quick`、`normal`、`heavy` 选择模型。
 - `HTMLTranslationPipeline` 只翻译语义块，不翻译整份 HTML 字符串；当前候选选择器包括 `p`、`h1...h6`、`figcaption`、`blockquote`、`li`。
+- HTML 全文翻译必须按语义块增量落盘和刷新展示：每完成一个块（包括缓存命中）就插入 `.rp-translation-block`、写回 `paper.html` 并通知阅读器刷新；不要等所有段落翻译完成后再一次性展示。
 - HTML 翻译会保护 `math`、`.ltx_Math`、`cite`、`code`，生成 `[PROTECTED_N]` 占位符；改 prompt 或渲染时必须保持占位符可恢复。
 - BabelDOC 通过 `BabelDocRunner` 和 `ProcessRunner` 启动外部进程，参数中 API key 要使用现有 redaction 逻辑；不要把外部工具失败吞掉成静默失败。
 - `ProcessRunner` 需要持续 draining stdout/stderr，并正确响应取消；改动时保留大输出和取消相关测试。

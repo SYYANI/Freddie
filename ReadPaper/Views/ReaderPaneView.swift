@@ -133,7 +133,12 @@ struct ReaderPaneView: View {
                     attachment: htmlAttachment,
                     paper: paper,
                     settings: settingsSnapshot,
-                    modelContext: modelContext
+                    modelContext: modelContext,
+                    onSegmentTranslated: { processed, total in
+                        displayMode = .bilingual
+                        htmlReloadToken += 1
+                        statusMessage = "Translated HTML \(processed)/\(total)..."
+                    }
                 )
                 try Task.checkCancellation()
                 displayMode = .bilingual

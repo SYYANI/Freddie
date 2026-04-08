@@ -22,7 +22,8 @@ final class HTMLTranslationPipeline {
         attachment: PaperAttachment,
         paper: Paper,
         settings: AppSettingsSnapshot,
-        modelContext: ModelContext
+        modelContext: ModelContext,
+        onSegmentTranslated: ((Int, Int) -> Void)? = nil
     ) async throws {
         try Task.checkCancellation()
         guard attachment.kind == .html else { throw PaperImportError.missingHTML }
@@ -30,6 +31,9 @@ final class HTMLTranslationPipeline {
         let html = try String(contentsOf: htmlURL, encoding: .utf8)
         let extraction = try Self.prepareDocument(html)
         let candidates = extraction.candidates
+        let document = try SwiftSoup.parse(extraction.preparedHTML)
+        let client = self.client
+        try Self.injectDisplayStyles(into: document)
 
         let job = TranslationJob(
             paperID: paper.id,
@@ -43,8 +47,18 @@ final class HTMLTranslationPipeline {
         try modelContext.save()
 
         do {
-            var translations: [String: String] = [:]
             var pendingCandidates: [HTMLTranslationCandidate] = []
+
+            func applyTranslatedSegment(_ candidate: HTMLTranslationCandidate, translated: String) throws {
+                try Self.applyTranslation(translated, candidate: candidate, to: document)
+                job.processedSegments += 1
+                job.progress = candidates.isEmpty ? 1 : Double(job.processedSegments) / Double(candidates.count)
+                job.modifiedAt = Date()
+                try modelContext.save()
+                try Self.writeDocument(document, to: htmlURL)
+                onSegmentTranslated?(job.processedSegments, candidates.count)
+            }
+
             for candidate in candidates {
                 try Task.checkCancellation()
                 if let cached = try cachedSegment(
@@ -54,11 +68,7 @@ final class HTMLTranslationPipeline {
                     sourceHash: candidate.sourceHash,
                     modelContext: modelContext
                 ) {
-                    translations[candidate.segmentID] = cached.translatedText
-                    job.processedSegments += 1
-                    job.progress = candidates.isEmpty ? 1 : Double(job.processedSegments) / Double(candidates.count)
-                    job.modifiedAt = Date()
-                    try modelContext.save()
+                    try applyTranslatedSegment(candidate, translated: cached.translatedText)
                 } else {
                     pendingCandidates.append(candidate)
                 }
@@ -67,34 +77,31 @@ final class HTMLTranslationPipeline {
             let concurrency = max(1, settings.htmlTranslationConcurrency)
             for batch in pendingCandidates.chunked(into: concurrency) {
                 try Task.checkCancellation()
-                let results = try await Self.translateBatch(batch, settings: settings, client: client)
-                try Task.checkCancellation()
-                for (candidate, translated) in results {
-                    translations[candidate.segmentID] = translated
-                    modelContext.insert(TranslationSegment(
-                        paperID: paper.id,
-                        sourceType: "html",
-                        targetLanguage: settings.targetLanguage,
-                        sourceHash: candidate.sourceHash,
-                        sourceText: candidate.sourceText,
-                        translatedText: translated,
-                        modelName: settings.heavyModelName
-                    ))
-                    job.processedSegments += 1
-                    job.progress = candidates.isEmpty ? 1 : Double(job.processedSegments) / Double(candidates.count)
-                    job.modifiedAt = Date()
+                try await withThrowingTaskGroup(of: (HTMLTranslationCandidate, String).self) { group in
+                    for candidate in batch {
+                        group.addTask {
+                            let translated = try await client.translate(candidate.sourceText, purpose: "heavy", settings: settings)
+                            return (candidate, translated)
+                        }
+                    }
+
+                    for try await (candidate, translated) in group {
+                        try Task.checkCancellation()
+                        modelContext.insert(TranslationSegment(
+                            paperID: paper.id,
+                            sourceType: "html",
+                            targetLanguage: settings.targetLanguage,
+                            sourceHash: candidate.sourceHash,
+                            sourceText: candidate.sourceText,
+                            translatedText: translated,
+                            modelName: settings.heavyModelName
+                        ))
+                        try applyTranslatedSegment(candidate, translated: translated)
+                    }
                 }
-                try modelContext.save()
             }
 
             try Task.checkCancellation()
-            let output = try Self.applyTranslations(
-                toPreparedHTML: extraction.preparedHTML,
-                candidates: candidates,
-                translations: translations
-            )
-            try Task.checkCancellation()
-            try output.write(to: htmlURL, atomically: true, encoding: .utf8)
             job.state = .completed
             job.progress = 1
             job.modifiedAt = Date()
@@ -134,29 +141,9 @@ final class HTMLTranslationPipeline {
         try prepareDocument(html).candidates
     }
 
-    nonisolated private static func translateBatch(
-        _ candidates: [HTMLTranslationCandidate],
-        settings: AppSettingsSnapshot,
-        client: ChatTranslationClient
-    ) async throws -> [(HTMLTranslationCandidate, String)] {
-        try await withThrowingTaskGroup(of: (HTMLTranslationCandidate, String).self) { group in
-            for candidate in candidates {
-                group.addTask {
-                    let translated = try await client.translate(candidate.sourceText, purpose: "heavy", settings: settings)
-                    return (candidate, translated)
-                }
-            }
-
-            var results: [(HTMLTranslationCandidate, String)] = []
-            for try await result in group {
-                results.append(result)
-            }
-            return results
-        }
-    }
-
     static func prepareDocument(_ html: String) throws -> (preparedHTML: String, candidates: [HTMLTranslationCandidate]) {
         let document = try SwiftSoup.parse(html)
+        try removeExistingTranslationBlocks(from: document)
         var candidates: [HTMLTranslationCandidate] = []
         let selector = "p, h1, h2, h3, h4, h5, h6, figcaption, blockquote, li"
 
@@ -188,19 +175,42 @@ final class HTMLTranslationPipeline {
         translations: [String: String]
     ) throws -> String {
         let document = try SwiftSoup.parse(html)
+        try injectDisplayStyles(into: document)
         for candidate in candidates {
-            guard let translation = translations[candidate.segmentID],
-                  let source = try document.select("[data-rp-segment-id=\(candidate.segmentID)]").first() else {
+            guard let translation = translations[candidate.segmentID] else {
                 continue
             }
-            let translatedHTML = renderTranslation(translation, candidate: candidate)
-            let block = try SwiftSoup.parseBodyFragment(translatedHTML).body()?.child(0)
-            if let block {
-                try source.after(block.outerHtml())
-            }
+            try applyTranslation(translation, candidate: candidate, to: document)
         }
-        try injectDisplayStyles(into: document)
         return try document.outerHtml()
+    }
+
+    private static func applyTranslation(
+        _ translation: String,
+        candidate: HTMLTranslationCandidate,
+        to document: Document
+    ) throws {
+        guard let source = try document.select("[data-rp-segment-id=\(candidate.segmentID)]").first() else {
+            return
+        }
+        for existing in try document.select(".rp-translation-block[data-rp-source-segment-id=\(candidate.segmentID)]").array() {
+            try existing.remove()
+        }
+        let translatedHTML = renderTranslation(translation, candidate: candidate)
+        let block = try SwiftSoup.parseBodyFragment(translatedHTML).body()?.child(0)
+        if let block {
+            try source.after(block.outerHtml())
+        }
+    }
+
+    private static func removeExistingTranslationBlocks(from document: Document) throws {
+        for block in try document.select(".rp-translation-block, [data-rp-translation=true]").array() {
+            try block.remove()
+        }
+    }
+
+    private static func writeDocument(_ document: Document, to url: URL) throws {
+        try document.outerHtml().write(to: url, atomically: true, encoding: .utf8)
     }
 
     private static func shouldSkip(_ element: Element) throws -> Bool {
@@ -233,7 +243,7 @@ final class HTMLTranslationPipeline {
         for (index, fragment) in candidate.protectedFragments.enumerated() {
             escaped = escaped.replacingOccurrences(of: "[PROTECTED_\(index)]", with: fragment)
         }
-        return "<\(candidate.tagName) class=\"rp-translation-block\" data-rp-translation=\"true\">\(escaped)</\(candidate.tagName)>"
+        return "<\(candidate.tagName) class=\"rp-translation-block\" data-rp-translation=\"true\" data-rp-source-segment-id=\"\(escapeHTML(candidate.segmentID))\">\(escaped)</\(candidate.tagName)>"
     }
 
     private static func escapeHTML(_ value: String) -> String {
