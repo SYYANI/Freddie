@@ -1,0 +1,609 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 63;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		03CDFDC549AB8AA1570B20E1 /* HTMLTranslationPipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30444FC979F813B5B76B4726 /* HTMLTranslationPipeline.swift */; };
+		06FF9EE63AC39F6DB1C926CA /* ToolInstallState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 817802100CC82AF9E893032F /* ToolInstallState.swift */; };
+		09B0F29FBA164F2565926AEE /* ProcessRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1D66200F6C63D43F207E0E0 /* ProcessRunner.swift */; };
+		0CDB0BC728BED911301C6C51 /* SwiftSoup in Frameworks */ = {isa = PBXBuildFile; productRef = 437DE790BDA46ED2BB4EE2AE /* SwiftSoup */; };
+		1FF14251FBD20C1F8E9BD9BC /* TranslationSegment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8039BE637474B04E1F1BC128 /* TranslationSegment.swift */; };
+		342E4EEBBCCF4E8BD73D9258 /* BabelDocToolManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9B5558A93632CE3A9C970E6 /* BabelDocToolManager.swift */; };
+		355CDD9F6A668C753004CD24 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0F1DEEFF5B77D9A4472738A /* ContentView.swift */; };
+		4071082F08025D60C62849D7 /* AddPaperSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 155075041A25A22CFB1EB008 /* AddPaperSheet.swift */; };
+		4481CA0D6E0C7EFF39813F45 /* Hashing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1451FFF74A97B956BEB980F1 /* Hashing.swift */; };
+		472EB6D1FB3D768A671315EB /* HTMLLocalizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = C595FD3B238BDE04DC6FA3CB /* HTMLLocalizer.swift */; };
+		48D5A00B8592D17446F4EC97 /* PDFReaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BC5E9153D7B4D74DDE3965B /* PDFReaderView.swift */; };
+		4CE8EA5B33F2C971A3290F3E /* PaperImporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61B39EE919BF400C2E3155C6 /* PaperImporter.swift */; };
+		55247C9ECE01BC43C04A1B23 /* ArxivClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47E6A94B8E0829E8FD015D53 /* ArxivClientTests.swift */; };
+		5863153059F6B2FD21F823A6 /* BabelDocRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E035274FD9E699D832B4D4E /* BabelDocRunner.swift */; };
+		5AD3BFC4315E9F41E1556652 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 585E60D2D3441D8A764523FD /* SettingsView.swift */; };
+		60130CE02ABCB946ABAC9A8A /* ArxivClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5AE04037B749D64F46B8231B /* ArxivClient.swift */; };
+		6990BD9AF719BD703BC7C2A1 /* HTMLReaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 901230971C8E7AE7E22E6181 /* HTMLReaderView.swift */; };
+		71CF6A923EFED0917CF9F58C /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 756B3F8A255940BE24DE7FD6 /* AppSettings.swift */; };
+		75E8CB58D1B269A6A0E56836 /* DualPDFReaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89FF6AD72E18C05D11EDCB30 /* DualPDFReaderView.swift */; };
+		767231C7EA8681A664133706 /* PaperFileStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51A72BDC5A78B51E6003243F /* PaperFileStore.swift */; };
+		7963C711C58099D0BDCC638B /* KeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD96D614696B0206B44ABB70 /* KeychainStore.swift */; };
+		7A241F55BD8F0AB450B557B7 /* ChatTranslationClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = F496C47E654307F9E1540963 /* ChatTranslationClient.swift */; };
+		8169A4E5294B7188BC29D67C /* InspectorPaneView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E5B1B3F81B9307F629924D1 /* InspectorPaneView.swift */; };
+		835C8F7821F26027B0AF9CDE /* AppSettingsSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 927F79103A61BBE018BA79FB /* AppSettingsSnapshot.swift */; };
+		89A6E060EB5C7613D3EC46CE /* ReadingState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 241BC82AE12D75C8F0E5E622 /* ReadingState.swift */; };
+		8EE17DFD7C21CC7E55838CEC /* TranslationJob.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86C925A200F45FCD09BF39B6 /* TranslationJob.swift */; };
+		9AF25254E445348AEED63EF3 /* Enums.swift in Sources */ = {isa = PBXBuildFile; fileRef = 373A9197249BAD6010BCBDC2 /* Enums.swift */; };
+		A88C29934E8FE196990CAD61 /* LibrarySidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D81E9697498069EC2F633A5 /* LibrarySidebarView.swift */; };
+		BBA7A714502F6AF34B631EDF /* BabelDocRunnerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD20AB596745F6A2DE939722 /* BabelDocRunnerTests.swift */; };
+		BC6FBEC8FEB0CC15B6D7000D /* PaperFileStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6E92728C43A017D4F19D275 /* PaperFileStoreTests.swift */; };
+		D24C62A4F3063599D4B2803A /* Note.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81666A1EE76A077C9CDB5FE7 /* Note.swift */; };
+		D25D1824CBC8BFAB17784D12 /* Paper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8817F3ED2BCD0D7DD32CE2FB /* Paper.swift */; };
+		D36320A9561EC3B9A4C29B91 /* PaperAttachment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8970B5A2B0E4E782656BAFEF /* PaperAttachment.swift */; };
+		DAFA837901E941BD58A5431A /* ReadPaperApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D2246237CB8E21F487FA0FF /* ReadPaperApp.swift */; };
+		F27D9396893317BF40E0BD22 /* ReaderPaneView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15605D44878CFDBFBF883E0F /* ReaderPaneView.swift */; };
+		F72717940014D21DF24FC04D /* HTMLTranslationPipelineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40C65F7E1559275AA3A5AA9F /* HTMLTranslationPipelineTests.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		81021532184C64355C95A945 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 74E16E933D398DC8AD9143A5 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 9FAF4C99F206E06D82BB4D49;
+			remoteInfo = ReadPaper;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		1451FFF74A97B956BEB980F1 /* Hashing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Hashing.swift; sourceTree = "<group>"; };
+		155075041A25A22CFB1EB008 /* AddPaperSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddPaperSheet.swift; sourceTree = "<group>"; };
+		15605D44878CFDBFBF883E0F /* ReaderPaneView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderPaneView.swift; sourceTree = "<group>"; };
+		241BC82AE12D75C8F0E5E622 /* ReadingState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingState.swift; sourceTree = "<group>"; };
+		30444FC979F813B5B76B4726 /* HTMLTranslationPipeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HTMLTranslationPipeline.swift; sourceTree = "<group>"; };
+		373A9197249BAD6010BCBDC2 /* Enums.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Enums.swift; sourceTree = "<group>"; };
+		3BC5E9153D7B4D74DDE3965B /* PDFReaderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PDFReaderView.swift; sourceTree = "<group>"; };
+		3E5B1B3F81B9307F629924D1 /* InspectorPaneView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InspectorPaneView.swift; sourceTree = "<group>"; };
+		40C65F7E1559275AA3A5AA9F /* HTMLTranslationPipelineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HTMLTranslationPipelineTests.swift; sourceTree = "<group>"; };
+		47E6A94B8E0829E8FD015D53 /* ArxivClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArxivClientTests.swift; sourceTree = "<group>"; };
+		4AD0F3DCACE64FFE539D2434 /* ReadPaper.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ReadPaper.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		51A72BDC5A78B51E6003243F /* PaperFileStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaperFileStore.swift; sourceTree = "<group>"; };
+		56425134B5A64FC38C9DC3B1 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		585E60D2D3441D8A764523FD /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		5AE04037B749D64F46B8231B /* ArxivClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArxivClient.swift; sourceTree = "<group>"; };
+		61B39EE919BF400C2E3155C6 /* PaperImporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaperImporter.swift; sourceTree = "<group>"; };
+		6D2246237CB8E21F487FA0FF /* ReadPaperApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadPaperApp.swift; sourceTree = "<group>"; };
+		756B3F8A255940BE24DE7FD6 /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
+		7D81E9697498069EC2F633A5 /* LibrarySidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibrarySidebarView.swift; sourceTree = "<group>"; };
+		8039BE637474B04E1F1BC128 /* TranslationSegment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslationSegment.swift; sourceTree = "<group>"; };
+		81666A1EE76A077C9CDB5FE7 /* Note.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Note.swift; sourceTree = "<group>"; };
+		817802100CC82AF9E893032F /* ToolInstallState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolInstallState.swift; sourceTree = "<group>"; };
+		81D379C5A3B056970FE8B41C /* ReadPaperTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ReadPaperTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		86C925A200F45FCD09BF39B6 /* TranslationJob.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslationJob.swift; sourceTree = "<group>"; };
+		8817F3ED2BCD0D7DD32CE2FB /* Paper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Paper.swift; sourceTree = "<group>"; };
+		8970B5A2B0E4E782656BAFEF /* PaperAttachment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaperAttachment.swift; sourceTree = "<group>"; };
+		89FF6AD72E18C05D11EDCB30 /* DualPDFReaderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DualPDFReaderView.swift; sourceTree = "<group>"; };
+		901230971C8E7AE7E22E6181 /* HTMLReaderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HTMLReaderView.swift; sourceTree = "<group>"; };
+		927F79103A61BBE018BA79FB /* AppSettingsSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettingsSnapshot.swift; sourceTree = "<group>"; };
+		9BA518377FB5E2D92733C70E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		9E035274FD9E699D832B4D4E /* BabelDocRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BabelDocRunner.swift; sourceTree = "<group>"; };
+		C595FD3B238BDE04DC6FA3CB /* HTMLLocalizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HTMLLocalizer.swift; sourceTree = "<group>"; };
+		CD20AB596745F6A2DE939722 /* BabelDocRunnerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BabelDocRunnerTests.swift; sourceTree = "<group>"; };
+		CD96D614696B0206B44ABB70 /* KeychainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStore.swift; sourceTree = "<group>"; };
+		E0F1DEEFF5B77D9A4472738A /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		E6E92728C43A017D4F19D275 /* PaperFileStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaperFileStoreTests.swift; sourceTree = "<group>"; };
+		F1D66200F6C63D43F207E0E0 /* ProcessRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProcessRunner.swift; sourceTree = "<group>"; };
+		F496C47E654307F9E1540963 /* ChatTranslationClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatTranslationClient.swift; sourceTree = "<group>"; };
+		F9B5558A93632CE3A9C970E6 /* BabelDocToolManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BabelDocToolManager.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		51AAC6A661F36E6C22680184 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				0CDB0BC728BED911301C6C51 /* SwiftSoup in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		0AA292ECBCC40B57A5E8EF1B /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				927F79103A61BBE018BA79FB /* AppSettingsSnapshot.swift */,
+				5AE04037B749D64F46B8231B /* ArxivClient.swift */,
+				9E035274FD9E699D832B4D4E /* BabelDocRunner.swift */,
+				F9B5558A93632CE3A9C970E6 /* BabelDocToolManager.swift */,
+				F496C47E654307F9E1540963 /* ChatTranslationClient.swift */,
+				1451FFF74A97B956BEB980F1 /* Hashing.swift */,
+				C595FD3B238BDE04DC6FA3CB /* HTMLLocalizer.swift */,
+				30444FC979F813B5B76B4726 /* HTMLTranslationPipeline.swift */,
+				CD96D614696B0206B44ABB70 /* KeychainStore.swift */,
+				51A72BDC5A78B51E6003243F /* PaperFileStore.swift */,
+				61B39EE919BF400C2E3155C6 /* PaperImporter.swift */,
+				F1D66200F6C63D43F207E0E0 /* ProcessRunner.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		26C675C2CC49D7667F8407B2 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				155075041A25A22CFB1EB008 /* AddPaperSheet.swift */,
+				E0F1DEEFF5B77D9A4472738A /* ContentView.swift */,
+				3E5B1B3F81B9307F629924D1 /* InspectorPaneView.swift */,
+				7D81E9697498069EC2F633A5 /* LibrarySidebarView.swift */,
+				15605D44878CFDBFBF883E0F /* ReaderPaneView.swift */,
+				585E60D2D3441D8A764523FD /* SettingsView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		4D797EE8BD36F43129AAEEEE /* Readers */ = {
+			isa = PBXGroup;
+			children = (
+				89FF6AD72E18C05D11EDCB30 /* DualPDFReaderView.swift */,
+				901230971C8E7AE7E22E6181 /* HTMLReaderView.swift */,
+				3BC5E9153D7B4D74DDE3965B /* PDFReaderView.swift */,
+			);
+			path = Readers;
+			sourceTree = "<group>";
+		};
+		6693C97AAC3E41596DB55CFD /* ReadPaperTests */ = {
+			isa = PBXGroup;
+			children = (
+				47E6A94B8E0829E8FD015D53 /* ArxivClientTests.swift */,
+				CD20AB596745F6A2DE939722 /* BabelDocRunnerTests.swift */,
+				40C65F7E1559275AA3A5AA9F /* HTMLTranslationPipelineTests.swift */,
+				9BA518377FB5E2D92733C70E /* Info.plist */,
+				E6E92728C43A017D4F19D275 /* PaperFileStoreTests.swift */,
+			);
+			path = ReadPaperTests;
+			sourceTree = "<group>";
+		};
+		CA9F040C059820545B5A7509 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				756B3F8A255940BE24DE7FD6 /* AppSettings.swift */,
+				373A9197249BAD6010BCBDC2 /* Enums.swift */,
+				81666A1EE76A077C9CDB5FE7 /* Note.swift */,
+				8817F3ED2BCD0D7DD32CE2FB /* Paper.swift */,
+				8970B5A2B0E4E782656BAFEF /* PaperAttachment.swift */,
+				241BC82AE12D75C8F0E5E622 /* ReadingState.swift */,
+				817802100CC82AF9E893032F /* ToolInstallState.swift */,
+				86C925A200F45FCD09BF39B6 /* TranslationJob.swift */,
+				8039BE637474B04E1F1BC128 /* TranslationSegment.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		D13B300E54DA3FEBC95FFDF1 /* ReadPaper */ = {
+			isa = PBXGroup;
+			children = (
+				56425134B5A64FC38C9DC3B1 /* Info.plist */,
+				6D2246237CB8E21F487FA0FF /* ReadPaperApp.swift */,
+				CA9F040C059820545B5A7509 /* Models */,
+				4D797EE8BD36F43129AAEEEE /* Readers */,
+				0AA292ECBCC40B57A5E8EF1B /* Services */,
+				26C675C2CC49D7667F8407B2 /* Views */,
+			);
+			path = ReadPaper;
+			sourceTree = "<group>";
+		};
+		EF36EA23E9C12D6765FFE9F9 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				4AD0F3DCACE64FFE539D2434 /* ReadPaper.app */,
+				81D379C5A3B056970FE8B41C /* ReadPaperTests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		FFD37AF8B380F0E09C17D8CA = {
+			isa = PBXGroup;
+			children = (
+				D13B300E54DA3FEBC95FFDF1 /* ReadPaper */,
+				6693C97AAC3E41596DB55CFD /* ReadPaperTests */,
+				EF36EA23E9C12D6765FFE9F9 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		0D75AE1C75AEE6F868286538 /* ReadPaperTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B2BDADAD5B053617493C1B5E /* Build configuration list for PBXNativeTarget "ReadPaperTests" */;
+			buildPhases = (
+				27812753FF73065ECE1068DA /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				B02578FA8F8E83FE81A1EF8F /* PBXTargetDependency */,
+			);
+			name = ReadPaperTests;
+			packageProductDependencies = (
+			);
+			productName = ReadPaperTests;
+			productReference = 81D379C5A3B056970FE8B41C /* ReadPaperTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		9FAF4C99F206E06D82BB4D49 /* ReadPaper */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 45E942F757EF4B498A54D37B /* Build configuration list for PBXNativeTarget "ReadPaper" */;
+			buildPhases = (
+				D0DC07E8D50342E81BE76498 /* Sources */,
+				51AAC6A661F36E6C22680184 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = ReadPaper;
+			packageProductDependencies = (
+				437DE790BDA46ED2BB4EE2AE /* SwiftSoup */,
+			);
+			productName = ReadPaper;
+			productReference = 4AD0F3DCACE64FFE539D2434 /* ReadPaper.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		74E16E933D398DC8AD9143A5 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					9FAF4C99F206E06D82BB4D49 = {
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = C6FE9DD1A2D1026BBB3A86DE /* Build configuration list for PBXProject "ReadPaper" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = FFD37AF8B380F0E09C17D8CA;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				933D5A0492F73A9308551225 /* XCRemoteSwiftPackageReference "SwiftSoup" */,
+			);
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				9FAF4C99F206E06D82BB4D49 /* ReadPaper */,
+				0D75AE1C75AEE6F868286538 /* ReadPaperTests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		27812753FF73065ECE1068DA /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				55247C9ECE01BC43C04A1B23 /* ArxivClientTests.swift in Sources */,
+				BBA7A714502F6AF34B631EDF /* BabelDocRunnerTests.swift in Sources */,
+				F72717940014D21DF24FC04D /* HTMLTranslationPipelineTests.swift in Sources */,
+				BC6FBEC8FEB0CC15B6D7000D /* PaperFileStoreTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D0DC07E8D50342E81BE76498 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				4071082F08025D60C62849D7 /* AddPaperSheet.swift in Sources */,
+				71CF6A923EFED0917CF9F58C /* AppSettings.swift in Sources */,
+				835C8F7821F26027B0AF9CDE /* AppSettingsSnapshot.swift in Sources */,
+				60130CE02ABCB946ABAC9A8A /* ArxivClient.swift in Sources */,
+				5863153059F6B2FD21F823A6 /* BabelDocRunner.swift in Sources */,
+				342E4EEBBCCF4E8BD73D9258 /* BabelDocToolManager.swift in Sources */,
+				7A241F55BD8F0AB450B557B7 /* ChatTranslationClient.swift in Sources */,
+				355CDD9F6A668C753004CD24 /* ContentView.swift in Sources */,
+				75E8CB58D1B269A6A0E56836 /* DualPDFReaderView.swift in Sources */,
+				9AF25254E445348AEED63EF3 /* Enums.swift in Sources */,
+				472EB6D1FB3D768A671315EB /* HTMLLocalizer.swift in Sources */,
+				6990BD9AF719BD703BC7C2A1 /* HTMLReaderView.swift in Sources */,
+				03CDFDC549AB8AA1570B20E1 /* HTMLTranslationPipeline.swift in Sources */,
+				4481CA0D6E0C7EFF39813F45 /* Hashing.swift in Sources */,
+				8169A4E5294B7188BC29D67C /* InspectorPaneView.swift in Sources */,
+				7963C711C58099D0BDCC638B /* KeychainStore.swift in Sources */,
+				A88C29934E8FE196990CAD61 /* LibrarySidebarView.swift in Sources */,
+				D24C62A4F3063599D4B2803A /* Note.swift in Sources */,
+				48D5A00B8592D17446F4EC97 /* PDFReaderView.swift in Sources */,
+				D25D1824CBC8BFAB17784D12 /* Paper.swift in Sources */,
+				D36320A9561EC3B9A4C29B91 /* PaperAttachment.swift in Sources */,
+				767231C7EA8681A664133706 /* PaperFileStore.swift in Sources */,
+				4CE8EA5B33F2C971A3290F3E /* PaperImporter.swift in Sources */,
+				09B0F29FBA164F2565926AEE /* ProcessRunner.swift in Sources */,
+				DAFA837901E941BD58A5431A /* ReadPaperApp.swift in Sources */,
+				F27D9396893317BF40E0BD22 /* ReaderPaneView.swift in Sources */,
+				89A6E060EB5C7613D3EC46CE /* ReadingState.swift in Sources */,
+				5AD3BFC4315E9F41E1556652 /* SettingsView.swift in Sources */,
+				06FF9EE63AC39F6DB1C926CA /* ToolInstallState.swift in Sources */,
+				8EE17DFD7C21CC7E55838CEC /* TranslationJob.swift in Sources */,
+				1FF14251FBD20C1F8E9BD9BC /* TranslationSegment.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		B02578FA8F8E83FE81A1EF8F /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 9FAF4C99F206E06D82BB4D49 /* ReadPaper */;
+			targetProxy = 81021532184C64355C95A945 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		28288A7BD3367CBCE3862706 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				COMBINE_HIDPI_IMAGES = YES;
+				INFOPLIST_FILE = ReadPaperTests/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.yiyan.ReadPaperTests;
+				PRODUCT_NAME = ReadPaperTests;
+				SDKROOT = macosx;
+				SWIFT_VERSION = 6.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/ReadPaper.app/Contents/MacOS/ReadPaper";
+			};
+			name = Debug;
+		};
+		2D25F597815AF55C82299E69 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 3VM5RUH8V5;
+				ENABLE_TESTABILITY = YES;
+				INFOPLIST_FILE = ReadPaper/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.yiyan.ReadPaper;
+				PRODUCT_NAME = ReadPaper;
+				SDKROOT = macosx;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		40DC77C40A2DADEF7FFCBE6E /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		43A96DC97E3C2E6993573F67 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		C89C3973D8E59DE7DD20D9F5 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 3VM5RUH8V5;
+				ENABLE_TESTABILITY = YES;
+				INFOPLIST_FILE = ReadPaper/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.yiyan.ReadPaper;
+				PRODUCT_NAME = ReadPaper;
+				SDKROOT = macosx;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		F2AE506DFEF597D5B520FC55 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				COMBINE_HIDPI_IMAGES = YES;
+				INFOPLIST_FILE = ReadPaperTests/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.yiyan.ReadPaperTests;
+				PRODUCT_NAME = ReadPaperTests;
+				SDKROOT = macosx;
+				SWIFT_VERSION = 6.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/ReadPaper.app/Contents/MacOS/ReadPaper";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		45E942F757EF4B498A54D37B /* Build configuration list for PBXNativeTarget "ReadPaper" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C89C3973D8E59DE7DD20D9F5 /* Debug */,
+				2D25F597815AF55C82299E69 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		B2BDADAD5B053617493C1B5E /* Build configuration list for PBXNativeTarget "ReadPaperTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				28288A7BD3367CBCE3862706 /* Debug */,
+				F2AE506DFEF597D5B520FC55 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		C6FE9DD1A2D1026BBB3A86DE /* Build configuration list for PBXProject "ReadPaper" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				43A96DC97E3C2E6993573F67 /* Debug */,
+				40DC77C40A2DADEF7FFCBE6E /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		933D5A0492F73A9308551225 /* XCRemoteSwiftPackageReference "SwiftSoup" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/scinfu/SwiftSoup.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.7.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		437DE790BDA46ED2BB4EE2AE /* SwiftSoup */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 933D5A0492F73A9308551225 /* XCRemoteSwiftPackageReference "SwiftSoup" */;
+			productName = SwiftSoup;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 74E16E933D398DC8AD9143A5 /* Project object */;
+}

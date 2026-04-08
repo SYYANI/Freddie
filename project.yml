@@ -1,0 +1,51 @@
+name: ReadPaper
+options:
+  minimumXcodeGenVersion: 2.42.0
+  deploymentTarget:
+    macOS: "14.0"
+packages:
+  SwiftSoup:
+    url: https://github.com/scinfu/SwiftSoup.git
+    from: 2.7.0
+targets:
+  ReadPaper:
+    type: application
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - path: ReadPaper
+    dependencies:
+      - package: SwiftSoup
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.yiyan.ReadPaper
+        PRODUCT_NAME: ReadPaper
+        INFOPLIST_FILE: ReadPaper/Info.plist
+        SWIFT_VERSION: 6.0
+        ENABLE_TESTABILITY: YES
+        CODE_SIGN_STYLE: Automatic
+        CURRENT_PROJECT_VERSION: 1
+        MARKETING_VERSION: 0.1.0
+  ReadPaperTests:
+    type: bundle.unit-test
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - path: ReadPaperTests
+    dependencies:
+      - target: ReadPaper
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.yiyan.ReadPaperTests
+        PRODUCT_NAME: ReadPaperTests
+        INFOPLIST_FILE: ReadPaperTests/Info.plist
+        SWIFT_VERSION: 6.0
+schemes:
+  ReadPaper:
+    build:
+      targets:
+        ReadPaper: all
+        ReadPaperTests: [test]
+    test:
+      targets:
+        - ReadPaperTests
