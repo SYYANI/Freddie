@@ -24,6 +24,7 @@ final class HTMLTranslationPipeline {
         settings: AppSettingsSnapshot,
         modelContext: ModelContext
     ) async throws {
+        try Task.checkCancellation()
         guard attachment.kind == .html else { throw PaperImportError.missingHTML }
         let htmlURL = attachment.fileURL
         let html = try String(contentsOf: htmlURL, encoding: .utf8)
@@ -41,30 +42,33 @@ final class HTMLTranslationPipeline {
         modelContext.insert(job)
         try modelContext.save()
 
-        var translations: [String: String] = [:]
-        var pendingCandidates: [HTMLTranslationCandidate] = []
-        for candidate in candidates {
-            if let cached = try cachedSegment(
-                paperID: paper.id,
-                sourceType: "html",
-                targetLanguage: settings.targetLanguage,
-                sourceHash: candidate.sourceHash,
-                modelContext: modelContext
-            ) {
-                translations[candidate.segmentID] = cached.translatedText
-                job.processedSegments += 1
-                job.progress = candidates.isEmpty ? 1 : Double(job.processedSegments) / Double(candidates.count)
-                job.modifiedAt = Date()
-                try modelContext.save()
-            } else {
-                pendingCandidates.append(candidate)
+        do {
+            var translations: [String: String] = [:]
+            var pendingCandidates: [HTMLTranslationCandidate] = []
+            for candidate in candidates {
+                try Task.checkCancellation()
+                if let cached = try cachedSegment(
+                    paperID: paper.id,
+                    sourceType: "html",
+                    targetLanguage: settings.targetLanguage,
+                    sourceHash: candidate.sourceHash,
+                    modelContext: modelContext
+                ) {
+                    translations[candidate.segmentID] = cached.translatedText
+                    job.processedSegments += 1
+                    job.progress = candidates.isEmpty ? 1 : Double(job.processedSegments) / Double(candidates.count)
+                    job.modifiedAt = Date()
+                    try modelContext.save()
+                } else {
+                    pendingCandidates.append(candidate)
+                }
             }
-        }
 
-        let concurrency = max(1, settings.htmlTranslationConcurrency)
-        for batch in pendingCandidates.chunked(into: concurrency) {
-            do {
+            let concurrency = max(1, settings.htmlTranslationConcurrency)
+            for batch in pendingCandidates.chunked(into: concurrency) {
+                try Task.checkCancellation()
                 let results = try await Self.translateBatch(batch, settings: settings, client: client)
+                try Task.checkCancellation()
                 for (candidate, translated) in results {
                     translations[candidate.segmentID] = translated
                     modelContext.insert(TranslationSegment(
@@ -81,25 +85,33 @@ final class HTMLTranslationPipeline {
                     job.modifiedAt = Date()
                 }
                 try modelContext.save()
-            } catch {
-                job.state = .failed
-                job.lastError = error.localizedDescription
-                job.modifiedAt = Date()
-                try? modelContext.save()
-                throw error
             }
-        }
 
-        let output = try Self.applyTranslations(
-            toPreparedHTML: extraction.preparedHTML,
-            candidates: candidates,
-            translations: translations
-        )
-        try output.write(to: htmlURL, atomically: true, encoding: .utf8)
-        job.state = .completed
-        job.progress = 1
-        job.modifiedAt = Date()
-        try modelContext.save()
+            try Task.checkCancellation()
+            let output = try Self.applyTranslations(
+                toPreparedHTML: extraction.preparedHTML,
+                candidates: candidates,
+                translations: translations
+            )
+            try Task.checkCancellation()
+            try output.write(to: htmlURL, atomically: true, encoding: .utf8)
+            job.state = .completed
+            job.progress = 1
+            job.modifiedAt = Date()
+            try modelContext.save()
+        } catch is CancellationError {
+            job.state = .failed
+            job.lastError = "Translation cancelled."
+            job.modifiedAt = Date()
+            try? modelContext.save()
+            throw CancellationError()
+        } catch {
+            job.state = .failed
+            job.lastError = error.localizedDescription
+            job.modifiedAt = Date()
+            try? modelContext.save()
+            throw error
+        }
     }
 
     private func cachedSegment(

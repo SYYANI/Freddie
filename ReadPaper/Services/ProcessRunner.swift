@@ -19,37 +19,183 @@ struct ProcessRunner {
         environment: [String: String] = [:],
         currentDirectoryURL: URL? = nil
     ) async throws -> ProcessResult {
-        try await withCheckedThrowingContinuation { continuation in
-            let process = Process()
-            process.executableURL = executableURL
-            process.arguments = arguments
-            if !environment.isEmpty {
-                process.environment = ProcessInfo.processInfo.environment.merging(environment) { _, new in new }
-            }
-            process.currentDirectoryURL = currentDirectoryURL
+        let cancellation = ProcessRunCancellation()
+        return try await withTaskCancellationHandler {
+            try Task.checkCancellation()
+            return try await withCheckedThrowingContinuation { continuation in
+                let process = Process()
+                process.executableURL = executableURL
+                process.arguments = arguments
+                if !environment.isEmpty {
+                    process.environment = ProcessInfo.processInfo.environment.merging(environment) { _, new in new }
+                }
+                process.currentDirectoryURL = currentDirectoryURL
 
-            let outputPipe = Pipe()
-            let errorPipe = Pipe()
-            process.standardOutput = outputPipe
-            process.standardError = errorPipe
+                let outputPipe = Pipe()
+                let errorPipe = Pipe()
+                process.standardOutput = outputPipe
+                process.standardError = errorPipe
 
-            process.terminationHandler = { process in
-                let outputData = outputPipe.fileHandleForReading.readDataToEndOfFile()
-                let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
-                let output = String(data: outputData, encoding: .utf8) ?? ""
-                let error = String(data: errorData, encoding: .utf8) ?? ""
-                continuation.resume(returning: ProcessResult(
-                    exitCode: process.terminationStatus,
-                    standardOutput: output,
-                    standardError: error
-                ))
-            }
+                let state = ProcessRunState(
+                    process: process,
+                    outputPipe: outputPipe,
+                    errorPipe: errorPipe,
+                    continuation: continuation
+                )
+                state.startReading()
 
-            do {
-                try process.run()
-            } catch {
-                continuation.resume(throwing: error)
+                process.terminationHandler = { [state] process in
+                    state.finish(exitCode: process.terminationStatus)
+                }
+
+                guard cancellation.set(state) else {
+                    return
+                }
+                state.run()
             }
+        } onCancel: {
+            cancellation.cancel()
         }
+    }
+}
+
+private final class ProcessRunCancellation: @unchecked Sendable {
+    private let lock = NSLock()
+    private var state: ProcessRunState?
+    private var isCancelled = false
+
+    func set(_ state: ProcessRunState) -> Bool {
+        lock.lock()
+        if isCancelled {
+            lock.unlock()
+            state.cancel()
+            return false
+        }
+        self.state = state
+        lock.unlock()
+        return true
+    }
+
+    func cancel() {
+        let state: ProcessRunState?
+        lock.lock()
+        isCancelled = true
+        state = self.state
+        lock.unlock()
+        state?.cancel()
+    }
+}
+
+private final class ProcessRunState: @unchecked Sendable {
+    private let lock = NSLock()
+    private var process: Process?
+    private let outputPipe: Pipe
+    private let errorPipe: Pipe
+    private var outputData = Data()
+    private var errorData = Data()
+    private var continuation: CheckedContinuation<ProcessResult, Error>?
+
+    init(
+        process: Process,
+        outputPipe: Pipe,
+        errorPipe: Pipe,
+        continuation: CheckedContinuation<ProcessResult, Error>
+    ) {
+        self.process = process
+        self.outputPipe = outputPipe
+        self.errorPipe = errorPipe
+        self.continuation = continuation
+    }
+
+    func startReading() {
+        outputPipe.fileHandleForReading.readabilityHandler = { [weak self] handle in
+            self?.appendOutput(handle.availableData)
+        }
+        errorPipe.fileHandleForReading.readabilityHandler = { [weak self] handle in
+            self?.appendError(handle.availableData)
+        }
+    }
+
+    func run() {
+        lock.lock()
+        guard continuation != nil, let process else {
+            lock.unlock()
+            return
+        }
+        do {
+            try process.run()
+            lock.unlock()
+        } catch {
+            lock.unlock()
+            fail(error)
+        }
+    }
+
+    func finish(exitCode: Int32) {
+        outputPipe.fileHandleForReading.readabilityHandler = nil
+        errorPipe.fileHandleForReading.readabilityHandler = nil
+        appendOutput(outputPipe.fileHandleForReading.readDataToEndOfFile())
+        appendError(errorPipe.fileHandleForReading.readDataToEndOfFile())
+
+        let result: ProcessResult
+        let continuation: CheckedContinuation<ProcessResult, Error>?
+        lock.lock()
+        result = ProcessResult(
+            exitCode: exitCode,
+            standardOutput: String(data: outputData, encoding: .utf8) ?? "",
+            standardError: String(data: errorData, encoding: .utf8) ?? ""
+        )
+        continuation = self.continuation
+        self.continuation = nil
+        process?.terminationHandler = nil
+        process = nil
+        lock.unlock()
+
+        continuation?.resume(returning: result)
+    }
+
+    func cancel() {
+        let process: Process?
+        lock.lock()
+        guard continuation != nil else {
+            lock.unlock()
+            return
+        }
+        process = self.process
+        lock.unlock()
+
+        if process?.isRunning == true {
+            process?.terminate()
+        }
+        fail(CancellationError())
+    }
+
+    func fail(_ error: Error) {
+        outputPipe.fileHandleForReading.readabilityHandler = nil
+        errorPipe.fileHandleForReading.readabilityHandler = nil
+
+        let continuation: CheckedContinuation<ProcessResult, Error>?
+        lock.lock()
+        continuation = self.continuation
+        self.continuation = nil
+        process?.terminationHandler = nil
+        process = nil
+        lock.unlock()
+
+        continuation?.resume(throwing: error)
+    }
+
+    private func appendOutput(_ data: Data) {
+        guard !data.isEmpty else { return }
+        lock.lock()
+        outputData.append(data)
+        lock.unlock()
+    }
+
+    private func appendError(_ data: Data) {
+        guard !data.isEmpty else { return }
+        lock.lock()
+        errorData.append(data)
+        lock.unlock()
     }
 }
