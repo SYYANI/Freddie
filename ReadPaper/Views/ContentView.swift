@@ -32,15 +32,21 @@ struct ContentView: View {
                 onDeleteOffsets: confirmDeletion(at:),
                 onDeletePaper: requestDeletion(of:)
             )
-        } detail: {
+            .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 340)
+        } content: {
             ReaderPaneView(
                 paper: selectedPaper,
                 attachments: attachments.filter { $0.paperID == selectedPaper?.id },
-                notes: notes.filter { $0.paperID == selectedPaper?.id },
                 settings: settingsRows.first,
                 readerMode: $readerMode,
                 displayMode: $displayMode
             )
+        } detail: {
+            InspectorPaneView(
+                paper: selectedPaper,
+                notes: notes.filter { $0.paperID == selectedPaper?.id }
+            )
+            .navigationSplitViewColumnWidth(min: 280, ideal: 340, max: 420)
         }
         .sheet(isPresented: $isAddingPaper) {
             AddPaperSheet(isPresented: $isAddingPaper, selectedPaperID: $selectedPaperID)

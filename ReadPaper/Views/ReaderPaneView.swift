@@ -6,7 +6,6 @@ struct ReaderPaneView: View {
 
     var paper: Paper?
     var attachments: [PaperAttachment]
-    var notes: [Note]
     var settings: AppSettings?
     @Binding var readerMode: ReaderMode
     @Binding var displayMode: TranslationDisplayMode
@@ -43,14 +42,8 @@ struct ReaderPaneView: View {
     }
 
     var body: some View {
-        HSplitView {
-            readerSurface
-                .frame(minWidth: 640, maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-
-            inspectorSurface
-                .frame(minWidth: 280, idealWidth: 340, maxWidth: 420, maxHeight: .infinity, alignment: .topLeading)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        readerSurface
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Color(nsColor: .windowBackgroundColor))
         .toolbar {
             readerToolbar
@@ -70,15 +63,6 @@ struct ReaderPaneView: View {
 
             content
         }
-    }
-
-    private var inspectorSurface: some View {
-        InspectorPaneView(
-            paper: paper,
-            notes: notes
-        )
-        .padding(12)
-        .background(Color(nsColor: .controlBackgroundColor))
     }
 
     @ToolbarContentBuilder
