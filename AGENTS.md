@@ -83,6 +83,7 @@ xcodebuild -project ReadPaper.xcodeproj -scheme ReadPaper -destination 'platform
 
 - 优先保持 SwiftUI + SwiftData 的现有风格，避免引入新的架构层，除非任务明确需要。
 - UI 状态尽量留在 View 内，持久化状态进入 SwiftData model，外部副作用放到 `Services`。
+- 阅读器不同模式的缺失态/空状态要保持一致的视觉语义；例如缺少 HTML、PDF 或翻译 PDF 时，优先复用统一的居中 unavailable 组件，不要一处是完整空状态卡片、另一处只显示一行占位文字。
 - 网络和子进程路径要可测试：通过可注入的 `URLSession`、`FileManager`、`ProcessRunner` 或配置快照传入依赖。
 - 处理本地文件时使用 `URL`/`FileManager`，不要拼接易碎路径字符串，除非已有模型字段需要保存 `.path`。
 - 涉及 SwiftData 的异步 UI 流程目前多在 `@MainActor` 上运行；改并发代码时显式考虑 actor 隔离和取消。
