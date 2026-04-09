@@ -76,6 +76,12 @@ struct PaperFileStore {
         return target
     }
 
+    func removeDirectory(for paperID: UUID) throws {
+        let target = try libraryDirectory.appendingPathComponent(paperID.uuidString, isDirectory: true)
+        guard fileManager.fileExists(atPath: target.path) else { return }
+        try fileManager.removeItem(at: target)
+    }
+
     func ensureDirectory(_ url: URL) throws {
         if !fileManager.fileExists(atPath: url.path) {
             try fileManager.createDirectory(at: url, withIntermediateDirectories: true)

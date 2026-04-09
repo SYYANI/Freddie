@@ -2,8 +2,11 @@ import SwiftUI
 
 struct LibrarySidebarView: View {
     var papers: [Paper]
+    var selectedPaper: Paper?
     @Binding var selectedPaperID: UUID?
     @Binding var isAddingPaper: Bool
+    var onDeleteOffsets: (IndexSet) -> Void
+    var onDeletePaper: (Paper) -> Void
 
     var body: some View {
         VStack(spacing: 0) {
@@ -19,7 +22,15 @@ struct LibrarySidebarView: View {
                     ForEach(papers) { paper in
                         PaperRowView(paper: paper)
                             .tag(paper.id)
+                            .contextMenu {
+                                Button(role: .destructive) {
+                                    onDeletePaper(paper)
+                                } label: {
+                                    Label("Delete Paper", systemImage: "trash")
+                                }
+                            }
                     }
+                    .onDelete(perform: onDeleteOffsets)
                 }
             }
         }
@@ -31,6 +42,16 @@ struct LibrarySidebarView: View {
                 } label: {
                     Label("Add Paper", systemImage: "plus")
                 }
+            }
+
+            ToolbarItem {
+                Button(role: .destructive) {
+                    guard let selectedPaper else { return }
+                    onDeletePaper(selectedPaper)
+                } label: {
+                    Label("Delete Paper", systemImage: "trash")
+                }
+                .disabled(selectedPaper == nil)
             }
         }
     }
