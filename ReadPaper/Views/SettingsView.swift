@@ -1,6 +1,13 @@
 import SwiftData
 import SwiftUI
 
+private enum SettingsTab: String, Hashable {
+    case general
+    case reader
+    case providers
+    case models
+}
+
 struct SettingsView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var settingsRows: [AppSettings]
@@ -22,7 +29,7 @@ struct SettingsView: View {
                     }
             }
         }
-        .padding(24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
@@ -32,6 +39,8 @@ private struct SettingsForm: View {
     @Bindable var settings: AppSettings
     let providers: [LLMProviderProfile]
     let models: [LLMModelProfile]
+
+    @AppStorage("ReadPaper.Settings.SelectedTab") private var selectedTabRawValue = SettingsTab.general.rawValue
 
     @State private var selectedProviderID: UUID?
     @State private var providerName = ""
@@ -100,13 +109,30 @@ private struct SettingsForm: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                translationSection
-                providerSection
-                modelSection
-            }
-            .frame(maxWidth: .infinity, alignment: .topLeading)
+        TabView(selection: selectedTabBinding) {
+            generalTab
+                .tag(SettingsTab.general)
+                .tabItem {
+                    Label("General", systemImage: "gearshape")
+                }
+
+            readerTab
+                .tag(SettingsTab.reader)
+                .tabItem {
+                    Label("Reader", systemImage: "book.closed")
+                }
+
+            providerTab
+                .tag(SettingsTab.providers)
+                .tabItem {
+                    Label("Providers", systemImage: "network")
+                }
+
+            modelTab
+                .tag(SettingsTab.models)
+                .tabItem {
+                    Label("Models", systemImage: "sparkles.rectangle.stack")
+                }
         }
         .formStyle(.grouped)
         .task {
@@ -127,51 +153,87 @@ private struct SettingsForm: View {
         }
     }
 
-    private var translationSection: some View {
-        GroupBox("Translation") {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack(alignment: .top, spacing: 16) {
+    private var selectedTabBinding: Binding<SettingsTab> {
+        Binding(
+            get: { SettingsTab(rawValue: selectedTabRawValue) ?? .general },
+            set: { selectedTabRawValue = $0.rawValue }
+        )
+    }
+
+    private var generalTab: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Form {
+                Section("Translation") {
                     TextField("Target language", text: $settings.targetLanguage)
+
+                    Stepper("HTML concurrency: \(settings.htmlTranslationConcurrency)", value: $settings.htmlTranslationConcurrency, in: 1...12)
+                    Stepper("BabelDOC QPS: \(settings.babelDocQPS)", value: $settings.babelDocQPS, in: 1...20)
+
+                    Text("Controls the default translation target and the amount of parallel work used for HTML and BabelDOC translation jobs.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+
+                Section("BabelDOC") {
+                    TextField("BabelDOC version", text: $settings.babelDocVersion)
+
+                    Button(isInstallingBabelDOC ? "Installing..." : "Install or update BabelDOC") {
+                        installBabelDOC()
+                    }
+                    .disabled(isInstallingBabelDOC)
+
+                    Text("The PDF translation tool is managed separately from the reader. Updating it here keeps the BabelDOC route ready when a paper needs full-PDF translation.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+
+                    if let generalStatusMessage {
+                        statusLabel(generalStatusMessage)
+                    }
+                }
+            }
+            .formStyle(.grouped)
+
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .padding(20)
+    }
+
+    private var readerTab: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Form {
+                Section("Translation Routes") {
                     Picker("HTML Model", selection: $settings.selectedHTMLModelProfileID) {
                         Text("Not Selected").tag(Optional<UUID>.none)
                         ForEach(sortedModels, id: \.id) { model in
                             Text(modelDisplayName(model)).tag(Optional(model.id))
                         }
                     }
+
                     Picker("PDF/BabelDOC Model", selection: $settings.selectedPDFModelProfileID) {
                         Text("Not Selected").tag(Optional<UUID>.none)
                         ForEach(sortedModels, id: \.id) { model in
                             Text(modelDisplayName(model)).tag(Optional(model.id))
                         }
                     }
-                }
 
-                HStack(alignment: .center, spacing: 16) {
-                    Stepper("HTML concurrency: \(settings.htmlTranslationConcurrency)", value: $settings.htmlTranslationConcurrency, in: 1...12)
-                    Stepper("BabelDOC QPS: \(settings.babelDocQPS)", value: $settings.babelDocQPS, in: 1...20)
-                }
-
-                HStack(alignment: .center, spacing: 16) {
-                    TextField("BabelDOC version", text: $settings.babelDocVersion)
-                        .frame(maxWidth: 220)
-                    Button(isInstallingBabelDOC ? "Installing..." : "Install or update BabelDOC") {
-                        installBabelDOC()
-                    }
-                    .disabled(isInstallingBabelDOC)
-                }
-
-                if let generalStatusMessage {
-                    statusLabel(generalStatusMessage)
+                    Text("Choose which saved model profile powers HTML translation and the BabelDOC PDF route inside the reader.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .formStyle(.grouped)
+
+            Spacer(minLength: 0)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .padding(20)
     }
 
-    private var providerSection: some View {
-        GroupBox("Providers") {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack(alignment: .center, spacing: 16) {
+    private var providerTab: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Form {
+                Section("Selection") {
                     Picker("Selected Provider", selection: $selectedProviderID) {
                         Text("New Provider").tag(Optional<UUID>.none)
                         ForEach(sortedProviders, id: \.id) { provider in
@@ -179,60 +241,62 @@ private struct SettingsForm: View {
                         }
                     }
 
-                    Spacer(minLength: 0)
+                    HStack(alignment: .center, spacing: 12) {
+                        Button("New") {
+                            resetProviderForm()
+                        }
 
-                    Button("New") {
-                        resetProviderForm()
+                        Button("Delete", role: .destructive) {
+                            deleteSelectedProvider()
+                        }
+                        .disabled(selectedProvider == nil)
                     }
-
-                    Button("Delete", role: .destructive) {
-                        deleteSelectedProvider()
-                    }
-                    .disabled(selectedProvider == nil)
                 }
 
-                HStack(alignment: .top, spacing: 16) {
+                Section(selectedProvider == nil ? "New Provider" : "Configuration") {
                     TextField("Display name", text: $providerName)
                     TextField("Base URL", text: $providerBaseURL)
-                }
-
-                HStack(alignment: .top, spacing: 16) {
                     SecureField("API key", text: $providerAPIKey, prompt: Text(providerAPIKeyPrompt))
                     TextField("Test model", text: $providerTestModel)
                     Toggle("Enabled", isOn: $providerEnabled)
                         .toggleStyle(.checkbox)
-                        .frame(width: 110, alignment: .leading)
                 }
 
-                HStack(alignment: .center, spacing: 12) {
-                    Button("Save") {
-                        saveProvider()
+                Section("Actions") {
+                    HStack(alignment: .center, spacing: 12) {
+                        Button("Save") {
+                            saveProvider()
+                        }
+                        Button(isTestingProvider ? "Testing..." : "Test") {
+                            testProvider()
+                        }
+                        .disabled(isTestingProvider)
                     }
-                    Button(isTestingProvider ? "Testing..." : "Test") {
-                        testProvider()
+
+                    if let providerStatusMessage {
+                        statusLabel(providerStatusMessage)
                     }
-                    .disabled(isTestingProvider)
-                }
 
-                if let providerStatusMessage {
-                    statusLabel(providerStatusMessage)
-                }
-
-                if let providerOutputPreview, providerOutputPreview.isEmpty == false {
-                    Text(providerOutputPreview)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                        .textSelection(.enabled)
+                    if let providerOutputPreview, providerOutputPreview.isEmpty == false {
+                        Text(providerOutputPreview)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .textSelection(.enabled)
+                    }
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .formStyle(.grouped)
+
+            Spacer(minLength: 0)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .padding(20)
     }
 
-    private var modelSection: some View {
-        GroupBox("Models") {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack(alignment: .center, spacing: 16) {
+    private var modelTab: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Form {
+                Section("Selection") {
                     Picker("Selected Model", selection: $selectedModelID) {
                         Text("New Model").tag(Optional<UUID>.none)
                         ForEach(sortedModels, id: \.id) { model in
@@ -240,19 +304,19 @@ private struct SettingsForm: View {
                         }
                     }
 
-                    Spacer(minLength: 0)
+                    HStack(alignment: .center, spacing: 12) {
+                        Button("New") {
+                            resetModelForm()
+                        }
 
-                    Button("New") {
-                        resetModelForm()
+                        Button("Delete", role: .destructive) {
+                            deleteSelectedModel()
+                        }
+                        .disabled(selectedModel == nil)
                     }
-
-                    Button("Delete", role: .destructive) {
-                        deleteSelectedModel()
-                    }
-                    .disabled(selectedModel == nil)
                 }
 
-                HStack(alignment: .top, spacing: 16) {
+                Section(selectedModel == nil ? "New Model" : "Configuration") {
                     Picker("Provider", selection: $modelProviderID) {
                         Text("Select Provider").tag(Optional<UUID>.none)
                         ForEach(sortedProviders, id: \.id) { provider in
@@ -261,46 +325,48 @@ private struct SettingsForm: View {
                     }
                     TextField("Profile name", text: $modelName)
                     TextField("Model name", text: $modelIdentifier)
-                }
-
-                HStack(alignment: .top, spacing: 16) {
                     TextField("Temperature", text: $modelTemperature)
                     TextField("Top-P", text: $modelTopP)
                     TextField("Max tokens", text: $modelMaxTokens)
                     Toggle("Enabled", isOn: $modelEnabled)
                         .toggleStyle(.checkbox)
-                        .frame(width: 110, alignment: .leading)
                 }
 
-                HStack(alignment: .center, spacing: 12) {
-                    Button("Save") {
-                        saveModel()
+                Section("Actions") {
+                    HStack(alignment: .center, spacing: 12) {
+                        Button("Save") {
+                            saveModel()
+                        }
+                        Button(isTestingModel ? "Testing..." : "Test") {
+                            testModel()
+                        }
+                        .disabled(isTestingModel)
                     }
-                    Button(isTestingModel ? "Testing..." : "Test") {
-                        testModel()
+
+                    if let selectedModelLastTestedAt {
+                        Text("Last tested: \(selectedModelLastTestedAt.formatted(date: .abbreviated, time: .shortened))")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
                     }
-                    .disabled(isTestingModel)
-                }
 
-                if let selectedModelLastTestedAt {
-                    Text("Last tested: \(selectedModelLastTestedAt.formatted(date: .abbreviated, time: .shortened))")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
+                    if let modelStatusMessage {
+                        statusLabel(modelStatusMessage)
+                    }
 
-                if let modelStatusMessage {
-                    statusLabel(modelStatusMessage)
-                }
-
-                if let modelOutputPreview, modelOutputPreview.isEmpty == false {
-                    Text(modelOutputPreview)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                        .textSelection(.enabled)
+                    if let modelOutputPreview, modelOutputPreview.isEmpty == false {
+                        Text(modelOutputPreview)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .textSelection(.enabled)
+                    }
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .formStyle(.grouped)
+
+            Spacer(minLength: 0)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .padding(20)
     }
 
     @ViewBuilder
@@ -480,7 +546,8 @@ private struct SettingsForm: View {
             if let selectedModelID, relatedModelIDs.contains(selectedModelID) {
                 resetModelForm()
             }
-            generalStatusMessage = "Provider deleted."
+            providerStatusMessage = "Provider deleted."
+            providerOutputPreview = nil
         } catch {
             providerStatusMessage = "Error: \(error.localizedDescription)"
         }
@@ -590,7 +657,8 @@ private struct SettingsForm: View {
             settings.modifiedAt = Date()
             try modelContext.save()
             resetModelForm()
-            generalStatusMessage = "Model deleted."
+            modelStatusMessage = "Model deleted."
+            modelOutputPreview = nil
         } catch {
             modelStatusMessage = "Error: \(error.localizedDescription)"
         }
