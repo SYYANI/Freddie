@@ -184,7 +184,13 @@ struct ReaderPaneView: View {
                     outputDirectory: outputDirectory,
                     settings: settingsSnapshot,
                     apiKey: apiKey,
-                    babelDocExecutable: try toolManager.babelDocExecutableURL
+                    babelDocExecutable: try toolManager.babelDocExecutableURL,
+                    onStatusUpdate: { message in
+                        Task { @MainActor in
+                            guard isWorking, !isCancelling else { return }
+                            statusMessage = message
+                        }
+                    }
                 )
                 try Task.checkCancellation()
                 modelContext.insert(PaperAttachment(

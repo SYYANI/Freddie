@@ -12,7 +12,8 @@ struct BabelDocRunner {
         outputDirectory: URL,
         settings: AppSettingsSnapshot,
         apiKey: String,
-        babelDocExecutable: URL
+        babelDocExecutable: URL,
+        onStatusUpdate: (@Sendable (String) -> Void)? = nil
     ) async throws -> URL {
         if !FileManager.default.fileExists(atPath: outputDirectory.path) {
             try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
@@ -28,7 +29,11 @@ struct BabelDocRunner {
                 apiKey: apiKey
             ),
             environment: ["PATH": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"],
-            currentDirectoryURL: outputDirectory
+            currentDirectoryURL: outputDirectory,
+            onOutput: { event in
+                guard let status = Self.statusMessage(from: event, apiKey: apiKey) else { return }
+                onStatusUpdate?(status)
+            }
         )
         guard result.exitCode == 0 else {
             throw BabelDocRunError.failed(Self.redact(result.combinedOutput, apiKey: apiKey))
@@ -65,6 +70,20 @@ struct BabelDocRunner {
         return value.replacingOccurrences(of: apiKey, with: "<redacted>")
     }
 
+    static func statusMessage(from event: ProcessOutputEvent, apiKey: String) -> String? {
+        let redacted = redact(event.text, apiKey: apiKey)
+        guard let line = redacted
+            .split(whereSeparator: \.isNewline)
+            .map({ String($0).trimmingCharacters(in: .whitespacesAndNewlines) })
+            .last(where: { !$0.isEmpty })
+        else {
+            return nil
+        }
+
+        let prefix = event.channel == .standardError ? "BabelDOC error" : "BabelDOC"
+        return "\(prefix): \(line.truncatedForStatus)"
+    }
+
     private func newestPDF(in directory: URL, after start: Date) throws -> URL? {
         let urls = try FileManager.default.contentsOfDirectory(
             at: directory,
@@ -83,6 +102,14 @@ struct BabelDocRunner {
                 return left > right
             }
             .first
+    }
+}
+
+private extension String {
+    var truncatedForStatus: String {
+        guard count > 160 else { return self }
+        let end = index(startIndex, offsetBy: 157)
+        return "\(self[..<end])..."
     }
 }
 

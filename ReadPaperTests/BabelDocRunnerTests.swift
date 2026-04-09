@@ -30,6 +30,12 @@ final class BabelDocRunnerTests: XCTestCase {
 
         let redacted = BabelDocRunner.redact("token sk-secret leaked", apiKey: "sk-secret")
         XCTAssertEqual(redacted, "token <redacted> leaked")
+
+        let status = BabelDocRunner.statusMessage(
+            from: ProcessOutputEvent(channel: .standardOutput, text: "using sk-secret\nworking\n"),
+            apiKey: "sk-secret"
+        )
+        XCTAssertEqual(status, "BabelDOC: working")
     }
 
     func testProcessRunnerDrainsLargeOutputWhileProcessRuns() async throws {
@@ -41,6 +47,29 @@ final class BabelDocRunnerTests: XCTestCase {
         XCTAssertEqual(result.exitCode, 0)
         XCTAssertGreaterThan(result.standardOutput.count, 1_000_000)
         XCTAssertTrue(result.standardError.contains("stderr-ready"))
+    }
+
+    func testProcessRunnerReportsOutputWhileProcessRuns() async throws {
+        let recorder = ProcessOutputRecorder()
+        let task = Task {
+            try await ProcessRunner().run(
+                executableURL: URL(fileURLWithPath: "/bin/sh"),
+                arguments: ["-c", "printf 'started\\n'; sleep 1; printf 'finished\\n'"],
+                onOutput: { event in
+                    Task {
+                        await recorder.append(event)
+                    }
+                }
+            )
+        }
+
+        try await Task.sleep(nanoseconds: 100_000_000)
+        let outputDuringRun = await recorder.combinedOutput
+        XCTAssertTrue(outputDuringRun.contains("started"))
+
+        let result = try await task.value
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertTrue(result.standardOutput.contains("finished"))
     }
 
     func testProcessRunnerCancelsRunningProcess() async throws {
@@ -60,5 +89,17 @@ final class BabelDocRunnerTests: XCTestCase {
         } catch is CancellationError {
             // Expected path.
         }
+    }
+}
+
+private actor ProcessOutputRecorder {
+    private var events: [ProcessOutputEvent] = []
+
+    var combinedOutput: String {
+        events.map(\.text).joined()
+    }
+
+    func append(_ event: ProcessOutputEvent) {
+        events.append(event)
     }
 }

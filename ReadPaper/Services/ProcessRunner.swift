@@ -12,12 +12,23 @@ struct ProcessResult: Sendable {
     }
 }
 
+enum ProcessOutputChannel: Sendable, Equatable {
+    case standardOutput
+    case standardError
+}
+
+struct ProcessOutputEvent: Sendable {
+    var channel: ProcessOutputChannel
+    var text: String
+}
+
 struct ProcessRunner {
     func run(
         executableURL: URL,
         arguments: [String],
         environment: [String: String] = [:],
-        currentDirectoryURL: URL? = nil
+        currentDirectoryURL: URL? = nil,
+        onOutput: (@Sendable (ProcessOutputEvent) -> Void)? = nil
     ) async throws -> ProcessResult {
         let cancellation = ProcessRunCancellation()
         return try await withTaskCancellationHandler {
@@ -40,7 +51,8 @@ struct ProcessRunner {
                     process: process,
                     outputPipe: outputPipe,
                     errorPipe: errorPipe,
-                    continuation: continuation
+                    continuation: continuation,
+                    onOutput: onOutput
                 )
                 state.startReading()
 
@@ -94,17 +106,20 @@ private final class ProcessRunState: @unchecked Sendable {
     private var outputData = Data()
     private var errorData = Data()
     private var continuation: CheckedContinuation<ProcessResult, Error>?
+    private let onOutput: (@Sendable (ProcessOutputEvent) -> Void)?
 
     init(
         process: Process,
         outputPipe: Pipe,
         errorPipe: Pipe,
-        continuation: CheckedContinuation<ProcessResult, Error>
+        continuation: CheckedContinuation<ProcessResult, Error>,
+        onOutput: (@Sendable (ProcessOutputEvent) -> Void)?
     ) {
         self.process = process
         self.outputPipe = outputPipe
         self.errorPipe = errorPipe
         self.continuation = continuation
+        self.onOutput = onOutput
     }
 
     func startReading() {
@@ -190,6 +205,7 @@ private final class ProcessRunState: @unchecked Sendable {
         lock.lock()
         outputData.append(data)
         lock.unlock()
+        report(data, channel: .standardOutput)
     }
 
     private func appendError(_ data: Data) {
@@ -197,5 +213,13 @@ private final class ProcessRunState: @unchecked Sendable {
         lock.lock()
         errorData.append(data)
         lock.unlock()
+        report(data, channel: .standardError)
+    }
+
+    private func report(_ data: Data, channel: ProcessOutputChannel) {
+        guard let onOutput else { return }
+        let text = String(decoding: data, as: UTF8.self)
+        guard !text.isEmpty else { return }
+        onOutput(ProcessOutputEvent(channel: channel, text: text))
     }
 }
