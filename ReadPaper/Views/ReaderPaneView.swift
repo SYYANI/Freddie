@@ -273,7 +273,7 @@ struct ReaderPaneView: View {
                         translatedURL: translatedPDFAttachment?.fileURL
                     )
                 } else {
-                    ContentUnavailableView(
+                    centeredUnavailableView(
                         "No translated PDF",
                         systemImage: "character.book.closed",
                         description: Text("Run PDF translation first to compare the original and translated versions side by side.")
@@ -417,12 +417,29 @@ struct ReaderPaneView: View {
                     readerLabel(label)
                 }
         } else {
-            ContentUnavailableView(
+            centeredUnavailableView(
                 emptyTitle,
                 systemImage: "doc.richtext",
                 description: Text(emptyDescription)
             )
         }
+    }
+
+    private func centeredUnavailableView(
+        _ title: String,
+        systemImage: String,
+        description: Text
+    ) -> some View {
+        ContentUnavailableView {
+            Label {
+                Text(verbatim: title)
+            } icon: {
+                Image(systemName: systemImage)
+            }
+        } description: {
+            description
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
     }
 
     private var emptyReaderState: some View {
