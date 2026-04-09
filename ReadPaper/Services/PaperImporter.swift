@@ -145,12 +145,31 @@ final class PaperImporter {
     }
 
     static func extractArxivID(from text: String) -> ArxivIdentifier? {
-        let pattern = #"(?:arXiv:)?(\d{4}\.\d{4,5}(?:v\d+)?|[a-zA-Z\-]+(?:\.[A-Z]{2})?/\d{7}(?:v\d+)?)"#
-        guard let regex = try? NSRegularExpression(pattern: pattern),
-              let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
-              let range = Range(match.range(at: 1), in: text) else {
-            return nil
+        let explicitPatterns = [
+            #"(?i)\barxiv\s*:?\s*(\d{4}\.\d{4,5}(?:v\d+)?|[a-zA-Z\-]+(?:\.[A-Z]{2})?/\d{7}(?:v\d+)?)\b"#,
+            #"(?i)\bhttps?://(?:www\.)?(?:arxiv\.org|ar5iv\.labs\.arxiv\.org)/\S+"#
+        ]
+
+        for pattern in explicitPatterns {
+            guard let regex = try? NSRegularExpression(pattern: pattern),
+                  let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) else {
+                continue
+            }
+
+            if match.numberOfRanges > 1,
+               let range = Range(match.range(at: 1), in: text),
+               let identifier = try? ArxivClient.normalizeIdentifier(String(text[range])) {
+                return identifier
+            }
+
+            if let range = Range(match.range(at: 0), in: text) {
+                let candidate = String(text[range]).trimmingCharacters(in: CharacterSet(charactersIn: "[](){}<>.,;\"'"))
+                if let identifier = try? ArxivClient.normalizeIdentifier(candidate) {
+                    return identifier
+                }
+            }
         }
-        return try? ArxivClient.normalizeIdentifier(String(text[range]))
+
+        return nil
     }
 }
