@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 63;
+	objectVersion = 77;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -32,6 +32,7 @@
 		767231C7EA8681A664133706 /* PaperFileStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51A72BDC5A78B51E6003243F /* PaperFileStore.swift */; };
 		7963C711C58099D0BDCC638B /* KeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD96D614696B0206B44ABB70 /* KeychainStore.swift */; };
 		7A241F55BD8F0AB450B557B7 /* ChatTranslationClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = F496C47E654307F9E1540963 /* ChatTranslationClient.swift */; };
+		80C7EDF69B15F127372D926B /* HTMLLocalizerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12D0D021D11F5C98A60484A3 /* HTMLLocalizerTests.swift */; };
 		8169A4E5294B7188BC29D67C /* InspectorPaneView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E5B1B3F81B9307F629924D1 /* InspectorPaneView.swift */; };
 		835C8F7821F26027B0AF9CDE /* AppSettingsSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 927F79103A61BBE018BA79FB /* AppSettingsSnapshot.swift */; };
 		89A6E060EB5C7613D3EC46CE /* ReadingState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 241BC82AE12D75C8F0E5E622 /* ReadingState.swift */; };
@@ -40,6 +41,7 @@
 		A88C29934E8FE196990CAD61 /* LibrarySidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D81E9697498069EC2F633A5 /* LibrarySidebarView.swift */; };
 		BBA7A714502F6AF34B631EDF /* BabelDocRunnerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD20AB596745F6A2DE939722 /* BabelDocRunnerTests.swift */; };
 		BC6FBEC8FEB0CC15B6D7000D /* PaperFileStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6E92728C43A017D4F19D275 /* PaperFileStoreTests.swift */; };
+		CB62B878D017B8B63DD87EC3 /* Readability in Frameworks */ = {isa = PBXBuildFile; productRef = 8C91D32341DE2A88D7364C3F /* Readability */; };
 		D24C62A4F3063599D4B2803A /* Note.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81666A1EE76A077C9CDB5FE7 /* Note.swift */; };
 		D25D1824CBC8BFAB17784D12 /* Paper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8817F3ED2BCD0D7DD32CE2FB /* Paper.swift */; };
 		D36320A9561EC3B9A4C29B91 /* PaperAttachment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8970B5A2B0E4E782656BAFEF /* PaperAttachment.swift */; };
@@ -60,6 +62,7 @@
 
 /* Begin PBXFileReference section */
 		0E7C661338A31257C85792F0 /* PaperDeletionServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaperDeletionServiceTests.swift; sourceTree = "<group>"; };
+		12D0D021D11F5C98A60484A3 /* HTMLLocalizerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HTMLLocalizerTests.swift; sourceTree = "<group>"; };
 		1451FFF74A97B956BEB980F1 /* Hashing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Hashing.swift; sourceTree = "<group>"; };
 		155075041A25A22CFB1EB008 /* AddPaperSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddPaperSheet.swift; sourceTree = "<group>"; };
 		15605D44878CFDBFBF883E0F /* ReaderPaneView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderPaneView.swift; sourceTree = "<group>"; };
@@ -70,7 +73,7 @@
 		3E5B1B3F81B9307F629924D1 /* InspectorPaneView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InspectorPaneView.swift; sourceTree = "<group>"; };
 		40C65F7E1559275AA3A5AA9F /* HTMLTranslationPipelineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HTMLTranslationPipelineTests.swift; sourceTree = "<group>"; };
 		47E6A94B8E0829E8FD015D53 /* ArxivClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArxivClientTests.swift; sourceTree = "<group>"; };
-		4AD0F3DCACE64FFE539D2434 /* ReadPaper.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; name = ReadPaper.app; path = Freddie.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		4AD0F3DCACE64FFE539D2434 /* ReadPaper.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ReadPaper.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		51A72BDC5A78B51E6003243F /* PaperFileStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaperFileStore.swift; sourceTree = "<group>"; };
 		56425134B5A64FC38C9DC3B1 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		585E60D2D3441D8A764523FD /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
@@ -78,6 +81,7 @@
 		61B39EE919BF400C2E3155C6 /* PaperImporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaperImporter.swift; sourceTree = "<group>"; };
 		6430BCDDD5126C2478477D4B /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		6D2246237CB8E21F487FA0FF /* ReadPaperApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadPaperApp.swift; sourceTree = "<group>"; };
+		703C8DC726DF6251058E63C6 /* swift-readability */ = {isa = PBXFileReference; lastKnownFileType = folder; name = "swift-readability"; path = "swift-readability"; sourceTree = SOURCE_ROOT; };
 		756B3F8A255940BE24DE7FD6 /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
 		7D81E9697498069EC2F633A5 /* LibrarySidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibrarySidebarView.swift; sourceTree = "<group>"; };
 		8039BE637474B04E1F1BC128 /* TranslationSegment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslationSegment.swift; sourceTree = "<group>"; };
@@ -109,6 +113,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				0CDB0BC728BED911301C6C51 /* SwiftSoup in Frameworks */,
+				CB62B878D017B8B63DD87EC3 /* Readability in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -133,6 +138,14 @@
 				F1D66200F6C63D43F207E0E0 /* ProcessRunner.swift */,
 			);
 			path = Services;
+			sourceTree = "<group>";
+		};
+		150F567549117DD069EF5912 /* Packages */ = {
+			isa = PBXGroup;
+			children = (
+				703C8DC726DF6251058E63C6 /* swift-readability */,
+			);
+			name = Packages;
 			sourceTree = "<group>";
 		};
 		26C675C2CC49D7667F8407B2 /* Views */ = {
@@ -163,6 +176,7 @@
 			children = (
 				47E6A94B8E0829E8FD015D53 /* ArxivClientTests.swift */,
 				CD20AB596745F6A2DE939722 /* BabelDocRunnerTests.swift */,
+				12D0D021D11F5C98A60484A3 /* HTMLLocalizerTests.swift */,
 				40C65F7E1559275AA3A5AA9F /* HTMLTranslationPipelineTests.swift */,
 				9BA518377FB5E2D92733C70E /* Info.plist */,
 				0E7C661338A31257C85792F0 /* PaperDeletionServiceTests.swift */,
@@ -213,6 +227,7 @@
 		FFD37AF8B380F0E09C17D8CA = {
 			isa = PBXGroup;
 			children = (
+				150F567549117DD069EF5912 /* Packages */,
 				D13B300E54DA3FEBC95FFDF1 /* ReadPaper */,
 				6693C97AAC3E41596DB55CFD /* ReadPaperTests */,
 				EF36EA23E9C12D6765FFE9F9 /* Products */,
@@ -255,6 +270,7 @@
 			name = ReadPaper;
 			packageProductDependencies = (
 				437DE790BDA46ED2BB4EE2AE /* SwiftSoup */,
+				8C91D32341DE2A88D7364C3F /* Readability */,
 			);
 			productName = ReadPaper;
 			productReference = 4AD0F3DCACE64FFE539D2434 /* ReadPaper.app */;
@@ -286,7 +302,9 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				933D5A0492F73A9308551225 /* XCRemoteSwiftPackageReference "SwiftSoup" */,
+				EF98ECE644852981F660041E /* XCLocalSwiftPackageReference "swift-readability" */,
 			);
+			preferredProjectObjectVersion = 77;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -314,6 +332,7 @@
 			files = (
 				55247C9ECE01BC43C04A1B23 /* ArxivClientTests.swift in Sources */,
 				BBA7A714502F6AF34B631EDF /* BabelDocRunnerTests.swift in Sources */,
+				80C7EDF69B15F127372D926B /* HTMLLocalizerTests.swift in Sources */,
 				F72717940014D21DF24FC04D /* HTMLTranslationPipelineTests.swift in Sources */,
 				56F482A9DBBA8B631D7AA6AC /* PaperDeletionServiceTests.swift in Sources */,
 				BC6FBEC8FEB0CC15B6D7000D /* PaperFileStoreTests.swift in Sources */,
@@ -607,6 +626,13 @@
 		};
 /* End XCConfigurationList section */
 
+/* Begin XCLocalSwiftPackageReference section */
+		EF98ECE644852981F660041E /* XCLocalSwiftPackageReference "swift-readability" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = "swift-readability";
+		};
+/* End XCLocalSwiftPackageReference section */
+
 /* Begin XCRemoteSwiftPackageReference section */
 		933D5A0492F73A9308551225 /* XCRemoteSwiftPackageReference "SwiftSoup" */ = {
 			isa = XCRemoteSwiftPackageReference;
@@ -623,6 +649,10 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 933D5A0492F73A9308551225 /* XCRemoteSwiftPackageReference "SwiftSoup" */;
 			productName = SwiftSoup;
+		};
+		8C91D32341DE2A88D7364C3F /* Readability */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = Readability;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

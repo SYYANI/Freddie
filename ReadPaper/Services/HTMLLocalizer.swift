@@ -1,4 +1,5 @@
 import Foundation
+import Readability
 import SwiftSoup
 
 struct HTMLLocalizer: @unchecked Sendable {
@@ -24,7 +25,7 @@ struct HTMLLocalizer: @unchecked Sendable {
         }
 
         let html = String(data: htmlData, encoding: .utf8) ?? String(decoding: htmlData, as: UTF8.self)
-        let document = try SwiftSoup.parse(html, sourceURL.absoluteString)
+        let document = try makeDocumentForLocalization(html: html, sourceURL: sourceURL)
         try document.select("script[src]").remove()
 
         for link in try document.select("link[rel=stylesheet][href]").array() {
@@ -64,6 +65,17 @@ struct HTMLLocalizer: @unchecked Sendable {
         let output = try document.outerHtml()
         try output.write(to: outputURL, atomically: true, encoding: .utf8)
         return outputURL
+    }
+
+    func makeDocumentForLocalization(html: String, sourceURL: URL) throws -> Document {
+        let document = try SwiftSoup.parse(html, sourceURL.absoluteString)
+        try absolutizeHyperlinks(in: document, baseURL: sourceURL)
+        try document.select("base[href]").remove()
+
+        guard let readableDocument = try makeReadableDocument(from: html, sourceURL: sourceURL, fallback: document) else {
+            return document
+        }
+        return readableDocument
     }
 
     func rewriteCSS(_ css: String, baseURL: URL, resourcesDirectory: URL) async throws -> String {
@@ -112,9 +124,107 @@ struct HTMLLocalizer: @unchecked Sendable {
         return rewrittenItems.joined(separator: ", ")
     }
 
+    private func makeReadableDocument(from html: String, sourceURL: URL, fallback document: Document) throws -> Document? {
+        do {
+            let readability = try Readability(
+                html: html,
+                baseURL: sourceURL,
+                options: ReadabilityOptions(keepClasses: true)
+            )
+            let result = try readability.parse()
+            try applyReadabilityResult(result, to: document)
+            return document
+        } catch {
+            return nil
+        }
+    }
+
+    private func applyReadabilityResult(_ result: ReadabilityResult, to document: Document) throws {
+        try updateMetadata(from: result, in: document)
+        try injectReadabilityStyles(into: document)
+        try document.body()?.addClass("rp-readability-body")
+        try document.body()?.html(renderReadableBody(for: result))
+    }
+
+    private func updateMetadata(from result: ReadabilityResult, in document: Document) throws {
+        if let html = try document.select("html").first() {
+            if let lang = nonEmpty(result.lang) {
+                try html.attr("lang", lang)
+            }
+            if let dir = nonEmpty(result.dir) {
+                try html.attr("dir", dir)
+            }
+        }
+
+        if let head = document.head() {
+            let titleText = nonEmpty(result.title) ?? "Paper"
+            if let titleElement = try head.select("title").first() {
+                try titleElement.text(titleText)
+            } else {
+                let titleElement = try document.createElement("title")
+                try titleElement.text(titleText)
+                try head.appendChild(titleElement)
+            }
+        }
+    }
+
+    private func injectReadabilityStyles(into document: Document) throws {
+        let styleID = "rp-readability-style"
+        if try document.getElementById(styleID) != nil {
+            return
+        }
+        let style = try document.createElement("style")
+        try style.attr("id", styleID)
+        try style.html("""
+        body.rp-readability-body { margin: 0; padding: 32px 24px 56px; }
+        .rp-readability-shell { max-width: 980px; margin: 0 auto; }
+        .rp-readability-header { margin-bottom: 2rem; }
+        .rp-readability-title { margin: 0; font-size: 2rem; line-height: 1.25; }
+        .rp-readability-byline, .rp-readability-excerpt { color: #5f6368; margin-top: 0.75rem; }
+        .rp-readability-content img, .rp-readability-content video, .rp-readability-content svg, .rp-readability-content math { max-width: 100%; }
+        """)
+        if let head = document.head() {
+            try head.appendChild(style)
+        }
+    }
+
+    private func renderReadableBody(for result: ReadabilityResult) -> String {
+        var parts: [String] = [
+            #"<main class="rp-readability-shell">"#
+        ]
+
+        if let title = nonEmpty(result.title) {
+            parts.append(#"<header class="rp-readability-header">"#)
+            parts.append(#"<h1 class="rp-readability-title">\#(escapeHTML(title))</h1>"#)
+            if let byline = nonEmpty(result.byline) {
+                parts.append(#"<p class="rp-readability-byline">\#(escapeHTML(byline))</p>"#)
+            }
+            if let excerpt = nonEmpty(result.excerpt) {
+                parts.append(#"<p class="rp-readability-excerpt">\#(escapeHTML(excerpt))</p>"#)
+            }
+            parts.append("</header>")
+        }
+
+        parts.append(#"<article class="rp-readability-content">\#(result.content)</article>"#)
+        parts.append("</main>")
+        return parts.joined()
+    }
+
+    private func absolutizeHyperlinks(in document: Document, baseURL: URL) throws {
+        for link in try document.select("a[href]").array() {
+            let href = try link.attr("href")
+            guard let resolvedURL = resolve(href, relativeTo: baseURL) else { continue }
+            try link.attr("href", resolvedURL.absoluteString)
+        }
+    }
+
     private func resolve(_ value: String, relativeTo baseURL: URL) -> URL? {
         let trimmed = value.trimmingCharacters(in: CharacterSet(charactersIn: " \"'"))
-        guard !trimmed.isEmpty, !trimmed.hasPrefix("#"), !trimmed.hasPrefix("data:") else { return nil }
+        let lowercased = trimmed.lowercased()
+        guard !trimmed.isEmpty,
+              !trimmed.hasPrefix("#"),
+              !lowercased.hasPrefix("data:"),
+              !lowercased.hasPrefix("javascript:") else { return nil }
         return URL(string: trimmed, relativeTo: baseURL)?.absoluteURL
     }
 
@@ -129,6 +239,22 @@ struct HTMLLocalizer: @unchecked Sendable {
             throw URLError(.badServerResponse)
         }
         return data
+    }
+
+    private func nonEmpty(_ value: String?) -> String? {
+        guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !trimmed.isEmpty else {
+            return nil
+        }
+        return trimmed
+    }
+
+    private func escapeHTML(_ value: String) -> String {
+        value
+            .replacingOccurrences(of: "&", with: "&amp;")
+            .replacingOccurrences(of: "<", with: "&lt;")
+            .replacingOccurrences(of: ">", with: "&gt;")
+            .replacingOccurrences(of: "\"", with: "&quot;")
     }
 
     @discardableResult
