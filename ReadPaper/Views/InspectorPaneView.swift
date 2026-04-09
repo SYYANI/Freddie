@@ -7,17 +7,22 @@ struct InspectorPaneView: View {
     var notes: [Note]
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                if let paper {
-                    metadataSection(paper)
-                    notesSection(paper)
-                } else {
-                    ContentUnavailableView("No paper selected", systemImage: "sidebar.right")
+        Group {
+            if let paper {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 18) {
+                        metadataSection(paper)
+                        notesSection(paper)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(16)
                 }
+            } else {
+                emptyInspectorState
             }
-            .padding(16)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(Color(nsColor: .windowBackgroundColor))
     }
 
     private func metadataSection(_ paper: Paper) -> some View {
@@ -72,6 +77,74 @@ struct InspectorPaneView: View {
     private func addNote(for paper: Paper) {
         modelContext.insert(Note(paperID: paper.id, body: ""))
         try? modelContext.save()
+    }
+
+    private var emptyInspectorState: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                Text("INSPECTOR")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .tracking(1.1)
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Paper details will appear here")
+                        .font(.title3.weight(.semibold))
+                    Text("Select or import a paper to view metadata, abstract, and notes in this panel.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                VStack(alignment: .leading, spacing: 12) {
+                    inspectorHintRow(
+                        title: "Metadata",
+                        systemImage: "text.document",
+                        description: "Title, authors, arXiv ID, and abstract."
+                    )
+                    inspectorHintRow(
+                        title: "Notes",
+                        systemImage: "note.text",
+                        description: "Quick reading notes stay attached to the current paper."
+                    )
+                }
+                .padding(16)
+                .background(
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .fill(Color(nsColor: .controlBackgroundColor))
+                )
+                .overlay {
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .strokeBorder(Color.primary.opacity(0.06))
+                }
+            }
+            .padding(16)
+        }
+        .scrollIndicators(.hidden)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private func inspectorHintRow(
+        title: String,
+        systemImage: String,
+        description: String
+    ) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: systemImage)
+                .font(.body.weight(.semibold))
+                .foregroundStyle(.primary)
+                .frame(width: 30, height: 30)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                Text(description)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
     }
 }
 
