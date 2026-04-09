@@ -7,21 +7,52 @@ struct InspectorPaneView: View {
     var notes: [Note]
 
     var body: some View {
-        Group {
-            if let paper {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 18) {
-                        metadataSection(paper)
-                        notesSection(paper)
+        VStack(spacing: 0) {
+            paneHeader
+            Divider()
+
+            Group {
+                if let paper {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 18) {
+                            metadataSection(paper)
+                            notesSection(paper)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(16)
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(16)
+                } else {
+                    emptyInspectorState
                 }
-            } else {
-                emptyInspectorState
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(Color(nsColor: .windowBackgroundColor))
+    }
+
+    private var paneHeader: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Text("INSPECTOR")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .tracking(1.1)
+
+            if let paper {
+                Text(paper.title)
+                    .font(.subheadline.weight(.medium))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            } else {
+                Text("Paper details, abstract, and notes")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
         .background(Color(nsColor: .windowBackgroundColor))
     }
 

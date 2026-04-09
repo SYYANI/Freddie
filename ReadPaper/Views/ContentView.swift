@@ -32,7 +32,7 @@ struct ContentView: View {
                 onDeleteOffsets: confirmDeletion(at:),
                 onDeletePaper: requestDeletion(of:)
             )
-            .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 340)
+            .navigationSplitViewColumnWidth(min: 240, ideal: 260, max: 340)
         } content: {
             ReaderPaneView(
                 paper: selectedPaper,

@@ -44,14 +44,17 @@ struct ReaderPaneView: View {
     var body: some View {
         readerSurface
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(Color(nsColor: .windowBackgroundColor))
-        .toolbar {
-            readerToolbar
-        }
+            .background(Color(nsColor: .windowBackgroundColor))
+            .toolbar {
+                readerToolbar
+            }
     }
 
     private var readerSurface: some View {
         VStack(spacing: 0) {
+            paneHeader
+            Divider()
+
             if isWorking || statusMessage != nil {
                 statusRow
                     .padding(.horizontal, 12)
@@ -63,6 +66,32 @@ struct ReaderPaneView: View {
 
             content
         }
+    }
+
+    private var paneHeader: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Text("READER")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .tracking(1.1)
+
+            if let paper {
+                Text(paper.title)
+                    .font(.subheadline.weight(.medium))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            } else {
+                Text("Select a paper to start reading")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(Color(nsColor: .windowBackgroundColor))
     }
 
     @ToolbarContentBuilder
