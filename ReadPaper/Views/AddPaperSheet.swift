@@ -10,6 +10,7 @@ struct AddPaperSheet: View {
 
     @State private var arxivInput = ""
     @State private var isImporting = false
+    @State private var importProgress: ArxivImportProgress?
     @State private var errorMessage: String?
 
     var body: some View {
@@ -40,7 +41,11 @@ struct AddPaperSheet: View {
             }
 
             if isImporting {
-                ProgressView()
+                if let importProgress {
+                    importProgressView(importProgress)
+                } else {
+                    ProgressView()
+                }
             }
 
             if let errorMessage {
@@ -54,6 +59,7 @@ struct AddPaperSheet: View {
                 Button("Close") {
                     isPresented = false
                 }
+                .disabled(isImporting)
                 .keyboardShortcut(.cancelAction)
             }
         }
@@ -62,17 +68,24 @@ struct AddPaperSheet: View {
 
     private func importArxiv() {
         isImporting = true
+        importProgress = .resolvingInput()
         errorMessage = nil
         let input = arxivInput
         Task {
             do {
-                let paper = try await PaperImporter().importArxiv(input, modelContext: modelContext)
+                let paper = try await PaperImporter().importArxiv(
+                    input,
+                    modelContext: modelContext
+                ) { progress in
+                    importProgress = progress
+                }
                 selectedPaperID = paper.id
                 isPresented = false
             } catch {
                 errorMessage = error.localizedDescription
             }
             isImporting = false
+            importProgress = nil
         }
     }
 
@@ -84,6 +97,7 @@ struct AddPaperSheet: View {
         guard panel.runModal() == .OK, let url = panel.url else { return }
 
         isImporting = true
+        importProgress = nil
         errorMessage = nil
         do {
             let paper = try PaperImporter().importLocalPDF(url, modelContext: modelContext)
@@ -93,5 +107,37 @@ struct AddPaperSheet: View {
             errorMessage = error.localizedDescription
         }
         isImporting = false
+    }
+
+    private func importProgressView(_ progress: ArxivImportProgress) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(progress.stepLabel)
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text("\(Int(round(progress.fractionCompleted * 100)))%")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+
+            ProgressView(value: progress.fractionCompleted)
+                .progressViewStyle(.linear)
+
+            Text(progress.title)
+                .font(.subheadline.weight(.semibold))
+
+            if let detail = progress.detail {
+                Text(detail)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(14)
+        .background {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(.quaternary.opacity(0.35))
+        }
     }
 }

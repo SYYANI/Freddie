@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 63;
+	objectVersion = 77;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -59,6 +59,7 @@
 		D36320A9561EC3B9A4C29B91 /* PaperAttachment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8970B5A2B0E4E782656BAFEF /* PaperAttachment.swift */; };
 		DAFA837901E941BD58A5431A /* ReadPaperApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D2246237CB8E21F487FA0FF /* ReadPaperApp.swift */; };
 		F27D9396893317BF40E0BD22 /* ReaderPaneView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15605D44878CFDBFBF883E0F /* ReaderPaneView.swift */; };
+		F4EDC902333FAE0E8269D73D /* ArxivImportProgress.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3B8354421E9159F37194453 /* ArxivImportProgress.swift */; };
 		F58BF1CACEBE2065B792874B /* TranslationLLMClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B99DBBAB3B54CC7AB7DEF2F /* TranslationLLMClient.swift */; };
 		F72717940014D21DF24FC04D /* HTMLTranslationPipelineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40C65F7E1559275AA3A5AA9F /* HTMLTranslationPipelineTests.swift */; };
 /* End PBXBuildFile section */
@@ -91,7 +92,7 @@
 		40C65F7E1559275AA3A5AA9F /* HTMLTranslationPipelineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HTMLTranslationPipelineTests.swift; sourceTree = "<group>"; };
 		46FC6C17BDF1F5821997810A /* LLMProviderValidationUseCase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLMProviderValidationUseCase.swift; sourceTree = "<group>"; };
 		47E6A94B8E0829E8FD015D53 /* ArxivClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArxivClientTests.swift; sourceTree = "<group>"; };
-		4AD0F3DCACE64FFE539D2434 /* ReadPaper.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; name = ReadPaper.app; path = Freddie.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		4AD0F3DCACE64FFE539D2434 /* ReadPaper.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ReadPaper.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		51A72BDC5A78B51E6003243F /* PaperFileStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaperFileStore.swift; sourceTree = "<group>"; };
 		56425134B5A64FC38C9DC3B1 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		585E60D2D3441D8A764523FD /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
@@ -99,7 +100,7 @@
 		61B39EE919BF400C2E3155C6 /* PaperImporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaperImporter.swift; sourceTree = "<group>"; };
 		6430BCDDD5126C2478477D4B /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		6D2246237CB8E21F487FA0FF /* ReadPaperApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadPaperApp.swift; sourceTree = "<group>"; };
-		703C8DC726DF6251058E63C6 /* swift-readability */ = {isa = PBXFileReference; lastKnownFileType = folder; path = "swift-readability"; sourceTree = SOURCE_ROOT; };
+		703C8DC726DF6251058E63C6 /* swift-readability */ = {isa = PBXFileReference; lastKnownFileType = folder; name = "swift-readability"; path = "swift-readability"; sourceTree = SOURCE_ROOT; };
 		706D7F40C6EF37BA2B90B166 /* OpenAICompatibleLLMProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAICompatibleLLMProvider.swift; sourceTree = "<group>"; };
 		756B3F8A255940BE24DE7FD6 /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
 		78A4FD40176F3BF293CF2AD5 /* LLMModelProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLMModelProfile.swift; sourceTree = "<group>"; };
@@ -126,6 +127,7 @@
 		CD96D614696B0206B44ABB70 /* KeychainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStore.swift; sourceTree = "<group>"; };
 		DB7C7C27FFFA5ECF81AABA98 /* LLMConfigurationBootstrapper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLMConfigurationBootstrapper.swift; sourceTree = "<group>"; };
 		E0F1DEEFF5B77D9A4472738A /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		E3B8354421E9159F37194453 /* ArxivImportProgress.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArxivImportProgress.swift; sourceTree = "<group>"; };
 		E6E92728C43A017D4F19D275 /* PaperFileStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaperFileStoreTests.swift; sourceTree = "<group>"; };
 		EBA58435DCA0AF5A28A23115 /* OpenAICompatibleLLMProviderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAICompatibleLLMProviderTests.swift; sourceTree = "<group>"; };
 		F1D66200F6C63D43F207E0E0 /* ProcessRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProcessRunner.swift; sourceTree = "<group>"; };
@@ -150,6 +152,7 @@
 			isa = PBXGroup;
 			children = (
 				5AE04037B749D64F46B8231B /* ArxivClient.swift */,
+				E3B8354421E9159F37194453 /* ArxivImportProgress.swift */,
 				9E035274FD9E699D832B4D4E /* BabelDocRunner.swift */,
 				F9B5558A93632CE3A9C970E6 /* BabelDocToolManager.swift */,
 				1451FFF74A97B956BEB980F1 /* Hashing.swift */,
@@ -344,6 +347,7 @@
 				933D5A0492F73A9308551225 /* XCRemoteSwiftPackageReference "SwiftSoup" */,
 				EF98ECE644852981F660041E /* XCLocalSwiftPackageReference "swift-readability" */,
 			);
+			preferredProjectObjectVersion = 77;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -390,6 +394,7 @@
 				4071082F08025D60C62849D7 /* AddPaperSheet.swift in Sources */,
 				71CF6A923EFED0917CF9F58C /* AppSettings.swift in Sources */,
 				60130CE02ABCB946ABAC9A8A /* ArxivClient.swift in Sources */,
+				F4EDC902333FAE0E8269D73D /* ArxivImportProgress.swift in Sources */,
 				5863153059F6B2FD21F823A6 /* BabelDocRunner.swift in Sources */,
 				342E4EEBBCCF4E8BD73D9258 /* BabelDocToolManager.swift in Sources */,
 				355CDD9F6A668C753004CD24 /* ContentView.swift in Sources */,

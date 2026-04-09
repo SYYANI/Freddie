@@ -21,14 +21,22 @@ final class PaperImporter {
         self.session = session
     }
 
-    func importArxiv(_ rawValue: String, modelContext: ModelContext) async throws -> Paper {
+    func importArxiv(
+        _ rawValue: String,
+        modelContext: ModelContext,
+        onProgress: ((ArxivImportProgress) -> Void)? = nil
+    ) async throws -> Paper {
+        onProgress?(.resolvingInput())
         let identifier = try ArxivClient.normalizeIdentifier(rawValue)
+        onProgress?(.resolvingInput(identifier: identifier.queryID))
         let existingPapers = try modelContext.fetch(FetchDescriptor<Paper>())
         if let existing = existingPapers.first(where: { $0.arxivID == identifier.baseID }) {
             return existing
         }
 
+        onProgress?(.fetchingMetadata(for: identifier.queryID))
         let metadata = try await arxivClient.fetchMetadata(for: rawValue)
+        onProgress?(.creatingLibraryEntry(title: metadata.title.isEmpty ? metadata.arxivID : metadata.title))
         let paper = Paper(
             arxivID: metadata.arxivID,
             arxivVersion: metadata.arxivVersion,
@@ -45,6 +53,7 @@ final class PaperImporter {
         modelContext.insert(paper)
 
         if let pdfURL = metadata.pdfURL ?? URL(string: "https://arxiv.org/pdf/\(metadata.arxivID)") {
+            onProgress?(.downloadingPDF(for: metadata.arxivID))
             let (data, response) = try await session.data(from: pdfURL)
             if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
                 throw URLError(.badServerResponse)
@@ -59,7 +68,12 @@ final class PaperImporter {
             ))
         }
 
-        await importArxivHTMLIfAvailable(for: paper, modelContext: modelContext)
+        let htmlImported = await importArxivHTMLIfAvailable(
+            for: paper,
+            modelContext: modelContext,
+            onProgress: onProgress
+        )
+        onProgress?(.finalizing(htmlImported: htmlImported))
         try modelContext.save()
         return paper
     }
@@ -100,26 +114,37 @@ final class PaperImporter {
         return paper
     }
 
-    func importArxivHTMLIfAvailable(for paper: Paper, modelContext: ModelContext) async {
-        guard let arxivID = paper.arxivID else { return }
+    func importArxivHTMLIfAvailable(
+        for paper: Paper,
+        modelContext: ModelContext,
+        onProgress: ((ArxivImportProgress) -> Void)? = nil
+    ) async -> Bool {
+        guard let arxivID = paper.arxivID else { return false }
         let outputURL: URL
         let resourcesDirectory: URL
         do {
             outputURL = try fileStore.directory(for: paper.id).appendingPathComponent("paper.html")
             resourcesDirectory = try fileStore.resourcesDirectory(for: paper)
         } catch {
-            return
+            return false
         }
 
         let candidates = [
-            URL(string: "https://arxiv.org/html/\(arxivID)"),
-            URL(string: "https://ar5iv.labs.arxiv.org/html/\(arxivID)")
-        ].compactMap { $0 }
+            (ArxivImportProgress.HTMLSource.arxiv, URL(string: "https://arxiv.org/html/\(arxivID)")),
+            (ArxivImportProgress.HTMLSource.ar5iv, URL(string: "https://ar5iv.labs.arxiv.org/html/\(arxivID)"))
+        ].compactMap { source, url in
+            url.map { (source, $0) }
+        }
 
-        for candidate in candidates {
+        for (index, candidate) in candidates.enumerated() {
+            onProgress?(.importingHTML(from: candidate.0, isFallback: index > 0))
             do {
-                let htmlURL = try await htmlLocalizer.fetchAndLocalize(from: candidate, outputURL: outputURL, resourcesDirectory: resourcesDirectory)
-                paper.htmlURLString = candidate.absoluteString
+                let htmlURL = try await htmlLocalizer.fetchAndLocalize(
+                    from: candidate.1,
+                    outputURL: outputURL,
+                    resourcesDirectory: resourcesDirectory
+                )
+                paper.htmlURLString = candidate.1.absoluteString
                 modelContext.insert(PaperAttachment(
                     paperID: paper.id,
                     kind: .html,
@@ -128,11 +153,13 @@ final class PaperImporter {
                     filePath: htmlURL.path
                 ))
                 try? modelContext.save()
-                return
+                return true
             } catch {
                 continue
             }
         }
+
+        return false
     }
 
     static func extractText(from document: PDFDocument?, maxPages: Int) -> String {
