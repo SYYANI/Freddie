@@ -21,7 +21,7 @@
 	<key>LSMinimumSystemVersion</key>
 	<string>14.0</string>
 	<key>NSDocumentsFolderUsageDescription</key>
-	<string>ReadPaper imports local PDF papers selected by you.</string>
+	<string>Freddie imports local PDF papers selected by you.</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>Personal build.</string>
 	<key>NSPrincipalClass</key>

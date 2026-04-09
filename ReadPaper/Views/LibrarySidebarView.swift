@@ -34,7 +34,7 @@ struct LibrarySidebarView: View {
                 }
             }
         }
-        .navigationTitle("ReadPaper")
+        .navigationTitle("Freddie")
         .toolbar {
             ToolbarItem {
                 Button {

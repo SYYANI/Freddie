@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 63;
+	objectVersion = 77;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -19,6 +19,7 @@
 		472EB6D1FB3D768A671315EB /* HTMLLocalizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = C595FD3B238BDE04DC6FA3CB /* HTMLLocalizer.swift */; };
 		48D5A00B8592D17446F4EC97 /* PDFReaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BC5E9153D7B4D74DDE3965B /* PDFReaderView.swift */; };
 		4CE8EA5B33F2C971A3290F3E /* PaperImporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61B39EE919BF400C2E3155C6 /* PaperImporter.swift */; };
+		547E6722EA7EECEAEB1FD1C1 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 6430BCDDD5126C2478477D4B /* Assets.xcassets */; };
 		55247C9ECE01BC43C04A1B23 /* ArxivClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47E6A94B8E0829E8FD015D53 /* ArxivClientTests.swift */; };
 		56F482A9DBBA8B631D7AA6AC /* PaperDeletionServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E7C661338A31257C85792F0 /* PaperDeletionServiceTests.swift */; };
 		5863153059F6B2FD21F823A6 /* BabelDocRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E035274FD9E699D832B4D4E /* BabelDocRunner.swift */; };
@@ -75,6 +76,7 @@
 		585E60D2D3441D8A764523FD /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		5AE04037B749D64F46B8231B /* ArxivClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArxivClient.swift; sourceTree = "<group>"; };
 		61B39EE919BF400C2E3155C6 /* PaperImporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaperImporter.swift; sourceTree = "<group>"; };
+		6430BCDDD5126C2478477D4B /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		6D2246237CB8E21F487FA0FF /* ReadPaperApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadPaperApp.swift; sourceTree = "<group>"; };
 		756B3F8A255940BE24DE7FD6 /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
 		7D81E9697498069EC2F633A5 /* LibrarySidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibrarySidebarView.swift; sourceTree = "<group>"; };
@@ -188,6 +190,7 @@
 		D13B300E54DA3FEBC95FFDF1 /* ReadPaper */ = {
 			isa = PBXGroup;
 			children = (
+				6430BCDDD5126C2478477D4B /* Assets.xcassets */,
 				56425134B5A64FC38C9DC3B1 /* Info.plist */,
 				6D2246237CB8E21F487FA0FF /* ReadPaperApp.swift */,
 				CA9F040C059820545B5A7509 /* Models */,
@@ -242,6 +245,7 @@
 			buildConfigurationList = 45E942F757EF4B498A54D37B /* Build configuration list for PBXNativeTarget "ReadPaper" */;
 			buildPhases = (
 				D0DC07E8D50342E81BE76498 /* Sources */,
+				1ACB2FAA3037591AE16F4B6C /* Resources */,
 				51AAC6A661F36E6C22680184 /* Frameworks */,
 			);
 			buildRules = (
@@ -283,6 +287,7 @@
 			packageReferences = (
 				933D5A0492F73A9308551225 /* XCRemoteSwiftPackageReference "SwiftSoup" */,
 			);
+			preferredProjectObjectVersion = 77;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -291,6 +296,17 @@
 			);
 		};
 /* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		1ACB2FAA3037591AE16F4B6C /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				547E6722EA7EECEAEB1FD1C1 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		27812753FF73065ECE1068DA /* Sources */ = {
@@ -384,6 +400,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_TESTABILITY = YES;
 				INFOPLIST_FILE = ReadPaper/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Freddie;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -391,7 +408,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 0.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.yiyan.ReadPaper;
-				PRODUCT_NAME = ReadPaper;
+				PRODUCT_NAME = Freddie;
 				SDKROOT = macosx;
 				SWIFT_VERSION = 6.0;
 			};
@@ -525,6 +542,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_TESTABILITY = YES;
 				INFOPLIST_FILE = ReadPaper/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Freddie;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -532,7 +550,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 0.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.yiyan.ReadPaper;
-				PRODUCT_NAME = ReadPaper;
+				PRODUCT_NAME = Freddie;
 				SDKROOT = macosx;
 				SWIFT_VERSION = 6.0;
 			};
