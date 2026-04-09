@@ -33,22 +33,14 @@ struct ContentView: View {
                 onDeletePaper: requestDeletion(of:)
             )
         } detail: {
-            HSplitView {
-                ReaderPaneView(
-                    paper: selectedPaper,
-                    attachments: attachments.filter { $0.paperID == selectedPaper?.id },
-                    settings: settingsRows.first,
-                    readerMode: $readerMode,
-                    displayMode: $displayMode
-                )
-                .frame(minWidth: 640)
-
-                InspectorPaneView(
-                    paper: selectedPaper,
-                    notes: notes.filter { $0.paperID == selectedPaper?.id }
-                )
-                .frame(minWidth: 280, idealWidth: 340, maxWidth: 420)
-            }
+            ReaderPaneView(
+                paper: selectedPaper,
+                attachments: attachments.filter { $0.paperID == selectedPaper?.id },
+                notes: notes.filter { $0.paperID == selectedPaper?.id },
+                settings: settingsRows.first,
+                readerMode: $readerMode,
+                displayMode: $displayMode
+            )
         }
         .sheet(isPresented: $isAddingPaper) {
             AddPaperSheet(isPresented: $isAddingPaper, selectedPaperID: $selectedPaperID)

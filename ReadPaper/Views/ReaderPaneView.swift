@@ -6,6 +6,7 @@ struct ReaderPaneView: View {
 
     var paper: Paper?
     var attachments: [PaperAttachment]
+    var notes: [Note]
     var settings: AppSettings?
     @Binding var readerMode: ReaderMode
     @Binding var displayMode: TranslationDisplayMode
@@ -29,14 +30,164 @@ struct ReaderPaneView: View {
         attachments.first { $0.kind == .translatedPDF }
     }
 
+    private var canTranslateHTML: Bool {
+        htmlAttachment != nil && settings != nil
+    }
+
+    private var canTranslatePDF: Bool {
+        pdfAttachment != nil && settings != nil
+    }
+
+    private var translationControlsDisabled: Bool {
+        isWorking || (!canTranslateHTML && !canTranslatePDF)
+    }
+
     var body: some View {
-        VStack(spacing: 0) {
-            toolbar
-            Divider()
-            content
+        HSplitView {
+            readerSurface
+                .frame(minWidth: 640, maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+
+            inspectorSurface
+                .frame(minWidth: 280, idealWidth: 340, maxWidth: 420, maxHeight: .infinity, alignment: .topLeading)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Color(nsColor: .windowBackgroundColor))
+        .toolbar {
+            readerToolbar
+        }
+    }
+
+    private var readerSurface: some View {
+        VStack(spacing: 0) {
+            if isWorking || statusMessage != nil {
+                statusRow
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(Color(nsColor: .windowBackgroundColor))
+
+                Divider()
+            }
+
+            content
+        }
+    }
+
+    private var inspectorSurface: some View {
+        InspectorPaneView(
+            paper: paper,
+            notes: notes
+        )
+        .padding(12)
+        .background(Color(nsColor: .controlBackgroundColor))
+    }
+
+    @ToolbarContentBuilder
+    private var readerToolbar: some ToolbarContent {
+        if paper != nil {
+            ToolbarItem(placement: .primaryAction) {
+                readerModePicker
+            }
+
+            if readerMode == .html {
+                ToolbarItem(placement: .primaryAction) {
+                    htmlDisplayPicker
+                }
+            }
+
+            ToolbarItemGroup(placement: .primaryAction) {
+                translationMenu
+
+                if isWorking {
+                    Button {
+                        cancelTranslation()
+                    } label: {
+                        Label(isCancelling ? "Cancelling..." : "Cancel", systemImage: "xmark.circle")
+                    }
+                    .labelStyle(.iconOnly)
+                    .disabled(isCancelling)
+                    .help(isCancelling ? "Cancelling translation..." : "Cancel Translation")
+                }
+            }
+        }
+    }
+
+    private var readerModePicker: some View {
+        Picker("Reader", selection: $readerMode) {
+            Label("HTML", systemImage: "globe")
+                .labelStyle(.iconOnly)
+                .tag(ReaderMode.html)
+            Label("PDF", systemImage: "doc")
+                .labelStyle(.iconOnly)
+                .tag(ReaderMode.pdf)
+            Label("Bilingual PDF", systemImage: "rectangle.split.2x1")
+                .labelStyle(.iconOnly)
+                .tag(ReaderMode.bilingualPDF)
+            Label("Translated PDF", systemImage: "character.book.closed")
+                .labelStyle(.iconOnly)
+                .tag(ReaderMode.translatedPDF)
+        }
+        .pickerStyle(.segmented)
+        .frame(width: 176)
+        .labelsHidden()
+        .help("Reader Mode")
+    }
+
+    private var htmlDisplayPicker: some View {
+        Picker("Display", selection: $displayMode) {
+            Image(systemName: "text.alignleft")
+                .accessibilityLabel("Original")
+                .tag(TranslationDisplayMode.original)
+            Image(systemName: "rectangle.split.1x2")
+                .accessibilityLabel("Bilingual")
+                .tag(TranslationDisplayMode.bilingual)
+            Image(systemName: "character.book.closed")
+                .accessibilityLabel("Translated")
+                .tag(TranslationDisplayMode.translated)
+        }
+        .pickerStyle(.segmented)
+        .frame(width: 128)
+        .labelsHidden()
+        .help("HTML Display Mode")
+    }
+
+    private var translationMenu: some View {
+        Menu {
+            Button {
+                translateHTML()
+            } label: {
+                Label("Translate HTML", systemImage: "globe")
+            }
+            .disabled(canTranslateHTML == false)
+
+            Button {
+                translatePDF()
+            } label: {
+                Label("Translate PDF", systemImage: "doc")
+            }
+            .disabled(canTranslatePDF == false)
+        } label: {
+            Label("Translate", systemImage: "translate")
+        }
+        .labelStyle(.iconOnly)
+        .menuIndicator(.hidden)
+        .disabled(translationControlsDisabled)
+        .help(translationMenuHelpText)
+    }
+
+    private var translationMenuHelpText: String {
+        if isWorking {
+            return "Translation in Progress"
+        }
+        if canTranslateHTML && canTranslatePDF {
+            return "Translate HTML or PDF"
+        }
+        if canTranslateHTML {
+            return "Translate HTML"
+        }
+        if canTranslatePDF {
+            return "Translate PDF"
+        }
+        return "Translation Unavailable"
     }
 
     @ViewBuilder
@@ -76,56 +227,6 @@ struct ReaderPaneView: View {
                 )
             }
         }
-    }
-
-    private var toolbar: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 12) {
-                Picker("Reader", selection: $readerMode) {
-                    Text("HTML").tag(ReaderMode.html)
-                    Text("PDF").tag(ReaderMode.pdf)
-                    Text("Bilingual PDF").tag(ReaderMode.bilingualPDF)
-                    Text("Translated PDF").tag(ReaderMode.translatedPDF)
-                }
-                .pickerStyle(.segmented)
-                .frame(width: 460)
-
-                if readerMode == .html {
-                    Picker("Display", selection: $displayMode) {
-                        Text("Original").tag(TranslationDisplayMode.original)
-                        Text("Bilingual").tag(TranslationDisplayMode.bilingual)
-                        Text("Translated").tag(TranslationDisplayMode.translated)
-                    }
-                    .pickerStyle(.segmented)
-                    .frame(width: 320)
-                }
-
-                Spacer()
-
-                Button("Translate HTML") {
-                    translateHTML()
-                }
-                .disabled(paper == nil || htmlAttachment == nil || settings == nil || isWorking)
-
-                Button("Translate PDF") {
-                    translatePDF()
-                }
-                .disabled(paper == nil || pdfAttachment == nil || settings == nil || isWorking)
-
-                if isWorking {
-                    Button(isCancelling ? "Cancelling..." : "Cancel") {
-                        cancelTranslation()
-                    }
-                    .disabled(isCancelling)
-                }
-            }
-            if isWorking || statusMessage != nil {
-                statusRow
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(Color(nsColor: .windowBackgroundColor))
     }
 
     private var statusRow: some View {
