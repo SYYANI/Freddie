@@ -69,8 +69,8 @@ private struct PaperRowView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
-            if let arxivID = paper.arxivID {
-                Text("arXiv \(arxivID)")
+            if let identifierText = paper.sidebarIdentifierText {
+                Text(identifierText)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }

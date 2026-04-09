@@ -39,6 +39,39 @@ final class PaperImporterTests: XCTestCase {
     }
 
     @MainActor
+    func testExtractDOIRecognizesExplicitDOI() {
+        let doi = PaperImporter.extractDOI(
+            from: "Published version doi:10.1145/3731715.3733394"
+        )
+
+        XCTAssertEqual(doi, "10.1145/3731715.3733394")
+    }
+
+    @MainActor
+    func testExtractDOIRecognizesWrappedDOIURL() {
+        let doi = PaperImporter.extractDOI(
+            from: """
+            ACM ISBN 979-8-4007-1877-9/2025/06
+            https://doi.org/10.
+            1145/3731715.3733394
+            """
+        )
+
+        XCTAssertEqual(doi, "10.1145/3731715.3733394")
+    }
+
+    @MainActor
+    func testPaperUsesDOIAsFallbackDisplayIdentifier() {
+        let paper = Paper(
+            doi: "10.1145/3731715.3733394",
+            title: "MoAFCL"
+        )
+
+        XCTAssertEqual(paper.sidebarIdentifierText, "DOI 10.1145/3731715.3733394")
+        XCTAssertEqual(paper.metadataIdentifierText, "DOI: 10.1145/3731715.3733394")
+    }
+
+    @MainActor
     func testImportArxivReportsProgressAcrossFallbackHTMLImport() async throws {
         let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: rootURL) }

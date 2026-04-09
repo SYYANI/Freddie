@@ -66,8 +66,8 @@ struct InspectorPaneView: View {
             Text(paper.displayAuthors)
                 .foregroundStyle(.secondary)
                 .textSelection(.enabled)
-            if let arxivID = paper.arxivID {
-                Text("arXiv: \(arxivID)")
+            if let identifierText = paper.metadataIdentifierText {
+                Text(identifierText)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .textSelection(.enabled)

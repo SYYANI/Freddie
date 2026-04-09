@@ -6,6 +6,7 @@ final class Paper {
     @Attribute(.unique) var id: UUID
     var arxivID: String?
     var arxivVersion: String?
+    var doi: String?
     var title: String
     var abstractText: String
     var authorsStorage: String
@@ -24,6 +25,7 @@ final class Paper {
         id: UUID = UUID(),
         arxivID: String? = nil,
         arxivVersion: String? = nil,
+        doi: String? = nil,
         title: String,
         abstractText: String = "",
         authors: [String] = [],
@@ -41,6 +43,7 @@ final class Paper {
         self.id = id
         self.arxivID = arxivID
         self.arxivVersion = arxivVersion
+        self.doi = doi
         self.title = title
         self.abstractText = abstractText
         self.authorsStorage = Paper.encodeList(authors)
@@ -83,6 +86,26 @@ final class Paper {
             return names.joined(separator: ", ")
         }
         return names.prefix(3).joined(separator: ", ") + " et al."
+    }
+
+    var sidebarIdentifierText: String? {
+        if let arxivID {
+            return "arXiv \(arxivID)"
+        }
+        if let doi {
+            return "DOI \(doi)"
+        }
+        return nil
+    }
+
+    var metadataIdentifierText: String? {
+        if let arxivID {
+            return "arXiv: \(arxivID)"
+        }
+        if let doi {
+            return "DOI: \(doi)"
+        }
+        return nil
     }
 
     static func encodeList(_ values: [String]) -> String {

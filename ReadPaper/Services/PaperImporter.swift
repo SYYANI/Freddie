@@ -87,7 +87,11 @@ final class PaperImporter {
         let extractedTitle = (attributes[PDFDocumentAttribute.titleAttribute] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
         let extractedAuthor = (attributes[PDFDocumentAttribute.authorAttribute] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
         let text = Self.extractText(from: pdfDocument, maxPages: 3)
-        let arxiv = Self.extractArxivID(from: text)
+        let searchableText = ([text] + Self.extractMetadataStrings(from: attributes))
+            .filter { !$0.isEmpty }
+            .joined(separator: "\n")
+        let arxiv = Self.extractArxivID(from: searchableText)
+        let doi = Self.extractDOI(from: searchableText)
 
         let title = [extractedTitle, url.deletingPathExtension().lastPathComponent]
             .compactMap { $0 }
@@ -97,6 +101,7 @@ final class PaperImporter {
         let paper = Paper(
             arxivID: arxiv?.baseID,
             arxivVersion: arxiv?.version,
+            doi: doi,
             title: title,
             authors: authors
         )
@@ -171,6 +176,21 @@ final class PaperImporter {
             .joined(separator: "\n")
     }
 
+    static func extractMetadataStrings(from attributes: [AnyHashable: Any]) -> [String] {
+        attributes.values.flatMap { value in
+            switch value {
+            case let string as String:
+                return [string]
+            case let strings as [String]:
+                return strings
+            case let array as NSArray:
+                return array.compactMap { $0 as? String }
+            default:
+                return []
+            }
+        }
+    }
+
     static func extractArxivID(from text: String) -> ArxivIdentifier? {
         let explicitPatterns = [
             #"(?i)\barxiv\s*:?\s*(\d{4}\.\d{4,5}(?:v\d+)?|[a-zA-Z\-]+(?:\.[A-Z]{2})?/\d{7}(?:v\d+)?)\b"#,
@@ -194,6 +214,32 @@ final class PaperImporter {
                 if let identifier = try? ArxivClient.normalizeIdentifier(candidate) {
                     return identifier
                 }
+            }
+        }
+
+        return nil
+    }
+
+    static func extractDOI(from text: String) -> String? {
+        let normalized = text
+            .replacingOccurrences(of: #"(10\.)\s+"#, with: "$1", options: .regularExpression)
+            .replacingOccurrences(of: #"(?i)(doi(?:\.org/|:))\s+"#, with: "$1", options: .regularExpression)
+            .replacingOccurrences(of: #"/\s+"#, with: "/", options: .regularExpression)
+
+        let patterns = [
+            #"(?i)\b(?:https?://(?:dx\.)?doi\.org/|doi:\s*)(10\.\d{4,9}/[-._;()/:A-Z0-9]+)\b"#,
+            #"(?i)\b(10\.\d{4,9}/[-._;()/:A-Z0-9]+)\b"#
+        ]
+
+        for pattern in patterns {
+            guard let regex = try? NSRegularExpression(pattern: pattern),
+                  let match = regex.firstMatch(in: normalized, range: NSRange(normalized.startIndex..., in: normalized)) else {
+                continue
+            }
+
+            let captureIndex = match.numberOfRanges > 1 ? 1 : 0
+            if let range = Range(match.range(at: captureIndex), in: normalized) {
+                return String(normalized[range])
             }
         }
 
