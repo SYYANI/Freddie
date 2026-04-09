@@ -265,12 +265,20 @@ struct ReaderPaneView: View {
         } else {
             switch readerMode {
             case .html:
-                HTMLReaderView(
-                    fileURL: htmlAttachment?.fileURL,
-                    displayMode: displayMode,
-                    reloadToken: htmlReloadToken,
-                    segmentUpdate: htmlSegmentUpdate
-                )
+                if let htmlFileURL = htmlAttachment?.fileURL {
+                    HTMLReaderView(
+                        fileURL: htmlFileURL,
+                        displayMode: displayMode,
+                        reloadToken: htmlReloadToken,
+                        segmentUpdate: htmlSegmentUpdate
+                    )
+                } else {
+                    centeredUnavailableView(
+                        "No HTML available",
+                        systemImage: "doc.text",
+                        description: Text("Import an arXiv paper with HTML content to read it here.")
+                    )
+                }
             case .pdf:
                 labeledPDFReader(
                     fileURL: pdfAttachment?.fileURL,

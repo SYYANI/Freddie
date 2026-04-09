@@ -2,7 +2,7 @@ import SwiftUI
 import WebKit
 
 struct HTMLReaderView: NSViewRepresentable {
-    var fileURL: URL?
+    var fileURL: URL
     var displayMode: TranslationDisplayMode
     var reloadToken: Int
     var segmentUpdate: HTMLTranslationSegmentUpdate?
@@ -17,12 +17,6 @@ struct HTMLReaderView: NSViewRepresentable {
 
     func updateNSView(_ view: WKWebView, context: Context) {
         context.coordinator.displayMode = displayMode
-        guard let fileURL else {
-            view.loadHTMLString(emptyHTML, baseURL: nil)
-            context.coordinator.resetLoadedState()
-            return
-        }
-
         let readAccessURL = fileURL.deletingLastPathComponent()
         if context.coordinator.loadedURL != fileURL {
             context.coordinator.requestLoad(
@@ -267,15 +261,5 @@ struct HTMLReaderView: NSViewRepresentable {
             }
             return String(json.dropFirst().dropLast())
         }
-    }
-
-    private var emptyHTML: String {
-        """
-        <html>
-        <body style="font: -apple-system-body; padding: 24px;">
-        <p>No HTML paper is available for this item.</p>
-        </body>
-        </html>
-        """
     }
 }
