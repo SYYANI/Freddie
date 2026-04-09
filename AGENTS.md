@@ -64,6 +64,8 @@ xcodebuild -project ReadPaper.xcodeproj -scheme ReadPaper -destination 'platform
 - `translations/`
 - `notes/`
 
+SwiftData 元数据 store 也应视为该目录的一部分：当前显式落在 `~/Library/Application Support/ReadPaper/ReadPaper.store`，承载 `Paper`、`PaperAttachment`、`TranslationSegment`、`LLMProviderProfile`、`LLMModelProfile`、`AppSettings` 等模型；不要再依赖系统默认 `~/Library/Application Support/default.store`。
+
 `paper.html` 当前默认保存的是适合阅读和翻译的本地化 HTML；对于 arXiv/ar5iv 导入，它通常是 `swift-readability` 提炼后的正文包装页，而不是原站完整页面快照。改导入链路时要注意这一展示语义。
 
 附件通过 `PaperAttachment` 记录，类型包括 `pdf`、`html`、`translatedPDF` 和 `resource`，来源包括 `arxivPDF`、`arxivHTML`、`localImport`、`babeldoc` 和 `generated`。改文件写入逻辑时，要同时维护附件记录和 SwiftData 保存时机。

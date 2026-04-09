@@ -30,4 +30,14 @@ final class PaperFileStoreTests: XCTestCase {
 
         XCTAssertFalse(FileManager.default.fileExists(atPath: directory.path))
     }
+
+    func testModelStoreURLUsesReadPaperApplicationSupportDirectory() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let storeURL = try ReadPaperModelStore.storeURL(applicationSupportDirectory: root)
+
+        XCTAssertEqual(storeURL, root.appendingPathComponent("ReadPaper.store"))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: root.path))
+    }
 }
