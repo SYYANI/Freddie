@@ -19,6 +19,7 @@ struct ReaderPaneView: View {
 
     @State private var pdfPageIndex = 0
     @State private var htmlReloadToken = 0
+    @State private var htmlSegmentUpdate: HTMLTranslationSegmentUpdate?
     @State private var isWorking = false
     @State private var isCancelling = false
     @State private var statusMessage: String?
@@ -258,7 +259,12 @@ struct ReaderPaneView: View {
         } else {
             switch readerMode {
             case .html:
-                HTMLReaderView(fileURL: htmlAttachment?.fileURL, displayMode: displayMode, reloadToken: htmlReloadToken)
+                HTMLReaderView(
+                    fileURL: htmlAttachment?.fileURL,
+                    displayMode: displayMode,
+                    reloadToken: htmlReloadToken,
+                    segmentUpdate: htmlSegmentUpdate
+                )
             case .pdf:
                 labeledPDFReader(
                     fileURL: pdfAttachment?.fileURL,
@@ -306,6 +312,7 @@ struct ReaderPaneView: View {
     private func translateHTML() {
         guard let paper, let htmlAttachment, let settings else { return }
         let settingsSnapshot = AppSettingsSnapshot(settings)
+        htmlSegmentUpdate = nil
         isWorking = true
         isCancelling = false
         statusMessage = "Translating HTML..."
@@ -317,15 +324,18 @@ struct ReaderPaneView: View {
                     paper: paper,
                     settings: settingsSnapshot,
                     modelContext: modelContext,
-                    onSegmentTranslated: { processed, total in
+                    onDocumentPrepared: {
                         displayMode = .bilingual
                         htmlReloadToken += 1
-                        statusMessage = "Translated HTML \(processed)/\(total)..."
+                    },
+                    onSegmentTranslated: { update in
+                        displayMode = .bilingual
+                        htmlSegmentUpdate = update
+                        statusMessage = "Translated HTML \(update.processedSegments)/\(update.totalSegments)..."
                     }
                 )
                 try Task.checkCancellation()
                 displayMode = .bilingual
-                htmlReloadToken += 1
                 statusMessage = "HTML translation completed."
             } catch is CancellationError {
                 statusMessage = "Translation cancelled."

@@ -10,6 +10,14 @@ struct HTMLTranslationCandidate: Equatable, Sendable {
     var protectedFragments: [String]
 }
 
+struct HTMLTranslationSegmentUpdate: Equatable, Sendable {
+    var sequence: Int
+    var processedSegments: Int
+    var totalSegments: Int
+    var segmentID: String
+    var translatedHTML: String
+}
+
 @MainActor
 final class HTMLTranslationPipeline {
     private let client: ChatTranslationClient
@@ -23,7 +31,8 @@ final class HTMLTranslationPipeline {
         paper: Paper,
         settings: AppSettingsSnapshot,
         modelContext: ModelContext,
-        onSegmentTranslated: ((Int, Int) -> Void)? = nil
+        onDocumentPrepared: (() -> Void)? = nil,
+        onSegmentTranslated: ((HTMLTranslationSegmentUpdate) -> Void)? = nil
     ) async throws {
         try Task.checkCancellation()
         guard attachment.kind == .html else { throw PaperImportError.missingHTML }
@@ -34,6 +43,8 @@ final class HTMLTranslationPipeline {
         let document = try SwiftSoup.parse(extraction.preparedHTML)
         let client = self.client
         try Self.injectDisplayStyles(into: document)
+        try Self.writeDocument(document, to: htmlURL)
+        onDocumentPrepared?()
 
         let job = TranslationJob(
             paperID: paper.id,
@@ -56,7 +67,13 @@ final class HTMLTranslationPipeline {
                 job.modifiedAt = Date()
                 try modelContext.save()
                 try Self.writeDocument(document, to: htmlURL)
-                onSegmentTranslated?(job.processedSegments, candidates.count)
+                onSegmentTranslated?(HTMLTranslationSegmentUpdate(
+                    sequence: job.processedSegments,
+                    processedSegments: job.processedSegments,
+                    totalSegments: candidates.count,
+                    segmentID: candidate.segmentID,
+                    translatedHTML: Self.renderTranslation(translated, candidate: candidate)
+                ))
             }
 
             for candidate in candidates {
