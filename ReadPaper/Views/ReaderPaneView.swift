@@ -2,6 +2,13 @@ import SwiftData
 import SwiftUI
 
 struct ReaderPaneView: View {
+    private enum PrimaryReaderMode: String, CaseIterable, Identifiable {
+        case html
+        case pdf
+
+        var id: String { rawValue }
+    }
+
     @Environment(\.modelContext) private var modelContext
 
     var paper: Paper?
@@ -16,6 +23,7 @@ struct ReaderPaneView: View {
     @State private var isCancelling = false
     @State private var statusMessage: String?
     @State private var translationTask: Task<Void, Never>?
+    @State private var lastPDFReaderMode: ReaderMode = .pdf
 
     private var pdfAttachment: PaperAttachment? {
         attachments.first { $0.kind == .pdf }
@@ -39,6 +47,38 @@ struct ReaderPaneView: View {
 
     private var translationControlsDisabled: Bool {
         isWorking || (!canTranslateHTML && !canTranslatePDF)
+    }
+
+    private var primaryReaderMode: Binding<PrimaryReaderMode> {
+        Binding(
+            get: {
+                readerMode == .html ? .html : .pdf
+            },
+            set: { newValue in
+                switch newValue {
+                case .html:
+                    if readerMode != .html {
+                        lastPDFReaderMode = normalizedPDFReaderMode(readerMode)
+                    }
+                    readerMode = .html
+                case .pdf:
+                    readerMode = normalizedPDFReaderMode(lastPDFReaderMode)
+                }
+            }
+        )
+    }
+
+    private var pdfReaderModeSelection: Binding<ReaderMode> {
+        Binding(
+            get: {
+                normalizedPDFReaderMode(readerMode == .html ? lastPDFReaderMode : readerMode)
+            },
+            set: { newValue in
+                let normalizedMode = normalizedPDFReaderMode(newValue)
+                lastPDFReaderMode = normalizedMode
+                readerMode = normalizedMode
+            }
+        )
     }
 
     var body: some View {
@@ -105,6 +145,10 @@ struct ReaderPaneView: View {
                 ToolbarItem(placement: .primaryAction) {
                     htmlDisplayPicker
                 }
+            } else {
+                ToolbarItem(placement: .primaryAction) {
+                    pdfDisplayPicker
+                }
             }
 
             ToolbarItemGroup(placement: .primaryAction) {
@@ -125,42 +169,46 @@ struct ReaderPaneView: View {
     }
 
     private var readerModePicker: some View {
-        Picker("Reader", selection: $readerMode) {
-            Label("HTML", systemImage: "globe")
-                .labelStyle(.iconOnly)
-                .tag(ReaderMode.html)
-            Label("PDF", systemImage: "doc")
-                .labelStyle(.iconOnly)
-                .tag(ReaderMode.pdf)
-            Label("Bilingual PDF", systemImage: "rectangle.split.2x1")
-                .labelStyle(.iconOnly)
-                .tag(ReaderMode.bilingualPDF)
-            Label("Translated PDF", systemImage: "character.book.closed")
-                .labelStyle(.iconOnly)
-                .tag(ReaderMode.translatedPDF)
+        Picker("Reader", selection: primaryReaderMode) {
+            Text("HTML")
+                .tag(PrimaryReaderMode.html)
+            Text("PDF")
+                .tag(PrimaryReaderMode.pdf)
         }
         .pickerStyle(.segmented)
-        .frame(width: 176)
+        .frame(width: 120)
         .labelsHidden()
-        .help("Reader Mode")
+        .help("Switch between HTML and PDF reading")
     }
 
     private var htmlDisplayPicker: some View {
         Picker("Display", selection: $displayMode) {
-            Image(systemName: "text.alignleft")
-                .accessibilityLabel("Original")
+            Text("Original")
                 .tag(TranslationDisplayMode.original)
-            Image(systemName: "rectangle.split.1x2")
-                .accessibilityLabel("Bilingual")
+            Text("Bilingual")
                 .tag(TranslationDisplayMode.bilingual)
-            Image(systemName: "character.book.closed")
-                .accessibilityLabel("Translated")
+            Text("Translated")
                 .tag(TranslationDisplayMode.translated)
         }
         .pickerStyle(.segmented)
-        .frame(width: 128)
+        .frame(width: 250)
         .labelsHidden()
         .help("HTML Display Mode")
+    }
+
+    private var pdfDisplayPicker: some View {
+        Picker("PDF Display", selection: pdfReaderModeSelection) {
+            Text("Original")
+                .tag(ReaderMode.pdf)
+            Text("Bilingual")
+                .tag(ReaderMode.bilingualPDF)    
+            Text("Translated")
+                .tag(ReaderMode.translatedPDF)
+        }
+        .pickerStyle(.segmented)
+        .frame(width: 250)
+        .labelsHidden()
+        .help("PDF Display Mode")
     }
 
     private var translationMenu: some View {
@@ -479,5 +527,14 @@ struct ReaderPaneView: View {
             .padding(.vertical, 4)
             .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6))
             .padding(8)
+    }
+
+    private func normalizedPDFReaderMode(_ mode: ReaderMode) -> ReaderMode {
+        switch mode {
+        case .html:
+            .pdf
+        case .pdf, .bilingualPDF, .translatedPDF:
+            mode
+        }
     }
 }
