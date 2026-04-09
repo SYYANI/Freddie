@@ -50,11 +50,31 @@ struct ReaderPaneView: View {
             case .html:
                 HTMLReaderView(fileURL: htmlAttachment?.fileURL, displayMode: displayMode, reloadToken: htmlReloadToken)
             case .pdf:
-                PDFReaderView(fileURL: pdfAttachment?.fileURL, pageIndex: $pdfPageIndex)
+                labeledPDFReader(
+                    fileURL: pdfAttachment?.fileURL,
+                    label: "Original",
+                    emptyTitle: "No PDF available",
+                    emptyDescription: "Import a PDF or fetch one from arXiv to read it here."
+                )
             case .bilingualPDF:
-                DualPDFReaderView(
-                    originalURL: pdfAttachment?.fileURL,
-                    translatedURL: translatedPDFAttachment?.fileURL
+                if translatedPDFAttachment != nil {
+                    DualPDFReaderView(
+                        originalURL: pdfAttachment?.fileURL,
+                        translatedURL: translatedPDFAttachment?.fileURL
+                    )
+                } else {
+                    ContentUnavailableView(
+                        "No translated PDF",
+                        systemImage: "character.book.closed",
+                        description: Text("Run PDF translation first to compare the original and translated versions side by side.")
+                    )
+                }
+            case .translatedPDF:
+                labeledPDFReader(
+                    fileURL: translatedPDFAttachment?.fileURL,
+                    label: "Translation",
+                    emptyTitle: "No translated PDF",
+                    emptyDescription: "Run PDF translation first to read the translated PDF on its own."
                 )
             }
         }
@@ -67,18 +87,20 @@ struct ReaderPaneView: View {
                     Text("HTML").tag(ReaderMode.html)
                     Text("PDF").tag(ReaderMode.pdf)
                     Text("Bilingual PDF").tag(ReaderMode.bilingualPDF)
+                    Text("Translated PDF").tag(ReaderMode.translatedPDF)
                 }
                 .pickerStyle(.segmented)
-                .frame(width: 320)
+                .frame(width: 460)
 
-                Picker("Display", selection: $displayMode) {
-                    Text("Original").tag(TranslationDisplayMode.original)
-                    Text("Bilingual").tag(TranslationDisplayMode.bilingual)
-                    Text("Translated").tag(TranslationDisplayMode.translated)
+                if readerMode == .html {
+                    Picker("Display", selection: $displayMode) {
+                        Text("Original").tag(TranslationDisplayMode.original)
+                        Text("Bilingual").tag(TranslationDisplayMode.bilingual)
+                        Text("Translated").tag(TranslationDisplayMode.translated)
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(width: 320)
                 }
-                .pickerStyle(.segmented)
-                .frame(width: 320)
-                .disabled(readerMode != .html)
 
                 Spacer()
 
@@ -219,5 +241,35 @@ struct ReaderPaneView: View {
         isCancelling = true
         statusMessage = "Cancelling translation..."
         translationTask?.cancel()
+    }
+
+    @ViewBuilder
+    private func labeledPDFReader(
+        fileURL: URL?,
+        label: String,
+        emptyTitle: String,
+        emptyDescription: String
+    ) -> some View {
+        if fileURL != nil {
+            PDFReaderView(fileURL: fileURL, pageIndex: $pdfPageIndex)
+                .overlay(alignment: .topLeading) {
+                    readerLabel(label)
+                }
+        } else {
+            ContentUnavailableView(
+                emptyTitle,
+                systemImage: "doc.richtext",
+                description: Text(emptyDescription)
+            )
+        }
+    }
+
+    private func readerLabel(_ value: String) -> some View {
+        Text(value)
+            .font(.caption.weight(.semibold))
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6))
+            .padding(8)
     }
 }

@@ -23,6 +23,7 @@ enum ReaderMode: String, Codable, CaseIterable, Identifiable {
     case html
     case pdf
     case bilingualPDF
+    case translatedPDF
 
     var id: String { rawValue }
 }
