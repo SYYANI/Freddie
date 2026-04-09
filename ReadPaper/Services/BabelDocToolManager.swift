@@ -56,6 +56,26 @@ struct BabelDocToolManager {
         return .missing
     }
 
+    func installedVersion() async throws -> String? {
+        let executableURL = try babelDocExecutableURL
+        guard FileManager.default.isExecutableFile(atPath: executableURL.path) else {
+            return nil
+        }
+
+        let result = try await runner.run(
+            executableURL: executableURL,
+            arguments: ["--version"],
+            environment: try environment(),
+            currentDirectoryURL: try toolRoot
+        )
+
+        guard result.exitCode == 0 else {
+            return nil
+        }
+
+        return Self.parseInstalledVersion(from: result.combinedOutput)
+    }
+
     func installOrUpdateBabelDOC(version: String) async throws -> ProcessResult {
         try prepareDirectories()
         let uvURL = try await ensureUV()
@@ -115,6 +135,26 @@ struct BabelDocToolManager {
         ["/opt/homebrew/bin/uv", "/usr/local/bin/uv", "/usr/bin/uv"]
             .map { URL(fileURLWithPath: $0) }
             .first { FileManager.default.isExecutableFile(atPath: $0.path) }
+    }
+
+    private static func parseInstalledVersion(from output: String) -> String? {
+        let trimmedOutput = output.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmedOutput.isEmpty == false else {
+            return nil
+        }
+
+        let lines = trimmedOutput
+            .split(whereSeparator: \.isNewline)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { $0.isEmpty == false }
+
+        for line in lines {
+            if let range = line.range(of: #"(?i)\b\d+\.\d+\.\d+(?:[-+._A-Za-z0-9]*)?\b"#, options: .regularExpression) {
+                return String(line[range])
+            }
+        }
+
+        return lines.first
     }
 }
 

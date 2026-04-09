@@ -83,6 +83,7 @@ LLM 配置现已拆成独立 SwiftData 模型：`LLMProviderProfile` 负责 prov
 - HTML 翻译进度在阅读器中优先使用确定型进度条展示；如果已知总段数，至少同时显示线性进度和 `processed/total` 计数，不要只保留 `1/xxx` 这类纯文本进度提示。
 - HTML 翻译会保护 `math`、`.ltx_Math`、`cite`、`code`，生成 `[PROTECTED_N]` 占位符；改 prompt 或渲染时必须保持占位符可恢复。
 - 设置页中的翻译配置已拆成 `Translation`、`Providers`、`Models` 三个区块。后续扩展优先沿用这个结构，不要再加回“单 Base URL + 三个模型名”的旧表单。
+- 设置页中的 BabelDOC 区域要区分“当前已安装版本”和“目标版本”：当前版本应来自对本地 `babeldoc` 可执行文件的实际探测并只读展示，目标版本才是用户可编辑、用于 `uv tool install ... BabelDOC==<version>` 的配置值；不要把可编辑输入框误当成已安装状态展示。
 - Reader 和设置页里的 LLM 错误要尽量按场景区分，例如 HTML 路由缺失、PDF 路由缺失、provider 被禁用、API key 缺失、测试模型不可用，而不是统一报成一个笼统的缺配置错误。
 - BabelDOC 通过 `BabelDocRunner` 和 `ProcessRunner` 启动外部进程，参数中的模型、base URL 和 API key 来自 PDF route snapshot；API key 要使用现有 redaction 逻辑，不要把外部工具失败吞掉成静默失败。
 - `ProcessRunner` 需要持续 draining stdout/stderr，并正确响应取消；改动时保留大输出和取消相关测试。

@@ -67,6 +67,8 @@ private struct SettingsForm: View {
 
     @State private var generalStatusMessage: String?
     @State private var isInstallingBabelDOC = false
+    @State private var installedBabelDocVersion: String?
+    @State private var isLoadingInstalledBabelDocVersion = false
 
     private let keychainStore = KeychainStore()
     private let validator = LLMProviderValidationUseCase()
@@ -138,6 +140,7 @@ private struct SettingsForm: View {
         .task {
             _ = try? LLMConfigurationBootstrapper().ensureBootstrap(modelContext: modelContext)
             loadInitialSelectionIfNeeded()
+            await refreshInstalledBabelDOCVersion()
         }
         .onChange(of: selectedProviderID) { _, _ in
             applySelectedProvider()
@@ -175,7 +178,18 @@ private struct SettingsForm: View {
                 }
 
                 Section("BabelDOC") {
-                    TextField("BabelDOC version", text: $settings.babelDocVersion)
+                    LabeledContent("Current installed version") {
+                        if isLoadingInstalledBabelDocVersion {
+                            ProgressView()
+                                .controlSize(.small)
+                        } else {
+                            Text(installedBabelDocVersion ?? "Not installed")
+                                .foregroundStyle(installedBabelDocVersion == nil ? .secondary : .primary)
+                                .textSelection(.enabled)
+                        }
+                    }
+
+                    TextField("Target version", text: $settings.babelDocVersion)
 
                     Button(isInstallingBabelDOC ? "Installing..." : "Install or update BabelDOC") {
                         installBabelDOC()
@@ -715,13 +729,29 @@ private struct SettingsForm: View {
             do {
                 let result = try await BabelDocToolManager().installOrUpdateBabelDOC(version: settings.babelDocVersion)
                 if result.exitCode == 0 {
-                    generalStatusMessage = "BabelDOC is ready."
+                    await refreshInstalledBabelDOCVersion()
+                    if let installedBabelDocVersion {
+                        generalStatusMessage = "BabelDOC is ready. Installed version: \(installedBabelDocVersion)."
+                    } else {
+                        generalStatusMessage = "BabelDOC is ready."
+                    }
                 } else {
                     generalStatusMessage = "Error: \(result.combinedOutput)"
                 }
             } catch {
                 generalStatusMessage = "Error: \(error.localizedDescription)"
             }
+        }
+    }
+
+    private func refreshInstalledBabelDOCVersion() async {
+        isLoadingInstalledBabelDocVersion = true
+        defer { isLoadingInstalledBabelDocVersion = false }
+
+        do {
+            installedBabelDocVersion = try await BabelDocToolManager().installedVersion()
+        } catch {
+            installedBabelDocVersion = nil
         }
     }
 
