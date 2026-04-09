@@ -32,6 +32,7 @@ final class HTMLTranslationPipeline {
         settings: AppSettingsSnapshot,
         modelContext: ModelContext,
         onDocumentPrepared: (() -> Void)? = nil,
+        onProgressUpdated: ((Int, Int) -> Void)? = nil,
         onSegmentTranslated: ((HTMLTranslationSegmentUpdate) -> Void)? = nil
     ) async throws {
         try Task.checkCancellation()
@@ -56,6 +57,7 @@ final class HTMLTranslationPipeline {
         )
         modelContext.insert(job)
         try modelContext.save()
+        onProgressUpdated?(0, candidates.count)
 
         do {
             var pendingCandidates: [HTMLTranslationCandidate] = []
@@ -67,6 +69,7 @@ final class HTMLTranslationPipeline {
                 job.modifiedAt = Date()
                 try modelContext.save()
                 try Self.writeDocument(document, to: htmlURL)
+                onProgressUpdated?(job.processedSegments, candidates.count)
                 onSegmentTranslated?(HTMLTranslationSegmentUpdate(
                     sequence: job.processedSegments,
                     processedSegments: job.processedSegments,

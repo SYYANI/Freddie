@@ -9,6 +9,11 @@ struct ReaderPaneView: View {
         var id: String { rawValue }
     }
 
+    private struct TranslationProgressStatus: Equatable {
+        var completed: Int
+        var total: Int
+    }
+
     @Environment(\.modelContext) private var modelContext
 
     var paper: Paper?
@@ -23,6 +28,7 @@ struct ReaderPaneView: View {
     @State private var isWorking = false
     @State private var isCancelling = false
     @State private var statusMessage: String?
+    @State private var translationProgress: TranslationProgressStatus?
     @State private var translationTask: Task<Void, Never>?
     @State private var lastPDFReaderMode: ReaderMode = .pdf
 
@@ -297,15 +303,34 @@ struct ReaderPaneView: View {
     }
 
     private var statusRow: some View {
-        HStack(spacing: 8) {
-            if isWorking {
-                ProgressView()
-                    .controlSize(.small)
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                if isWorking, translationProgress == nil {
+                    ProgressView()
+                        .controlSize(.small)
+                }
+                Text(statusMessage ?? "Working...")
+                    .font(.caption)
+                    .foregroundStyle(statusMessage?.hasPrefix("Error") == true ? .red : .secondary)
+                    .lineLimit(1)
+
+                Spacer(minLength: 0)
+
+                if let translationProgress {
+                    Text("\(translationProgress.completed)/\(translationProgress.total)")
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.tertiary)
+                }
             }
-            Text(statusMessage ?? "Working...")
-                .font(.caption)
-                .foregroundStyle(statusMessage?.hasPrefix("Error") == true ? .red : .secondary)
-                .lineLimit(1)
+
+            if let translationProgress, translationProgress.total > 0 {
+                ProgressView(
+                    value: Double(translationProgress.completed),
+                    total: Double(translationProgress.total)
+                )
+                .progressViewStyle(.linear)
+                .controlSize(.small)
+            }
         }
     }
 
@@ -313,6 +338,7 @@ struct ReaderPaneView: View {
         guard let paper, let htmlAttachment, let settings else { return }
         let settingsSnapshot = AppSettingsSnapshot(settings)
         htmlSegmentUpdate = nil
+        translationProgress = nil
         isWorking = true
         isCancelling = false
         statusMessage = "Translating HTML..."
@@ -328,18 +354,27 @@ struct ReaderPaneView: View {
                         displayMode = .bilingual
                         htmlReloadToken += 1
                     },
+                    onProgressUpdated: { processedSegments, totalSegments in
+                        translationProgress = totalSegments > 0 ? TranslationProgressStatus(
+                            completed: processedSegments,
+                            total: totalSegments
+                        ) : nil
+                        statusMessage = totalSegments > 0 ? "Translating HTML..." : "Preparing HTML translation..."
+                    },
                     onSegmentTranslated: { update in
                         displayMode = .bilingual
                         htmlSegmentUpdate = update
-                        statusMessage = "Translated HTML \(update.processedSegments)/\(update.totalSegments)..."
                     }
                 )
                 try Task.checkCancellation()
                 displayMode = .bilingual
+                translationProgress = nil
                 statusMessage = "HTML translation completed."
             } catch is CancellationError {
+                translationProgress = nil
                 statusMessage = "Translation cancelled."
             } catch {
+                translationProgress = nil
                 statusMessage = "Error: \(error.localizedDescription)"
             }
             isWorking = false
@@ -351,6 +386,7 @@ struct ReaderPaneView: View {
     private func translatePDF() {
         guard let paper, let pdfAttachment, let settings else { return }
         let settingsSnapshot = AppSettingsSnapshot(settings)
+        translationProgress = nil
         isWorking = true
         isCancelling = false
         statusMessage = "Running BabelDOC..."
