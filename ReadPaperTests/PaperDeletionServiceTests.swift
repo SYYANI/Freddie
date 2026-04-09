@@ -19,9 +19,22 @@ final class PaperDeletionServiceTests: XCTestCase {
 
         let otherPaper = Paper(title: "Other Paper")
         otherPaper.localDirectoryPath = try fileStore.directory(for: otherPaper.id).path
+        let provider = LLMProviderProfile(
+            name: "Provider",
+            baseURL: "https://api.example.test/v1",
+            apiKeyRef: "provider-ref",
+            testModel: "gpt-test"
+        )
+        let model = LLMModelProfile(
+            providerID: provider.id,
+            name: "Model",
+            modelName: "gpt-test"
+        )
 
         modelContext.insert(targetPaper)
         modelContext.insert(otherPaper)
+        modelContext.insert(provider)
+        modelContext.insert(model)
         modelContext.insert(PaperAttachment(
             paperID: targetPaper.id,
             kind: .pdf,
@@ -74,6 +87,8 @@ final class PaperDeletionServiceTests: XCTestCase {
         XCTAssertEqual(try relatedReadingStatePaperIDs(in: modelContext), [otherPaper.id])
         XCTAssertEqual(try relatedSegmentPaperIDs(in: modelContext), [otherPaper.id])
         XCTAssertEqual(try relatedJobPaperIDs(in: modelContext), [otherPaper.id])
+        XCTAssertEqual(try modelContext.fetch(FetchDescriptor<LLMProviderProfile>()).map(\.id), [provider.id])
+        XCTAssertEqual(try modelContext.fetch(FetchDescriptor<LLMModelProfile>()).map(\.id), [model.id])
     }
 
     @MainActor
@@ -84,7 +99,9 @@ final class PaperDeletionServiceTests: XCTestCase {
             ReadingState.self,
             Note.self,
             TranslationSegment.self,
-            TranslationJob.self
+            TranslationJob.self,
+            LLMProviderProfile.self,
+            LLMModelProfile.self
         ])
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
         return try ModelContainer(for: schema, configurations: [configuration])

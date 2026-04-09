@@ -132,11 +132,20 @@ struct HTMLLocalizer: @unchecked Sendable {
                 options: ReadabilityOptions(keepClasses: true)
             )
             let result = try readability.parse()
+            guard try shouldUseReadabilityResult(result) else {
+                return nil
+            }
             try applyReadabilityResult(result, to: document)
             return document
         } catch {
             return nil
         }
+    }
+
+    private func shouldUseReadabilityResult(_ result: ReadabilityResult) throws -> Bool {
+        let contentDocument = try SwiftSoup.parseBodyFragment(result.content)
+        let visibleText = try contentDocument.text().trimmingCharacters(in: .whitespacesAndNewlines)
+        return visibleText.count >= 40
     }
 
     private func applyReadabilityResult(_ result: ReadabilityResult, to document: Document) throws {

@@ -60,7 +60,6 @@ enum PaperImportError: Error, LocalizedError {
     case missingPDF
     case missingHTML
     case unsupportedFile(URL)
-    case missingAPIConfiguration
     case noTranslatedPDFProduced
 
     var errorDescription: String? {
@@ -73,8 +72,6 @@ enum PaperImportError: Error, LocalizedError {
             "No HTML attachment is available for this paper."
         case .unsupportedFile(let url):
             "Unsupported file: \(url.lastPathComponent)"
-        case .missingAPIConfiguration:
-            "Configure an OpenAI-compatible base URL, model, and API key first."
         case .noTranslatedPDFProduced:
             "BabelDOC finished without producing a translated PDF."
         }

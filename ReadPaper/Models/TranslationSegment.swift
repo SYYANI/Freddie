@@ -10,6 +10,8 @@ final class TranslationSegment {
     var sourceHash: String
     var sourceText: String
     var translatedText: String
+    var providerProfileID: UUID?
+    var modelProfileID: UUID?
     var modelName: String
     var createdAt: Date
     var modifiedAt: Date
@@ -22,6 +24,8 @@ final class TranslationSegment {
         sourceHash: String,
         sourceText: String,
         translatedText: String,
+        providerProfileID: UUID? = nil,
+        modelProfileID: UUID? = nil,
         modelName: String,
         createdAt: Date = Date(),
         modifiedAt: Date = Date()
@@ -33,6 +37,8 @@ final class TranslationSegment {
         self.sourceHash = sourceHash
         self.sourceText = sourceText
         self.translatedText = translatedText
+        self.providerProfileID = providerProfileID
+        self.modelProfileID = modelProfileID
         self.modelName = modelName
         self.createdAt = createdAt
         self.modifiedAt = modifiedAt

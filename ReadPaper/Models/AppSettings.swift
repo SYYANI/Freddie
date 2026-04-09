@@ -4,6 +4,9 @@ import SwiftData
 @Model
 final class AppSettings {
     @Attribute(.unique) var id: UUID
+    var selectedHTMLModelProfileID: UUID?
+    var selectedPDFModelProfileID: UUID?
+    var didBootstrapLLMProfilesValue: Bool?
     var openAIBaseURL: String
     var normalModelName: String
     var quickModelName: String
@@ -15,8 +18,16 @@ final class AppSettings {
     var createdAt: Date
     var modifiedAt: Date
 
+    var didBootstrapLLMProfiles: Bool {
+        get { didBootstrapLLMProfilesValue ?? false }
+        set { didBootstrapLLMProfilesValue = newValue }
+    }
+
     init(
         id: UUID = UUID(),
+        selectedHTMLModelProfileID: UUID? = nil,
+        selectedPDFModelProfileID: UUID? = nil,
+        didBootstrapLLMProfiles: Bool = false,
         openAIBaseURL: String = "https://api.openai.com/v1",
         normalModelName: String = "gpt-4o-mini",
         quickModelName: String = "gpt-4o-mini",
@@ -29,6 +40,9 @@ final class AppSettings {
         modifiedAt: Date = Date()
     ) {
         self.id = id
+        self.selectedHTMLModelProfileID = selectedHTMLModelProfileID
+        self.selectedPDFModelProfileID = selectedPDFModelProfileID
+        self.didBootstrapLLMProfilesValue = didBootstrapLLMProfiles
         self.openAIBaseURL = openAIBaseURL
         self.normalModelName = normalModelName
         self.quickModelName = quickModelName

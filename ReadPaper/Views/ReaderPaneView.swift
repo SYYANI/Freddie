@@ -344,7 +344,7 @@ struct ReaderPaneView: View {
 
     private func translateHTML() {
         guard let paper, let htmlAttachment, let settings else { return }
-        let settingsSnapshot = AppSettingsSnapshot(settings)
+        let preferences = TranslationPreferencesSnapshot(settings)
         htmlSegmentUpdate = nil
         translationProgress = nil
         isWorking = true
@@ -353,10 +353,16 @@ struct ReaderPaneView: View {
         translationTask = Task {
             do {
                 try Task.checkCancellation()
+                let resolvedRoute = try LLMRouteResolver().resolveHTMLRoute(
+                    settings: settings,
+                    modelContext: modelContext
+                )
                 try await HTMLTranslationPipeline().translateHTML(
                     attachment: htmlAttachment,
                     paper: paper,
-                    settings: settingsSnapshot,
+                    preferences: preferences,
+                    route: resolvedRoute.snapshot,
+                    apiKey: resolvedRoute.apiKey,
                     modelContext: modelContext,
                     onDocumentPrepared: {
                         displayMode = .bilingual
@@ -393,7 +399,7 @@ struct ReaderPaneView: View {
 
     private func translatePDF() {
         guard let paper, let pdfAttachment, let settings else { return }
-        let settingsSnapshot = AppSettingsSnapshot(settings)
+        let preferences = TranslationPreferencesSnapshot(settings)
         translationProgress = nil
         isWorking = true
         isCancelling = false
@@ -401,14 +407,14 @@ struct ReaderPaneView: View {
         translationTask = Task {
             do {
                 try Task.checkCancellation()
-                let apiKey = try KeychainStore().load(account: KeychainStore.openAIAPIKeyAccount) ?? ""
-                guard !apiKey.isEmpty else {
-                    throw PaperImportError.missingAPIConfiguration
-                }
+                let resolvedRoute = try LLMRouteResolver().resolvePDFRoute(
+                    settings: settings,
+                    modelContext: modelContext
+                )
                 let toolManager = BabelDocToolManager()
                 if try toolManager.detect() != .ready {
                     statusMessage = "Installing BabelDOC..."
-                    let installResult = try await toolManager.installOrUpdateBabelDOC(version: settingsSnapshot.babelDocVersion)
+                    let installResult = try await toolManager.installOrUpdateBabelDOC(version: preferences.babelDocVersion)
                     try Task.checkCancellation()
                     guard installResult.exitCode == 0 else {
                         throw BabelDocRunError.failed(installResult.combinedOutput)
@@ -419,8 +425,9 @@ struct ReaderPaneView: View {
                 let translated = try await BabelDocRunner().translatePDF(
                     inputPDF: pdfAttachment.fileURL,
                     outputDirectory: outputDirectory,
-                    settings: settingsSnapshot,
-                    apiKey: apiKey,
+                    preferences: preferences,
+                    route: resolvedRoute.snapshot,
+                    apiKey: resolvedRoute.apiKey,
                     babelDocExecutable: try toolManager.babelDocExecutableURL,
                     onStatusUpdate: { message in
                         Task { @MainActor in

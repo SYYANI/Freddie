@@ -2,7 +2,7 @@ import Foundation
 import Security
 
 struct KeychainStore {
-    static let openAIAPIKeyAccount = "openai-compatible-api-key"
+    static let legacyOpenAIAPIKeyAccount = "openai-compatible-api-key"
 
     let service: String
 

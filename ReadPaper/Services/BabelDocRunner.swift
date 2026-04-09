@@ -10,7 +10,8 @@ struct BabelDocRunner {
     func translatePDF(
         inputPDF: URL,
         outputDirectory: URL,
-        settings: AppSettingsSnapshot,
+        preferences: TranslationPreferencesSnapshot,
+        route: LLMModelRouteSnapshot,
         apiKey: String,
         babelDocExecutable: URL,
         onStatusUpdate: (@Sendable (String) -> Void)? = nil
@@ -25,7 +26,8 @@ struct BabelDocRunner {
             arguments: Self.arguments(
                 inputPDF: inputPDF,
                 outputDirectory: outputDirectory,
-                settings: settings,
+                preferences: preferences,
+                route: route,
                 apiKey: apiKey
             ),
             environment: ["PATH": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"],
@@ -45,24 +47,41 @@ struct BabelDocRunner {
         return translated
     }
 
-    static func arguments(inputPDF: URL, outputDirectory: URL, settings: AppSettingsSnapshot, apiKey: String) -> [String] {
+    static func arguments(
+        inputPDF: URL,
+        outputDirectory: URL,
+        preferences: TranslationPreferencesSnapshot,
+        route: LLMModelRouteSnapshot,
+        apiKey: String
+    ) -> [String] {
         [
             "--openai",
-            "--openai-model", settings.heavyModelName,
-            "--openai-base-url", settings.openAIBaseURL,
+            "--openai-model", route.modelName,
+            "--openai-base-url", route.baseURL,
             "--openai-api-key", apiKey,
             "--files", inputPDF.path,
             "--output", outputDirectory.path,
             "--lang-in", "en",
-            "--lang-out", settings.targetLanguage,
-            "--qps", "\(settings.babelDocQPS)",
+            "--lang-out", preferences.targetLanguage,
+            "--qps", "\(preferences.babelDocQPS)",
             "--no-dual",
             "--watermark-output-mode", "no_watermark"
         ]
     }
 
-    static func redactedArguments(inputPDF: URL, outputDirectory: URL, settings: AppSettingsSnapshot) -> [String] {
-        arguments(inputPDF: inputPDF, outputDirectory: outputDirectory, settings: settings, apiKey: "<redacted>")
+    static func redactedArguments(
+        inputPDF: URL,
+        outputDirectory: URL,
+        preferences: TranslationPreferencesSnapshot,
+        route: LLMModelRouteSnapshot
+    ) -> [String] {
+        arguments(
+            inputPDF: inputPDF,
+            outputDirectory: outputDirectory,
+            preferences: preferences,
+            route: route,
+            apiKey: "<redacted>"
+        )
     }
 
     static func redact(_ value: String, apiKey: String) -> String {

@@ -15,6 +15,8 @@ struct ReadPaperApp: App {
             TranslationSegment.self,
             TranslationJob.self,
             ToolInstallState.self,
+            LLMProviderProfile.self,
+            LLMModelProfile.self,
             AppSettings.self
         ])
 
@@ -28,9 +30,11 @@ struct ReadPaperApp: App {
                     TranslationSegment.self,
                     TranslationJob.self,
                     ToolInstallState.self,
+                    LLMProviderProfile.self,
+                    LLMModelProfile.self,
                     AppSettings.self
                 ])
-                .frame(width: 560, height: 440)
+                .frame(width: 920, height: 720)
         }
     }
 }

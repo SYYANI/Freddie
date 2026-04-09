@@ -92,9 +92,7 @@ struct ContentView: View {
     }
 
     private func ensureSettings() {
-        guard settingsRows.isEmpty else { return }
-        modelContext.insert(AppSettings())
-        try? modelContext.save()
+        _ = try? LLMConfigurationBootstrapper().ensureBootstrap(modelContext: modelContext)
     }
 
     private func confirmDeletion(at offsets: IndexSet) {

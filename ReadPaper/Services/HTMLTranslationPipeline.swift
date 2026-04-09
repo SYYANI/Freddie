@@ -20,16 +20,18 @@ struct HTMLTranslationSegmentUpdate: Equatable, Sendable {
 
 @MainActor
 final class HTMLTranslationPipeline {
-    private let client: ChatTranslationClient
+    private let client: TranslationLLMClientProtocol
 
-    init(client: ChatTranslationClient = ChatTranslationClient()) {
+    init(client: TranslationLLMClientProtocol = TranslationLLMClient()) {
         self.client = client
     }
 
     func translateHTML(
         attachment: PaperAttachment,
         paper: Paper,
-        settings: AppSettingsSnapshot,
+        preferences: TranslationPreferencesSnapshot,
+        route: LLMModelRouteSnapshot,
+        apiKey: String,
         modelContext: ModelContext,
         onDocumentPrepared: (() -> Void)? = nil,
         onProgressUpdated: ((Int, Int) -> Void)? = nil,
@@ -51,7 +53,7 @@ final class HTMLTranslationPipeline {
             paperID: paper.id,
             attachmentID: attachment.id,
             kind: "html",
-            targetLanguage: settings.targetLanguage,
+            targetLanguage: preferences.targetLanguage,
             state: .running,
             totalSegments: candidates.count
         )
@@ -84,8 +86,9 @@ final class HTMLTranslationPipeline {
                 if let cached = try cachedSegment(
                     paperID: paper.id,
                     sourceType: "html",
-                    targetLanguage: settings.targetLanguage,
+                    targetLanguage: preferences.targetLanguage,
                     sourceHash: candidate.sourceHash,
+                    route: route,
                     modelContext: modelContext
                 ) {
                     try applyTranslatedSegment(candidate, translated: cached.translatedText)
@@ -94,13 +97,18 @@ final class HTMLTranslationPipeline {
                 }
             }
 
-            let concurrency = max(1, settings.htmlTranslationConcurrency)
+            let concurrency = max(1, preferences.htmlTranslationConcurrency)
             for batch in pendingCandidates.chunked(into: concurrency) {
                 try Task.checkCancellation()
                 try await withThrowingTaskGroup(of: (HTMLTranslationCandidate, String).self) { group in
                     for candidate in batch {
                         group.addTask {
-                            let translated = try await client.translate(candidate.sourceText, purpose: "heavy", settings: settings)
+                            let translated = try await client.translate(
+                                candidate.sourceText,
+                                targetLanguage: preferences.targetLanguage,
+                                route: route,
+                                apiKey: apiKey
+                            )
                             return (candidate, translated)
                         }
                     }
@@ -110,11 +118,13 @@ final class HTMLTranslationPipeline {
                         modelContext.insert(TranslationSegment(
                             paperID: paper.id,
                             sourceType: "html",
-                            targetLanguage: settings.targetLanguage,
+                            targetLanguage: preferences.targetLanguage,
                             sourceHash: candidate.sourceHash,
                             sourceText: candidate.sourceText,
                             translatedText: translated,
-                            modelName: settings.heavyModelName
+                            providerProfileID: route.providerProfileID,
+                            modelProfileID: route.modelProfileID,
+                            modelName: route.modelName
                         ))
                         try applyTranslatedSegment(candidate, translated: translated)
                     }
@@ -146,6 +156,7 @@ final class HTMLTranslationPipeline {
         sourceType: String,
         targetLanguage: String,
         sourceHash: String,
+        route: LLMModelRouteSnapshot,
         modelContext: ModelContext
     ) throws -> TranslationSegment? {
         let segments = try modelContext.fetch(FetchDescriptor<TranslationSegment>())
@@ -153,7 +164,9 @@ final class HTMLTranslationPipeline {
             $0.paperID == paperID &&
                 $0.sourceType == sourceType &&
                 $0.targetLanguage == targetLanguage &&
-                $0.sourceHash == sourceHash
+                $0.sourceHash == sourceHash &&
+                $0.providerProfileID == route.providerProfileID &&
+                $0.modelProfileID == route.modelProfileID
         }
     }
 

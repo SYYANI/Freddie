@@ -3,27 +3,37 @@ import XCTest
 
 final class BabelDocRunnerTests: XCTestCase {
     func testArgumentsAndRedaction() {
-        let settings = AppSettingsSnapshot(
-            openAIBaseURL: "https://api.example.test/v1",
-            normalModelName: "paper-model",
-            quickModelName: "paper-model",
-            heavyModelName: "paper-model",
+        let preferences = TranslationPreferencesSnapshot(
             targetLanguage: "zh-CN",
             htmlTranslationConcurrency: 4,
             babelDocQPS: 7,
             babelDocVersion: "0.5.24"
+        )
+        let route = LLMModelRouteSnapshot(
+            providerProfileID: UUID(),
+            providerName: "Test Provider",
+            modelProfileID: UUID(),
+            modelProfileName: "Paper Model",
+            baseURL: "https://api.example.test/v1",
+            apiKeyRef: "provider-key",
+            modelName: "paper-model",
+            temperature: nil,
+            topP: nil,
+            maxTokens: nil
         )
         let input = URL(fileURLWithPath: "/tmp/paper.pdf")
         let output = URL(fileURLWithPath: "/tmp/out", isDirectory: true)
         let arguments = BabelDocRunner.arguments(
             inputPDF: input,
             outputDirectory: output,
-            settings: settings,
+            preferences: preferences,
+            route: route,
             apiKey: "sk-secret"
         )
 
         XCTAssertTrue(arguments.contains("--openai"))
         XCTAssertTrue(arguments.contains("paper-model"))
+        XCTAssertTrue(arguments.contains("https://api.example.test/v1"))
         XCTAssertTrue(arguments.contains("zh-CN"))
         XCTAssertTrue(arguments.contains("7"))
         XCTAssertTrue(arguments.contains("sk-secret"))

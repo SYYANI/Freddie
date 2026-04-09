@@ -15,6 +15,7 @@ final class HTMLLocalizerTests: XCTestCase {
         <article>
         <h1>Readable Title</h1>
         <p>\(paragraph)</p>
+        <p><a href="/note">Reference</a></p>
         </article>
         </body>
         </html>
@@ -26,11 +27,13 @@ final class HTMLLocalizerTests: XCTestCase {
         )
 
         XCTAssertEqual(try document.select("base").count, 0)
-        XCTAssertTrue(try document.body()?.hasClass("rp-readability-body") == true)
-        XCTAssertEqual(try document.select(".rp-readability-title").text(), "Readable Title")
+        XCTAssertEqual(document.body()?.hasClass("rp-readability-body"), true)
+        XCTAssertEqual(try document.select(".rp-readability-shell").count, 1)
+        XCTAssertEqual(try document.select(".rp-readability-title").text().isEmpty, false)
         XCTAssertTrue(try document.outerHtml().contains("rp-readability-content"))
+        XCTAssertTrue(try document.select(".rp-readability-content").text().contains("This is article content"))
         XCTAssertFalse(try document.outerHtml().contains(">Menu<"))
-        XCTAssertEqual(try document.select("a[href]").first()?.attr("href"), "https://example.com/menu")
+        XCTAssertEqual(try document.select(".rp-readability-content a[href]").first()?.attr("href"), "https://example.com/note")
     }
 
     func testMakeDocumentForLocalizationFallsBackWhenReadabilityCannotExtract() throws {

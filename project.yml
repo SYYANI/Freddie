@@ -7,6 +7,9 @@ packages:
   SwiftSoup:
     url: https://github.com/scinfu/SwiftSoup.git
     from: 2.7.0
+  SwiftOpenAI:
+    url: https://github.com/jamesrochabrun/SwiftOpenAI
+    from: 4.3.3
   Readability:
     path: swift-readability
 targets:
@@ -18,11 +21,13 @@ targets:
       - path: ReadPaper
     dependencies:
       - package: SwiftSoup
+      - package: SwiftOpenAI
       - package: Readability
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.yiyan.ReadPaper
         PRODUCT_NAME: Freddie
+        PRODUCT_MODULE_NAME: ReadPaper
         INFOPLIST_FILE: ReadPaper/Info.plist
         INFOPLIST_KEY_CFBundleDisplayName: Freddie
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
@@ -34,6 +39,7 @@ targets:
   ReadPaperTests:
     type: bundle.unit-test
     platform: macOS
+    hostApplication: ReadPaper
     deploymentTarget: "14.0"
     sources:
       - path: ReadPaperTests
@@ -45,6 +51,8 @@ targets:
         PRODUCT_NAME: ReadPaperTests
         INFOPLIST_FILE: ReadPaperTests/Info.plist
         SWIFT_VERSION: 6.0
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/Freddie.app/Contents/MacOS/Freddie
+        BUNDLE_LOADER: $(TEST_HOST)
 schemes:
   ReadPaper:
     build:
