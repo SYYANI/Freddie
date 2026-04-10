@@ -110,6 +110,17 @@ private struct SettingsForm: View {
         return ""
     }
 
+    private var targetLanguageBinding: Binding<String> {
+        Binding(
+            get: { settings.targetLanguage },
+            set: { newValue in
+                guard settings.targetLanguage != newValue else { return }
+                settings.targetLanguage = newValue
+                settings.modifiedAt = Date()
+            }
+        )
+    }
+
     var body: some View {
         TabView(selection: selectedTabBinding) {
             generalTab
@@ -167,12 +178,17 @@ private struct SettingsForm: View {
         VStack(alignment: .leading, spacing: 12) {
             Form {
                 Section("Translation") {
-                    TextField("Target language", text: $settings.targetLanguage)
+                    Picker("Target language", selection: targetLanguageBinding) {
+                        ForEach(TranslationTargetLanguage.supported) { option in
+                            Text(option.nativeName).tag(option.code)
+                        }
+                    }
+                    .pickerStyle(.menu)
 
                     Stepper("HTML concurrency: \(settings.htmlTranslationConcurrency)", value: $settings.htmlTranslationConcurrency, in: 1...12)
                     Stepper("BabelDOC QPS: \(settings.babelDocQPS)", value: $settings.babelDocQPS, in: 1...20)
 
-                    Text("Controls the default translation target and the amount of parallel work used for HTML and BabelDOC translation jobs.")
+                    Text("Controls the default translation target and the amount of parallel work used for HTML and BabelDOC translation jobs. Supported languages: English and Simplified Chinese.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
