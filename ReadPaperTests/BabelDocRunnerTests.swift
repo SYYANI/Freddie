@@ -2,6 +2,40 @@ import XCTest
 @testable import ReadPaper
 
 final class BabelDocRunnerTests: XCTestCase {
+    func testToolManagerFindsSiblingPythonForShellWrappedLauncher() throws {
+        let fm = FileManager.default
+        let tempRoot = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try fm.createDirectory(at: tempRoot, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: tempRoot) }
+
+        let manager = BabelDocToolManager(
+            fileStore: PaperFileStore(applicationSupportDirectory: tempRoot)
+        )
+        let venvBin = try manager.toolRoot
+            .appendingPathComponent("tools", isDirectory: true)
+            .appendingPathComponent("babeldoc", isDirectory: true)
+            .appendingPathComponent("bin", isDirectory: true)
+        try fm.createDirectory(at: venvBin, withIntermediateDirectories: true)
+
+        let launcher = venvBin.appendingPathComponent("babeldoc")
+        try """
+        #!/bin/sh
+        '''exec' '\(venvBin.appendingPathComponent("python3").path)' "$0" "$@"
+        ' '''
+        import sys
+        """.write(to: launcher, atomically: true, encoding: .utf8)
+        try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: launcher.path)
+
+        let python = venvBin.appendingPathComponent("python3")
+        fm.createFile(atPath: python.path, contents: Data(), attributes: [.posixPermissions: 0o755])
+
+        let publicLauncher = try manager.toolBinDirectory.appendingPathComponent("babeldoc")
+        try fm.createDirectory(at: publicLauncher.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try fm.createSymbolicLink(at: publicLauncher, withDestinationURL: launcher)
+
+        XCTAssertEqual(try manager.babelDocPythonExecutableURL(), python)
+    }
+
     func testArgumentsAndRedaction() {
         let preferences = TranslationPreferencesSnapshot(
             targetLanguage: "zh-CN",
@@ -37,6 +71,8 @@ final class BabelDocRunnerTests: XCTestCase {
         XCTAssertTrue(arguments.contains("zh-CN"))
         XCTAssertTrue(arguments.contains("7"))
         XCTAssertTrue(arguments.contains("sk-secret"))
+        XCTAssertTrue(arguments.contains("--report-interval"))
+        XCTAssertTrue(arguments.contains("0.1"))
 
         let redacted = BabelDocRunner.redact("token sk-secret leaked", apiKey: "sk-secret")
         XCTAssertEqual(redacted, "token <redacted> leaked")
@@ -46,6 +82,59 @@ final class BabelDocRunnerTests: XCTestCase {
             apiKey: "sk-secret"
         )
         XCTAssertEqual(status, "BabelDOC: working")
+    }
+
+    func testOutputParserDecodesStructuredBridgeEventsAcrossChunks() {
+        let parser = BabelDocOutputParser(apiKey: "sk-secret")
+
+        let firstChunk = parser.consume(ProcessOutputEvent(
+            channel: .standardOutput,
+            text: "\(BabelDocRunner.bridgeEventPrefix){\"type\":\"progress_start\",\"stage\":\"LayoutParser\"}\n\(BabelDocRunner.bridgeEventPrefix){\"type\":\"progress_update\""
+        ))
+        XCTAssertEqual(firstChunk.statusMessages, ["Analyzing layout"])
+        XCTAssertTrue(firstChunk.progressUpdates.isEmpty)
+
+        let secondChunk = parser.consume(ProcessOutputEvent(
+            channel: .standardOutput,
+            text: ",\"stage\":\"LayoutParser\",\"stage_current\":3,\"stage_total\":10,\"overall_progress\":42.4}\n"
+        ))
+        XCTAssertEqual(
+            secondChunk.progressUpdates,
+            [
+                BabelDocProgressUpdate(
+                    completed: 42.4,
+                    total: 100,
+                    summary: "42%",
+                    statusMessage: "Analyzing layout 3/10"
+                )
+            ]
+        )
+        XCTAssertTrue(secondChunk.statusMessages.isEmpty)
+    }
+
+    func testOutputParserRedactsFallbackLogsAndSanitizedOutputRemovesBridgeEvents() {
+        let parser = BabelDocOutputParser(apiKey: "sk-secret")
+
+        let parsed = parser.consume(ProcessOutputEvent(
+            channel: .standardError,
+            text: "using sk-secret\nstill working\n"
+        ))
+        XCTAssertEqual(
+            parsed.statusMessages,
+            [
+                "BabelDOC error: using <redacted>",
+                "BabelDOC error: still working"
+            ]
+        )
+
+        let sanitized = BabelDocRunner.sanitizedOutput(
+            """
+            \(BabelDocRunner.bridgeEventPrefix){"type":"progress_update","overall_progress":88}
+            visible sk-secret output
+            """,
+            apiKey: "sk-secret"
+        )
+        XCTAssertEqual(sanitized, "visible <redacted> output")
     }
 
     func testProcessRunnerDrainsLargeOutputWhileProcessRuns() async throws {

@@ -1,7 +1,141 @@
 import Foundation
 
+struct BabelDocProgressUpdate: Sendable, Equatable {
+    var completed: Double
+    var total: Double
+    var summary: String
+    var statusMessage: String
+}
+
+struct BabelDocBridgeEvent: Decodable, Sendable, Equatable {
+    var type: String
+    var stage: String?
+    var stageCurrent: Int?
+    var stageTotal: Int?
+    var stageProgress: Double?
+    var overallProgress: Double?
+    var partIndex: Int?
+    var totalParts: Int?
+    var error: String?
+
+    enum CodingKeys: String, CodingKey {
+        case type
+        case stage
+        case stageCurrent = "stage_current"
+        case stageTotal = "stage_total"
+        case stageProgress = "stage_progress"
+        case overallProgress = "overall_progress"
+        case partIndex = "part_index"
+        case totalParts = "total_parts"
+        case error
+    }
+}
+
+struct BabelDocOutputParseResult: Sendable {
+    var progressUpdates: [BabelDocProgressUpdate] = []
+    var statusMessages: [String] = []
+
+    mutating func append(_ other: BabelDocOutputParseResult) {
+        progressUpdates.append(contentsOf: other.progressUpdates)
+        statusMessages.append(contentsOf: other.statusMessages)
+    }
+}
+
+final class BabelDocOutputParser: @unchecked Sendable {
+    private let lock = NSLock()
+    private let apiKey: String
+    private var stdoutBuffer = ""
+    private var stderrBuffer = ""
+
+    init(apiKey: String) {
+        self.apiKey = apiKey
+    }
+
+    func consume(_ event: ProcessOutputEvent) -> BabelDocOutputParseResult {
+        let lines: [String]
+        lock.lock()
+        switch event.channel {
+        case .standardOutput:
+            stdoutBuffer += BabelDocRunner.redact(event.text, apiKey: apiKey)
+            let extracted = Self.extractLines(from: stdoutBuffer)
+            lines = extracted.lines
+            stdoutBuffer = extracted.remainder
+        case .standardError:
+            stderrBuffer += BabelDocRunner.redact(event.text, apiKey: apiKey)
+            let extracted = Self.extractLines(from: stderrBuffer)
+            lines = extracted.lines
+            stderrBuffer = extracted.remainder
+        }
+        lock.unlock()
+
+        return Self.parseLines(lines, channel: event.channel)
+    }
+
+    func finish() -> BabelDocOutputParseResult {
+        let stdoutRemainder: String
+        let stderrRemainder: String
+
+        lock.lock()
+        stdoutRemainder = stdoutBuffer
+        stderrRemainder = stderrBuffer
+        stdoutBuffer = ""
+        stderrBuffer = ""
+        lock.unlock()
+
+        var result = BabelDocOutputParseResult()
+        if stdoutRemainder.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
+            result.append(Self.parseLines([stdoutRemainder], channel: .standardOutput))
+        }
+        if stderrRemainder.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
+            result.append(Self.parseLines([stderrRemainder], channel: .standardError))
+        }
+        return result
+    }
+
+    private static func extractLines(from buffer: String) -> (lines: [String], remainder: String) {
+        let normalized = buffer
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
+        let parts = normalized.components(separatedBy: "\n")
+        guard normalized.hasSuffix("\n") == false else {
+            return (Array(parts.dropLast()), "")
+        }
+        return (Array(parts.dropLast()), parts.last ?? "")
+    }
+
+    private static func parseLines(_ lines: [String], channel: ProcessOutputChannel) -> BabelDocOutputParseResult {
+        var result = BabelDocOutputParseResult()
+
+        for rawLine in lines {
+            let line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard line.isEmpty == false else { continue }
+
+            if channel == .standardOutput, line.hasPrefix(BabelDocRunner.bridgeEventPrefix) {
+                let payload = String(line.dropFirst(BabelDocRunner.bridgeEventPrefix.count))
+                guard let bridgeEvent = BabelDocRunner.bridgeEvent(from: payload) else { continue }
+
+                if let progress = BabelDocRunner.progressUpdate(from: bridgeEvent) {
+                    result.progressUpdates.append(progress)
+                }
+                if let status = BabelDocRunner.structuredStatusMessage(from: bridgeEvent) {
+                    result.statusMessages.append(status)
+                }
+                continue
+            }
+
+            if let status = BabelDocRunner.statusMessage(forLine: line, channel: channel) {
+                result.statusMessages.append(status)
+            }
+        }
+
+        return result
+    }
+}
+
 struct BabelDocRunner {
     let processRunner: ProcessRunner
+
+    static let bridgeEventPrefix = "__READPAPER_BABELDOC_EVENT__"
 
     init(processRunner: ProcessRunner = ProcessRunner()) {
         self.processRunner = processRunner
@@ -13,32 +147,49 @@ struct BabelDocRunner {
         preferences: TranslationPreferencesSnapshot,
         route: LLMModelRouteSnapshot,
         apiKey: String,
-        babelDocExecutable: URL,
-        onStatusUpdate: (@Sendable (String) -> Void)? = nil
+        babelDocPythonExecutable: URL,
+        bridgeScript: URL,
+        environment: [String: String] = [:],
+        onStatusUpdate: (@Sendable (String) -> Void)? = nil,
+        onProgressUpdate: (@Sendable (BabelDocProgressUpdate) -> Void)? = nil
     ) async throws -> URL {
         if !FileManager.default.fileExists(atPath: outputDirectory.path) {
             try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
         }
 
         let startedAt = Date()
+        let outputParser = BabelDocOutputParser(apiKey: apiKey)
         let result = try await processRunner.run(
-            executableURL: babelDocExecutable,
-            arguments: Self.arguments(
+            executableURL: babelDocPythonExecutable,
+            arguments: [bridgeScript.path] + Self.arguments(
                 inputPDF: inputPDF,
                 outputDirectory: outputDirectory,
                 preferences: preferences,
                 route: route,
                 apiKey: apiKey
             ),
-            environment: ["PATH": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"],
+            environment: environment.merging(["PYTHONUNBUFFERED": "1"]) { _, new in new },
             currentDirectoryURL: outputDirectory,
             onOutput: { event in
-                guard let status = Self.statusMessage(from: event, apiKey: apiKey) else { return }
-                onStatusUpdate?(status)
+                let parsed = outputParser.consume(event)
+                for progress in parsed.progressUpdates {
+                    onProgressUpdate?(progress)
+                }
+                for status in parsed.statusMessages {
+                    onStatusUpdate?(status)
+                }
             }
         )
+        let finalParsed = outputParser.finish()
+        for progress in finalParsed.progressUpdates {
+            onProgressUpdate?(progress)
+        }
+        for status in finalParsed.statusMessages {
+            onStatusUpdate?(status)
+        }
         guard result.exitCode == 0 else {
-            throw BabelDocRunError.failed(Self.redact(result.combinedOutput, apiKey: apiKey))
+            let output = Self.sanitizedOutput(result.combinedOutput, apiKey: apiKey)
+            throw BabelDocRunError.failed(output.isEmpty ? "BabelDOC exited with code \(result.exitCode)." : output)
         }
 
         guard let translated = try newestPDF(in: outputDirectory, after: startedAt) else {
@@ -64,6 +215,7 @@ struct BabelDocRunner {
             "--lang-in", "en",
             "--lang-out", preferences.targetLanguage,
             "--qps", "\(preferences.babelDocQPS)",
+            "--report-interval", "0.1",
             "--no-dual",
             "--watermark-output-mode", "no_watermark"
         ]
@@ -89,6 +241,45 @@ struct BabelDocRunner {
         return value.replacingOccurrences(of: apiKey, with: "<redacted>")
     }
 
+    static func bridgeEvent(from payload: String) -> BabelDocBridgeEvent? {
+        let data = Data(payload.utf8)
+        return try? JSONDecoder().decode(BabelDocBridgeEvent.self, from: data)
+    }
+
+    static func progressUpdate(from event: BabelDocBridgeEvent) -> BabelDocProgressUpdate? {
+        guard event.type == "progress_update" || event.type == "progress_end" else {
+            return nil
+        }
+        guard let overallProgress = event.overallProgress else {
+            return nil
+        }
+
+        let clampedProgress = min(max(overallProgress, 0), 100)
+        return BabelDocProgressUpdate(
+            completed: clampedProgress,
+            total: 100,
+            summary: "\(Int(clampedProgress.rounded()))%",
+            statusMessage: stageStatusMessage(from: event, includeCounts: true) ?? "Translating PDF with BabelDOC..."
+        )
+    }
+
+    static func structuredStatusMessage(from event: BabelDocBridgeEvent) -> String? {
+        switch event.type {
+        case "stage_summary":
+            return "Preparing PDF translation..."
+        case "progress_start":
+            return stageStatusMessage(from: event, includeCounts: false)
+        case "error":
+            let message = event.error?.trimmingCharacters(in: .whitespacesAndNewlines)
+            if let message, message.isEmpty == false {
+                return "BabelDOC error: \(message.truncatedForStatus)"
+            }
+            return "BabelDOC error."
+        default:
+            return nil
+        }
+    }
+
     static func statusMessage(from event: ProcessOutputEvent, apiKey: String) -> String? {
         let redacted = redact(event.text, apiKey: apiKey)
         guard let line = redacted
@@ -99,8 +290,64 @@ struct BabelDocRunner {
             return nil
         }
 
-        let prefix = event.channel == .standardError ? "BabelDOC error" : "BabelDOC"
+        return statusMessage(forLine: line, channel: event.channel)
+    }
+
+    static func statusMessage(forLine line: String, channel: ProcessOutputChannel) -> String? {
+        let prefix = channel == .standardError ? "BabelDOC error" : "BabelDOC"
         return "\(prefix): \(line.truncatedForStatus)"
+    }
+
+    static func stageStatusMessage(from event: BabelDocBridgeEvent, includeCounts: Bool) -> String? {
+        guard let stage = event.stage, stage.isEmpty == false else {
+            return nil
+        }
+
+        var message = humanReadableStageName(stage)
+        if let totalParts = event.totalParts, totalParts > 1, let partIndex = event.partIndex {
+            message += " (part \(partIndex)/\(totalParts))"
+        }
+        if includeCounts, let stageTotal = event.stageTotal, stageTotal > 0 {
+            let stageCurrent = min(max(event.stageCurrent ?? 0, 0), stageTotal)
+            message += " \(stageCurrent)/\(stageTotal)"
+        }
+        return message
+    }
+
+    static func humanReadableStageName(_ stage: String) -> String {
+        switch stage {
+        case "DetectScannedFile":
+            return "Checking PDF content"
+        case "ILCreater":
+            return "Preparing PDF structure"
+        case "LayoutParser":
+            return "Analyzing layout"
+        case "ParagraphFinder":
+            return "Grouping paragraphs"
+        case "StylesAndFormulas":
+            return "Preserving styles and formulas"
+        case "ILTranslator":
+            return "Translating text blocks"
+        case "Typesetting":
+            return "Applying translated layout"
+        case "FontMapper":
+            return "Matching fonts"
+        case "PDFCreater":
+            return "Generating translated PDF"
+        default:
+            return stage.replacingOccurrences(of: "_", with: " ")
+        }
+    }
+
+    static func sanitizedOutput(_ output: String, apiKey: String) -> String {
+        let lines = redact(output, apiKey: apiKey)
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
+            .split(whereSeparator: \.isNewline)
+            .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { $0.isEmpty == false && $0.hasPrefix(bridgeEventPrefix) == false }
+
+        return Array(lines.suffix(20)).joined(separator: "\n")
     }
 
     private func newestPDF(in directory: URL, after start: Date) throws -> URL? {

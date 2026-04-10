@@ -16,8 +16,9 @@ struct ReaderPaneView: View {
     }
 
     private struct TranslationProgressStatus: Equatable {
-        var completed: Int
-        var total: Int
+        var completed: Double
+        var total: Double
+        var summary: String
     }
 
     @Environment(\.modelContext) private var modelContext
@@ -345,7 +346,7 @@ struct ReaderPaneView: View {
                 Spacer(minLength: 0)
 
                 if let translationProgress {
-                    Text("\(translationProgress.completed)/\(translationProgress.total)")
+                    Text(translationProgress.summary)
                         .font(.caption.monospacedDigit())
                         .foregroundStyle(.tertiary)
                 }
@@ -390,8 +391,9 @@ struct ReaderPaneView: View {
                     },
                     onProgressUpdated: { processedSegments, totalSegments in
                         translationProgress = totalSegments > 0 ? TranslationProgressStatus(
-                            completed: processedSegments,
-                            total: totalSegments
+                            completed: Double(processedSegments),
+                            total: Double(totalSegments),
+                            summary: "\(processedSegments)/\(totalSegments)"
                         ) : nil
                         statusMessage = totalSegments > 0 ? "Translating HTML..." : "Preparing HTML translation..."
                     },
@@ -442,17 +444,33 @@ struct ReaderPaneView: View {
                 }
                 statusMessage = "Translating PDF with BabelDOC..."
                 let outputDirectory = try PaperFileStore().translationsDirectory(for: paper)
+                let toolEnvironment = try toolManager.environment()
                 let translated = try await BabelDocRunner().translatePDF(
                     inputPDF: pdfAttachment.fileURL,
                     outputDirectory: outputDirectory,
                     preferences: preferences,
                     route: resolvedRoute.snapshot,
                     apiKey: resolvedRoute.apiKey,
-                    babelDocExecutable: try toolManager.babelDocExecutableURL,
+                    babelDocPythonExecutable: try toolManager.babelDocPythonExecutableURL(),
+                    bridgeScript: try toolManager.ensureProgressBridgeScript(),
+                    environment: toolEnvironment,
                     onStatusUpdate: { message in
                         Task { @MainActor in
                             guard isWorking, !isCancelling else { return }
-                            statusMessage = message
+                            if translationProgress == nil || message.hasPrefix("BabelDOC error") {
+                                statusMessage = message
+                            }
+                        }
+                    },
+                    onProgressUpdate: { progress in
+                        Task { @MainActor in
+                            guard isWorking, !isCancelling else { return }
+                            translationProgress = TranslationProgressStatus(
+                                completed: progress.completed,
+                                total: progress.total,
+                                summary: progress.summary
+                            )
+                            statusMessage = progress.statusMessage
                         }
                     }
                 )
@@ -466,10 +484,13 @@ struct ReaderPaneView: View {
                 ))
                 try modelContext.save()
                 readerMode = .bilingualPDF
+                translationProgress = nil
                 statusMessage = "PDF translation completed."
             } catch is CancellationError {
+                translationProgress = nil
                 statusMessage = "Translation cancelled."
             } catch {
+                translationProgress = nil
                 statusMessage = "Error: \(error.localizedDescription)"
             }
             isWorking = false
