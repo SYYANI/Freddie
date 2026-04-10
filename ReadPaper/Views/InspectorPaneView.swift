@@ -6,6 +6,7 @@ struct InspectorPaneView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var notePendingDeletion: Note?
     @State private var noteDeletionErrorMessage: String?
+    @State private var focusedNoteID: UUID?
     var paper: Paper?
     var notes: [Note]
 
@@ -136,8 +137,15 @@ struct InspectorPaneView: View {
                     .foregroundStyle(.secondary)
             } else {
                 ForEach(notes) { note in
-                    NoteEditor(note: note) {
+                    NoteEditor(
+                        note: note,
+                        shouldFocus: focusedNoteID == note.id
+                    ) {
                         notePendingDeletion = note
+                    } onFocusApplied: {
+                        if focusedNoteID == note.id {
+                            focusedNoteID = nil
+                        }
                     }
                 }
             }
@@ -145,11 +153,16 @@ struct InspectorPaneView: View {
     }
 
     private func addNote(for paper: Paper) {
-        modelContext.insert(Note(paperID: paper.id, body: ""))
+        let note = Note(paperID: paper.id, body: "")
+        modelContext.insert(note)
         try? modelContext.save()
+        focusedNoteID = note.id
     }
 
     private func deleteNote(_ note: Note) {
+        if focusedNoteID == note.id {
+            focusedNoteID = nil
+        }
         modelContext.delete(note)
 
         do {
@@ -233,7 +246,9 @@ struct InspectorPaneView: View {
 
 private struct NoteEditor: View {
     @Bindable var note: Note
+    let shouldFocus: Bool
     let onDelete: () -> Void
+    let onFocusApplied: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -257,7 +272,9 @@ private struct NoteEditor: View {
                         note.body = newValue
                         note.modifiedAt = Date()
                     }
-                )
+                ),
+                shouldFocus: shouldFocus,
+                onFocusApplied: onFocusApplied
             )
                 .frame(minHeight: 90)
                 .background(
@@ -267,6 +284,7 @@ private struct NoteEditor: View {
                 .overlay {
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
                         .stroke(.quaternary)
+                        .allowsHitTesting(false)
                 }
         }
     }
@@ -274,9 +292,11 @@ private struct NoteEditor: View {
 
 private struct InsetTextView: NSViewRepresentable {
     @Binding var text: String
+    var shouldFocus: Bool
+    var onFocusApplied: () -> Void
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(text: $text)
+        Coordinator(text: $text, onFocusApplied: onFocusApplied)
     }
 
     func makeNSView(context: Context) -> NSScrollView {
@@ -290,9 +310,16 @@ private struct InsetTextView: NSViewRepresentable {
         let textView = NSTextView()
         textView.delegate = context.coordinator
         textView.drawsBackground = false
+        textView.isEditable = true
+        textView.isSelectable = true
         textView.isRichText = false
         textView.importsGraphics = false
         textView.allowsUndo = true
+        textView.isHorizontallyResizable = false
+        textView.isVerticallyResizable = true
+        textView.minSize = NSSize(width: 0, height: 0)
+        textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+        textView.autoresizingMask = [.width]
         textView.isAutomaticQuoteSubstitutionEnabled = false
         textView.isAutomaticDashSubstitutionEnabled = false
         textView.isAutomaticTextReplacementEnabled = false
@@ -314,18 +341,55 @@ private struct InsetTextView: NSViewRepresentable {
         if textView.string != text {
             textView.string = text
         }
+
+        context.coordinator.applyFocusIfNeeded(to: textView, shouldFocus: shouldFocus)
     }
 
     final class Coordinator: NSObject, NSTextViewDelegate {
         @Binding private var text: String
+        private let onFocusApplied: () -> Void
+        private var hasAppliedFocus = false
 
-        init(text: Binding<String>) {
+        init(text: Binding<String>, onFocusApplied: @escaping () -> Void) {
             _text = text
+            self.onFocusApplied = onFocusApplied
         }
 
         func textDidChange(_ notification: Notification) {
             guard let textView = notification.object as? NSTextView else { return }
             text = textView.string
+        }
+
+        @MainActor
+        func applyFocusIfNeeded(to textView: NSTextView, shouldFocus: Bool) {
+            guard shouldFocus else {
+                hasAppliedFocus = false
+                return
+            }
+
+            guard !hasAppliedFocus else { return }
+
+            let focusAction = { [weak textView] in
+                guard let textView, let window = textView.window else { return }
+                if window.firstResponder === textView {
+                    self.hasAppliedFocus = true
+                    self.onFocusApplied()
+                    return
+                }
+
+                if window.makeFirstResponder(textView) {
+                    self.hasAppliedFocus = true
+                    self.onFocusApplied()
+                }
+            }
+
+            if textView.window == nil {
+                Task { @MainActor in
+                    focusAction()
+                }
+            } else {
+                focusAction()
+            }
         }
     }
 }
