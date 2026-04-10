@@ -1,0 +1,94 @@
+name: Build Test DMG
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+
+jobs:
+  build-dmg:
+    runs-on: macos-26
+    permissions:
+      contents: write
+    env:
+      APP_NAME: Freddie
+      PROJECT_PATH: ReadPaper.xcodeproj
+      SCHEME: ReadPaper
+      DERIVED_DATA_PATH: build/DerivedData
+      APP_PATH: build/DerivedData/Build/Products/Release/Freddie.app
+      DMG_PATH: build/Freddie-unsigned.dmg
+      LOCAL_READABILITY_REPO: https://github.com/neolee/swift-readability.git
+      LOCAL_READABILITY_REF: 7f01a968e7089a3f2b68a6c7587015756b4648c4
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Check Environment Versions
+        run: |
+          sw_vers
+          xcodebuild -version
+          xcrun --show-sdk-version
+
+      - name: Restore local package dependency
+        run: |
+          if [ ! -d swift-readability ]; then
+            git clone "$LOCAL_READABILITY_REPO" swift-readability
+          fi
+          git -C swift-readability fetch --depth 1 origin "$LOCAL_READABILITY_REF"
+          git -C swift-readability checkout --detach "$LOCAL_READABILITY_REF"
+
+      - name: Install build tools
+        run: |
+          brew install xcodegen create-dmg
+
+      - name: Generate Xcode project
+        run: |
+          xcodegen generate
+
+      - name: Build unsigned app
+        run: |
+          xcodebuild build \
+            -project "$PROJECT_PATH" \
+            -scheme "$SCHEME" \
+            -configuration Release \
+            -destination "generic/platform=macOS" \
+            -derivedDataPath "$DERIVED_DATA_PATH" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY=""
+
+      - name: Verify app bundle
+        run: |
+          test -d "$APP_PATH"
+          ls -la "$APP_PATH"
+
+      - name: Create DMG
+        run: |
+          rm -f "$DMG_PATH"
+          create-dmg \
+            --volname "$APP_NAME" \
+            --window-pos 200 120 \
+            --window-size 800 400 \
+            --icon-size 100 \
+            --icon "$APP_NAME.app" 200 190 \
+            --hide-extension "$APP_NAME.app" \
+            --app-drop-link 600 185 \
+            "$DMG_PATH" \
+            "$APP_PATH"
+
+      - name: Upload DMG artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: Freddie-unsigned-dmg
+          path: build/Freddie-unsigned.dmg
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/Freddie-unsigned.dmg
+          name: ${{ github.ref_name }}
+          generate_release_notes: true
