@@ -32,7 +32,11 @@ final class LLMConfigurationBootstrapperTests: XCTestCase {
         XCTAssertTrue(bootstrappedSettings.didBootstrapLLMProfiles)
         XCTAssertEqual(providers.count, 1)
         XCTAssertEqual(models.count, 3)
+        XCTAssertEqual(providers.first?.name, "Default Provider")
         XCTAssertEqual(providers.first?.baseURL, "https://api.example.com/proxy/v1")
+        XCTAssertEqual(models.first(where: { $0.modelName == "heavy-model" })?.name, "Primary Model")
+        XCTAssertEqual(models.first(where: { $0.modelName == "normal-model" })?.name, "Balanced Model")
+        XCTAssertEqual(models.first(where: { $0.modelName == "quick-model" })?.name, "Fast Model")
 
         let heavyModel = try XCTUnwrap(models.first(where: { $0.modelName == "heavy-model" }))
         XCTAssertEqual(bootstrappedSettings.selectedHTMLModelProfileID, heavyModel.id)
