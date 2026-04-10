@@ -15,6 +15,10 @@ struct ContentView: View {
     @State private var paperPendingDeletion: Paper?
     @State private var deletionErrorMessage: String?
 
+    private var settings: AppSettings? {
+        settingsRows.first
+    }
+
     private var selectedPaper: Paper? {
         if let selectedPaperID, let paper = papers.first(where: { $0.id == selectedPaperID }) {
             return paper
@@ -37,7 +41,7 @@ struct ContentView: View {
             ReaderPaneView(
                 paper: selectedPaper,
                 attachments: attachments.filter { $0.paperID == selectedPaper?.id },
-                settings: settingsRows.first,
+                settings: settings,
                 readerMode: $readerMode,
                 displayMode: $displayMode
             )
@@ -85,15 +89,20 @@ struct ContentView: View {
             Text(deletionErrorMessage ?? "")
         }
         .onAppear {
-            ensureSettings()
-            if selectedPaperID == nil {
-                selectedPaperID = papers.first?.id
-            }
+            let restoredSettings = ensureSettings()
+            restoreSelection(preferredPaperID: restoredSettings?.lastOpenedPaperID)
+            persistSelectedPaperIDIfNeeded(selectedPaperID, using: restoredSettings)
+        }
+        .onChange(of: papers.map(\.id)) { _, _ in
+            syncSelectionWithAvailablePapers()
+        }
+        .onChange(of: selectedPaperID) { _, newValue in
+            persistSelectedPaperIDIfNeeded(newValue)
         }
     }
 
-    private func ensureSettings() {
-        _ = try? LLMConfigurationBootstrapper().ensureBootstrap(modelContext: modelContext)
+    private func ensureSettings() -> AppSettings? {
+        try? LLMConfigurationBootstrapper().ensureBootstrap(modelContext: modelContext)
     }
 
     private func confirmDeletion(at offsets: IndexSet) {
@@ -128,5 +137,41 @@ struct ContentView: View {
 
         let nextIndex = min(deletedIndex, remainingPapers.count - 1)
         return remainingPapers[nextIndex].id
+    }
+
+    private func restoreSelection(preferredPaperID: UUID?) {
+        selectedPaperID = PaperSelectionStore.resolvedSelection(
+            currentPaperID: nil,
+            savedPaperID: preferredPaperID,
+            availablePaperIDs: papers.map(\.id)
+        )
+    }
+
+    private func syncSelectionWithAvailablePapers() {
+        let resolvedSelection = PaperSelectionStore.resolvedSelection(
+            currentPaperID: selectedPaperID,
+            savedPaperID: settings?.lastOpenedPaperID,
+            availablePaperIDs: papers.map(\.id)
+        )
+
+        guard resolvedSelection != selectedPaperID else { return }
+        selectedPaperID = resolvedSelection
+    }
+
+    private func persistSelectedPaperIDIfNeeded(
+        _ paperID: UUID?,
+        using settingsOverride: AppSettings? = nil
+    ) {
+        guard let settings = settingsOverride ?? settings else { return }
+        guard settings.lastOpenedPaperID != paperID else { return }
+
+        settings.lastOpenedPaperID = paperID
+        settings.modifiedAt = Date()
+
+        do {
+            try modelContext.save()
+        } catch {
+            assertionFailure("Failed to save selected paper: \(error.localizedDescription)")
+        }
     }
 }

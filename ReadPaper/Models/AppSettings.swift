@@ -4,6 +4,7 @@ import SwiftData
 @Model
 final class AppSettings {
     @Attribute(.unique) var id: UUID
+    var lastOpenedPaperID: UUID?
     var selectedHTMLModelProfileID: UUID?
     var selectedPDFModelProfileID: UUID?
     var didBootstrapLLMProfilesValue: Bool?
@@ -25,6 +26,7 @@ final class AppSettings {
 
     init(
         id: UUID = UUID(),
+        lastOpenedPaperID: UUID? = nil,
         selectedHTMLModelProfileID: UUID? = nil,
         selectedPDFModelProfileID: UUID? = nil,
         didBootstrapLLMProfiles: Bool = false,
@@ -40,6 +42,7 @@ final class AppSettings {
         modifiedAt: Date = Date()
     ) {
         self.id = id
+        self.lastOpenedPaperID = lastOpenedPaperID
         self.selectedHTMLModelProfileID = selectedHTMLModelProfileID
         self.selectedPDFModelProfileID = selectedPDFModelProfileID
         self.didBootstrapLLMProfilesValue = didBootstrapLLMProfiles
