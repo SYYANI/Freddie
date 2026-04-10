@@ -349,6 +349,8 @@ private struct InsetTextView: NSViewRepresentable {
         @Binding private var text: String
         private let onFocusApplied: () -> Void
         private var hasAppliedFocus = false
+        private var isFocusScheduled = false
+        private var focusGeneration = 0
 
         init(text: Binding<String>, onFocusApplied: @escaping () -> Void) {
             _text = text
@@ -363,14 +365,25 @@ private struct InsetTextView: NSViewRepresentable {
         @MainActor
         func applyFocusIfNeeded(to textView: NSTextView, shouldFocus: Bool) {
             guard shouldFocus else {
+                focusGeneration += 1
                 hasAppliedFocus = false
+                isFocusScheduled = false
                 return
             }
 
-            guard !hasAppliedFocus else { return }
+            guard !hasAppliedFocus, !isFocusScheduled else { return }
+            isFocusScheduled = true
+            let generation = focusGeneration
 
-            let focusAction = { [weak textView] in
-                guard let textView, let window = textView.window else { return }
+            Task { @MainActor [weak self, weak textView] in
+                guard let self else { return }
+                self.isFocusScheduled = false
+                guard generation == self.focusGeneration,
+                      let textView,
+                      let window = textView.window else {
+                    return
+                }
+
                 if window.firstResponder === textView {
                     self.hasAppliedFocus = true
                     self.onFocusApplied()
@@ -381,14 +394,6 @@ private struct InsetTextView: NSViewRepresentable {
                     self.hasAppliedFocus = true
                     self.onFocusApplied()
                 }
-            }
-
-            if textView.window == nil {
-                Task { @MainActor in
-                    focusAction()
-                }
-            } else {
-                focusAction()
             }
         }
     }

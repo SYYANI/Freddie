@@ -126,8 +126,13 @@ struct HTMLReaderView: NSViewRepresentable {
         }
 
         func applyDisplayMode(to webView: WKWebView) {
-            let script = "document.documentElement.setAttribute('data-rp-display-mode', '\(displayMode.rawValue)');"
-            webView.evaluateJavaScript(script)
+            guard let displayModeValue = javaScriptStringLiteral(displayMode.rawValue) else {
+                return
+            }
+            runJavaScript(
+                "document.documentElement.setAttribute('data-rp-display-mode', \(displayModeValue));",
+                in: webView
+            )
         }
 
         @MainActor
@@ -172,13 +177,18 @@ struct HTMLReaderView: NSViewRepresentable {
         }
 
         private func captureScrollPosition(from webView: WKWebView, completion: @escaping (CGPoint) -> Void) {
-            let script = "[window.scrollX || 0, window.scrollY || 0]"
+            let script = "String(window.scrollX || 0) + ',' + String(window.scrollY || 0)"
             webView.evaluateJavaScript(script) { result, _ in
                 let position: CGPoint
-                if let values = result as? [Double], values.count == 2 {
-                    position = CGPoint(x: values[0], y: values[1])
-                } else if let values = result as? [NSNumber], values.count == 2 {
-                    position = CGPoint(x: values[0].doubleValue, y: values[1].doubleValue)
+                if let rawValue = result as? String {
+                    let parts = rawValue.split(separator: ",", maxSplits: 1).map(String.init)
+                    if parts.count == 2,
+                       let x = Double(parts[0]),
+                       let y = Double(parts[1]) {
+                        position = CGPoint(x: x, y: y)
+                    } else {
+                        position = .zero
+                    }
                 } else {
                     position = .zero
                 }
@@ -192,8 +202,7 @@ struct HTMLReaderView: NSViewRepresentable {
         private func restoreScrollPositionIfNeeded(in webView: WKWebView) {
             guard let position = pendingScrollPosition else { return }
             pendingScrollPosition = nil
-            let script = "window.scrollTo(\(position.x), \(position.y));"
-            webView.evaluateJavaScript(script)
+            runJavaScript("window.scrollTo(\(position.x), \(position.y));", in: webView)
         }
 
         private func finishLoadIfNeeded(in webView: WKWebView) {
@@ -244,13 +253,12 @@ struct HTMLReaderView: NSViewRepresentable {
             let script = """
             (() => {
                 const source = document.querySelector(\(segmentSelector));
-                if (!source) { return false; }
+                if (!source) { return; }
                 document.querySelectorAll(\(translationSelector)).forEach(node => node.remove());
                 source.insertAdjacentHTML('afterend', \(translatedHTML));
-                return true;
             })();
             """
-            webView.evaluateJavaScript(script)
+            runJavaScript(script, in: webView)
             lastAppliedSegmentSequence = update.sequence
         }
 
@@ -260,6 +268,10 @@ struct HTMLReaderView: NSViewRepresentable {
                 return nil
             }
             return String(json.dropFirst().dropLast())
+        }
+
+        private func runJavaScript(_ script: String, in webView: WKWebView) {
+            webView.evaluateJavaScript(script, completionHandler: nil)
         }
     }
 }

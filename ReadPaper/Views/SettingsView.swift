@@ -1,3 +1,4 @@
+import AppKit
 import SwiftData
 import SwiftUI
 
@@ -255,7 +256,7 @@ private struct SettingsForm: View {
                         }
                     }
 
-                    TextField("Target version", text: $settings.babelDocVersion)
+                    SettingsPlainTextField("Target version", text: $settings.babelDocVersion)
 
                     Button(isInstallingBabelDOC ? "Installing..." : "Install or update BabelDOC") {
                         installBabelDOC()
@@ -354,10 +355,10 @@ private struct SettingsForm: View {
                 }
 
                 Section(selectedProvider == nil ? "New Provider" : "Configuration") {
-                    TextField("Display name", text: $providerName)
-                    TextField("Base URL", text: $providerBaseURL)
-                    SecureField("API key", text: $providerAPIKey, prompt: Text(providerAPIKeyPrompt))
-                    TextField("Test model", text: $providerTestModel)
+                    SettingsPlainTextField("Display name", text: $providerName)
+                    SettingsPlainTextField("Base URL", text: $providerBaseURL)
+                    SettingsSecureTextField("API key", text: $providerAPIKey, placeholder: providerAPIKeyPrompt)
+                    SettingsPlainTextField("Test model", text: $providerTestModel)
                     Toggle("Enabled", isOn: $providerEnabled)
                         .toggleStyle(.checkbox)
                 }
@@ -433,11 +434,11 @@ private struct SettingsForm: View {
                             Text(provider.name).tag(Optional(provider.id))
                         }
                     }
-                    TextField("Profile name", text: $modelName)
-                    TextField("Model name", text: $modelIdentifier)
-                    TextField("Temperature", text: $modelTemperature)
-                    TextField("Top-P", text: $modelTopP)
-                    TextField("Max tokens", text: $modelMaxTokens)
+                    SettingsPlainTextField("Profile name", text: $modelName)
+                    SettingsPlainTextField("Model name", text: $modelIdentifier)
+                    SettingsPlainTextField("Temperature", text: $modelTemperature)
+                    SettingsPlainTextField("Top-P", text: $modelTopP)
+                    SettingsPlainTextField("Max tokens", text: $modelMaxTokens)
                     Toggle("Enabled", isOn: $modelEnabled)
                         .toggleStyle(.checkbox)
                 }
@@ -1005,6 +1006,140 @@ private enum SettingsValidationError: LocalizedError {
         switch self {
         case .message(let message):
             return message
+        }
+    }
+}
+
+private struct SettingsPlainTextField: NSViewRepresentable {
+    let placeholder: String
+    @Binding var text: String
+
+    init(_ placeholder: String, text: Binding<String>) {
+        self.placeholder = placeholder
+        _text = text
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(text: $text)
+    }
+
+    func makeNSView(context: Context) -> NSTextField {
+        let textField = NSTextField()
+        configure(textField, coordinator: context.coordinator)
+        return textField
+    }
+
+    func updateNSView(_ nsView: NSTextField, context: Context) {
+        nsView.placeholderString = placeholder
+        if nsView.stringValue != text {
+            nsView.stringValue = text
+        }
+        context.coordinator.configureEditorIfNeeded(for: nsView)
+    }
+
+    private func configure(_ textField: NSTextField, coordinator: Coordinator) {
+        textField.delegate = coordinator
+        textField.placeholderString = placeholder
+        textField.stringValue = text
+        textField.isEditable = true
+        textField.isSelectable = true
+        textField.usesSingleLineMode = true
+        textField.isAutomaticTextCompletionEnabled = false
+        textField.allowsCharacterPickerTouchBarItem = false
+        if #available(macOS 15.2, *) {
+            textField.allowsWritingTools = false
+        }
+        if #available(macOS 15.4, *) {
+            textField.allowsWritingToolsAffordance = false
+        }
+        coordinator.configureEditorIfNeeded(for: textField)
+    }
+}
+
+private struct SettingsSecureTextField: NSViewRepresentable {
+    let placeholder: String
+    @Binding var text: String
+
+    init(_ placeholder: String, text: Binding<String>, placeholder displayPlaceholder: String = "") {
+        self.placeholder = displayPlaceholder.isEmpty ? placeholder : displayPlaceholder
+        _text = text
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(text: $text)
+    }
+
+    func makeNSView(context: Context) -> NSSecureTextField {
+        let textField = NSSecureTextField()
+        configure(textField, coordinator: context.coordinator)
+        return textField
+    }
+
+    func updateNSView(_ nsView: NSSecureTextField, context: Context) {
+        nsView.placeholderString = placeholder
+        if nsView.stringValue != text {
+            nsView.stringValue = text
+        }
+        context.coordinator.configureEditorIfNeeded(for: nsView)
+    }
+
+    private func configure(_ textField: NSSecureTextField, coordinator: Coordinator) {
+        textField.delegate = coordinator
+        textField.placeholderString = placeholder
+        textField.stringValue = text
+        textField.isEditable = true
+        textField.isSelectable = true
+        textField.usesSingleLineMode = true
+        textField.isAutomaticTextCompletionEnabled = false
+        textField.allowsCharacterPickerTouchBarItem = false
+        if #available(macOS 15.2, *) {
+            textField.allowsWritingTools = false
+        }
+        if #available(macOS 15.4, *) {
+            textField.allowsWritingToolsAffordance = false
+        }
+        coordinator.configureEditorIfNeeded(for: textField)
+    }
+}
+
+private final class Coordinator: NSObject, NSTextFieldDelegate {
+    @Binding private var text: String
+
+    init(text: Binding<String>) {
+        _text = text
+    }
+
+    func controlTextDidChange(_ notification: Notification) {
+        guard let textField = notification.object as? NSTextField else { return }
+        text = textField.stringValue
+    }
+
+    func controlTextDidBeginEditing(_ notification: Notification) {
+        guard let textField = notification.object as? NSTextField else { return }
+        configureEditorIfNeeded(for: textField)
+    }
+
+    func control(_ control: NSControl, textShouldEndEditing fieldEditor: NSText) -> Bool {
+        if let textView = fieldEditor as? NSTextView {
+            textView.unmarkText()
+            textView.inputContext?.discardMarkedText()
+        }
+        return true
+    }
+
+    @MainActor
+    func configureEditorIfNeeded(for textField: NSTextField) {
+        guard let editor = textField.currentEditor() as? NSTextView else { return }
+        editor.isAutomaticQuoteSubstitutionEnabled = false
+        editor.isAutomaticDashSubstitutionEnabled = false
+        editor.isAutomaticTextReplacementEnabled = false
+        editor.isAutomaticSpellingCorrectionEnabled = false
+        editor.isContinuousSpellCheckingEnabled = false
+        editor.isGrammarCheckingEnabled = false
+        editor.isAutomaticTextCompletionEnabled = false
+        editor.smartInsertDeleteEnabled = false
+        if #available(macOS 15.0, *) {
+            editor.writingToolsBehavior = .none
         }
     }
 }
