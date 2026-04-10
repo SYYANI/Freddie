@@ -256,7 +256,9 @@ private struct SettingsForm: View {
                         }
                     }
 
-                    SettingsPlainTextField("Target version", text: $settings.babelDocVersion)
+                    SettingsFieldRow("Target version") {
+                        SettingsPlainTextField(text: $settings.babelDocVersion)
+                    }
 
                     Button(isInstallingBabelDOC ? "Installing..." : "Install or update BabelDOC") {
                         installBabelDOC()
@@ -355,10 +357,18 @@ private struct SettingsForm: View {
                 }
 
                 Section(selectedProvider == nil ? "New Provider" : "Configuration") {
-                    SettingsPlainTextField("Display name", text: $providerName)
-                    SettingsPlainTextField("Base URL", text: $providerBaseURL)
-                    SettingsSecureTextField("API key", text: $providerAPIKey, placeholder: providerAPIKeyPrompt)
-                    SettingsPlainTextField("Test model", text: $providerTestModel)
+                    SettingsFieldRow("Display name") {
+                        SettingsPlainTextField(text: $providerName)
+                    }
+                    SettingsFieldRow("Base URL") {
+                        SettingsPlainTextField(text: $providerBaseURL)
+                    }
+                    SettingsFieldRow("API key") {
+                        SettingsSecureTextField(text: $providerAPIKey, placeholder: providerAPIKeyPrompt)
+                    }
+                    SettingsFieldRow("Test model") {
+                        SettingsPlainTextField(text: $providerTestModel)
+                    }
                     Toggle("Enabled", isOn: $providerEnabled)
                         .toggleStyle(.checkbox)
                 }
@@ -434,11 +444,21 @@ private struct SettingsForm: View {
                             Text(provider.name).tag(Optional(provider.id))
                         }
                     }
-                    SettingsPlainTextField("Profile name", text: $modelName)
-                    SettingsPlainTextField("Model name", text: $modelIdentifier)
-                    SettingsPlainTextField("Temperature", text: $modelTemperature)
-                    SettingsPlainTextField("Top-P", text: $modelTopP)
-                    SettingsPlainTextField("Max tokens", text: $modelMaxTokens)
+                    SettingsFieldRow("Profile name") {
+                        SettingsPlainTextField(text: $modelName)
+                    }
+                    SettingsFieldRow("Model name") {
+                        SettingsPlainTextField(text: $modelIdentifier)
+                    }
+                    SettingsFieldRow("Temperature") {
+                        SettingsPlainTextField(text: $modelTemperature)
+                    }
+                    SettingsFieldRow("Top-P") {
+                        SettingsPlainTextField(text: $modelTopP)
+                    }
+                    SettingsFieldRow("Max tokens") {
+                        SettingsPlainTextField(text: $modelMaxTokens)
+                    }
                     Toggle("Enabled", isOn: $modelEnabled)
                         .toggleStyle(.checkbox)
                 }
@@ -1010,11 +1030,35 @@ private enum SettingsValidationError: LocalizedError {
     }
 }
 
+private struct SettingsFieldRow<Content: View>: View {
+    let title: String
+    let content: Content
+
+    init(_ title: String, @ViewBuilder content: () -> Content) {
+        self.title = title
+        self.content = content()
+    }
+
+    var body: some View {
+        LabeledContent {
+            content
+                .frame(minWidth: 260, idealWidth: 320, maxWidth: .infinity, alignment: .leading)
+        } label: {
+            Text(title)
+        }
+    }
+}
+
 private struct SettingsPlainTextField: NSViewRepresentable {
     let placeholder: String
     @Binding var text: String
 
     init(_ placeholder: String, text: Binding<String>) {
+        self.placeholder = placeholder
+        _text = text
+    }
+
+    init(text: Binding<String>, placeholder: String = "") {
         self.placeholder = placeholder
         _text = text
     }
@@ -1062,6 +1106,11 @@ private struct SettingsSecureTextField: NSViewRepresentable {
 
     init(_ placeholder: String, text: Binding<String>, placeholder displayPlaceholder: String = "") {
         self.placeholder = displayPlaceholder.isEmpty ? placeholder : displayPlaceholder
+        _text = text
+    }
+
+    init(text: Binding<String>, placeholder: String = "") {
+        self.placeholder = placeholder
         _text = text
     }
 

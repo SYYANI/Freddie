@@ -95,6 +95,7 @@ LLM 配置现已拆成独立 SwiftData 模型：`LLMProviderProfile` 负责 prov
 - PDF 翻译进度在阅读器中也优先使用确定型进度条和阶段文案。当前 `BabelDocRunner` 通过受控 Python bridge 订阅 BabelDOC 内部 progress events，把结构化事件以 JSON line 输出给 Swift 侧解析；不要回退成依赖 rich/tqdm 终端文本渲染结果做正则猜测。
 - 设置页中的翻译配置已拆成 `Translation`、`Providers`、`Models` 三个区块。后续扩展优先沿用这个结构，不要再加回“单 Base URL + 三个模型名”的旧表单。
 - 设置页中的 BabelDOC 区域要区分“当前已安装版本”和“目标版本”：当前版本应来自对本地 `babeldoc` 可执行文件的实际探测并只读展示，目标版本才是用户可编辑、用于 `uv tool install ... BabelDOC==<version>` 的配置值；不要把可编辑输入框误当成已安装状态展示。
+- macOS 设置页的字符串输入框在快速切换焦点，尤其配合中文输入法或其他有 marked text / suggestions / Writing Tools 参与的输入路径时，可能打出 `NSXPCDecoder validateAllowedClass:forKey:` 且 allowed classes 含 `NSObject` 的系统警告。当前经验判断这更像 AppKit / 输入法 / Writing Tools 的系统日志，而不是项目里某个业务 `NSSecureCoding` 白名单真的写错。遇到这类报错时，先排查是否发生在设置页输入焦点切换，而不要优先沿 SwiftData、Keychain 或业务解码链路误判。
 - Reader 和设置页里的 LLM 错误要尽量按场景区分，例如 HTML 路由缺失、PDF 路由缺失、provider 被禁用、API key 缺失、测试模型不可用，而不是统一报成一个笼统的缺配置错误。
 - BabelDOC 通过 `BabelDocRunner` 和 `ProcessRunner` 启动外部进程，参数中的模型、base URL 和 API key 来自 PDF route snapshot；API key 要使用现有 redaction 逻辑，不要把外部工具失败吞掉成静默失败。
 - BabelDOC 的 launcher 可能是 `uv tool install` 生成的 `sh` 包装器，第一行 shebang 不一定就是实际 Python 解释器；改启动逻辑时要兼容“同目录 venv `python3`/`python` + shell wrapper `exec .../python3`”这类结构，不要简单假设 `#!/usr/bin/env python3`。
@@ -105,6 +106,7 @@ LLM 配置现已拆成独立 SwiftData 模型：`LLMProviderProfile` 负责 prov
 - 优先保持 SwiftUI + SwiftData 的现有风格，避免引入新的架构层，除非任务明确需要。
 - UI 状态尽量留在 View 内，持久化状态进入 SwiftData model，外部副作用放到 `Services`。
 - 设置页整体信息架构优先使用顶部 `TabView` 页签承载大类（如 `General`、`Reader`、`Providers`、`Models`），不要轻易回退成单页长表单或侧边栏式设置窗口，除非任务明确要求。
+- 如果要改设置页输入框，优先保持当前 AppKit-backed 单行输入控件策略：关闭 text completion、smart quotes/dashes、自动替换、拼写检查和 character picker；在可用系统版本上关闭 Writing Tools / affordance；并在结束编辑前主动 `unmarkText()` / `discardMarkedText()`，尽量降低快速切换焦点时的系统输入服务噪音日志。不要轻易退回成默认 SwiftUI `TextField` / `SecureField` 而不处理这些输入系统细节。
 - 阅读器不同模式的缺失态/空状态要保持一致的视觉语义；例如缺少 HTML、PDF 或翻译 PDF 时，优先复用统一的居中 unavailable 组件，不要一处是完整空状态卡片、另一处只显示一行占位文字。
 - arXiv 导入进度要尽量使用确定型、分步骤的状态反馈；如果链路已知关键阶段，至少同时展示当前步骤标题和阶段性说明，不要退回成只有转圈、没有上下文的等待态。若 HTML 主源失败并回退到备用源，也要把“正在尝试备用源”明确告诉用户。
 - 网络和子进程路径要可测试：通过可注入的 `URLSession`、`FileManager`、`ProcessRunner` 或配置快照传入依赖。
