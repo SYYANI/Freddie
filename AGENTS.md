@@ -40,6 +40,13 @@ xcodebuild -project ReadPaper.xcodeproj -scheme ReadPaper -destination 'platform
 xcodebuild -project ReadPaper.xcodeproj -scheme ReadPaper -destination 'platform=macOS' -derivedDataPath .DerivedData test
 ```
 
+GitHub Actions 构建 DMG：
+
+- 仓库已包含 [`.github/workflows/release.yml`](/Users/yiyan/Desktop/read-paper/.github/workflows/release.yml)，支持在 GitHub Actions 上构建 DMG；触发方式为手动 `workflow_dispatch` 或推送 `v*` tag。
+- 当前 workflow 运行在 `macos-26`，会先恢复本地 `swift-readability` 依赖，再安装 `xcodegen` 和 `create-dmg`，生成 Xcode 项目后执行无签名 Release 构建。
+- CI 产物当前是 unsigned 的 `Freddie.app` 和 `Freddie-unsigned.dmg`；artifact 名为 `Freddie-unsigned-dmg`。若是 tag 触发，还会创建 GitHub Release 并附带该 DMG。
+- 后续若调整 app 名称、scheme、产物路径、签名或打包方式，要同步更新 workflow 中的 `APP_NAME`、`APP_PATH`、`DMG_PATH` 和 release 上传逻辑，避免本地可构建但 CI 打包失效。
+
 如果沙箱或受限终端里 `xcodebuild` 因 Xcode/SwiftPM/clang 缓存目录权限失败，不要先判断为代码失败；换到可写 Xcode 缓存的环境或使用 Xcode 运行后再确认。
 
 ## 目录职责
@@ -51,6 +58,7 @@ xcodebuild -project ReadPaper.xcodeproj -scheme ReadPaper -destination 'platform
 - `ReadPaper/Services/`：导入、arXiv API、HTML 本地化、翻译、BabelDOC、Keychain、文件存储、子进程运行等业务服务。
 - `ReadPaperTests/`：XCTest 单元测试，重点覆盖 arXiv ID/Atom 解析、文件存储、HTML 翻译管线、BabelDOC 参数和进程运行。
 - `project.yml`：XcodeGen 的项目源配置。调整 target、依赖、构建设置时改这里并重新生成项目。
+- `.github/workflows/release.yml`：GitHub Actions 的 DMG 打包/发布流程；负责恢复 `swift-readability`、安装 `xcodegen` 与 `create-dmg`、构建 unsigned `Freddie.app`、产出 `Freddie-unsigned.dmg`，并在 tag 发布时上传到 GitHub Release。
 - `ReadPaper.xcodeproj/project.xcworkspace/xcuserdata/`：Xcode 用户状态。除非任务明确要求，不要编辑或整理这类文件。
 - `ReadPaper.xcodeproj/project.xcworkspace/xcuserdata/yiyan.xcuserdatad/UserInterfaceState.xcuserstate`：本地 Xcode 窗口/界面状态文件，默认视为无需处理的噪音文件；不要因为它是 dirty 而额外清理、提交或回退。
 

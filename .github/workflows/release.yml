@@ -1,4 +1,4 @@
-name: Build Test DMG
+name: Publish DMG
 
 on:
   workflow_dispatch:
