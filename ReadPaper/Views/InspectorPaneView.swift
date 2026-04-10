@@ -1,8 +1,11 @@
+import AppKit
 import SwiftData
 import SwiftUI
 
 struct InspectorPaneView: View {
     @Environment(\.modelContext) private var modelContext
+    @State private var notePendingDeletion: Note?
+    @State private var noteDeletionErrorMessage: String?
     var paper: Paper?
     var notes: [Note]
 
@@ -28,6 +31,40 @@ struct InspectorPaneView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Color(nsColor: .windowBackgroundColor))
+        .confirmationDialog(
+            "Delete Note?",
+            isPresented: Binding(
+                get: { notePendingDeletion != nil },
+                set: { isPresented in
+                    if !isPresented {
+                        notePendingDeletion = nil
+                    }
+                }
+            ),
+            presenting: notePendingDeletion
+        ) { note in
+            Button("Delete", role: .destructive) {
+                deleteNote(note)
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: { note in
+            Text(note.body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "This empty note will be removed." : "This note will be permanently removed.")
+        }
+        .alert(
+            "Unable to Delete Note",
+            isPresented: Binding(
+                get: { noteDeletionErrorMessage != nil },
+                set: { isPresented in
+                    if !isPresented {
+                        noteDeletionErrorMessage = nil
+                    }
+                }
+            )
+        ) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(noteDeletionErrorMessage ?? "")
+        }
     }
 
     private var paneHeader: some View {
@@ -99,7 +136,9 @@ struct InspectorPaneView: View {
                     .foregroundStyle(.secondary)
             } else {
                 ForEach(notes) { note in
-                    NoteEditor(note: note)
+                    NoteEditor(note: note) {
+                        notePendingDeletion = note
+                    }
                 }
             }
         }
@@ -108,6 +147,19 @@ struct InspectorPaneView: View {
     private func addNote(for paper: Paper) {
         modelContext.insert(Note(paperID: paper.id, body: ""))
         try? modelContext.save()
+    }
+
+    private func deleteNote(_ note: Note) {
+        modelContext.delete(note)
+
+        do {
+            try modelContext.save()
+            notePendingDeletion = nil
+        } catch {
+            modelContext.rollback()
+            notePendingDeletion = nil
+            noteDeletionErrorMessage = error.localizedDescription
+        }
     }
 
     private var emptyInspectorState: some View {
@@ -181,19 +233,99 @@ struct InspectorPaneView: View {
 
 private struct NoteEditor: View {
     @Bindable var note: Note
+    let onDelete: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            TextEditor(text: $note.body)
-                .font(.body)
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(note.modifiedAt.formatted(date: .abbreviated, time: .shortened))
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button(role: .destructive, action: onDelete) {
+                    Label("Delete Note", systemImage: "trash")
+                        .labelStyle(.iconOnly)
+                }
+                .buttonStyle(.borderless)
+                .help("Delete note")
+            }
+
+            InsetTextView(
+                text: Binding(
+                    get: { note.body },
+                    set: { newValue in
+                        note.body = newValue
+                        note.modifiedAt = Date()
+                    }
+                )
+            )
                 .frame(minHeight: 90)
+                .background(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(Color(nsColor: .textBackgroundColor))
+                )
                 .overlay {
-                    RoundedRectangle(cornerRadius: 8)
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
                         .stroke(.quaternary)
                 }
-            Text(note.modifiedAt, style: .date)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
+        }
+    }
+}
+
+private struct InsetTextView: NSViewRepresentable {
+    @Binding var text: String
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(text: $text)
+    }
+
+    func makeNSView(context: Context) -> NSScrollView {
+        let scrollView = NSScrollView()
+        scrollView.drawsBackground = false
+        scrollView.borderType = .noBorder
+        scrollView.hasVerticalScroller = true
+        scrollView.hasHorizontalScroller = false
+        scrollView.autohidesScrollers = true
+
+        let textView = NSTextView()
+        textView.delegate = context.coordinator
+        textView.drawsBackground = false
+        textView.isRichText = false
+        textView.importsGraphics = false
+        textView.allowsUndo = true
+        textView.isAutomaticQuoteSubstitutionEnabled = false
+        textView.isAutomaticDashSubstitutionEnabled = false
+        textView.isAutomaticTextReplacementEnabled = false
+        textView.font = .preferredFont(forTextStyle: .body)
+        textView.string = text
+        textView.textContainerInset = NSSize(width: 10, height: 10)
+
+        if let textContainer = textView.textContainer {
+            textContainer.widthTracksTextView = true
+            textContainer.containerSize = NSSize(width: 0, height: CGFloat.greatestFiniteMagnitude)
+        }
+
+        scrollView.documentView = textView
+        return scrollView
+    }
+
+    func updateNSView(_ nsView: NSScrollView, context: Context) {
+        guard let textView = nsView.documentView as? NSTextView else { return }
+        if textView.string != text {
+            textView.string = text
+        }
+    }
+
+    final class Coordinator: NSObject, NSTextViewDelegate {
+        @Binding private var text: String
+
+        init(text: Binding<String>) {
+            _text = text
+        }
+
+        func textDidChange(_ notification: Notification) {
+            guard let textView = notification.object as? NSTextView else { return }
+            text = textView.string
         }
     }
 }
