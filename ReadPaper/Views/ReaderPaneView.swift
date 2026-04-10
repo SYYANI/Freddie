@@ -9,6 +9,12 @@ struct ReaderPaneView: View {
         var id: String { rawValue }
     }
 
+    private struct ReaderAvailability: Equatable {
+        var paperID: UUID?
+        var hasHTML: Bool
+        var hasPDF: Bool
+    }
+
     private struct TranslationProgressStatus: Equatable {
         var completed: Int
         var total: Int
@@ -56,6 +62,14 @@ struct ReaderPaneView: View {
         isWorking || (!canTranslateHTML && !canTranslatePDF)
     }
 
+    private var readerAvailability: ReaderAvailability {
+        ReaderAvailability(
+            paperID: paper?.id,
+            hasHTML: htmlAttachment != nil,
+            hasPDF: pdfAttachment != nil
+        )
+    }
+
     private var primaryReaderMode: Binding<PrimaryReaderMode> {
         Binding(
             get: {
@@ -94,6 +108,10 @@ struct ReaderPaneView: View {
             .background(Color(nsColor: .windowBackgroundColor))
             .toolbar {
                 readerToolbar
+            }
+            .onAppear(perform: syncReaderModeWithAvailableContent)
+            .onChange(of: readerAvailability) { _, _ in
+                syncReaderModeWithAvailableContent()
             }
     }
 
@@ -465,6 +483,12 @@ struct ReaderPaneView: View {
         isCancelling = true
         statusMessage = "Cancelling translation..."
         translationTask?.cancel()
+    }
+
+    private func syncReaderModeWithAvailableContent() {
+        guard readerMode == .html else { return }
+        guard htmlAttachment == nil, pdfAttachment != nil else { return }
+        readerMode = normalizedPDFReaderMode(lastPDFReaderMode)
     }
 
     @ViewBuilder
