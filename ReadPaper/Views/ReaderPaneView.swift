@@ -551,107 +551,12 @@ struct ReaderPaneView: View {
     }
 
     private var emptyReaderState: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 28) {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("READY TO READ")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                        .tracking(1.2)
-
-                    Text("Build your local paper desk")
-                        .font(.system(size: 30, weight: .semibold, design: .rounded))
-
-                    Text("Import an arXiv paper or a local PDF from the sidebar. Once the first paper is added, HTML, PDF, bilingual reading, and translation tools all appear here.")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
-                LazyVGrid(
-                    columns: [
-                        GridItem(.adaptive(minimum: 220, maximum: 320), spacing: 16, alignment: .top)
-                    ],
-                    alignment: .leading,
-                    spacing: 16
-                ) {
-                    emptyStateCard(
-                        title: "Import",
-                        systemImage: "square.and.arrow.down",
-                        description: "Add an arXiv ID, an arXiv URL, or a local PDF from the library sidebar."
-                    )
-                    emptyStateCard(
-                        title: "Read",
-                        systemImage: "doc.richtext",
-                        description: "Switch between localized HTML, original PDF, translated PDF, and side-by-side PDF comparison."
-                    )
-                    emptyStateCard(
-                        title: "Translate",
-                        systemImage: "character.book.closed",
-                        description: "Run semantic HTML translation incrementally, or send the PDF through BabelDOC when you need a full translated document."
-                    )
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-                HStack(spacing: 12) {
-                    Image(systemName: "sidebar.left")
-                        .font(.title3)
-                        .foregroundStyle(.secondary)
-                        .frame(width: 36, height: 36)
-                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
-
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Start from the left sidebar")
-                            .font(.headline)
-                        Text("Use the + button in the library to create the first paper record.")
-                            .font(.callout)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-            }
-            .padding(.horizontal, 32)
-            .padding(.top, 28)
-            .padding(.bottom, 32)
-            .frame(maxWidth: 900, alignment: .leading)
+        ContentUnavailableView {
+            Label("No paper selected", systemImage: "doc.text")
+        } description: {
+            Text("Import an arXiv paper or a local PDF from the sidebar to start reading.")
         }
-        .scrollIndicators(.hidden)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(Color(nsColor: .windowBackgroundColor))
-    }
-
-    private func emptyStateCard(
-        title: String,
-        systemImage: String,
-        description: String
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Image(systemName: systemImage)
-                .font(.title2)
-                .foregroundStyle(.primary)
-                .frame(width: 40, height: 40)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
-
-            VStack(alignment: .leading, spacing: 6) {
-                Text(title)
-                    .font(.headline)
-                Text(description)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            Spacer(minLength: 0)
-        }
-        .frame(maxWidth: .infinity, minHeight: 168, maxHeight: .infinity, alignment: .topLeading)
-        .padding(20)
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color(nsColor: .controlBackgroundColor))
-        )
-        .overlay {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.06))
-        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
     }
 
     private func readerLabel(_ value: String) -> some View {

@@ -11,6 +11,7 @@ private enum SettingsTab: String, Hashable {
 struct SettingsView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var settingsRows: [AppSettings]
+    @Query private var papers: [Paper]
     @Query(sort: [SortDescriptor(\LLMProviderProfile.modifiedAt, order: .reverse)]) private var providers: [LLMProviderProfile]
     @Query(sort: [SortDescriptor(\LLMModelProfile.modifiedAt, order: .reverse)]) private var models: [LLMModelProfile]
 
@@ -20,7 +21,8 @@ struct SettingsView: View {
                 SettingsForm(
                     settings: settings,
                     providers: providers,
-                    models: models
+                    models: models,
+                    paperCount: papers.count
                 )
             } else {
                 ProgressView()
@@ -39,8 +41,10 @@ private struct SettingsForm: View {
     @Bindable var settings: AppSettings
     let providers: [LLMProviderProfile]
     let models: [LLMModelProfile]
+    let paperCount: Int
 
     @AppStorage("ReadPaper.Settings.SelectedTab") private var selectedTabRawValue = SettingsTab.general.rawValue
+    @AppStorage("ReadPaper.Settings.DidDismissGettingStarted") private var didDismissGettingStarted = false
 
     @State private var selectedProviderID: UUID?
     @State private var providerName = ""
@@ -101,6 +105,44 @@ private struct SettingsForm: View {
 
     private var selectedModelLastTestedAt: Date? {
         selectedModel?.lastTestedAt
+    }
+
+    private var configuredProviderCount: Int {
+        readyProviders.count
+    }
+
+    private var readyProviders: [LLMProviderProfile] {
+        sortedProviders.filter { provider in
+            provider.isEnabled && hasStoredAPIKey(ref: provider.apiKeyRef)
+        }
+    }
+
+    private var readyProviderIDs: Set<UUID> {
+        Set(readyProviders.map(\.id))
+    }
+
+    private var readyModels: [LLMModelProfile] {
+        sortedModels.filter { model in
+            model.isEnabled && readyProviderIDs.contains(model.providerID)
+        }
+    }
+
+    private var readyModelIDs: Set<UUID> {
+        Set(readyModels.map(\.id))
+    }
+
+    private var readyModelCount: Int {
+        readyModels.count
+    }
+
+    private var hasHTMLRouteSelection: Bool {
+        guard let modelID = settings.selectedHTMLModelProfileID else { return false }
+        return readyModelIDs.contains(modelID)
+    }
+
+    private var hasPDFRouteSelection: Bool {
+        guard let modelID = settings.selectedPDFModelProfileID else { return false }
+        return readyModelIDs.contains(modelID)
     }
 
     private var providerAPIKeyPrompt: String {
@@ -177,6 +219,14 @@ private struct SettingsForm: View {
     private var generalTab: some View {
         VStack(alignment: .leading, spacing: 12) {
             Form {
+                Section("Getting Started") {
+                    if didDismissGettingStarted {
+                        dismissedGettingStartedPanel
+                    } else {
+                        gettingStartedPanel
+                    }
+                }
+
                 Section("Translation") {
                     Picker("Target language", selection: targetLanguageBinding) {
                         ForEach(TranslationTargetLanguage.supported) { option in
@@ -232,6 +282,16 @@ private struct SettingsForm: View {
     private var readerTab: some View {
         VStack(alignment: .leading, spacing: 12) {
             Form {
+                Section("How to use translation") {
+                    Text("After selecting routes here, go back to the main window, import a paper, open it in the reader, and use the Translate button in the toolbar.")
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Text("HTML translation works best for arXiv papers with HTML content. PDF translation uses the PDF/BabelDOC route and can produce translated or side-by-side PDF reading modes.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
                 Section("Translation Routes") {
                     Picker("HTML Model", selection: $settings.selectedHTMLModelProfileID) {
                         Text("Not Selected").tag(Optional<UUID>.none)
@@ -263,6 +323,16 @@ private struct SettingsForm: View {
     private var providerTab: some View {
         VStack(alignment: .leading, spacing: 12) {
             Form {
+                Section("Provider Guide") {
+                    Text("Create one provider for each OpenAI-compatible endpoint you want to use. The API key is stored in Keychain, so leaving the API key field blank while editing an existing provider keeps the saved key.")
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Text("For a typical setup, fill in the service base URL, paste the API key, set a lightweight test model, then click Save and Test.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
                 Section("Selection") {
                     Picker("Selected Provider", selection: $selectedProviderID) {
                         Text("New Provider").tag(Optional<UUID>.none)
@@ -326,6 +396,16 @@ private struct SettingsForm: View {
     private var modelTab: some View {
         VStack(alignment: .leading, spacing: 12) {
             Form {
+                Section("Model Guide") {
+                    Text("A model profile points to one provider and stores the exact chat model name plus optional sampling parameters. You can create separate profiles for fast HTML translation and heavier PDF work.")
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Text("Profile name is only for display inside ReadPaper. Model name must match the real model identifier accepted by your provider.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
                 Section("Selection") {
                     Picker("Selected Model", selection: $selectedModelID) {
                         Text("New Model").tag(Optional<UUID>.none)
@@ -405,6 +485,117 @@ private struct SettingsForm: View {
             .font(.footnote)
             .foregroundStyle(message.hasPrefix("Error") ? .red : .secondary)
             .textSelection(.enabled)
+    }
+
+    private var gettingStartedPanel: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Set up your translation route once, then come back to the reader to import papers and translate them.")
+                .fixedSize(horizontal: false, vertical: true)
+
+            onboardingStep(
+                title: "1. Save a provider API key",
+                detail: configuredProviderCount > 0
+                    ? "\(configuredProviderCount) provider\(configuredProviderCount == 1 ? "" : "s") ready."
+                    : "Open Providers, fill in the base URL, API key, and test model, then save and test it.",
+                isComplete: configuredProviderCount > 0,
+                actionTitle: "Open Providers",
+                targetTab: .providers
+            )
+
+            onboardingStep(
+                title: "2. Create a model profile",
+                detail: readyModelCount > 0
+                    ? "\(readyModelCount) model profile\(readyModelCount == 1 ? "" : "s") ready to use."
+                    : "Create at least one enabled model profile and attach it to a provider with a saved API key.",
+                isComplete: readyModelCount > 0,
+                actionTitle: "Open Models",
+                targetTab: .models
+            )
+
+            onboardingStep(
+                title: "3. Choose HTML and PDF routes",
+                detail: hasHTMLRouteSelection && hasPDFRouteSelection
+                    ? "HTML and PDF routes are both selected."
+                    : "Choose which model powers HTML translation and which model is used by BabelDOC/PDF translation.",
+                isComplete: hasHTMLRouteSelection && hasPDFRouteSelection,
+                actionTitle: "Open Reader",
+                targetTab: .reader
+            )
+
+            onboardingStep(
+                title: "4. Import and translate papers",
+                detail: paperCount > 0
+                    ? "\(paperCount) paper\(paperCount == 1 ? "" : "s") already in your library. Use Translate in the reader toolbar."
+                    : "Return to the main window, add an arXiv paper or local PDF, then use Translate in the reader toolbar.",
+                isComplete: paperCount > 0,
+                actionTitle: nil,
+                targetTab: nil
+            )
+
+            Button("Skip") {
+                didDismissGettingStarted = true
+            }
+            .buttonStyle(.bordered)
+        }
+        .padding(.vertical, 6)
+    }
+
+    private var dismissedGettingStartedPanel: some View {
+        HStack(alignment: .center, spacing: 12) {
+            Image(systemName: "checkmark.circle")
+                .foregroundStyle(.secondary)
+
+            Text("Getting started guide is hidden.")
+                .foregroundStyle(.secondary)
+
+            Spacer(minLength: 0)
+
+            Button("Show Guide Again") {
+                didDismissGettingStarted = false
+            }
+            .buttonStyle(.bordered)
+        }
+        .padding(.vertical, 6)
+    }
+
+    private func onboardingStep(
+        title: String,
+        detail: String,
+        isComplete: Bool,
+        actionTitle: String?,
+        targetTab: SettingsTab?
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: isComplete ? "checkmark.circle.fill" : "circle.dashed")
+                    .foregroundStyle(isComplete ? .green : .secondary)
+                    .font(.title3)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title)
+                        .font(.headline)
+                    Text(detail)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer(minLength: 0)
+            }
+
+            if let actionTitle, let targetTab {
+                Button(actionTitle) {
+                    selectedTabRawValue = targetTab.rawValue
+                }
+                .buttonStyle(.bordered)
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color(nsColor: .controlBackgroundColor))
+        )
     }
 
     private func loadInitialSelectionIfNeeded() {

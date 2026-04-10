@@ -11,11 +11,24 @@ struct LibrarySidebarView: View {
     var body: some View {
         VStack(spacing: 0) {
             if papers.isEmpty {
-                ContentUnavailableView(
-                    "No papers yet",
-                    systemImage: "doc.text.magnifyingglass",
-                    description: Text("Add an arXiv ID, arXiv URL, or a local PDF.")
-                )
+                ContentUnavailableView {
+                    Label("No papers yet", systemImage: "doc.text.magnifyingglass")
+                } description: {
+                    Text("Add an arXiv ID, arXiv URL, or a local PDF. Before using translation, open Settings and save at least one LLM provider API key and model profile.")
+                } actions: {
+                    VStack(alignment: .center, spacing: 10) {
+                        SettingsLink {
+                            Label("Open Settings", systemImage: "gearshape")
+                        }
+
+                        Button {
+                            isAddingPaper = true
+                        } label: {
+                            Label("Add First Paper", systemImage: "plus")
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
                 .padding()
             } else {
                 List(selection: $selectedPaperID) {
