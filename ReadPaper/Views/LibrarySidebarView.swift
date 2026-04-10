@@ -16,18 +16,31 @@ struct LibrarySidebarView: View {
                 } description: {
                     Text("Add an arXiv ID, arXiv URL, or a local PDF. Before using translation, open Settings and save at least one LLM provider API key and model profile.")
                 } actions: {
-                    VStack(alignment: .center, spacing: 10) {
+                    HStack(spacing: 0) {
                         SettingsLink {
-                            Label("Open Settings", systemImage: "gearshape")
+                            emptyStateActionLabel("Settings", systemImage: "gearshape")
                         }
+                        .buttonStyle(.plain)
+
+                        Divider()
+                            .frame(height: 18)
 
                         Button {
                             isAddingPaper = true
                         } label: {
-                            Label("Add First Paper", systemImage: "plus")
+                            emptyStateActionLabel("First Paper", systemImage: "plus")
                         }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.borderedProminent)
+                    .background(
+                        RoundedRectangle(cornerRadius: 9, style: .continuous)
+                            .fill(Color(nsColor: .controlBackgroundColor))
+                    )
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 9, style: .continuous)
+                            .strokeBorder(Color.primary.opacity(0.08))
+                    }
+                    .frame(minWidth: 280)
                 }
                 .padding()
             } else {
@@ -68,6 +81,16 @@ struct LibrarySidebarView: View {
             }
         }
     }
+}
+
+private func emptyStateActionLabel(_ title: String, systemImage: String) -> some View {
+    Label(title, systemImage: systemImage)
+        .font(.subheadline.weight(.medium))
+        .lineLimit(1)
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .contentShape(Rectangle())
 }
 
 private struct PaperRowView: View {
