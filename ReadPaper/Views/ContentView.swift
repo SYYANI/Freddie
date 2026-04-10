@@ -41,6 +41,7 @@ struct ContentView: View {
                 readerMode: $readerMode,
                 displayMode: $displayMode
             )
+            .navigationSplitViewColumnWidth(min: 520, ideal: 760)
         } detail: {
             InspectorPaneView(
                 paper: selectedPaper,

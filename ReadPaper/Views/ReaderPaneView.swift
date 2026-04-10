@@ -523,7 +523,13 @@ struct ReaderPaneView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
-                HStack(alignment: .top, spacing: 16) {
+                LazyVGrid(
+                    columns: [
+                        GridItem(.adaptive(minimum: 220, maximum: 320), spacing: 16, alignment: .top)
+                    ],
+                    alignment: .leading,
+                    spacing: 16
+                ) {
                     emptyStateCard(
                         title: "Import",
                         systemImage: "square.and.arrow.down",
@@ -540,6 +546,7 @@ struct ReaderPaneView: View {
                         description: "Run semantic HTML translation incrementally, or send the PDF through BabelDOC when you need a full translated document."
                     )
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
 
                 HStack(spacing: 12) {
                     Image(systemName: "sidebar.left")
@@ -587,8 +594,10 @@ struct ReaderPaneView: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
+
+            Spacer(minLength: 0)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, minHeight: 168, maxHeight: .infinity, alignment: .topLeading)
         .padding(20)
         .background(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
