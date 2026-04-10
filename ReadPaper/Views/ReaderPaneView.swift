@@ -13,6 +13,7 @@ struct ReaderPaneView: View {
         var paperID: UUID?
         var hasHTML: Bool
         var hasPDF: Bool
+        var hasTranslatedPDF: Bool
     }
 
     private struct TranslationProgressStatus: Equatable {
@@ -22,6 +23,7 @@ struct ReaderPaneView: View {
     }
 
     @Environment(\.modelContext) private var modelContext
+    @Query(sort: \ReadingState.modifiedAt, order: .reverse) private var readingStates: [ReadingState]
 
     var paper: Paper?
     var attachments: [PaperAttachment]
@@ -30,6 +32,7 @@ struct ReaderPaneView: View {
     @Binding var displayMode: TranslationDisplayMode
 
     @State private var pdfPageIndex = 0
+    @State private var htmlScrollRatio = 0.0
     @State private var htmlReloadToken = 0
     @State private var htmlSegmentUpdate: HTMLTranslationSegmentUpdate?
     @State private var isWorking = false
@@ -38,6 +41,7 @@ struct ReaderPaneView: View {
     @State private var translationProgress: TranslationProgressStatus?
     @State private var translationTask: Task<Void, Never>?
     @State private var lastPDFReaderMode: ReaderMode = .pdf
+    @State private var suspendReadingStatePersistence = false
 
     private var pdfAttachment: PaperAttachment? {
         attachments.first { $0.kind == .pdf }
@@ -67,8 +71,14 @@ struct ReaderPaneView: View {
         ReaderAvailability(
             paperID: paper?.id,
             hasHTML: htmlAttachment != nil,
-            hasPDF: pdfAttachment != nil
+            hasPDF: pdfAttachment != nil,
+            hasTranslatedPDF: translatedPDFAttachment != nil
         )
+    }
+
+    private var readingState: ReadingState? {
+        guard let paper else { return nil }
+        return readingStates.first { $0.paperID == paper.id }
     }
 
     private var primaryReaderMode: Binding<PrimaryReaderMode> {
@@ -110,10 +120,26 @@ struct ReaderPaneView: View {
             .toolbar {
                 readerToolbar
             }
-            .onAppear(perform: syncReaderModeWithAvailableContent)
+            .onAppear(perform: restoreReadingStateForCurrentPaper)
+            .onChange(of: paper?.id) { _, _ in
+                restoreReadingStateForCurrentPaper()
+            }
             .onChange(of: readerAvailability) { _, _ in
                 syncReaderModeWithAvailableContent()
             }
+            .onChange(of: readerMode) { _, newValue in
+                if newValue != .html {
+                    lastPDFReaderMode = normalizedPDFReaderMode(newValue)
+                }
+                persistReadingStateIfNeeded()
+            }
+            .onChange(of: pdfPageIndex) { _, _ in
+                persistReadingStateIfNeeded()
+            }
+            .onChange(of: htmlScrollRatio) { _, _ in
+                persistReadingStateIfNeeded()
+            }
+            .onDisappear(perform: persistReadingStateIfNeeded)
     }
 
     private var readerSurface: some View {
@@ -291,6 +317,7 @@ struct ReaderPaneView: View {
                         fileURL: htmlFileURL,
                         displayMode: displayMode,
                         reloadToken: htmlReloadToken,
+                        scrollRatio: $htmlScrollRatio,
                         segmentUpdate: htmlSegmentUpdate
                     )
                 } else {
@@ -311,7 +338,8 @@ struct ReaderPaneView: View {
                 if translatedPDFAttachment != nil {
                     DualPDFReaderView(
                         originalURL: pdfAttachment?.fileURL,
-                        translatedURL: translatedPDFAttachment?.fileURL
+                        translatedURL: translatedPDFAttachment?.fileURL,
+                        pageIndex: $pdfPageIndex
                     )
                 } else {
                     centeredUnavailableView(
@@ -507,9 +535,22 @@ struct ReaderPaneView: View {
     }
 
     private func syncReaderModeWithAvailableContent() {
-        guard readerMode == .html else { return }
-        guard htmlAttachment == nil, pdfAttachment != nil else { return }
-        readerMode = normalizedPDFReaderMode(lastPDFReaderMode)
+        guard paper != nil else { return }
+
+        let resolvedMode = ReadingStateStore.resolvedReaderMode(
+            preferredMode: readerMode,
+            hasHTML: htmlAttachment != nil,
+            hasPDF: pdfAttachment != nil,
+            hasTranslatedPDF: translatedPDFAttachment != nil
+        )
+        guard resolvedMode != readerMode else { return }
+
+        updateWithoutPersistingReadingState {
+            if resolvedMode != .html {
+                lastPDFReaderMode = normalizedPDFReaderMode(resolvedMode)
+            }
+            readerMode = resolvedMode
+        }
     }
 
     @ViewBuilder
@@ -669,6 +710,73 @@ struct ReaderPaneView: View {
             .pdf
         case .pdf, .bilingualPDF, .translatedPDF:
             mode
+        }
+    }
+
+    private func restoreReadingStateForCurrentPaper() {
+        guard paper != nil else { return }
+
+        let restoredMode = ReadingStateStore.resolvedReaderMode(
+            preferredMode: readingState?.readerMode,
+            hasHTML: htmlAttachment != nil,
+            hasPDF: pdfAttachment != nil,
+            hasTranslatedPDF: translatedPDFAttachment != nil
+        )
+        let restoredPageIndex = max(0, readingState?.pageIndex ?? 0)
+        let restoredScrollRatio = ReadingStateStore.clampedScrollRatio(readingState?.scrollRatio ?? 0)
+
+        updateWithoutPersistingReadingState {
+            readerMode = restoredMode
+            if restoredMode != .html {
+                lastPDFReaderMode = normalizedPDFReaderMode(restoredMode)
+            }
+            pdfPageIndex = restoredPageIndex
+            htmlScrollRatio = restoredScrollRatio
+        }
+    }
+
+    private func persistReadingStateIfNeeded() {
+        guard !suspendReadingStatePersistence, let paper else { return }
+        guard htmlAttachment != nil || pdfAttachment != nil || translatedPDFAttachment != nil else { return }
+
+        let resolvedMode = ReadingStateStore.resolvedReaderMode(
+            preferredMode: readerMode,
+            hasHTML: htmlAttachment != nil,
+            hasPDF: pdfAttachment != nil,
+            hasTranslatedPDF: translatedPDFAttachment != nil
+        )
+        let attachmentID = attachmentID(for: resolvedMode)
+
+        do {
+            try ReadingStateStore().upsertState(
+                for: paper.id,
+                attachmentID: attachmentID,
+                readerMode: resolvedMode,
+                pageIndex: pdfPageIndex,
+                scrollRatio: resolvedMode == .html ? htmlScrollRatio : 0,
+                in: modelContext
+            )
+        } catch {
+            assertionFailure("Failed to save reading state: \(error.localizedDescription)")
+        }
+    }
+
+    private func attachmentID(for mode: ReaderMode) -> UUID? {
+        switch mode {
+        case .html:
+            htmlAttachment?.id
+        case .pdf, .bilingualPDF:
+            pdfAttachment?.id
+        case .translatedPDF:
+            translatedPDFAttachment?.id
+        }
+    }
+
+    private func updateWithoutPersistingReadingState(_ updates: () -> Void) {
+        suspendReadingStatePersistence = true
+        updates()
+        DispatchQueue.main.async {
+            suspendReadingStatePersistence = false
         }
     }
 }

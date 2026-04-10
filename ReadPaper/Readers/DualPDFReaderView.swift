@@ -3,12 +3,12 @@ import SwiftUI
 struct DualPDFReaderView: View {
     var originalURL: URL?
     var translatedURL: URL?
-    @State private var originalPageIndex = 0
+    @Binding var pageIndex: Int
     @State private var translatedPageIndex = 0
 
     var body: some View {
         HSplitView {
-            PDFReaderView(fileURL: originalURL, pageIndex: $originalPageIndex)
+            PDFReaderView(fileURL: originalURL, pageIndex: $pageIndex)
                 .overlay(alignment: .topLeading) {
                     readerLabel("Original")
                 }
@@ -17,11 +17,16 @@ struct DualPDFReaderView: View {
                     readerLabel("Translation")
                 }
         }
-        .onChange(of: originalPageIndex) { _, newValue in
+        .onAppear {
+            translatedPageIndex = pageIndex
+        }
+        .onChange(of: pageIndex) { _, newValue in
+            guard translatedPageIndex != newValue else { return }
             translatedPageIndex = newValue
         }
         .onChange(of: translatedPageIndex) { _, newValue in
-            originalPageIndex = newValue
+            guard pageIndex != newValue else { return }
+            pageIndex = newValue
         }
     }
 

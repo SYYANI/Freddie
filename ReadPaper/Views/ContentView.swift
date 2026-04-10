@@ -9,7 +9,7 @@ struct ContentView: View {
     @Query private var settingsRows: [AppSettings]
 
     @State private var selectedPaperID: UUID?
-    @State private var readerMode: ReaderMode = .html
+    @State private var readerMode: ReaderMode = .pdf
     @State private var displayMode: TranslationDisplayMode = .bilingual
     @State private var isAddingPaper = false
     @State private var paperPendingDeletion: Paper?
