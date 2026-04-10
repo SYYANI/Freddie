@@ -224,6 +224,7 @@ struct ReaderPaneView: View {
                 translateHTML()
             } label: {
                 Label("Translate HTML", systemImage: "globe")
+                    .labelStyle(.titleAndIcon)
             }
             .disabled(canTranslateHTML == false)
 
@@ -231,12 +232,13 @@ struct ReaderPaneView: View {
                 translatePDF()
             } label: {
                 Label("Translate PDF", systemImage: "doc")
+                    .labelStyle(.titleAndIcon)
             }
             .disabled(canTranslatePDF == false)
         } label: {
             Label("Translate", systemImage: "translate")
+                .labelStyle(.iconOnly)
         }
-        .labelStyle(.iconOnly)
         .menuIndicator(.hidden)
         .disabled(translationControlsDisabled)
         .help(translationMenuHelpText)
