@@ -20,7 +20,7 @@ jobs:
       DMG_PATH: build/Freddie-unsigned.dmg
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
       LOCAL_READABILITY_REPO: https://github.com/SYYANI/swift-readability.git
-      LOCAL_READABILITY_REF: 6d98afef8c2c0cc7f6055bdb74e0fd01b49e4729
+      LOCAL_READABILITY_REF: 71d68f4c667856fd4c547c7c813476db5bdd56b1
     steps:
       - name: Checkout
         uses: actions/checkout@v6
