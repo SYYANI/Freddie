@@ -17,7 +17,6 @@ jobs:
       SCHEME: ReadPaper
       DERIVED_DATA_PATH: build/DerivedData
       APP_PATH: build/DerivedData/Build/Products/Release/Freddie.app
-      DMG_PATH: build/Freddie-unsigned.dmg
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
       LOCAL_READABILITY_REPO: https://github.com/SYYANI/swift-readability.git
       LOCAL_READABILITY_REF: 71d68f4c667856fd4c547c7c813476db5bdd56b1
@@ -66,6 +65,30 @@ jobs:
           test -d "$APP_PATH"
           ls -la "$APP_PATH"
 
+      - name: Resolve artifact names
+        id: artifact_meta
+        run: |
+          app_info_plist="$APP_PATH/Contents/Info.plist"
+          app_version="$(
+            /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app_info_plist"
+          )"
+          app_build="$(
+            /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$app_info_plist"
+          )"
+          dmg_basename="${APP_NAME}-${app_version}-unsigned"
+          dmg_path="build/${dmg_basename}.dmg"
+          artifact_name="${dmg_basename}-dmg"
+
+          echo "APP_VERSION=$app_version" >> "$GITHUB_ENV"
+          echo "APP_BUILD=$app_build" >> "$GITHUB_ENV"
+          echo "DMG_PATH=$dmg_path" >> "$GITHUB_ENV"
+          echo "ARTIFACT_NAME=$artifact_name" >> "$GITHUB_ENV"
+
+          echo "app_version=$app_version" >> "$GITHUB_OUTPUT"
+          echo "app_build=$app_build" >> "$GITHUB_OUTPUT"
+          echo "dmg_path=$dmg_path" >> "$GITHUB_OUTPUT"
+          echo "artifact_name=$artifact_name" >> "$GITHUB_OUTPUT"
+
       - name: Create DMG
         run: |
           rm -f "$DMG_PATH"
@@ -83,8 +106,8 @@ jobs:
       - name: Upload DMG artifact
         uses: actions/upload-artifact@v6
         with:
-          name: Freddie-unsigned-dmg
-          path: build/Freddie-unsigned.dmg
+          name: ${{ steps.artifact_meta.outputs.artifact_name }}
+          path: ${{ steps.artifact_meta.outputs.dmg_path }}
 
       - name: Generate release notes
         if: startsWith(github.ref, 'refs/tags/v')
@@ -122,6 +145,6 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2.5.0
         with:
-          files: build/Freddie-unsigned.dmg
+          files: ${{ steps.artifact_meta.outputs.dmg_path }}
           name: ${{ github.ref_name }}
           body_path: build/release-notes.md
