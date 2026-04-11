@@ -490,7 +490,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 7;
+				CURRENT_PROJECT_VERSION = 8;
 				ENABLE_TESTABILITY = YES;
 				INFOPLIST_FILE = ReadPaper/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Freddie;
@@ -499,7 +499,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 0.1.6;
+				MARKETING_VERSION = 0.1.7;
 				PRODUCT_BUNDLE_IDENTIFIER = com.yiyan.ReadPaper;
 				PRODUCT_MODULE_NAME = ReadPaper;
 				PRODUCT_NAME = Freddie;
@@ -633,7 +633,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 7;
+				CURRENT_PROJECT_VERSION = 8;
 				ENABLE_TESTABILITY = YES;
 				INFOPLIST_FILE = ReadPaper/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Freddie;
@@ -642,7 +642,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 0.1.6;
+				MARKETING_VERSION = 0.1.7;
 				PRODUCT_BUNDLE_IDENTIFIER = com.yiyan.ReadPaper;
 				PRODUCT_MODULE_NAME = ReadPaper;
 				PRODUCT_NAME = Freddie;

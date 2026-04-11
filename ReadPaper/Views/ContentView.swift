@@ -8,6 +8,7 @@ struct ContentView: View {
     @Query(sort: \Note.modifiedAt, order: .reverse) private var notes: [Note]
     @Query private var settingsRows: [AppSettings]
 
+    @SceneStorage("contentView.isInspectorCollapsed") private var isInspectorCollapsed = false
     @State private var selectedPaperID: UUID?
     @State private var readerMode: ReaderMode = .pdf
     @State private var displayMode: TranslationDisplayMode = .bilingual
@@ -49,9 +50,14 @@ struct ContentView: View {
         } detail: {
             InspectorPaneView(
                 paper: selectedPaper,
-                notes: notes.filter { $0.paperID == selectedPaper?.id }
+                notes: notes.filter { $0.paperID == selectedPaper?.id },
+                isCollapsed: $isInspectorCollapsed
             )
-            .navigationSplitViewColumnWidth(min: 280, ideal: 340, max: 420)
+            .navigationSplitViewColumnWidth(
+                min: isInspectorCollapsed ? 36 : 280,
+                ideal: isInspectorCollapsed ? 44 : 340,
+                max: isInspectorCollapsed ? 52 : 420
+            )
         }
         .sheet(isPresented: $isAddingPaper) {
             AddPaperSheet(isPresented: $isAddingPaper, selectedPaperID: $selectedPaperID)

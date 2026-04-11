@@ -20,7 +20,7 @@ struct PDFReaderView: NSViewRepresentable {
         guard let fileURL else {
             view.document = nil
             context.coordinator.loadedURL = nil
-            context.coordinator.updateCurrentPageIndex()
+            context.coordinator.scheduleCurrentPageIndexUpdate()
             return
         }
         if context.coordinator.loadedURL != fileURL {
@@ -30,7 +30,7 @@ struct PDFReaderView: NSViewRepresentable {
         if let page = view.document?.page(at: pageIndex), view.currentPage != page {
             view.go(to: page)
         }
-        context.coordinator.updateCurrentPageIndex()
+        context.coordinator.scheduleCurrentPageIndexUpdate()
     }
 
     func makeCoordinator() -> Coordinator {
@@ -42,6 +42,7 @@ struct PDFReaderView: NSViewRepresentable {
         var loadedURL: URL?
         weak var pdfView: PDFView?
         var pageIndex: Binding<Int>
+        private var isPageIndexUpdateScheduled = false
 
         init(pageIndex: Binding<Int>) {
             self.pageIndex = pageIndex
@@ -62,7 +63,18 @@ struct PDFReaderView: NSViewRepresentable {
             )
         }
 
-        func updateCurrentPageIndex() {
+        func scheduleCurrentPageIndexUpdate() {
+            guard !isPageIndexUpdateScheduled else { return }
+            isPageIndexUpdateScheduled = true
+
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.isPageIndexUpdateScheduled = false
+                self.updateCurrentPageIndexIfNeeded()
+            }
+        }
+
+        private func updateCurrentPageIndexIfNeeded() {
             guard let pdfView,
                   let document = pdfView.document,
                   let currentPage = pdfView.currentPage else {
@@ -76,7 +88,7 @@ struct PDFReaderView: NSViewRepresentable {
 
         @objc
         private func handlePageChanged(_ notification: Notification) {
-            updateCurrentPageIndex()
+            scheduleCurrentPageIndexUpdate()
         }
     }
 }

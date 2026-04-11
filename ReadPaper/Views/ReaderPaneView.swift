@@ -161,7 +161,7 @@ struct ReaderPaneView: View {
     }
 
     private var paneHeader: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 12) {
+        HStack(spacing: 12) {
             Text("READER")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
@@ -181,6 +181,7 @@ struct ReaderPaneView: View {
 
             Spacer(minLength: 0)
         }
+        .frame(minHeight: 20)
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
         .background(Color(nsColor: .windowBackgroundColor))
