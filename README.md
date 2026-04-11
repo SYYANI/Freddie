@@ -20,16 +20,6 @@ It focuses on three practical reading workflows:
 - Full PDF translation via BabelDOC with structured progress reporting
 - PDF, HTML, and dual-PDF reading modes in one app
 
-## Tech Stack
-
-- SwiftUI
-- SwiftData
-- PDFKit
-- SwiftSoup
-- SwiftOpenAI
-- `swift-readability`
-- BabelDOC
-
 ## Requirements
 
 - macOS 14.0+
@@ -107,6 +97,6 @@ This project is released under the MIT License. See [LICENSE](LICENSE).
 
 Special thanks to the projects and ideas that helped shape ReadPaper:
 
-- Mercury
-- BabelDOC
-- swift-readability
+- [Mercury](https://github.com/neolee/mercury) 
+- [BabelDOC](https://github.com/funstory-ai/BabelDOC)
+- [swift-readability](https://github.com/neolee/swift-readability)
