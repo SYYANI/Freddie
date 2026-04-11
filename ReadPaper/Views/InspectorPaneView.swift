@@ -7,16 +7,14 @@ struct InspectorPaneView: View {
     @State private var notePendingDeletion: Note?
     @State private var noteDeletionErrorMessage: String?
     @State private var focusedNoteID: UUID?
-    @State private var isExpandedHeaderButtonHovered = false
-    @State private var isCollapsedHeaderHovered = false
     var paper: Paper?
     var notes: [Note]
-    @Binding var isCollapsed: Bool
+    var isCollapsed: Bool
 
     var body: some View {
         Group {
             if isCollapsed {
-                collapsedInspectorRail
+                Color.clear
             } else {
                 expandedInspectorPane
             }
@@ -101,87 +99,11 @@ struct InspectorPaneView: View {
             }
 
             Spacer(minLength: 0)
-
-            Button {
-                setInspectorCollapsed(true)
-            } label: {
-                inspectorToggleHandle(
-                    systemImage: "chevron.right",
-                    isHovered: isExpandedHeaderButtonHovered,
-                    size: 20
-                )
-            }
-            .buttonStyle(.plain)
-            .help("Collapse Inspector")
-            .onHover { isHovering in
-                isExpandedHeaderButtonHovered = isHovering
-            }
         }
         .frame(minHeight: 20)
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
         .background(Color(nsColor: .windowBackgroundColor))
-    }
-
-    private var collapsedInspectorRail: some View {
-        VStack(spacing: 0) {
-            VStack(spacing: 0) {
-                inspectorToggleHandle(
-                    systemImage: "chevron.left",
-                    isHovered: isCollapsedHeaderHovered,
-                    size: 20
-                )
-                .frame(maxWidth: .infinity)
-                .frame(height: 20)
-                .padding(.horizontal, 6)
-                .padding(.vertical, 10)
-                .animation(.easeInOut(duration: 0.12), value: isCollapsedHeaderHovered)
-
-                Divider()
-            }
-            .contentShape(Rectangle())
-            .help("Expand Inspector")
-            .onHover { isHovering in
-                isCollapsedHeaderHovered = isHovering
-            }
-            .onTapGesture {
-                setInspectorCollapsed(false)
-            }
-
-            VStack(spacing: 0) {
-                Spacer(minLength: 0)
-            }
-        }
-        .padding(.bottom, 16)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-    }
-
-    private func inspectorToggleHandle(systemImage: String, isHovered: Bool, size: CGFloat = 28) -> some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(
-                    isHovered
-                        ? Color.accentColor.opacity(0.16)
-                        : Color(nsColor: .windowBackgroundColor)
-                )
-                .overlay {
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .stroke(
-                            isHovered
-                                ? Color.accentColor.opacity(0.4)
-                                : Color.primary.opacity(0.08),
-                            lineWidth: 1
-                        )
-                }
-
-            Image(systemName: systemImage)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(
-                    isHovered ? Color.accentColor : Color.secondary
-                )
-        }
-        .frame(width: size, height: size)
-        .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 
     private func metadataSection(_ paper: Paper) -> some View {
@@ -262,13 +184,6 @@ struct InspectorPaneView: View {
             modelContext.rollback()
             notePendingDeletion = nil
             noteDeletionErrorMessage = error.localizedDescription
-        }
-    }
-
-    private func setInspectorCollapsed(_ collapsed: Bool) {
-        guard isCollapsed != collapsed else { return }
-        withAnimation(.easeInOut(duration: 0.18)) {
-            isCollapsed = collapsed
         }
     }
 

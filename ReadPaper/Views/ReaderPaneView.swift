@@ -30,6 +30,7 @@ struct ReaderPaneView: View {
     var settings: AppSettings?
     @Binding var readerMode: ReaderMode
     @Binding var displayMode: TranslationDisplayMode
+    @Binding var isInspectorCollapsed: Bool
 
     @State private var pdfPageIndex = 0
     @State private var htmlScrollRatio = 0.0
@@ -218,6 +219,23 @@ struct ReaderPaneView: View {
                     .help(isCancelling ? "Cancelling translation..." : "Cancel Translation")
                 }
             }
+
+            if #available(macOS 26.0, *) {
+                ToolbarSpacer(.fixed, placement: .primaryAction)
+            }
+
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    toggleInspectorCollapsed()
+                } label: {
+                    Label(
+                        isInspectorCollapsed ? "Show Inspector" : "Hide Inspector",
+                        systemImage: "sidebar.trailing"
+                    )
+                }
+                .labelStyle(.iconOnly)
+                .help(isInspectorCollapsed ? "Show Inspector" : "Hide Inspector")
+            }
         }
     }
 
@@ -247,6 +265,12 @@ struct ReaderPaneView: View {
         .frame(width: 250)
         .labelsHidden()
         .help("HTML Display Mode")
+    }
+
+    private func toggleInspectorCollapsed() {
+        withAnimation(.easeInOut(duration: 0.18)) {
+            isInspectorCollapsed.toggle()
+        }
     }
 
     private var pdfDisplayPicker: some View {

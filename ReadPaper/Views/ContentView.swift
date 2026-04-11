@@ -44,19 +44,20 @@ struct ContentView: View {
                 attachments: attachments.filter { $0.paperID == selectedPaper?.id },
                 settings: settings,
                 readerMode: $readerMode,
-                displayMode: $displayMode
+                displayMode: $displayMode,
+                isInspectorCollapsed: $isInspectorCollapsed
             )
             .navigationSplitViewColumnWidth(min: 520, ideal: 760)
         } detail: {
             InspectorPaneView(
                 paper: selectedPaper,
                 notes: notes.filter { $0.paperID == selectedPaper?.id },
-                isCollapsed: $isInspectorCollapsed
+                isCollapsed: isInspectorCollapsed
             )
             .navigationSplitViewColumnWidth(
-                min: isInspectorCollapsed ? 36 : 280,
-                ideal: isInspectorCollapsed ? 44 : 340,
-                max: isInspectorCollapsed ? 52 : 420
+                min: isInspectorCollapsed ? 0 : 280,
+                ideal: isInspectorCollapsed ? 0 : 340,
+                max: isInspectorCollapsed ? 0 : 420
             )
         }
         .sheet(isPresented: $isAddingPaper) {
@@ -180,4 +181,5 @@ struct ContentView: View {
             assertionFailure("Failed to save selected paper: \(error.localizedDescription)")
         }
     }
+
 }
