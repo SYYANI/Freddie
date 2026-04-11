@@ -187,7 +187,14 @@ struct HTMLLocalizer: @unchecked Sendable {
         try style.html("""
         body.rp-readability-body { margin: 0; padding: 32px 24px 56px; }
         .rp-readability-shell { max-width: 980px; margin: 0 auto; }
-        .rp-readability-header { margin-bottom: 2rem; }
+        .rp-readability-header {
+            display: block;
+            margin-bottom: 2rem;
+            background: transparent;
+            padding: 0;
+            width: auto;
+            box-sizing: border-box;
+        }
         .rp-readability-title { margin: 0; font-size: 2rem; line-height: 1.25; }
         .rp-readability-byline, .rp-readability-excerpt { color: #5f6368; margin-top: 0.75rem; }
         .rp-readability-content img, .rp-readability-content video, .rp-readability-content svg, .rp-readability-content math { max-width: 100%; }
@@ -203,7 +210,7 @@ struct HTMLLocalizer: @unchecked Sendable {
         ]
 
         if let title = nonEmpty(result.title) {
-            parts.append(#"<header class="rp-readability-header">"#)
+            parts.append(#"<div class="rp-readability-header">"#)
             parts.append(#"<h1 class="rp-readability-title">\#(escapeHTML(title))</h1>"#)
             if let byline = nonEmpty(result.byline) {
                 parts.append(#"<p class="rp-readability-byline">\#(escapeHTML(byline))</p>"#)
@@ -211,7 +218,7 @@ struct HTMLLocalizer: @unchecked Sendable {
             if let excerpt = nonEmpty(result.excerpt) {
                 parts.append(#"<p class="rp-readability-excerpt">\#(escapeHTML(excerpt))</p>"#)
             }
-            parts.append("</header>")
+            parts.append("</div>")
         }
 
         parts.append(#"<article class="rp-readability-content">\#(result.content)</article>"#)
