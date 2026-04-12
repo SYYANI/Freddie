@@ -23,7 +23,9 @@ struct TranslationLLMClient: TranslationLLMClientProtocol {
         apiKey: String
     ) async throws -> String {
         guard let baseURL = URL(string: route.baseURL) else {
-            throw LLMProviderError.invalidConfiguration("Invalid provider base URL: \(route.baseURL)")
+            throw LLMProviderError.invalidConfiguration(
+                AppLocalization.format("Invalid provider base URL: %@", route.baseURL)
+            )
         }
 
         let response = try await provider.complete(

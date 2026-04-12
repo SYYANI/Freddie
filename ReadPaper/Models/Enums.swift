@@ -65,15 +65,15 @@ enum PaperImportError: Error, LocalizedError {
     var errorDescription: String? {
         switch self {
         case .invalidArxivIdentifier(let rawValue):
-            "Invalid arXiv identifier: \(rawValue)"
+            AppLocalization.format("Invalid arXiv identifier: %@", rawValue)
         case .missingPDF:
-            "No PDF attachment is available for this paper."
+            AppLocalization.localized("No PDF attachment is available for this paper.")
         case .missingHTML:
-            "No HTML attachment is available for this paper."
+            AppLocalization.localized("No HTML attachment is available for this paper.")
         case .unsupportedFile(let url):
-            "Unsupported file: \(url.lastPathComponent)"
+            AppLocalization.format("Unsupported file: %@", url.lastPathComponent)
         case .noTranslatedPDFProduced:
-            "BabelDOC finished without producing a translated PDF."
+            AppLocalization.localized("BabelDOC finished without producing a translated PDF.")
         }
     }
 }

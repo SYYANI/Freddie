@@ -77,6 +77,6 @@ struct KeychainError: Error, LocalizedError {
     let status: OSStatus
 
     var errorDescription: String? {
-        "Keychain operation failed with status \(status)."
+        AppLocalization.format("Keychain operation failed with status %d.", status)
     }
 }

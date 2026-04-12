@@ -21,7 +21,7 @@ struct ArxivImportProgress: Equatable {
         var displayName: String {
             switch self {
             case .arxiv:
-                "arXiv HTML"
+                AppLocalization.localized("arXiv HTML")
             case .ar5iv:
                 "ar5iv"
             }
@@ -38,16 +38,18 @@ struct ArxivImportProgress: Equatable {
     }
 
     var stepLabel: String {
-        "Step \(stage.stepNumber) of \(totalSteps)"
+        AppLocalization.format("Step %d of %d", stage.stepNumber, totalSteps)
     }
 
     static func resolvingInput(identifier: String? = nil) -> Self {
         Self(
             stage: .resolvingInput,
             fractionCompleted: 0.08,
-            title: "Checking arXiv identifier",
-            detail: identifier.map { "Normalized to \($0) and checking whether it already exists in your library." }
-                ?? "Normalizing the input and checking whether it already exists in your library."
+            title: AppLocalization.localized("Checking arXiv identifier"),
+            detail: identifier.map {
+                AppLocalization.format("Normalized to %@ and checking whether it already exists in your library.", $0)
+            }
+                ?? AppLocalization.localized("Normalizing the input and checking whether it already exists in your library.")
         )
     }
 
@@ -55,8 +57,8 @@ struct ArxivImportProgress: Equatable {
         Self(
             stage: .fetchingMetadata,
             fractionCompleted: 0.22,
-            title: "Fetching metadata",
-            detail: "Loading title, authors, abstract, and links for \(identifier)."
+            title: AppLocalization.localized("Fetching metadata"),
+            detail: AppLocalization.format("Loading title, authors, abstract, and links for %@.", identifier)
         )
     }
 
@@ -64,8 +66,8 @@ struct ArxivImportProgress: Equatable {
         Self(
             stage: .creatingLibraryEntry,
             fractionCompleted: 0.38,
-            title: "Creating library entry",
-            detail: "Preparing local storage for \"\(title)\"."
+            title: AppLocalization.localized("Creating library entry"),
+            detail: AppLocalization.format("Preparing local storage for \"%@\".", title)
         )
     }
 
@@ -73,8 +75,8 @@ struct ArxivImportProgress: Equatable {
         Self(
             stage: .downloadingPDF,
             fractionCompleted: 0.56,
-            title: "Downloading PDF",
-            detail: "Saving the source PDF for \(identifier) to your local library."
+            title: AppLocalization.localized("Downloading PDF"),
+            detail: AppLocalization.format("Saving the source PDF for %@ to your local library.", identifier)
         )
     }
 
@@ -82,10 +84,10 @@ struct ArxivImportProgress: Equatable {
         Self(
             stage: .importingHTML,
             fractionCompleted: isFallback ? 0.8 : 0.72,
-            title: isFallback ? "Trying backup HTML source" : "Fetching reader HTML",
+            title: isFallback ? AppLocalization.localized("Trying backup HTML source") : AppLocalization.localized("Fetching reader HTML"),
             detail: isFallback
-                ? "The primary HTML source was unavailable, so ReadPaper is trying \(source.displayName)."
-                : "Localizing the paper body from \(source.displayName) for reading and translation."
+                ? AppLocalization.format("The primary HTML source was unavailable, so ReadPaper is trying %@.", source.displayName)
+                : AppLocalization.format("Localizing the paper body from %@ for reading and translation.", source.displayName)
         )
     }
 
@@ -93,10 +95,10 @@ struct ArxivImportProgress: Equatable {
         Self(
             stage: .finalizing,
             fractionCompleted: 0.92,
-            title: "Finalizing import",
+            title: AppLocalization.localized("Finalizing import"),
             detail: htmlImported
-                ? "Saving the paper, PDF, and localized HTML to your library."
-                : "Saving the paper and PDF. HTML was unavailable, so the import will finish with PDF only."
+                ? AppLocalization.localized("Saving the paper, PDF, and localized HTML to your library.")
+                : AppLocalization.localized("Saving the paper and PDF. HTML was unavailable, so the import will finish with PDF only.")
         )
     }
 }

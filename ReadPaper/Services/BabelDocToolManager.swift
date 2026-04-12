@@ -365,9 +365,9 @@ enum ToolInstallError: Error, LocalizedError {
     var errorDescription: String? {
         switch self {
         case .uvInstallFailed(let output):
-            "uv installation failed: \(output)"
+            AppLocalization.format("uv installation failed: %@", output)
         case .invalidBabelDocLauncher(let path):
-            "BabelDOC launcher is invalid: \(path)"
+            AppLocalization.format("BabelDOC launcher is invalid: %@", path)
         }
     }
 }

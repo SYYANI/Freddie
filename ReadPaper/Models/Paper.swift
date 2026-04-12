@@ -81,7 +81,7 @@ final class Paper {
 
     var displayAuthors: String {
         let names = authors
-        guard !names.isEmpty else { return "Unknown authors" }
+        guard !names.isEmpty else { return AppLocalization.localized("Unknown authors") }
         if names.count <= 3 {
             return names.joined(separator: ", ")
         }
@@ -90,20 +90,20 @@ final class Paper {
 
     var sidebarIdentifierText: String? {
         if let arxivID {
-            return "arXiv \(arxivID)"
+            return AppLocalization.format("arXiv %@", arxivID)
         }
         if let doi {
-            return "DOI \(doi)"
+            return AppLocalization.format("DOI %@", doi)
         }
         return nil
     }
 
     var metadataIdentifierText: String? {
         if let arxivID {
-            return "arXiv: \(arxivID)"
+            return AppLocalization.format("arXiv: %@", arxivID)
         }
         if let doi {
-            return "DOI: \(doi)"
+            return AppLocalization.format("DOI: %@", doi)
         }
         return nil
     }

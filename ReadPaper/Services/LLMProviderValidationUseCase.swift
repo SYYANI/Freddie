@@ -16,13 +16,13 @@ enum LLMProviderValidationError: LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case .invalidBaseURL:
-            return "Please enter a valid Base URL."
+            return AppLocalization.localized("Please enter a valid Base URL.")
         case .unsupportedBaseURLScheme:
-            return "Only http:// or https:// Base URL is supported."
+            return AppLocalization.localized("Only http:// or https:// Base URL is supported.")
         case .emptyModel:
-            return "Model name cannot be empty."
+            return AppLocalization.localized("Model name cannot be empty.")
         case .emptyAPIKey:
-            return "API key cannot be empty."
+            return AppLocalization.localized("API key cannot be empty.")
         }
     }
 }

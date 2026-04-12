@@ -4,7 +4,16 @@ import XCTest
 @testable import ReadPaper
 
 final class PaperImporterTests: XCTestCase {
+    private var originalLanguageOverride: String?
+
+    override func setUp() {
+        super.setUp()
+        originalLanguageOverride = AppLocalization.currentLanguageOverride()
+        AppLocalization.setLanguageOverride("en")
+    }
+
     override func tearDown() {
+        AppLocalization.setLanguageOverride(originalLanguageOverride)
         super.tearDown()
         MockPaperImporterURLProtocol.reset()
     }

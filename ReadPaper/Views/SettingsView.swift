@@ -11,6 +11,7 @@ private enum SettingsTab: String, Hashable {
 
 struct SettingsView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.localizationBundle) private var bundle
     @Query private var settingsRows: [AppSettings]
     @Query private var papers: [Paper]
     @Query(sort: [SortDescriptor(\LLMProviderProfile.modifiedAt, order: .reverse)]) private var providers: [LLMProviderProfile]
@@ -39,6 +40,7 @@ struct SettingsView: View {
 
 private struct SettingsForm: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.localizationBundle) private var bundle
 
     @Bindable var settings: AppSettings
     let providers: [LLMProviderProfile]
@@ -165,30 +167,37 @@ private struct SettingsForm: View {
         )
     }
 
+    private var appLanguageBinding: Binding<String?> {
+        Binding(
+            get: { LanguageManager.shared.languageOverride },
+            set: { LanguageManager.shared.setLanguage($0) }
+        )
+    }
+
     var body: some View {
         TabView(selection: selectedTabBinding) {
             generalTab
                 .tag(SettingsTab.general)
                 .tabItem {
-                    Label("General", systemImage: "gearshape")
+                    Label(String(localized: "General", bundle: bundle), systemImage: "gearshape")
                 }
 
             readerTab
                 .tag(SettingsTab.reader)
                 .tabItem {
-                    Label("Reader", systemImage: "book.closed")
+                    Label(String(localized: "Reader", bundle: bundle), systemImage: "book.closed")
                 }
 
             providerTab
                 .tag(SettingsTab.providers)
                 .tabItem {
-                    Label("Providers", systemImage: "network")
+                    Label(String(localized: "Providers", bundle: bundle), systemImage: "network")
                 }
 
             modelTab
                 .tag(SettingsTab.models)
                 .tabItem {
-                    Label("Models", systemImage: "sparkles.rectangle.stack")
+                    Label(String(localized: "Models", bundle: bundle), systemImage: "sparkles.rectangle.stack")
                 }
         }
         .formStyle(.grouped)
@@ -221,7 +230,7 @@ private struct SettingsForm: View {
     private var generalTab: some View {
         VStack(alignment: .leading, spacing: 12) {
             Form {
-                Section("Getting Started") {
+                Section(String(localized: "Getting Started", bundle: bundle)) {
                     if didDismissGettingStarted {
                         dismissedGettingStartedPanel
                     } else {
@@ -229,44 +238,76 @@ private struct SettingsForm: View {
                     }
                 }
 
-                Section("Translation") {
-                    Picker("Target language", selection: targetLanguageBinding) {
+                Section(String(localized: "Language", bundle: bundle)) {
+                    Picker(String(localized: "App language", bundle: bundle), selection: appLanguageBinding) {
+                        Text("Follow System", bundle: bundle).tag(Optional<String>.none)
+                        ForEach(AppLocalization.supportedLanguages) { option in
+                            Text(verbatim: option.displayName).tag(Optional(option.code))
+                        }
+                    }
+                    .pickerStyle(.menu)
+
+                    Text("Choose whether ReadPaper follows the macOS language setting or always uses English or Simplified Chinese.", bundle: bundle)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+
+                Section(String(localized: "Translation", bundle: bundle)) {
+                    Picker(String(localized: "Target language", bundle: bundle), selection: targetLanguageBinding) {
                         ForEach(TranslationTargetLanguage.supported) { option in
                             Text(option.nativeName).tag(option.code)
                         }
                     }
                     .pickerStyle(.menu)
 
-                    Stepper("HTML concurrency: \(settings.htmlTranslationConcurrency)", value: $settings.htmlTranslationConcurrency, in: 1...12)
-                    Stepper("BabelDOC QPS: \(settings.babelDocQPS)", value: $settings.babelDocQPS, in: 1...20)
+                    Stepper(
+                        String(
+                            format: String(localized: "HTML concurrency: %d", bundle: bundle),
+                            settings.htmlTranslationConcurrency
+                        ),
+                        value: $settings.htmlTranslationConcurrency,
+                        in: 1...12
+                    )
+                    Stepper(
+                        String(
+                            format: String(localized: "BabelDOC QPS: %d", bundle: bundle),
+                            settings.babelDocQPS
+                        ),
+                        value: $settings.babelDocQPS,
+                        in: 1...20
+                    )
 
-                    Text("Controls the default translation target and the amount of parallel work used for HTML and BabelDOC translation jobs. Supported languages: English and Simplified Chinese.")
+                    Text("Controls the default translation target and the amount of parallel work used for HTML and BabelDOC translation jobs. Supported languages: English and Simplified Chinese.", bundle: bundle)
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
 
-                Section("BabelDOC") {
-                    LabeledContent("Current installed version") {
+                Section(String(localized: "BabelDOC", bundle: bundle)) {
+                    LabeledContent(String(localized: "Current installed version", bundle: bundle)) {
                         if isLoadingInstalledBabelDocVersion {
                             ProgressView()
                                 .controlSize(.small)
                         } else {
-                            Text(installedBabelDocVersion ?? "Not installed")
+                            Text(installedBabelDocVersion ?? String(localized: "Not installed", bundle: bundle))
                                 .foregroundStyle(installedBabelDocVersion == nil ? .secondary : .primary)
                                 .textSelection(.enabled)
                         }
                     }
 
-                    SettingsFieldRow("Target version") {
+                    SettingsFieldRow(String(localized: "Target version", bundle: bundle)) {
                         SettingsPlainTextField(text: $settings.babelDocVersion)
                     }
 
-                    Button(isInstallingBabelDOC ? "Installing..." : "Install or update BabelDOC") {
+                    Button(
+                        isInstallingBabelDOC
+                            ? String(localized: "Installing...", bundle: bundle)
+                            : String(localized: "Install or update BabelDOC", bundle: bundle)
+                    ) {
                         installBabelDOC()
                     }
                     .disabled(isInstallingBabelDOC)
 
-                    Text("The PDF translation tool is managed separately from the reader. Updating it here keeps the BabelDOC route ready when a paper needs full-PDF translation.")
+                    Text("The PDF translation tool is managed separately from the reader. Updating it here keeps the BabelDOC route ready when a paper needs full-PDF translation.", bundle: bundle)
                         .font(.footnote)
                         .foregroundStyle(.secondary)
 
@@ -286,32 +327,32 @@ private struct SettingsForm: View {
     private var readerTab: some View {
         VStack(alignment: .leading, spacing: 12) {
             Form {
-                Section("How to use translation") {
-                    Text("After selecting routes here, go back to the main window, import a paper, open it in the reader, and use the Translate button in the toolbar.")
+                Section(String(localized: "How to use translation", bundle: bundle)) {
+                    Text("After selecting routes here, go back to the main window, import a paper, open it in the reader, and use the Translate button in the toolbar.", bundle: bundle)
                         .fixedSize(horizontal: false, vertical: true)
 
-                    Text("HTML translation works best for arXiv papers with HTML content. PDF translation uses the PDF/BabelDOC route and can produce translated or side-by-side PDF reading modes.")
+                    Text("HTML translation works best for arXiv papers with HTML content. PDF translation uses the PDF/BabelDOC route and can produce translated or side-by-side PDF reading modes.", bundle: bundle)
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
-                Section("Translation Routes") {
-                    Picker("HTML Model", selection: $settings.selectedHTMLModelProfileID) {
-                        Text("Not Selected").tag(Optional<UUID>.none)
+                Section(String(localized: "Translation Routes", bundle: bundle)) {
+                    Picker(String(localized: "HTML Model", bundle: bundle), selection: $settings.selectedHTMLModelProfileID) {
+                        Text("Not Selected", bundle: bundle).tag(Optional<UUID>.none)
                         ForEach(sortedModels, id: \.id) { model in
                             Text(modelDisplayName(model)).tag(Optional(model.id))
                         }
                     }
 
-                    Picker("PDF/BabelDOC Model", selection: $settings.selectedPDFModelProfileID) {
-                        Text("Not Selected").tag(Optional<UUID>.none)
+                    Picker(String(localized: "PDF/BabelDOC Model", bundle: bundle), selection: $settings.selectedPDFModelProfileID) {
+                        Text("Not Selected", bundle: bundle).tag(Optional<UUID>.none)
                         ForEach(sortedModels, id: \.id) { model in
                             Text(modelDisplayName(model)).tag(Optional(model.id))
                         }
                     }
 
-                    Text("Choose which saved model profile powers HTML translation and the BabelDOC PDF route inside the reader.")
+                    Text("Choose which saved model profile powers HTML translation and the BabelDOC PDF route inside the reader.", bundle: bundle)
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
@@ -327,59 +368,63 @@ private struct SettingsForm: View {
     private var providerTab: some View {
         VStack(alignment: .leading, spacing: 12) {
             Form {
-                Section("Provider Guide") {
-                    Text("Create one provider for each OpenAI-compatible endpoint you want to use. The API key is stored in Keychain, so leaving the API key field blank while editing an existing provider keeps the saved key.")
+                Section(String(localized: "Provider Guide", bundle: bundle)) {
+                    Text("Create one provider for each OpenAI-compatible endpoint you want to use. The API key is stored in Keychain, so leaving the API key field blank while editing an existing provider keeps the saved key.", bundle: bundle)
                         .fixedSize(horizontal: false, vertical: true)
 
-                    Text("For a typical setup, fill in the service base URL, paste the API key, set a lightweight test model, then click Save and Test.")
+                    Text("For a typical setup, fill in the service base URL, paste the API key, set a lightweight test model, then click Save and Test.", bundle: bundle)
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
-                Section("Selection") {
-                    Picker("Selected Provider", selection: $selectedProviderID) {
-                        Text("New Provider").tag(Optional<UUID>.none)
+                Section(String(localized: "Selection", bundle: bundle)) {
+                    Picker(String(localized: "Selected Provider", bundle: bundle), selection: $selectedProviderID) {
+                        Text("New Provider", bundle: bundle).tag(Optional<UUID>.none)
                         ForEach(sortedProviders, id: \.id) { provider in
                             Text(provider.name).tag(Optional(provider.id))
                         }
                     }
 
                     HStack(alignment: .center, spacing: 12) {
-                        Button("New") {
+                        Button(String(localized: "New", bundle: bundle)) {
                             resetProviderForm()
                         }
 
-                        Button("Delete", role: .destructive) {
+                        Button(String(localized: "Delete", bundle: bundle), role: .destructive) {
                             deleteSelectedProvider()
                         }
                         .disabled(selectedProvider == nil)
                     }
                 }
 
-                Section(selectedProvider == nil ? "New Provider" : "Configuration") {
-                    SettingsFieldRow("Display name") {
+                Section(selectedProvider == nil ? String(localized: "New Provider", bundle: bundle) : String(localized: "Configuration", bundle: bundle)) {
+                    SettingsFieldRow(String(localized: "Display name", bundle: bundle)) {
                         SettingsPlainTextField(text: $providerName)
                     }
-                    SettingsFieldRow("Base URL") {
+                    SettingsFieldRow(String(localized: "Base URL", bundle: bundle)) {
                         SettingsPlainTextField(text: $providerBaseURL)
                     }
-                    SettingsFieldRow("API key") {
+                    SettingsFieldRow(String(localized: "API key", bundle: bundle)) {
                         SettingsSecureTextField(text: $providerAPIKey, placeholder: providerAPIKeyPrompt)
                     }
-                    SettingsFieldRow("Test model") {
+                    SettingsFieldRow(String(localized: "Test model", bundle: bundle)) {
                         SettingsPlainTextField(text: $providerTestModel)
                     }
-                    Toggle("Enabled", isOn: $providerEnabled)
+                    Toggle(String(localized: "Enabled", bundle: bundle), isOn: $providerEnabled)
                         .toggleStyle(.checkbox)
                 }
 
-                Section("Actions") {
+                Section(String(localized: "Actions", bundle: bundle)) {
                     HStack(alignment: .center, spacing: 12) {
-                        Button("Save") {
+                        Button(String(localized: "Save", bundle: bundle)) {
                             saveProvider()
                         }
-                        Button(isTestingProvider ? "Testing..." : "Test") {
+                        Button(
+                            isTestingProvider
+                                ? String(localized: "Testing...", bundle: bundle)
+                                : String(localized: "Test", bundle: bundle)
+                        ) {
                             testProvider()
                         }
                         .disabled(isTestingProvider)
@@ -408,75 +453,84 @@ private struct SettingsForm: View {
     private var modelTab: some View {
         VStack(alignment: .leading, spacing: 12) {
             Form {
-                Section("Model Guide") {
-                    Text("A model profile points to one provider and stores the exact chat model name plus optional sampling parameters. You can create separate profiles for fast HTML translation and heavier PDF work.")
+                Section(String(localized: "Model Guide", bundle: bundle)) {
+                    Text("A model profile points to one provider and stores the exact chat model name plus optional sampling parameters. You can create separate profiles for fast HTML translation and heavier PDF work.", bundle: bundle)
                         .fixedSize(horizontal: false, vertical: true)
 
-                    Text("Profile name is only for display inside ReadPaper. Model name must match the real model identifier accepted by your provider.")
+                    Text("Profile name is only for display inside ReadPaper. Model name must match the real model identifier accepted by your provider.", bundle: bundle)
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
-                Section("Selection") {
-                    Picker("Selected Model", selection: $selectedModelID) {
-                        Text("New Model").tag(Optional<UUID>.none)
+                Section(String(localized: "Selection", bundle: bundle)) {
+                    Picker(String(localized: "Selected Model", bundle: bundle), selection: $selectedModelID) {
+                        Text("New Model", bundle: bundle).tag(Optional<UUID>.none)
                         ForEach(sortedModels, id: \.id) { model in
                             Text(modelDisplayName(model)).tag(Optional(model.id))
                         }
                     }
 
                     HStack(alignment: .center, spacing: 12) {
-                        Button("New") {
+                        Button(String(localized: "New", bundle: bundle)) {
                             resetModelForm()
                         }
 
-                        Button("Delete", role: .destructive) {
+                        Button(String(localized: "Delete", bundle: bundle), role: .destructive) {
                             deleteSelectedModel()
                         }
                         .disabled(selectedModel == nil)
                     }
                 }
 
-                Section(selectedModel == nil ? "New Model" : "Configuration") {
-                    Picker("Provider", selection: $modelProviderID) {
-                        Text("Select Provider").tag(Optional<UUID>.none)
+                Section(selectedModel == nil ? String(localized: "New Model", bundle: bundle) : String(localized: "Configuration", bundle: bundle)) {
+                    Picker(String(localized: "Provider", bundle: bundle), selection: $modelProviderID) {
+                        Text("Select Provider", bundle: bundle).tag(Optional<UUID>.none)
                         ForEach(sortedProviders, id: \.id) { provider in
                             Text(provider.name).tag(Optional(provider.id))
                         }
                     }
-                    SettingsFieldRow("Profile name") {
+                    SettingsFieldRow(String(localized: "Profile name", bundle: bundle)) {
                         SettingsPlainTextField(text: $modelName)
                     }
-                    SettingsFieldRow("Model name") {
+                    SettingsFieldRow(String(localized: "Model name", bundle: bundle)) {
                         SettingsPlainTextField(text: $modelIdentifier)
                     }
-                    SettingsFieldRow("Temperature") {
+                    SettingsFieldRow(String(localized: "Temperature", bundle: bundle)) {
                         SettingsPlainTextField(text: $modelTemperature)
                     }
-                    SettingsFieldRow("Top-P") {
+                    SettingsFieldRow(String(localized: "Top-P", bundle: bundle)) {
                         SettingsPlainTextField(text: $modelTopP)
                     }
-                    SettingsFieldRow("Max tokens") {
+                    SettingsFieldRow(String(localized: "Max tokens", bundle: bundle)) {
                         SettingsPlainTextField(text: $modelMaxTokens)
                     }
-                    Toggle("Enabled", isOn: $modelEnabled)
+                    Toggle(String(localized: "Enabled", bundle: bundle), isOn: $modelEnabled)
                         .toggleStyle(.checkbox)
                 }
 
-                Section("Actions") {
+                Section(String(localized: "Actions", bundle: bundle)) {
                     HStack(alignment: .center, spacing: 12) {
-                        Button("Save") {
+                        Button(String(localized: "Save", bundle: bundle)) {
                             saveModel()
                         }
-                        Button(isTestingModel ? "Testing..." : "Test") {
+                        Button(
+                            isTestingModel
+                                ? String(localized: "Testing...", bundle: bundle)
+                                : String(localized: "Test", bundle: bundle)
+                        ) {
                             testModel()
                         }
                         .disabled(isTestingModel)
                     }
 
                     if let selectedModelLastTestedAt {
-                        Text("Last tested: \(selectedModelLastTestedAt.formatted(date: .abbreviated, time: .shortened))")
+                        Text(
+                            String(
+                                format: String(localized: "Last tested: %@", bundle: bundle),
+                                selectedModelLastTestedAt.formatted(date: .abbreviated, time: .shortened)
+                            )
+                        )
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     }
@@ -505,56 +559,68 @@ private struct SettingsForm: View {
     private func statusLabel(_ message: String) -> some View {
         Text(message)
             .font(.footnote)
-            .foregroundStyle(message.hasPrefix("Error") ? .red : .secondary)
+            .foregroundStyle(AppLocalization.isErrorMessage(message, bundle: bundle) ? .red : .secondary)
             .textSelection(.enabled)
     }
 
     private var gettingStartedPanel: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Set up your translation route once, then come back to the reader to import papers and translate them.")
+            Text("Set up your translation route once, then come back to the reader to import papers and translate them.", bundle: bundle)
                 .fixedSize(horizontal: false, vertical: true)
 
             onboardingStep(
-                title: "1. Save a provider API key",
+                title: String(localized: "1. Save a provider API key", bundle: bundle),
                 detail: configuredProviderCount > 0
-                    ? "\(configuredProviderCount) provider\(configuredProviderCount == 1 ? "" : "s") ready."
-                    : "Open Providers, fill in the base URL, API key, and test model, then save and test it.",
+                    ? String(
+                        format: String(localized: "%d provider%@ ready.", bundle: bundle),
+                        configuredProviderCount,
+                        configuredProviderCount == 1 ? "" : "s"
+                    )
+                    : String(localized: "Open Providers, fill in the base URL, API key, and test model, then save and test it.", bundle: bundle),
                 isComplete: configuredProviderCount > 0,
-                actionTitle: "Open Providers",
+                actionTitle: String(localized: "Open Providers", bundle: bundle),
                 targetTab: .providers
             )
 
             onboardingStep(
-                title: "2. Create a model profile",
+                title: String(localized: "2. Create a model profile", bundle: bundle),
                 detail: readyModelCount > 0
-                    ? "\(readyModelCount) model profile\(readyModelCount == 1 ? "" : "s") ready to use."
-                    : "Create at least one enabled model profile and attach it to a provider with a saved API key.",
+                    ? String(
+                        format: String(localized: "%d model profile%@ ready to use.", bundle: bundle),
+                        readyModelCount,
+                        readyModelCount == 1 ? "" : "s"
+                    )
+                    : String(localized: "Create at least one enabled model profile and attach it to a provider with a saved API key.", bundle: bundle),
                 isComplete: readyModelCount > 0,
-                actionTitle: "Open Models",
+                actionTitle: String(localized: "Open Models", bundle: bundle),
                 targetTab: .models
             )
 
             onboardingStep(
-                title: "3. Choose HTML and PDF routes",
+                title: String(localized: "3. Choose HTML and PDF routes", bundle: bundle),
                 detail: hasHTMLRouteSelection && hasPDFRouteSelection
-                    ? "HTML and PDF routes are both selected."
-                    : "Choose which model powers HTML translation and which model is used by BabelDOC/PDF translation.",
+                    ? String(localized: "HTML and PDF routes are both selected.", bundle: bundle)
+                    : String(localized: "Choose which model powers HTML translation and which model is used by BabelDOC/PDF translation.", bundle: bundle),
                 isComplete: hasHTMLRouteSelection && hasPDFRouteSelection,
-                actionTitle: "Open Reader",
+                actionTitle: String(localized: "Open Reader", bundle: bundle),
                 targetTab: .reader
             )
 
             onboardingStep(
-                title: "4. Import and translate papers",
+                title: String(localized: "4. Import and translate papers", bundle: bundle),
                 detail: paperCount > 0
-                    ? "\(paperCount) paper\(paperCount == 1 ? "" : "s") already in your library. Use Translate in the reader toolbar."
-                    : "Return to the main window, add an arXiv paper or local PDF, then use Translate in the reader toolbar.",
+                    ? String(
+                        format: String(localized: "%d paper%@ already in your library. Use Translate in the reader toolbar.", bundle: bundle),
+                        paperCount,
+                        paperCount == 1 ? "" : "s"
+                    )
+                    : String(localized: "Return to the main window, add an arXiv paper or local PDF, then use Translate in the reader toolbar.", bundle: bundle),
                 isComplete: paperCount > 0,
                 actionTitle: nil,
                 targetTab: nil
             )
 
-            Button("Skip") {
+            Button(String(localized: "Skip", bundle: bundle)) {
                 didDismissGettingStarted = true
             }
             .buttonStyle(.bordered)
@@ -567,12 +633,12 @@ private struct SettingsForm: View {
             Image(systemName: "checkmark.circle")
                 .foregroundStyle(.secondary)
 
-            Text("Getting started guide is hidden.")
+            Text("Getting started guide is hidden.", bundle: bundle)
                 .foregroundStyle(.secondary)
 
             Spacer(minLength: 0)
 
-            Button("Show Guide Again") {
+            Button(String(localized: "Show Guide Again", bundle: bundle)) {
                 didDismissGettingStarted = false
             }
             .buttonStyle(.bordered)
@@ -715,7 +781,7 @@ private struct SettingsForm: View {
         do {
             let normalizedName = providerName.trimmingCharacters(in: .whitespacesAndNewlines)
             guard normalizedName.isEmpty == false else {
-                throw SettingsValidationError.message("Provider name cannot be empty.")
+                throw SettingsValidationError.message(String(localized: "Provider name cannot be empty.", bundle: bundle))
             }
 
             let normalizedBaseURL = try validator.normalizedBaseURL(providerBaseURL)
@@ -760,10 +826,10 @@ private struct SettingsForm: View {
             selectedProviderID = provider.id
             providerAPIKey = ""
             providerHasStoredAPIKey = true
-            providerStatusMessage = "Provider saved."
+            providerStatusMessage = String(localized: "Provider saved.", bundle: bundle)
             providerOutputPreview = nil
         } catch {
-            providerStatusMessage = "Error: \(error.localizedDescription)"
+            providerStatusMessage = AppLocalization.errorMessage(error, bundle: bundle)
         }
     }
 
@@ -789,16 +855,16 @@ private struct SettingsForm: View {
             if let selectedModelID, relatedModelIDs.contains(selectedModelID) {
                 resetModelForm()
             }
-            providerStatusMessage = "Provider deleted."
+            providerStatusMessage = String(localized: "Provider deleted.", bundle: bundle)
             providerOutputPreview = nil
         } catch {
-            providerStatusMessage = "Error: \(error.localizedDescription)"
+            providerStatusMessage = AppLocalization.errorMessage(error, bundle: bundle)
         }
     }
 
     private func testProvider() {
         isTestingProvider = true
-        providerStatusMessage = "Testing provider..."
+        providerStatusMessage = String(localized: "Testing provider...", bundle: bundle)
         providerOutputPreview = nil
 
         Task { @MainActor in
@@ -821,10 +887,13 @@ private struct SettingsForm: View {
                     model: providerTestModel
                 )
 
-                providerStatusMessage = "Provider test passed in \(result.latencyMs) ms."
+                providerStatusMessage = String(
+                    format: String(localized: "Provider test passed in %d ms.", bundle: bundle),
+                    result.latencyMs
+                )
                 providerOutputPreview = result.outputPreview
             } catch {
-                providerStatusMessage = "Error: \(error.localizedDescription)"
+                providerStatusMessage = AppLocalization.errorMessage(error, bundle: bundle)
                 providerOutputPreview = nil
             }
         }
@@ -833,18 +902,18 @@ private struct SettingsForm: View {
     private func saveModel() {
         do {
             guard let modelProviderID else {
-                throw SettingsValidationError.message("Select a provider for the model.")
+                throw SettingsValidationError.message(String(localized: "Select a provider for the model.", bundle: bundle))
             }
 
             let normalizedName = modelName.trimmingCharacters(in: .whitespacesAndNewlines)
             guard normalizedName.isEmpty == false else {
-                throw SettingsValidationError.message("Model profile name cannot be empty.")
+                throw SettingsValidationError.message(String(localized: "Model profile name cannot be empty.", bundle: bundle))
             }
 
             let validatedIdentifier = try validator.validateModelName(modelIdentifier)
-            let temperature = try parseOptionalDouble(modelTemperature, label: "Temperature")
-            let topP = try parseOptionalDouble(modelTopP, label: "Top-P")
-            let maxTokens = try parseOptionalInt(modelMaxTokens, label: "Max tokens")
+            let temperature = try parseOptionalDouble(modelTemperature, label: String(localized: "Temperature", bundle: bundle))
+            let topP = try parseOptionalDouble(modelTopP, label: String(localized: "Top-P", bundle: bundle))
+            let maxTokens = try parseOptionalInt(modelMaxTokens, label: String(localized: "Max tokens", bundle: bundle))
             let now = Date()
 
             let model: LLMModelProfile
@@ -879,10 +948,10 @@ private struct SettingsForm: View {
             try modelContext.save()
 
             selectedModelID = model.id
-            modelStatusMessage = "Model saved."
+            modelStatusMessage = String(localized: "Model saved.", bundle: bundle)
             modelOutputPreview = nil
         } catch {
-            modelStatusMessage = "Error: \(error.localizedDescription)"
+            modelStatusMessage = AppLocalization.errorMessage(error, bundle: bundle)
         }
     }
 
@@ -900,16 +969,16 @@ private struct SettingsForm: View {
             settings.modifiedAt = Date()
             try modelContext.save()
             resetModelForm()
-            modelStatusMessage = "Model deleted."
+            modelStatusMessage = String(localized: "Model deleted.", bundle: bundle)
             modelOutputPreview = nil
         } catch {
-            modelStatusMessage = "Error: \(error.localizedDescription)"
+            modelStatusMessage = AppLocalization.errorMessage(error, bundle: bundle)
         }
     }
 
     private func testModel() {
         isTestingModel = true
-        modelStatusMessage = "Testing model..."
+        modelStatusMessage = String(localized: "Testing model...", bundle: bundle)
         modelOutputPreview = nil
 
         Task { @MainActor in
@@ -917,7 +986,7 @@ private struct SettingsForm: View {
 
             do {
                 guard let modelProviderID else {
-                    throw SettingsValidationError.message("Select a provider for the model.")
+                    throw SettingsValidationError.message(String(localized: "Select a provider for the model.", bundle: bundle))
                 }
                 guard let provider = providers.first(where: { $0.id == modelProviderID }) else {
                     throw LLMRouteError.providerNotFound
@@ -928,9 +997,9 @@ private struct SettingsForm: View {
                     baseURL: provider.baseURL,
                     apiKey: apiKey,
                     model: modelIdentifier,
-                    temperature: try parseOptionalDouble(modelTemperature, label: "Temperature"),
-                    topP: try parseOptionalDouble(modelTopP, label: "Top-P"),
-                    maxTokens: try parseOptionalInt(modelMaxTokens, label: "Max tokens")
+                    temperature: try parseOptionalDouble(modelTemperature, label: String(localized: "Temperature", bundle: bundle)),
+                    topP: try parseOptionalDouble(modelTopP, label: String(localized: "Top-P", bundle: bundle)),
+                    maxTokens: try parseOptionalInt(modelMaxTokens, label: String(localized: "Max tokens", bundle: bundle))
                 )
 
                 if let selectedModel {
@@ -939,10 +1008,13 @@ private struct SettingsForm: View {
                     try? modelContext.save()
                 }
 
-                modelStatusMessage = "Model test passed in \(result.latencyMs) ms."
+                modelStatusMessage = String(
+                    format: String(localized: "Model test passed in %d ms.", bundle: bundle),
+                    result.latencyMs
+                )
                 modelOutputPreview = result.outputPreview
             } catch {
-                modelStatusMessage = "Error: \(error.localizedDescription)"
+                modelStatusMessage = AppLocalization.errorMessage(error, bundle: bundle)
                 modelOutputPreview = nil
             }
         }
@@ -950,7 +1022,7 @@ private struct SettingsForm: View {
 
     private func installBabelDOC() {
         isInstallingBabelDOC = true
-        generalStatusMessage = "Installing BabelDOC..."
+        generalStatusMessage = String(localized: "Installing BabelDOC...", bundle: bundle)
 
         Task { @MainActor in
             defer { isInstallingBabelDOC = false }
@@ -960,15 +1032,18 @@ private struct SettingsForm: View {
                 if result.exitCode == 0 {
                     await refreshInstalledBabelDOCVersion()
                     if let installedBabelDocVersion {
-                        generalStatusMessage = "BabelDOC is ready. Installed version: \(installedBabelDocVersion)."
+                        generalStatusMessage = String(
+                            format: String(localized: "BabelDOC is ready. Installed version: %@.", bundle: bundle),
+                            installedBabelDocVersion
+                        )
                     } else {
-                        generalStatusMessage = "BabelDOC is ready."
+                        generalStatusMessage = String(localized: "BabelDOC is ready.", bundle: bundle)
                     }
                 } else {
-                    generalStatusMessage = "Error: \(result.combinedOutput)"
+                    generalStatusMessage = AppLocalization.format("Error: %@", bundle: bundle, result.combinedOutput)
                 }
             } catch {
-                generalStatusMessage = "Error: \(error.localizedDescription)"
+                generalStatusMessage = AppLocalization.errorMessage(error, bundle: bundle)
             }
         }
     }
@@ -997,7 +1072,8 @@ private struct SettingsForm: View {
     }
 
     private func modelDisplayName(_ model: LLMModelProfile) -> String {
-        let providerName = providers.first(where: { $0.id == model.providerID })?.name ?? "Unknown Provider"
+        let providerName = providers.first(where: { $0.id == model.providerID })?.name
+            ?? String(localized: "Unknown Provider", bundle: bundle)
         return "\(providerName) / \(model.name)"
     }
 
@@ -1005,7 +1081,9 @@ private struct SettingsForm: View {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.isEmpty == false else { return nil }
         guard let parsed = Double(trimmed) else {
-            throw SettingsValidationError.message("\(label) must be a number.")
+            throw SettingsValidationError.message(
+                String(format: String(localized: "%@ must be a number.", bundle: bundle), label)
+            )
         }
         return parsed
     }
@@ -1014,7 +1092,9 @@ private struct SettingsForm: View {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.isEmpty == false else { return nil }
         guard let parsed = Int(trimmed) else {
-            throw SettingsValidationError.message("\(label) must be an integer.")
+            throw SettingsValidationError.message(
+                String(format: String(localized: "%@ must be an integer.", bundle: bundle), label)
+            )
         }
         return parsed
     }

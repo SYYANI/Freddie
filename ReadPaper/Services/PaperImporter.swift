@@ -95,7 +95,7 @@ final class PaperImporter {
 
         let title = [extractedTitle, url.deletingPathExtension().lastPathComponent]
             .compactMap { $0 }
-            .first { !$0.isEmpty } ?? "Untitled PDF"
+            .first { !$0.isEmpty } ?? AppLocalization.localized("Untitled PDF")
         let authors = extractedAuthor.map { [$0] } ?? []
 
         let paper = Paper(

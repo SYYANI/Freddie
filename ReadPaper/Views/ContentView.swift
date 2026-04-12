@@ -3,6 +3,7 @@ import SwiftUI
 
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.localizationBundle) private var bundle
     @Query(sort: \Paper.modifiedAt, order: .reverse) private var papers: [Paper]
     @Query(sort: \PaperAttachment.createdAt) private var attachments: [PaperAttachment]
     @Query(sort: \Note.modifiedAt, order: .reverse) private var notes: [Note]
@@ -65,7 +66,7 @@ struct ContentView: View {
                 .frame(width: 520)
         }
         .confirmationDialog(
-            "Delete Paper?",
+            String(localized: "Delete Paper?", bundle: bundle),
             isPresented: Binding(
                 get: { paperPendingDeletion != nil },
                 set: { isPresented in
@@ -76,14 +77,19 @@ struct ContentView: View {
             ),
             presenting: paperPendingDeletion
         ) { paper in
-            Button("Delete", role: .destructive) {
+            Button(String(localized: "Delete", bundle: bundle), role: .destructive) {
                 deletePaper(paper)
             }
-            Button("Cancel", role: .cancel) {}
+            Button(String(localized: "Cancel", bundle: bundle), role: .cancel) {}
         } message: { paper in
-            Text("“\(paper.title)” and all of its local files, notes, reading state, and translation cache will be removed.")
+            Text(
+                String(
+                    format: String(localized: "“%@” and all of its local files, notes, reading state, and translation cache will be removed.", bundle: bundle),
+                    paper.title
+                )
+            )
         }
-        .alert("Unable to Delete Paper", isPresented: Binding(
+        .alert(String(localized: "Unable to Delete Paper", bundle: bundle), isPresented: Binding(
             get: { deletionErrorMessage != nil },
             set: { isPresented in
                 if !isPresented {
@@ -91,7 +97,7 @@ struct ContentView: View {
                 }
             }
         )) {
-            Button("OK", role: .cancel) {}
+            Button(String(localized: "OK", bundle: bundle), role: .cancel) {}
         } message: {
             Text(deletionErrorMessage ?? "")
         }

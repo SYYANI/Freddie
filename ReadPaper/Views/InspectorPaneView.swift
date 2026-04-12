@@ -4,6 +4,7 @@ import SwiftUI
 
 struct InspectorPaneView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.localizationBundle) private var bundle
     @State private var notePendingDeletion: Note?
     @State private var noteDeletionErrorMessage: String?
     @State private var focusedNoteID: UUID?
@@ -22,7 +23,7 @@ struct InspectorPaneView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Color(nsColor: .windowBackgroundColor))
         .confirmationDialog(
-            "Delete Note?",
+            String(localized: "Delete Note?", bundle: bundle),
             isPresented: Binding(
                 get: { notePendingDeletion != nil },
                 set: { isPresented in
@@ -33,15 +34,19 @@ struct InspectorPaneView: View {
             ),
             presenting: notePendingDeletion
         ) { note in
-            Button("Delete", role: .destructive) {
+            Button(String(localized: "Delete", bundle: bundle), role: .destructive) {
                 deleteNote(note)
             }
-            Button("Cancel", role: .cancel) {}
+            Button(String(localized: "Cancel", bundle: bundle), role: .cancel) {}
         } message: { note in
-            Text(note.body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "This empty note will be removed." : "This note will be permanently removed.")
+            Text(
+                note.body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    ? String(localized: "This empty note will be removed.", bundle: bundle)
+                    : String(localized: "This note will be permanently removed.", bundle: bundle)
+            )
         }
         .alert(
-            "Unable to Delete Note",
+            String(localized: "Unable to Delete Note", bundle: bundle),
             isPresented: Binding(
                 get: { noteDeletionErrorMessage != nil },
                 set: { isPresented in
@@ -51,7 +56,7 @@ struct InspectorPaneView: View {
                 }
             )
         ) {
-            Button("OK", role: .cancel) {}
+            Button(String(localized: "OK", bundle: bundle), role: .cancel) {}
         } message: {
             Text(noteDeletionErrorMessage ?? "")
         }
@@ -81,18 +86,18 @@ struct InspectorPaneView: View {
 
     private var paneHeader: some View {
         HStack(spacing: 12) {
-            Text("INSPECTOR")
+            Text("INSPECTOR", bundle: bundle)
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
                 .tracking(1.1)
 
             if paper == nil {
-                Text("Paper details, abstract, and notes")
+                Text("Paper details, abstract, and notes", bundle: bundle)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             } else {
-                Text("Metadata, abstract, and notes")
+                Text("Metadata, abstract, and notes", bundle: bundle)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -108,7 +113,7 @@ struct InspectorPaneView: View {
 
     private func metadataSection(_ paper: Paper) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Metadata")
+            Text("Metadata", bundle: bundle)
                 .font(.headline)
             Text(paper.title)
                 .font(.title3.weight(.semibold))
@@ -133,18 +138,18 @@ struct InspectorPaneView: View {
     private func notesSection(_ paper: Paper) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("Notes")
+                Text("Notes", bundle: bundle)
                     .font(.headline)
                 Spacer()
                 Button {
                     addNote(for: paper)
                 } label: {
-                    Label("Add Note", systemImage: "plus")
+                    Label(String(localized: "Add Note", bundle: bundle), systemImage: "plus")
                 }
             }
 
             if notes.isEmpty {
-                Text("No notes yet.")
+                Text("No notes yet.", bundle: bundle)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             } else {
@@ -190,15 +195,15 @@ struct InspectorPaneView: View {
     private var emptyInspectorState: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                Text("INSPECTOR")
+                Text("INSPECTOR", bundle: bundle)
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
                     .tracking(1.1)
 
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Paper details will appear here")
+                    Text("Paper details will appear here", bundle: bundle)
                         .font(.title3.weight(.semibold))
-                    Text("Select or import a paper to view metadata, abstract, and notes in this panel.")
+                    Text("Select or import a paper to view metadata, abstract, and notes in this panel.", bundle: bundle)
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -206,14 +211,14 @@ struct InspectorPaneView: View {
 
                 VStack(alignment: .leading, spacing: 12) {
                     inspectorHintRow(
-                        title: "Metadata",
+                        title: String(localized: "Metadata", bundle: bundle),
                         systemImage: "text.document",
-                        description: "Title, authors, arXiv ID, and abstract."
+                        description: String(localized: "Title, authors, arXiv ID, and abstract.", bundle: bundle)
                     )
                     inspectorHintRow(
-                        title: "Notes",
+                        title: String(localized: "Notes", bundle: bundle),
                         systemImage: "note.text",
-                        description: "Quick reading notes stay attached to the current paper."
+                        description: String(localized: "Quick reading notes stay attached to the current paper.", bundle: bundle)
                     )
                 }
                 .padding(16)
@@ -257,6 +262,7 @@ struct InspectorPaneView: View {
 }
 
 private struct NoteEditor: View {
+    @Environment(\.localizationBundle) private var bundle
     @Bindable var note: Note
     let shouldFocus: Bool
     let onDelete: () -> Void
@@ -270,11 +276,11 @@ private struct NoteEditor: View {
                     .foregroundStyle(.secondary)
                 Spacer()
                 Button(role: .destructive, action: onDelete) {
-                    Label("Delete Note", systemImage: "trash")
+                    Label(String(localized: "Delete Note", bundle: bundle), systemImage: "trash")
                         .labelStyle(.iconOnly)
                 }
                 .buttonStyle(.borderless)
-                .help("Delete note")
+                .help(String(localized: "Delete note", bundle: bundle))
             }
 
             InsetTextView(

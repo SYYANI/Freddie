@@ -138,7 +138,7 @@ final class HTMLTranslationPipeline {
             try modelContext.save()
         } catch is CancellationError {
             job.state = .failed
-            job.lastError = "Translation cancelled."
+            job.lastError = AppLocalization.localized("Translation cancelled.")
             job.modifiedAt = Date()
             try? modelContext.save()
             throw CancellationError()

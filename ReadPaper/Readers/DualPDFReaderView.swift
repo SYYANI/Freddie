@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct DualPDFReaderView: View {
+    @Environment(\.localizationBundle) private var bundle
     var originalURL: URL?
     var translatedURL: URL?
     @Binding var pageIndex: Int
@@ -10,11 +11,11 @@ struct DualPDFReaderView: View {
         HSplitView {
             PDFReaderView(fileURL: originalURL, pageIndex: $pageIndex)
                 .overlay(alignment: .topLeading) {
-                    readerLabel("Original")
+                    readerLabel(String(localized: "Original", bundle: bundle))
                 }
             PDFReaderView(fileURL: translatedURL, pageIndex: $translatedPageIndex)
                 .overlay(alignment: .topLeading) {
-                    readerLabel("Translation")
+                    readerLabel(String(localized: "Translation", bundle: bundle))
                 }
         }
         .onAppear {

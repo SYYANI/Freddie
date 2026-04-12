@@ -5,6 +5,7 @@ import UniformTypeIdentifiers
 
 struct AddPaperSheet: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.localizationBundle) private var bundle
     @Binding var isPresented: Bool
     @Binding var selectedPaperID: UUID?
 
@@ -15,15 +16,18 @@ struct AddPaperSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            Text("Add a paper")
+            Text("Add a paper", bundle: bundle)
                 .font(.title2.weight(.semibold))
 
             VStack(alignment: .leading, spacing: 8) {
-                Text("arXiv ID or URL")
+                Text("arXiv ID or URL", bundle: bundle)
                     .font(.headline)
-                TextField("2303.08774 or https://arxiv.org/abs/2303.08774", text: $arxivInput)
+                TextField(
+                    String(localized: "2303.08774 or https://arxiv.org/abs/2303.08774", bundle: bundle),
+                    text: $arxivInput
+                )
                     .textFieldStyle(.roundedBorder)
-                Button("Import from arXiv") {
+                Button(String(localized: "Import from arXiv", bundle: bundle)) {
                     importArxiv()
                 }
                 .disabled(arxivInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isImporting)
@@ -32,9 +36,9 @@ struct AddPaperSheet: View {
             Divider()
 
             VStack(alignment: .leading, spacing: 8) {
-                Text("Local PDF")
+                Text("Local PDF", bundle: bundle)
                     .font(.headline)
-                Button("Choose PDF...") {
+                Button(String(localized: "Choose PDF...", bundle: bundle)) {
                     importLocalPDF()
                 }
                 .disabled(isImporting)
@@ -56,7 +60,7 @@ struct AddPaperSheet: View {
 
             HStack {
                 Spacer()
-                Button("Close") {
+                Button(String(localized: "Close", bundle: bundle)) {
                     isPresented = false
                 }
                 .disabled(isImporting)
@@ -91,6 +95,7 @@ struct AddPaperSheet: View {
 
     private func importLocalPDF() {
         let panel = NSOpenPanel()
+        panel.title = String(localized: "Choose PDF...", bundle: bundle)
         panel.allowedContentTypes = [.pdf]
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false

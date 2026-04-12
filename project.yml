@@ -28,14 +28,15 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.yiyan.ReadPaper
         PRODUCT_NAME: Freddie
         PRODUCT_MODULE_NAME: ReadPaper
+        DEVELOPMENT_LANGUAGE: en
         INFOPLIST_FILE: ReadPaper/Info.plist
         INFOPLIST_KEY_CFBundleDisplayName: Freddie
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         SWIFT_VERSION: 6.0
         ENABLE_TESTABILITY: YES
         CODE_SIGN_STYLE: Automatic
-        CURRENT_PROJECT_VERSION: 9
-        MARKETING_VERSION: 0.1.8
+        CURRENT_PROJECT_VERSION: 10
+        MARKETING_VERSION: 0.1.9
   ReadPaperTests:
     type: bundle.unit-test
     platform: macOS
@@ -49,6 +50,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.yiyan.ReadPaperTests
         PRODUCT_NAME: ReadPaperTests
+        DEVELOPMENT_LANGUAGE: en
         INFOPLIST_FILE: ReadPaperTests/Info.plist
         SWIFT_VERSION: 6.0
         TEST_HOST: $(BUILT_PRODUCTS_DIR)/Freddie.app/Contents/MacOS/Freddie

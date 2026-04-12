@@ -23,6 +23,7 @@ struct ReaderPaneView: View {
     }
 
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.localizationBundle) private var bundle
     @Query(sort: \ReadingState.modifiedAt, order: .reverse) private var readingStates: [ReadingState]
 
     var paper: Paper?
@@ -163,7 +164,7 @@ struct ReaderPaneView: View {
 
     private var paneHeader: some View {
         HStack(spacing: 12) {
-            Text("READER")
+            Text("READER", bundle: bundle)
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
                 .tracking(1.1)
@@ -174,7 +175,7 @@ struct ReaderPaneView: View {
                     .lineLimit(1)
                     .truncationMode(.tail)
             } else {
-                Text("Select a paper to start reading")
+                Text("Select a paper to start reading", bundle: bundle)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -212,11 +213,20 @@ struct ReaderPaneView: View {
                     Button {
                         cancelTranslation()
                     } label: {
-                        Label(isCancelling ? "Cancelling..." : "Cancel", systemImage: "xmark.circle")
+                        Label(
+                            isCancelling
+                                ? String(localized: "Cancelling...", bundle: bundle)
+                                : String(localized: "Cancel", bundle: bundle),
+                            systemImage: "xmark.circle"
+                        )
                     }
                     .labelStyle(.iconOnly)
                     .disabled(isCancelling)
-                    .help(isCancelling ? "Cancelling translation..." : "Cancel Translation")
+                    .help(
+                        isCancelling
+                            ? String(localized: "Cancelling translation...", bundle: bundle)
+                            : String(localized: "Cancel Translation", bundle: bundle)
+                    )
                 }
             }
 
@@ -229,42 +239,48 @@ struct ReaderPaneView: View {
                     toggleInspectorCollapsed()
                 } label: {
                     Label(
-                        isInspectorCollapsed ? "Show Inspector" : "Hide Inspector",
+                        isInspectorCollapsed
+                            ? String(localized: "Show Inspector", bundle: bundle)
+                            : String(localized: "Hide Inspector", bundle: bundle),
                         systemImage: "sidebar.trailing"
                     )
                 }
                 .labelStyle(.iconOnly)
-                .help(isInspectorCollapsed ? "Show Inspector" : "Hide Inspector")
+                .help(
+                    isInspectorCollapsed
+                        ? String(localized: "Show Inspector", bundle: bundle)
+                        : String(localized: "Hide Inspector", bundle: bundle)
+                )
             }
         }
     }
 
     private var readerModePicker: some View {
-        Picker("Reader", selection: primaryReaderMode) {
-            Text("HTML")
+        Picker(String(localized: "Reader", bundle: bundle), selection: primaryReaderMode) {
+            Text("HTML", bundle: bundle)
                 .tag(PrimaryReaderMode.html)
-            Text("PDF")
+            Text("PDF", bundle: bundle)
                 .tag(PrimaryReaderMode.pdf)
         }
         .pickerStyle(.segmented)
         .frame(width: 120)
         .labelsHidden()
-        .help("Switch between HTML and PDF reading")
+        .help(String(localized: "Switch between HTML and PDF reading", bundle: bundle))
     }
 
     private var htmlDisplayPicker: some View {
-        Picker("Display", selection: $displayMode) {
-            Text("Original")
+        Picker(String(localized: "Display", bundle: bundle), selection: $displayMode) {
+            Text("Original", bundle: bundle)
                 .tag(TranslationDisplayMode.original)
-            Text("Bilingual")
+            Text("Bilingual", bundle: bundle)
                 .tag(TranslationDisplayMode.bilingual)
-            Text("Translated")
+            Text("Translated", bundle: bundle)
                 .tag(TranslationDisplayMode.translated)
         }
         .pickerStyle(.segmented)
-        .frame(width: 250)
+        .fixedSize()
         .labelsHidden()
-        .help("HTML Display Mode")
+        .help(String(localized: "HTML Display Mode", bundle: bundle))
     }
 
     private func toggleInspectorCollapsed() {
@@ -274,18 +290,18 @@ struct ReaderPaneView: View {
     }
 
     private var pdfDisplayPicker: some View {
-        Picker("PDF Display", selection: pdfReaderModeSelection) {
-            Text("Original")
+        Picker(String(localized: "PDF Display", bundle: bundle), selection: pdfReaderModeSelection) {
+            Text("Original", bundle: bundle)
                 .tag(ReaderMode.pdf)
-            Text("Bilingual")
+            Text("Bilingual", bundle: bundle)
                 .tag(ReaderMode.bilingualPDF)    
-            Text("Translated")
+            Text("Translated", bundle: bundle)
                 .tag(ReaderMode.translatedPDF)
         }
         .pickerStyle(.segmented)
-        .frame(width: 250)
+        .fixedSize()
         .labelsHidden()
-        .help("PDF Display Mode")
+        .help(String(localized: "PDF Display Mode", bundle: bundle))
     }
 
     private var translationMenu: some View {
@@ -293,7 +309,7 @@ struct ReaderPaneView: View {
             Button {
                 translateHTML()
             } label: {
-                Label("Translate HTML", systemImage: "globe")
+                Label(String(localized: "Translate HTML", bundle: bundle), systemImage: "globe")
                     .labelStyle(.titleAndIcon)
             }
             .disabled(canTranslateHTML == false)
@@ -301,12 +317,12 @@ struct ReaderPaneView: View {
             Button {
                 translatePDF()
             } label: {
-                Label("Translate PDF", systemImage: "doc")
+                Label(String(localized: "Translate PDF", bundle: bundle), systemImage: "doc")
                     .labelStyle(.titleAndIcon)
             }
             .disabled(canTranslatePDF == false)
         } label: {
-            Label("Translate", systemImage: "translate")
+            Label(String(localized: "Translate", bundle: bundle), systemImage: "translate")
                 .labelStyle(.iconOnly)
         }
         .menuIndicator(.hidden)
@@ -316,18 +332,18 @@ struct ReaderPaneView: View {
 
     private var translationMenuHelpText: String {
         if isWorking {
-            return "Translation in Progress"
+            return String(localized: "Translation in Progress", bundle: bundle)
         }
         if canTranslateHTML && canTranslatePDF {
-            return "Translate HTML or PDF"
+            return String(localized: "Translate HTML or PDF", bundle: bundle)
         }
         if canTranslateHTML {
-            return "Translate HTML"
+            return String(localized: "Translate HTML", bundle: bundle)
         }
         if canTranslatePDF {
-            return "Translate PDF"
+            return String(localized: "Translate PDF", bundle: bundle)
         }
-        return "Translation Unavailable"
+        return String(localized: "Translation Unavailable", bundle: bundle)
     }
 
     @ViewBuilder
@@ -347,17 +363,17 @@ struct ReaderPaneView: View {
                     )
                 } else {
                     centeredUnavailableView(
-                        "No HTML available",
+                        String(localized: "No HTML available", bundle: bundle),
                         systemImage: "doc.text",
-                        description: Text("Import an arXiv paper with HTML content to read it here.")
+                        description: Text("Import an arXiv paper with HTML content to read it here.", bundle: bundle)
                     )
                 }
             case .pdf:
                 labeledPDFReader(
                     fileURL: pdfAttachment?.fileURL,
-                    label: "Original",
-                    emptyTitle: "No PDF available",
-                    emptyDescription: "Import a PDF or fetch one from arXiv to read it here."
+                    label: String(localized: "Original", bundle: bundle),
+                    emptyTitle: String(localized: "No PDF available", bundle: bundle),
+                    emptyDescription: String(localized: "Import a PDF or fetch one from arXiv to read it here.", bundle: bundle)
                 )
             case .bilingualPDF:
                 if translatedPDFAttachment != nil {
@@ -368,17 +384,17 @@ struct ReaderPaneView: View {
                     )
                 } else {
                     centeredUnavailableView(
-                        "No translated PDF",
+                        String(localized: "No translated PDF", bundle: bundle),
                         systemImage: "character.book.closed",
-                        description: Text("Run PDF translation first to compare the original and translated versions side by side.")
+                        description: Text("Run PDF translation first to compare the original and translated versions side by side.", bundle: bundle)
                     )
                 }
             case .translatedPDF:
                 labeledPDFReader(
                     fileURL: translatedPDFAttachment?.fileURL,
-                    label: "Translation",
-                    emptyTitle: "No translated PDF",
-                    emptyDescription: "Run PDF translation first to read the translated PDF on its own."
+                    label: String(localized: "Translation", bundle: bundle),
+                    emptyTitle: String(localized: "No translated PDF", bundle: bundle),
+                    emptyDescription: String(localized: "Run PDF translation first to read the translated PDF on its own.", bundle: bundle)
                 )
             }
         }
@@ -391,9 +407,9 @@ struct ReaderPaneView: View {
                     ProgressView()
                         .controlSize(.small)
                 }
-                Text(statusMessage ?? "Working...")
+                Text(statusMessage ?? String(localized: "Working...", bundle: bundle))
                     .font(.caption)
-                    .foregroundStyle(statusMessage?.hasPrefix("Error") == true ? .red : .secondary)
+                    .foregroundStyle(AppLocalization.isErrorMessage(statusMessage, bundle: bundle) ? .red : .secondary)
                     .lineLimit(1)
 
                 Spacer(minLength: 0)
@@ -423,7 +439,7 @@ struct ReaderPaneView: View {
         translationProgress = nil
         isWorking = true
         isCancelling = false
-        statusMessage = "Translating HTML..."
+        statusMessage = String(localized: "Translating HTML...", bundle: bundle)
         translationTask = Task {
             do {
                 try Task.checkCancellation()
@@ -448,7 +464,9 @@ struct ReaderPaneView: View {
                             total: Double(totalSegments),
                             summary: "\(processedSegments)/\(totalSegments)"
                         ) : nil
-                        statusMessage = totalSegments > 0 ? "Translating HTML..." : "Preparing HTML translation..."
+                        statusMessage = totalSegments > 0
+                            ? String(localized: "Translating HTML...", bundle: bundle)
+                            : String(localized: "Preparing HTML translation...", bundle: bundle)
                     },
                     onSegmentTranslated: { update in
                         displayMode = .bilingual
@@ -458,13 +476,13 @@ struct ReaderPaneView: View {
                 try Task.checkCancellation()
                 displayMode = .bilingual
                 translationProgress = nil
-                statusMessage = "HTML translation completed."
+                statusMessage = String(localized: "HTML translation completed.", bundle: bundle)
             } catch is CancellationError {
                 translationProgress = nil
-                statusMessage = "Translation cancelled."
+                statusMessage = String(localized: "Translation cancelled.", bundle: bundle)
             } catch {
                 translationProgress = nil
-                statusMessage = "Error: \(error.localizedDescription)"
+                statusMessage = AppLocalization.errorMessage(error, bundle: bundle)
             }
             isWorking = false
             isCancelling = false
@@ -478,7 +496,7 @@ struct ReaderPaneView: View {
         translationProgress = nil
         isWorking = true
         isCancelling = false
-        statusMessage = "Running BabelDOC..."
+        statusMessage = String(localized: "Running BabelDOC...", bundle: bundle)
         translationTask = Task {
             do {
                 try Task.checkCancellation()
@@ -488,14 +506,14 @@ struct ReaderPaneView: View {
                 )
                 let toolManager = BabelDocToolManager()
                 if try toolManager.detect() != .ready {
-                    statusMessage = "Installing BabelDOC..."
+                    statusMessage = String(localized: "Installing BabelDOC...", bundle: bundle)
                     let installResult = try await toolManager.installOrUpdateBabelDOC(version: preferences.babelDocVersion)
                     try Task.checkCancellation()
                     guard installResult.exitCode == 0 else {
                         throw BabelDocRunError.failed(installResult.combinedOutput)
                     }
                 }
-                statusMessage = "Translating PDF with BabelDOC..."
+                statusMessage = String(localized: "Translating PDF with BabelDOC...", bundle: bundle)
                 let outputDirectory = try PaperFileStore().translationsDirectory(for: paper)
                 let toolEnvironment = try toolManager.environment()
                 let translated = try await BabelDocRunner().translatePDF(
@@ -510,7 +528,7 @@ struct ReaderPaneView: View {
                     onStatusUpdate: { message in
                         Task { @MainActor in
                             guard isWorking, !isCancelling else { return }
-                            if translationProgress == nil || message.hasPrefix("BabelDOC error") {
+                            if translationProgress == nil || message.hasPrefix(String(localized: "BabelDOC error", bundle: bundle)) {
                                 statusMessage = message
                             }
                         }
@@ -538,13 +556,13 @@ struct ReaderPaneView: View {
                 try modelContext.save()
                 readerMode = .bilingualPDF
                 translationProgress = nil
-                statusMessage = "PDF translation completed."
+                statusMessage = String(localized: "PDF translation completed.", bundle: bundle)
             } catch is CancellationError {
                 translationProgress = nil
-                statusMessage = "Translation cancelled."
+                statusMessage = String(localized: "Translation cancelled.", bundle: bundle)
             } catch {
                 translationProgress = nil
-                statusMessage = "Error: \(error.localizedDescription)"
+                statusMessage = AppLocalization.errorMessage(error, bundle: bundle)
             }
             isWorking = false
             isCancelling = false
@@ -555,7 +573,7 @@ struct ReaderPaneView: View {
     private func cancelTranslation() {
         guard isWorking else { return }
         isCancelling = true
-        statusMessage = "Cancelling translation..."
+        statusMessage = String(localized: "Cancelling translation...", bundle: bundle)
         translationTask?.cancel()
     }
 
@@ -620,15 +638,15 @@ struct ReaderPaneView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 28) {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("READY TO READ")
+                    Text("READY TO READ", bundle: bundle)
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.secondary)
                         .tracking(1.2)
 
-                    Text("Build your local paper desk")
+                    Text("Build your local paper desk", bundle: bundle)
                         .font(.system(size: 30, weight: .semibold, design: .rounded))
 
-                    Text("Import an arXiv paper or a local PDF from the sidebar. Once the first paper is added, HTML, PDF, bilingual reading, and translation tools all appear here.")
+                    Text("Import an arXiv paper or a local PDF from the sidebar. Once the first paper is added, HTML, PDF, bilingual reading, and translation tools all appear here.", bundle: bundle)
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -642,19 +660,19 @@ struct ReaderPaneView: View {
                     spacing: 16
                 ) {
                     emptyStateCard(
-                        title: "Import",
+                        title: String(localized: "Import", bundle: bundle),
                         systemImage: "square.and.arrow.down",
-                        description: "Add an arXiv ID, an arXiv URL, or a local PDF from the library sidebar."
+                        description: String(localized: "Add an arXiv ID, an arXiv URL, or a local PDF from the library sidebar.", bundle: bundle)
                     )
                     emptyStateCard(
-                        title: "Read",
+                        title: String(localized: "Read", bundle: bundle),
                         systemImage: "doc.richtext",
-                        description: "Switch between localized HTML, original PDF, translated PDF, and side-by-side PDF comparison."
+                        description: String(localized: "Switch between localized HTML, original PDF, translated PDF, and side-by-side PDF comparison.", bundle: bundle)
                     )
                     emptyStateCard(
-                        title: "Translate",
+                        title: String(localized: "Translate", bundle: bundle),
                         systemImage: "character.book.closed",
-                        description: "Run semantic HTML translation incrementally, or send the PDF through BabelDOC when you need a full translated document."
+                        description: String(localized: "Run semantic HTML translation incrementally, or send the PDF through BabelDOC when you need a full translated document.", bundle: bundle)
                     )
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -667,9 +685,9 @@ struct ReaderPaneView: View {
                         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
 
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Start from the left sidebar")
+                        Text("Start from the left sidebar", bundle: bundle)
                             .font(.headline)
-                        Text("Use the + button in the library to create the first paper record.")
+                        Text("Use the + button in the library to create the first paper record.", bundle: bundle)
                             .font(.callout)
                             .foregroundStyle(.secondary)
                     }

@@ -189,7 +189,11 @@ struct BabelDocRunner {
         }
         guard result.exitCode == 0 else {
             let output = Self.sanitizedOutput(result.combinedOutput, apiKey: apiKey)
-            throw BabelDocRunError.failed(output.isEmpty ? "BabelDOC exited with code \(result.exitCode)." : output)
+            throw BabelDocRunError.failed(
+                output.isEmpty
+                    ? AppLocalization.format("BabelDOC exited with code %d.", result.exitCode)
+                    : output
+            )
         }
 
         guard let translated = try newestPDF(in: outputDirectory, after: startedAt) else {
@@ -259,22 +263,22 @@ struct BabelDocRunner {
             completed: clampedProgress,
             total: 100,
             summary: "\(Int(clampedProgress.rounded()))%",
-            statusMessage: stageStatusMessage(from: event, includeCounts: true) ?? "Translating PDF with BabelDOC..."
+            statusMessage: stageStatusMessage(from: event, includeCounts: true) ?? AppLocalization.localized("Translating PDF with BabelDOC...")
         )
     }
 
     static func structuredStatusMessage(from event: BabelDocBridgeEvent) -> String? {
         switch event.type {
         case "stage_summary":
-            return "Preparing PDF translation..."
+            return AppLocalization.localized("Preparing PDF translation...")
         case "progress_start":
             return stageStatusMessage(from: event, includeCounts: false)
         case "error":
             let message = event.error?.trimmingCharacters(in: .whitespacesAndNewlines)
             if let message, message.isEmpty == false {
-                return "BabelDOC error: \(message.truncatedForStatus)"
+                return AppLocalization.format("BabelDOC error: %@", message.truncatedForStatus)
             }
-            return "BabelDOC error."
+            return AppLocalization.localized("BabelDOC error.")
         default:
             return nil
         }
@@ -294,8 +298,8 @@ struct BabelDocRunner {
     }
 
     static func statusMessage(forLine line: String, channel: ProcessOutputChannel) -> String? {
-        let prefix = channel == .standardError ? "BabelDOC error" : "BabelDOC"
-        return "\(prefix): \(line.truncatedForStatus)"
+        let key = channel == .standardError ? "BabelDOC error: %@" : "BabelDOC: %@"
+        return AppLocalization.format(key, line.truncatedForStatus)
     }
 
     static func stageStatusMessage(from event: BabelDocBridgeEvent, includeCounts: Bool) -> String? {
@@ -305,11 +309,11 @@ struct BabelDocRunner {
 
         var message = humanReadableStageName(stage)
         if let totalParts = event.totalParts, totalParts > 1, let partIndex = event.partIndex {
-            message += " (part \(partIndex)/\(totalParts))"
+            message += AppLocalization.format(" (part %d/%d)", partIndex, totalParts)
         }
         if includeCounts, let stageTotal = event.stageTotal, stageTotal > 0 {
             let stageCurrent = min(max(event.stageCurrent ?? 0, 0), stageTotal)
-            message += " \(stageCurrent)/\(stageTotal)"
+            message += AppLocalization.format(" %d/%d", stageCurrent, stageTotal)
         }
         return message
     }
@@ -317,23 +321,23 @@ struct BabelDocRunner {
     static func humanReadableStageName(_ stage: String) -> String {
         switch stage {
         case "DetectScannedFile":
-            return "Checking PDF content"
+            return AppLocalization.localized("Checking PDF content")
         case "ILCreater":
-            return "Preparing PDF structure"
+            return AppLocalization.localized("Preparing PDF structure")
         case "LayoutParser":
-            return "Analyzing layout"
+            return AppLocalization.localized("Analyzing layout")
         case "ParagraphFinder":
-            return "Grouping paragraphs"
+            return AppLocalization.localized("Grouping paragraphs")
         case "StylesAndFormulas":
-            return "Preserving styles and formulas"
+            return AppLocalization.localized("Preserving styles and formulas")
         case "ILTranslator":
-            return "Translating text blocks"
+            return AppLocalization.localized("Translating text blocks")
         case "Typesetting":
-            return "Applying translated layout"
+            return AppLocalization.localized("Applying translated layout")
         case "FontMapper":
-            return "Matching fonts"
+            return AppLocalization.localized("Matching fonts")
         case "PDFCreater":
-            return "Generating translated PDF"
+            return AppLocalization.localized("Generating translated PDF")
         default:
             return stage.replacingOccurrences(of: "_", with: " ")
         }
@@ -385,7 +389,7 @@ enum BabelDocRunError: Error, LocalizedError {
     var errorDescription: String? {
         switch self {
         case .failed(let output):
-            "BabelDOC failed: \(output)"
+            AppLocalization.format("BabelDOC failed: %@", output)
         }
     }
 }

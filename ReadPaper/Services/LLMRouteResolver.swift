@@ -14,21 +14,21 @@ enum LLMRouteError: LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case .htmlModelNotSelected:
-            return "Choose an HTML translation model in Settings first."
+            return AppLocalization.localized("Choose an HTML translation model in Settings first.")
         case .pdfModelNotSelected:
-            return "Choose a PDF translation model in Settings first."
+            return AppLocalization.localized("Choose a PDF translation model in Settings first.")
         case .modelNotFound:
-            return "The selected translation model could not be found."
+            return AppLocalization.localized("The selected translation model could not be found.")
         case .providerNotFound:
-            return "The selected translation provider could not be found."
+            return AppLocalization.localized("The selected translation provider could not be found.")
         case .modelDisabled(let name):
-            return "The selected model “\(name)” is disabled."
+            return AppLocalization.format("The selected model “%@” is disabled.", name)
         case .providerDisabled(let name):
-            return "The selected provider “\(name)” is disabled."
+            return AppLocalization.format("The selected provider “%@” is disabled.", name)
         case .missingAPIKey(let name):
-            return "No API key is saved for provider “\(name)”."
+            return AppLocalization.format("No API key is saved for provider “%@”.", name)
         case .invalidBaseURL(let value):
-            return "The provider Base URL is invalid: \(value)"
+            return AppLocalization.format("The provider Base URL is invalid: %@", value)
         }
     }
 }

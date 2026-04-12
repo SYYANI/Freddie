@@ -14,13 +14,17 @@ struct ReadPaperApp: App {
     }
 
     var body: some Scene {
+        let bundle = LanguageManager.shared.bundle
+
         WindowGroup {
             ContentView()
+                .environment(\.localizationBundle, bundle)
         }
         .modelContainer(sharedModelContainer)
 
         Settings {
             SettingsView()
+                .environment(\.localizationBundle, bundle)
                 .modelContainer(sharedModelContainer)
                 .frame(width: 920, height: 720)
         }

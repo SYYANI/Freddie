@@ -71,24 +71,24 @@ enum LLMProviderError: LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case .invalidConfiguration(let message):
-            return "Invalid provider configuration: \(message)"
+            return AppLocalization.format("Invalid provider configuration: %@", message)
         case .network(let message):
             return message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                ? "Provider request failed due to a network or server error."
+                ? AppLocalization.localized("Provider request failed due to a network or server error.")
                 : message
         case .timedOut(_, let message):
             return message?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
                 ? message
-                : "Request timed out."
+                : AppLocalization.localized("Request timed out.")
         case .unauthorized:
-            return "Authentication failed. Please check API key and endpoint permission."
+            return AppLocalization.localized("Authentication failed. Please check API key and endpoint permission.")
         case .cancelled:
-            return "The request was cancelled."
+            return AppLocalization.localized("The request was cancelled.")
         case .emptyResponse:
-            return "The provider returned an empty response."
+            return AppLocalization.localized("The provider returned an empty response.")
         case .unknown(let message):
             return message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                ? "Provider request failed with an unknown error."
+                ? AppLocalization.localized("Provider request failed with an unknown error.")
                 : message
         }
     }
@@ -296,12 +296,18 @@ nonisolated struct OpenAICompatibleLLMProvider: Sendable {
             }
             group.addTask {
                 try await Task.sleep(for: .seconds(clampedSeconds))
-                throw LLMProviderError.timedOut(kind: timeoutKind, message: "Request timed out.")
+                throw LLMProviderError.timedOut(
+                    kind: timeoutKind,
+                    message: AppLocalization.localized("Request timed out.")
+                )
             }
 
             guard let firstResult = try await group.next() else {
                 group.cancelAll()
-                throw LLMProviderError.timedOut(kind: timeoutKind, message: "Request timed out.")
+                throw LLMProviderError.timedOut(
+                    kind: timeoutKind,
+                    message: AppLocalization.localized("Request timed out.")
+                )
             }
             group.cancelAll()
             return firstResult
@@ -323,7 +329,7 @@ nonisolated struct OpenAICompatibleLLMProvider: Sendable {
         }
 
         if isTimeoutLikeError(error) {
-            return .timedOut(kind: .request, message: "Request timed out.")
+            return .timedOut(kind: .request, message: AppLocalization.localized("Request timed out."))
         }
 
         if let apiError = error as? APIError {
@@ -337,22 +343,27 @@ nonisolated struct OpenAICompatibleLLMProvider: Sendable {
                     let retryDetails: String
                     if let fallbackPlanTried {
                         let fallbackEndpoint = inferredChatEndpoint(from: fallbackPlanTried)
-                        retryDetails = " Retried with resolved endpoint \(fallbackEndpoint)."
+                        retryDetails = AppLocalization.format(
+                            " Retried with resolved endpoint %@.",
+                            fallbackEndpoint
+                        )
                     } else {
                         retryDetails = ""
                     }
                     return .network(
-                        "HTTP 404: endpoint not found. Current base URL is \(baseURL.absoluteString). " +
-                        "Resolved endpoint is \(primaryEndpoint)." +
-                        retryDetails +
-                        " Expected OpenAI-compatible chat endpoint is usually '<baseURL>/chat/completions'."
+                        AppLocalization.format(
+                            "HTTP 404: endpoint not found. Current base URL is %@. Resolved endpoint is %@.%@ Expected OpenAI-compatible chat endpoint is usually '<baseURL>/chat/completions'.",
+                            baseURL.absoluteString,
+                            primaryEndpoint,
+                            retryDetails
+                        )
                     )
                 }
                 let details = description.trimmingCharacters(in: .whitespacesAndNewlines)
                 if details.isEmpty == false {
-                    return .network("HTTP \(statusCode): \(details)")
+                    return .network(AppLocalization.format("HTTP %d: %@", statusCode, details))
                 }
-                return .network("HTTP \(statusCode): \(apiError.displayDescription)")
+                return .network(AppLocalization.format("HTTP %d: %@", statusCode, apiError.displayDescription))
             case .requestFailed(let description):
                 let details = description.trimmingCharacters(in: .whitespacesAndNewlines)
                 if details.isEmpty == false {
@@ -360,7 +371,7 @@ nonisolated struct OpenAICompatibleLLMProvider: Sendable {
                 }
                 return .network(apiError.displayDescription)
             case .timeOutError:
-                return .timedOut(kind: .request, message: "Request timed out.")
+                return .timedOut(kind: .request, message: AppLocalization.localized("Request timed out."))
             case .jsonDecodingFailure(let description):
                 return .unknown(description)
             case .dataCouldNotBeReadMissingData(let description):

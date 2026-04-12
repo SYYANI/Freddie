@@ -3,13 +3,6 @@ import SwiftData
 
 @MainActor
 struct LLMConfigurationBootstrapper {
-    private static let bootstrappedProviderName = "Default Provider"
-    private static let bootstrappedModelProfiles = [
-        ("Primary Model", \AppSettings.heavyModelName),
-        ("Balanced Model", \AppSettings.normalModelName),
-        ("Fast Model", \AppSettings.quickModelName)
-    ]
-
     let keychainStore: KeychainStore
     let validator: LLMProviderValidationUseCase
 
@@ -45,7 +38,7 @@ struct LLMConfigurationBootstrapper {
         let providerAPIKeyRef = Self.makeAPIKeyRef(providerID: providerID)
         let provider = LLMProviderProfile(
             id: providerID,
-            name: Self.bootstrappedProviderName,
+            name: AppLocalization.localized("Default Provider"),
             baseURL: normalizedBaseURL,
             apiKeyRef: providerAPIKeyRef,
             testModel: settings.heavyModelName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? settings.normalModelName : settings.heavyModelName
@@ -53,7 +46,11 @@ struct LLMConfigurationBootstrapper {
         modelContext.insert(provider)
 
         var createdModelIDsByName: [String: UUID] = [:]
-        for (profileName, keyPath) in Self.bootstrappedModelProfiles {
+        for (profileName, keyPath) in [
+            (AppLocalization.localized("Primary Model"), \AppSettings.heavyModelName),
+            (AppLocalization.localized("Balanced Model"), \AppSettings.normalModelName),
+            (AppLocalization.localized("Fast Model"), \AppSettings.quickModelName)
+        ] {
             let rawModelName = settings[keyPath: keyPath]
             let trimmed = rawModelName.trimmingCharacters(in: .whitespacesAndNewlines)
             guard trimmed.isEmpty == false else { continue }

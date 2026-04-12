@@ -166,7 +166,7 @@ struct HTMLLocalizer: @unchecked Sendable {
         }
 
         if let head = document.head() {
-            let titleText = nonEmpty(result.title) ?? "Paper"
+            let titleText = nonEmpty(result.title) ?? AppLocalization.localized("Paper")
             if let titleElement = try head.select("title").first() {
                 try titleElement.text(titleText)
             } else {

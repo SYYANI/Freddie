@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct LibrarySidebarView: View {
+    @Environment(\.localizationBundle) private var bundle
     var papers: [Paper]
     var selectedPaper: Paper?
     @Binding var selectedPaperID: UUID?
@@ -12,13 +13,17 @@ struct LibrarySidebarView: View {
         VStack(spacing: 0) {
             if papers.isEmpty {
                 ContentUnavailableView {
-                    Label("No papers yet", systemImage: "doc.text.magnifyingglass")
+                    Label {
+                        Text("No papers yet", bundle: bundle)
+                    } icon: {
+                        Image(systemName: "doc.text.magnifyingglass")
+                    }
                 } description: {
-                    Text("Add an arXiv ID, arXiv URL, or a local PDF. Before using translation, open Settings and save at least one LLM provider API key and model profile.")
+                    Text("Add an arXiv ID, arXiv URL, or a local PDF. Before using translation, open Settings and save at least one LLM provider API key and model profile.", bundle: bundle)
                 } actions: {
                     HStack(spacing: 0) {
                         SettingsLink {
-                            emptyStateActionLabel("Settings", systemImage: "gearshape")
+                            emptyStateActionLabel(String(localized: "Settings", bundle: bundle), systemImage: "gearshape")
                         }
                         .buttonStyle(.plain)
 
@@ -28,7 +33,7 @@ struct LibrarySidebarView: View {
                         Button {
                             isAddingPaper = true
                         } label: {
-                            emptyStateActionLabel("First Paper", systemImage: "plus")
+                            emptyStateActionLabel(String(localized: "First Paper", bundle: bundle), systemImage: "plus")
                         }
                         .buttonStyle(.plain)
                     }
@@ -52,7 +57,7 @@ struct LibrarySidebarView: View {
                                 Button(role: .destructive) {
                                     onDeletePaper(paper)
                                 } label: {
-                                    Label("Delete Paper", systemImage: "trash")
+                                    Label(String(localized: "Delete Paper", bundle: bundle), systemImage: "trash")
                                 }
                             }
                     }
@@ -60,13 +65,13 @@ struct LibrarySidebarView: View {
                 }
             }
         }
-        .navigationTitle("Freddie")
+        .navigationTitle(String(localized: "Freddie", bundle: bundle))
         .toolbar {
             ToolbarItem {
                 Button {
                     isAddingPaper = true
                 } label: {
-                    Label("Add Paper", systemImage: "plus")
+                    Label(String(localized: "Add Paper", bundle: bundle), systemImage: "plus")
                 }
             }
 
@@ -75,7 +80,7 @@ struct LibrarySidebarView: View {
                     guard let selectedPaper else { return }
                     onDeletePaper(selectedPaper)
                 } label: {
-                    Label("Delete Paper", systemImage: "trash")
+                    Label(String(localized: "Delete Paper", bundle: bundle), systemImage: "trash")
                 }
                 .disabled(selectedPaper == nil)
             }
