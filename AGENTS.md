@@ -77,6 +77,8 @@ GitHub Actions 构建 DMG：
 
 SwiftData 元数据 store 也应视为该目录的一部分：当前显式落在 `~/Library/Application Support/ReadPaper/ReadPaper.store`，承载 `Paper`、`PaperAttachment`、`TranslationSegment`、`LLMProviderProfile`、`LLMModelProfile`、`AppSettings` 等模型；不要再依赖系统默认 `~/Library/Application Support/default.store`。
 
+SwiftData schema 变更要特别谨慎：历史上已经出现过“新版本删改 `AppSettings` 字段并写回 `ReadPaper.store`，随后旧版 `Freddie 0.1.8 (9)` 再打开同一份 store 时，在 `ReadPaperApp.init()` 创建 `ModelContainer` 阶段直接 `fatalError` 崩溃”的问题。对于会落盘的模型字段，尤其是 `AppSettings`、`LLMProviderProfile`、`LLMModelProfile` 这类启动早期就会参与建库/开库的类型，不要只改当前代码里的 `@Model` 定义；必须同时考虑旧 store 兼容、`SchemaMigrationPlan` / `VersionedSchema`、或至少临时保留兼容字段，避免发布后出现“新库打不开旧版 / 旧版打不开新库”的双向不兼容。
+
 `paper.html` 当前默认保存的是适合阅读和翻译的本地化 HTML；对于 arXiv/ar5iv 导入，它通常是 `swift-readability` 提炼后的正文包装页，而不是原站完整页面快照。改导入链路时要注意这一展示语义。
 
 附件通过 `PaperAttachment` 记录，类型包括 `pdf`、`html`、`translatedPDF` 和 `resource`，来源包括 `arxivPDF`、`arxivHTML`、`localImport`、`babeldoc` 和 `generated`。改文件写入逻辑时，要同时维护附件记录和 SwiftData 保存时机。
