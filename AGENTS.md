@@ -53,10 +53,13 @@ GitHub Actions 构建 DMG：
 
 - `ReadPaper/ReadPaperApp.swift`：应用入口和 SwiftData `modelContainer` 注册。
 - `ReadPaper/Models/`：SwiftData 模型和枚举。新增模型时同步检查 `ReadPaperApp` 中的 model container。
+- `ReadPaper/Localization/`：运行时本地化基础设施，如 `LanguageManager`、bundle 解析和 SwiftUI environment 注入。
 - `ReadPaper/Views/`：SwiftUI 界面，包含主布局、导入面板、阅读工具栏、设置页和检查器。
 - `ReadPaper/Readers/`：PDF、HTML、双语 PDF 阅读器。
 - `ReadPaper/Services/`：导入、arXiv API、HTML 本地化、翻译、BabelDOC、Keychain、文件存储、子进程运行等业务服务。
 - `ReadPaperTests/`：XCTest 单元测试，重点覆盖 arXiv ID/Atom 解析、文件存储、HTML 翻译管线、BabelDOC 参数和进程运行。
+- `ReadPaper/Localizable.xcstrings`：应用自有 UI、状态文案和错误文案的字符串目录，当前以英文 source string 为 key，并提供 `en` / `zh-Hans`。
+- `ReadPaper/InfoPlist.xcstrings`：Info.plist 对用户可见文案的字符串目录，例如 `NSDocumentsFolderUsageDescription`。
 - `project.yml`：XcodeGen 的项目源配置。调整 target、依赖、构建设置时改这里并重新生成项目。
 - `.github/workflows/release.yml`：GitHub Actions 的 DMG 打包/发布流程；负责恢复 `swift-readability`、安装 `xcodegen` 与 `create-dmg`、构建 unsigned `Freddie.app`、产出 `Freddie-unsigned.dmg`，并在 tag 发布时上传到 GitHub Release。
 - `ReadPaper.xcodeproj/project.xcworkspace/xcuserdata/`：Xcode 用户状态。除非任务明确要求，不要编辑或整理这类文件。
@@ -78,14 +81,14 @@ SwiftData 元数据 store 也应视为该目录的一部分：当前显式落在
 
 附件通过 `PaperAttachment` 记录，类型包括 `pdf`、`html`、`translatedPDF` 和 `resource`，来源包括 `arxivPDF`、`arxivHTML`、`localImport`、`babeldoc` 和 `generated`。改文件写入逻辑时，要同时维护附件记录和 SwiftData 保存时机。
 
-LLM 配置现已拆成独立 SwiftData 模型：`LLMProviderProfile` 负责 provider 名称、`baseURL`、`apiKeyRef`、`testModel` 和启用状态，`LLMModelProfile` 负责模型名、所属 provider 和高级参数。`AppSettings` 只保留全局翻译偏好与当前选中的 HTML/PDF model profile；旧的 `openAIBaseURL` / `quickModelName` / `normalModelName` / `heavyModelName` 仅用于一次性 bootstrap 迁移，不应再作为新运行时读取源。
+LLM 配置现已拆成独立 SwiftData 模型：`LLMProviderProfile` 负责 provider 名称、`baseURL`、`apiKeyRef`、`testModel` 和启用状态，`LLMModelProfile` 负责模型名、所属 provider 和高级参数。`AppSettings` 只保留全局翻译偏好与当前选中的 HTML/PDF model profile；运行时路由解析不再依赖旧的单 Base URL / 多 legacy model name 配置。
 
 翻译缓存位于 `TranslationSegment`，现在除 `paperID`、`sourceType`、`targetLanguage`、`sourceHash` 之外，还会记录 route identity（至少 `providerProfileID`、`modelProfileID`、`modelName`）。改缓存或查找逻辑时，不要让切换 provider/model 后继续命中旧译文。
 
 ## 翻译与外部工具
 
 - OpenAI-compatible API 已改为多 provider / 多 model profile 结构。API key 仍然存于 Keychain，但通过 provider-specific `apiKeyRef` 关联；日志、错误和测试输出中不要泄露真实 key。
-- `LLMConfigurationBootstrapper` 会在首次发现旧配置时，把 legacy `AppSettings` 和旧 Keychain key 迁移成 provider/model profiles，并默认把 HTML/PDF 路由指向 legacy heavy model。涉及 `AppSettings` 新字段时，优先保持 SwiftData 迁移安全，避免再新增会阻塞旧 store 启动的必填列。
+- `LLMConfigurationBootstrapper` 现在只负责确保 `AppSettings` 行存在，方便应用启动和设置页读取全局翻译偏好；不要再把它扩回 legacy LLM 配置迁移入口。
 - `OpenAICompatibleLLMProvider` 负责 `/chat/completions` 调用，保留代理 base path，识别版本段，并在 `404 + /v1` 场景下尝试去掉尾部版本段回退。`LLMProviderValidationUseCase` 负责 base URL 规范化、模型名校验、连接测试和错误归类。
 - `LLMRouteResolver` 从 `AppSettings`、`LLMProviderProfile`、`LLMModelProfile` 和 Keychain 解析 HTML/PDF 两条独立路由。`HTMLTranslationPipeline` 与 `BabelDocRunner` 必须消费 `TranslationPreferencesSnapshot` / `LLMModelRouteSnapshot`，不要再直接从 `AppSettings` 读取 provider base URL、模型名或 API key。
 - `HTMLTranslationPipeline` 只翻译语义块，不翻译整份 HTML 字符串；当前候选选择器包括 `p`、`h1...h6`、`figcaption`、`blockquote`、`li`。
@@ -105,7 +108,11 @@ LLM 配置现已拆成独立 SwiftData 模型：`LLMProviderProfile` 负责 prov
 
 - 优先保持 SwiftUI + SwiftData 的现有风格，避免引入新的架构层，除非任务明确需要。
 - UI 状态尽量留在 View 内，持久化状态进入 SwiftData model，外部副作用放到 `Services`。
+- 应用内国际化当前采用 Mercury 风格的运行时 bundle 切换，而不是只依赖系统语言：SwiftUI View 优先从 `@Environment(\.localizationBundle)` 取 bundle，并用 `Text(..., bundle: bundle)`、`String(localized: ..., bundle: bundle)` 或 `LocalizedStringResource` 走字符串目录；不要在新增 UI 文案时直接写死字符串并假设后续再统一替换。
+- 新增或修改用户可见文案时，默认同步更新 `ReadPaper/Localizable.xcstrings`；Info.plist 可见文案则更新 `ReadPaper/InfoPlist.xcstrings`。当前开发语言是英文，首批支持语言只有 `en` 与 `zh-Hans`；如果要扩语言，先沿用 `LanguageManager` 的规范化/回退规则，不要零散地在各处单独判断 locale。
+- app-owned 的错误、校验提示、状态说明和阶段文案应优先通过 `AppLocalization` / 当前 localization bundle 统一生成；若消息中混有底层系统或第三方错误，保留底层 `localizedDescription` 原文，只本地化项目自己控制的前缀、模板和上下文。
 - 设置页整体信息架构优先使用顶部 `TabView` 页签承载大类（如 `General`、`Reader`、`Providers`、`Models`），不要轻易回退成单页长表单或侧边栏式设置窗口，除非任务明确要求。
+- 设置页 `General` 现已承载应用语言选择；后续如果新增全局语言相关偏好，优先放在这里，并保持“Follow System / English / 简体中文”这类运行时可切换、不要求重启的交互语义。
 - 如果要改设置页输入框，优先保持当前 AppKit-backed 单行输入控件策略：关闭 text completion、smart quotes/dashes、自动替换、拼写检查和 character picker；在可用系统版本上关闭 Writing Tools / affordance；并在结束编辑前主动 `unmarkText()` / `discardMarkedText()`，尽量降低快速切换焦点时的系统输入服务噪音日志。不要轻易退回成默认 SwiftUI `TextField` / `SecureField` 而不处理这些输入系统细节。
 - 阅读器不同模式的缺失态/空状态要保持一致的视觉语义；例如缺少 HTML、PDF 或翻译 PDF 时，优先复用统一的居中 unavailable 组件，不要一处是完整空状态卡片、另一处只显示一行占位文字。
 - 与阅读模式切换相邻、语义上属于“二选一 / 多选一”或并列主操作的按钮，视觉上优先向阅读器里的 `htmlDisplayPicker` / segmented control 靠拢：保持紧凑、等权、成组展示，必要时使用共享圆角底板和分隔线；避免混入单个过强的 `.borderedProminent` 按钮破坏整组节奏。空状态里的并列 action 也优先遵循这套样式，并预留足够宽度保证文案完整展示。
@@ -134,6 +141,12 @@ LLM 配置现已拆成独立 SwiftData 模型：`LLMProviderProfile` 负责 prov
 - provider 校验、base URL 规范化、连接测试：`LLMProviderValidationUseCaseTests`
 - provider/model route 解析与缺配置错误：`LLMRouteResolverTests`
 - OpenAI-compatible `/v1` 回退与代理路径保留：`OpenAICompatibleLLMProviderTests`
-- legacy 配置 bootstrap 迁移：`LLMConfigurationBootstrapperTests`
+- settings 初始化保障：`LLMConfigurationBootstrapperTests`
+- 运行时语言选择、bundle 规范化/回退、代表性本地化行为：`LanguageManagerTests`、`LocalizationBehaviorTests`
 
 涉及真实网络、OpenAI API、BabelDOC 安装或真实 PDF 翻译的测试不要默认加入单元测试；优先用可注入依赖、临时目录和小样本文本覆盖行为。
+
+涉及本地化改动时，再额外注意两点：
+
+- 不要让测试依赖执行环境当前系统语言；必要时像 `PaperImporterTests` 一样显式固定 language override，并在 `tearDown` 恢复。
+- 变更 app-owned 错误、状态文案或语言切换逻辑时，优先补充 `LanguageManagerTests`、`LocalizationBehaviorTests` 或对应错误类型的定向断言，避免只在手工切语言时发现回归。

@@ -4,46 +4,45 @@ import XCTest
 
 final class LLMConfigurationBootstrapperTests: XCTestCase {
     @MainActor
-    func testBootstrapMigratesLegacySettingsIntoProviderAndModels() throws {
-        let keychainService = "LLMConfigurationBootstrapperTests.\(UUID().uuidString)"
-        let keychainStore = KeychainStore(service: keychainService)
-        let bootstrapper = LLMConfigurationBootstrapper(keychainStore: keychainStore)
+    func testBootstrapCreatesSettingsRowWhenMissing() throws {
+        let bootstrapper = LLMConfigurationBootstrapper()
         let container = try makeContainer()
         let modelContext = ModelContext(container)
 
-        let settings = AppSettings(
-            openAIBaseURL: "https://api.example.com/proxy/v1/",
-            normalModelName: "normal-model",
-            quickModelName: "quick-model",
-            heavyModelName: "heavy-model",
-            targetLanguage: "zh-CN",
-            htmlTranslationConcurrency: 4,
-            babelDocQPS: 4,
-            babelDocVersion: "0.5.24"
-        )
-        modelContext.insert(settings)
-        try modelContext.save()
-        try keychainStore.save("sk-legacy", account: KeychainStore.legacyOpenAIAPIKeyAccount)
-
         let bootstrappedSettings = try bootstrapper.ensureBootstrap(modelContext: modelContext)
+        let settingsRows = try modelContext.fetch(FetchDescriptor<AppSettings>())
         let providers = try modelContext.fetch(FetchDescriptor<LLMProviderProfile>())
         let models = try modelContext.fetch(FetchDescriptor<LLMModelProfile>())
 
-        XCTAssertTrue(bootstrappedSettings.didBootstrapLLMProfiles)
-        XCTAssertEqual(providers.count, 1)
-        XCTAssertEqual(models.count, 3)
-        XCTAssertEqual(providers.first?.name, "Default Provider")
-        XCTAssertEqual(providers.first?.baseURL, "https://api.example.com/proxy/v1")
-        XCTAssertEqual(models.first(where: { $0.modelName == "heavy-model" })?.name, "Primary Model")
-        XCTAssertEqual(models.first(where: { $0.modelName == "normal-model" })?.name, "Balanced Model")
-        XCTAssertEqual(models.first(where: { $0.modelName == "quick-model" })?.name, "Fast Model")
+        XCTAssertEqual(settingsRows.count, 1)
+        XCTAssertEqual(bootstrappedSettings.id, settingsRows.first?.id)
+        XCTAssertEqual(providers.count, 0)
+        XCTAssertEqual(models.count, 0)
+    }
 
-        let heavyModel = try XCTUnwrap(models.first(where: { $0.modelName == "heavy-model" }))
-        XCTAssertEqual(bootstrappedSettings.selectedHTMLModelProfileID, heavyModel.id)
-        XCTAssertEqual(bootstrappedSettings.selectedPDFModelProfileID, heavyModel.id)
+    @MainActor
+    func testBootstrapReturnsExistingSettingsRow() throws {
+        let bootstrapper = LLMConfigurationBootstrapper()
+        let container = try makeContainer()
+        let modelContext = ModelContext(container)
 
-        let migratedAPIKey = try keychainStore.load(account: try XCTUnwrap(providers.first?.apiKeyRef))
-        XCTAssertEqual(migratedAPIKey, "sk-legacy")
+        let settings = AppSettings(targetLanguage: "en")
+        let provider = LLMProviderProfile(
+            name: "Provider",
+            baseURL: "https://api.example.com/v1",
+            apiKeyRef: "provider-ref",
+            testModel: "gpt-test"
+        )
+        modelContext.insert(settings)
+        modelContext.insert(provider)
+        try modelContext.save()
+
+        let bootstrappedSettings = try bootstrapper.ensureBootstrap(modelContext: modelContext)
+        let settingsRows = try modelContext.fetch(FetchDescriptor<AppSettings>())
+
+        XCTAssertEqual(settingsRows.count, 1)
+        XCTAssertEqual(bootstrappedSettings.id, settings.id)
+        XCTAssertEqual(bootstrappedSettings.targetLanguage, "en")
     }
 
     @MainActor

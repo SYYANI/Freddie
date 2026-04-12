@@ -819,7 +819,6 @@ private struct SettingsForm: View {
                 throw LLMProviderValidationError.emptyAPIKey
             }
 
-            settings.didBootstrapLLMProfiles = true
             settings.modifiedAt = now
             try modelContext.save()
 
@@ -943,7 +942,6 @@ private struct SettingsForm: View {
             model.isEnabled = modelEnabled
             model.modifiedAt = now
 
-            settings.didBootstrapLLMProfiles = true
             settings.modifiedAt = now
             try modelContext.save()
 

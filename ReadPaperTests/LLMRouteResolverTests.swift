@@ -20,8 +20,7 @@ final class LLMRouteResolverTests: XCTestCase {
         let pdfModel = LLMModelProfile(providerID: provider.id, name: "PDF", modelName: "pdf-model")
         let settings = AppSettings(
             selectedHTMLModelProfileID: htmlModel.id,
-            selectedPDFModelProfileID: pdfModel.id,
-            didBootstrapLLMProfiles: true
+            selectedPDFModelProfileID: pdfModel.id
         )
 
         modelContext.insert(provider)
@@ -57,8 +56,7 @@ final class LLMRouteResolverTests: XCTestCase {
         let model = LLMModelProfile(providerID: provider.id, name: "HTML", modelName: "html-model")
         let settings = AppSettings(
             selectedHTMLModelProfileID: model.id,
-            selectedPDFModelProfileID: nil,
-            didBootstrapLLMProfiles: true
+            selectedPDFModelProfileID: nil
         )
 
         modelContext.insert(provider)
@@ -93,8 +91,7 @@ final class LLMRouteResolverTests: XCTestCase {
         let model = LLMModelProfile(providerID: provider.id, name: "HTML", modelName: "html-model")
         let settings = AppSettings(
             selectedHTMLModelProfileID: model.id,
-            selectedPDFModelProfileID: nil,
-            didBootstrapLLMProfiles: true
+            selectedPDFModelProfileID: nil
         )
 
         modelContext.insert(provider)
