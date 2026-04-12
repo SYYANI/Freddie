@@ -91,6 +91,27 @@ ReadPaper does not treat arbitrary PDF text extraction as a reliable full-docume
 - arXiv papers prefer HTML as the structured reading and translation carrier
 - full PDF translation is delegated to BabelDOC
 
+## Data
+
+Primary application data is stored under:
+
+```text
+~/Library/Application Support/ReadPaper/
+```
+
+Key locations there:
+
+- `ReadPaper.store`: the SwiftData store for papers, attachments, translation cache, provider/model profiles, and app settings
+- `Library/{paper UUID}/`: per-paper files such as `paper.pdf`, `paper.html`, `Resources/`, `translations/`, and `notes/`
+- `Tools/`: app-managed external tool files
+
+Even though the app bundle name is `Freddie`, the on-disk application support directory currently remains `ReadPaper`.
+
+Other system locations affected by the app:
+
+- `~/.cache/babeldoc/`: BabelDOC may create or update its own cache outside the app support directory during PDF translation-related work
+- macOS Keychain: provider API keys are stored as generic password items under the Keychain service `com.yiyan.ReadPaper`; SwiftData keeps only references such as `apiKeyRef`, not the raw keys themselves
+
 ## Release
 
 The repository includes a GitHub Actions workflow that can generate an unsigned macOS DMG on tag push or manual dispatch.
