@@ -20,6 +20,14 @@ It focuses on three practical reading workflows:
 - Full PDF translation via BabelDOC with structured progress reporting
 - PDF, HTML, and dual-PDF reading modes in one app
 
+## Screenshots
+
+<img width="1624" height="977" alt="Image" src="https://github.com/user-attachments/assets/934b88d3-d388-41db-808c-eab5b1ad3a9b" />
+
+<img width="1624" height="977" alt="Image" src="https://github.com/user-attachments/assets/8b4435d3-a0a0-4b04-babe-15ec72e1ecc1" />
+
+<img width="1624" height="977" alt="Image" src="https://github.com/user-attachments/assets/36068495-9c21-457d-bee1-dd19033d9906" />
+
 ## Requirements
 
 - macOS 14.0+
