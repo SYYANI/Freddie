@@ -298,8 +298,14 @@ struct BabelDocRunner {
     }
 
     static func statusMessage(forLine line: String, channel: ProcessOutputChannel) -> String? {
-        let key = channel == .standardError ? "BabelDOC error: %@" : "BabelDOC: %@"
-        return AppLocalization.format(key, line.truncatedForStatus)
+        if channel == .standardError {
+            let isError = line.hasPrefix("ERROR:") || line.hasPrefix("CRITICAL:")
+            if !isError {
+                return nil
+            }
+            return AppLocalization.format("BabelDOC error: %@", line.truncatedForStatus)
+        }
+        return AppLocalization.format("BabelDOC: %@", line.truncatedForStatus)
     }
 
     static func stageStatusMessage(from event: BabelDocBridgeEvent, includeCounts: Bool) -> String? {
