@@ -55,6 +55,13 @@ struct DualPDFReaderView: View {
         .onChange(of: translatedURL) { _, _ in
             updateTranslatedPageCount()
         }
+        .onChange(of: translatedPageCount) { _, newCount in
+            guard newCount > 0 else { return }
+            let target = min(pageIndex, maxTranslatedPage)
+            if translatedPageIndex != target {
+                translatedPageIndex = target
+            }
+        }
     }
 
     private var maxTranslatedPage: Int {
