@@ -8,6 +8,7 @@ struct InspectorPaneView: View {
     @State private var notePendingDeletion: Note?
     @State private var noteDeletionErrorMessage: String?
     @State private var focusedNoteID: UUID?
+    @State private var isAbstractExpanded = false
     var paper: Paper?
     var notes: [Note]
     var isCollapsed: Bool
@@ -128,10 +129,79 @@ struct InspectorPaneView: View {
                     .textSelection(.enabled)
             }
             if !paper.abstractText.isEmpty {
-                Text(paper.abstractText)
+                abstractView(paper.abstractText)
+            }
+        }
+    }
+    
+    private func abstractView(_ abstractText: String) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Abstract", bundle: bundle)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+                Spacer()
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        isAbstractExpanded.toggle()
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Text(
+                            isAbstractExpanded 
+                                ? String(localized: "Show Less", bundle: bundle)
+                                : String(localized: "Show More", bundle: bundle)
+                        )
+                        .font(.caption.weight(.medium))
+                        Image(systemName: isAbstractExpanded ? "chevron.up" : "chevron.down")
+                            .font(.caption2.weight(.semibold))
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(
+                        Capsule()
+                            .fill(Color.primary.opacity(0.05))
+                    )
+                    .overlay(
+                        Capsule()
+                            .strokeBorder(Color.primary.opacity(0.1), lineWidth: 1)
+                    )
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+            }
+            
+            ZStack(alignment: .bottom) {
+                Text(abstractText)
                     .font(.callout)
                     .textSelection(.enabled)
+                    .lineLimit(isAbstractExpanded ? nil : 8)
+                    .animation(.easeInOut(duration: 0.2), value: isAbstractExpanded)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                
+                if !isAbstractExpanded {
+                    LinearGradient(
+                        gradient: Gradient(colors: [
+                            .clear,
+                            Color(nsColor: .controlBackgroundColor).opacity(0.9)
+                        ]),
+                        startPoint: .center,
+                        endPoint: .bottom
+                    )
+                    .frame(height: 40)
+                    .allowsHitTesting(false)
+                }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color(nsColor: .controlBackgroundColor))
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
         }
     }
 
