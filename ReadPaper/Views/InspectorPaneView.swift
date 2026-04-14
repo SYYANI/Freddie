@@ -9,6 +9,9 @@ struct InspectorPaneView: View {
     @State private var noteDeletionErrorMessage: String?
     @State private var focusedNoteID: UUID?
     @State private var isAbstractExpanded = false
+    @State private var isTranslatingAbstract = false
+    @State private var abstractTranslationError: String?
+    @State private var translatedAbstract: String?
     var paper: Paper?
     var notes: [Note]
     var isCollapsed: Bool
@@ -141,45 +144,119 @@ struct InspectorPaneView: View {
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.primary)
                 Spacer()
-                Button {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        isAbstractExpanded.toggle()
+                
+                HStack(spacing: 8) {
+                    if let translatedAbstract = translatedAbstract {
+                        Button {
+                            self.translatedAbstract = nil
+                        } label: {
+                            HStack(spacing: 4) {
+                                Text(String(localized: "Original", bundle: bundle))
+                                    .font(.caption.weight(.medium))
+                                    .fixedSize()
+                                Image(systemName: "arrow.uturn.backward")
+                                    .font(.caption2.weight(.semibold))
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(
+                                Capsule()
+                                    .fill(Color.primary.opacity(0.05))
+                            )
+                            .overlay(
+                                Capsule()
+                                    .strokeBorder(Color.primary.opacity(0.1), lineWidth: 1)
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(.secondary)
+                    } else if !isTranslatingAbstract {
+                        Button {
+                            translateAbstract()
+                        } label: {
+                            HStack(spacing: 4) {
+                                Text(String(localized: "Translate", bundle: bundle))
+                                    .font(.caption.weight(.medium))
+                                    .fixedSize()
+                                Image(systemName: "character.book.closed")
+                                    .font(.caption2.weight(.semibold))
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(
+                                Capsule()
+                                    .fill(Color.primary.opacity(0.05))
+                            )
+                            .overlay(
+                                Capsule()
+                                    .strokeBorder(Color.primary.opacity(0.1), lineWidth: 1)
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(.secondary)
+                        .disabled(isTranslatingAbstract)
                     }
-                } label: {
-                    HStack(spacing: 4) {
-                        Text(
-                            isAbstractExpanded 
-                                ? String(localized: "Show Less", bundle: bundle)
-                                : String(localized: "Show More", bundle: bundle)
+                    
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            isAbstractExpanded.toggle()
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text(
+                                isAbstractExpanded 
+                                    ? String(localized: "Less", bundle: bundle)
+                                    : String(localized: "More", bundle: bundle)
+                            )
+                            .font(.caption.weight(.medium))
+                            .fixedSize()
+                            Image(systemName: isAbstractExpanded ? "chevron.up" : "chevron.down")
+                                .font(.caption2.weight(.semibold))
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(
+                            Capsule()
+                                .fill(Color.primary.opacity(0.05))
                         )
-                        .font(.caption.weight(.medium))
-                        Image(systemName: isAbstractExpanded ? "chevron.up" : "chevron.down")
-                            .font(.caption2.weight(.semibold))
+                        .overlay(
+                            Capsule()
+                                .strokeBorder(Color.primary.opacity(0.1), lineWidth: 1)
+                        )
                     }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(
-                        Capsule()
-                            .fill(Color.primary.opacity(0.05))
-                    )
-                    .overlay(
-                        Capsule()
-                            .strokeBorder(Color.primary.opacity(0.1), lineWidth: 1)
-                    )
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
                 }
-                .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
+            }
+            
+            if let error = abstractTranslationError {
+                Text(error)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+                    .padding(.vertical, 4)
             }
             
             ZStack(alignment: .bottom) {
-                Text(abstractText)
-                    .font(.callout)
-                    .textSelection(.enabled)
-                    .lineLimit(isAbstractExpanded ? nil : 8)
-                    .animation(.easeInOut(duration: 0.2), value: isAbstractExpanded)
+                if isTranslatingAbstract {
+                    HStack(spacing: 8) {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text(String(localized: "Translating abstract...", bundle: bundle))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 8)
+                } else {
+                    Text(translatedAbstract ?? abstractText)
+                        .font(.callout)
+                        .textSelection(.enabled)
+                        .lineLimit(isAbstractExpanded ? nil : 8)
+                        .animation(.easeInOut(duration: 0.2), value: isAbstractExpanded)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
                 
-                if !isAbstractExpanded {
+                if !isAbstractExpanded && !isTranslatingAbstract {
                     LinearGradient(
                         gradient: Gradient(colors: [
                             .clear,
@@ -259,6 +336,37 @@ struct InspectorPaneView: View {
             modelContext.rollback()
             notePendingDeletion = nil
             noteDeletionErrorMessage = error.localizedDescription
+        }
+    }
+    
+    private func translateAbstract() {
+        guard let paper = paper else { return }
+        
+        isTranslatingAbstract = true
+        abstractTranslationError = nil
+        
+        Task {
+            do {
+                let service = AbstractTranslationService()
+                let settings = try modelContext.fetch(FetchDescriptor<AppSettings>()).first ?? AppSettings()
+                
+                let translated = try await service.translateAbstract(
+                    paper: paper,
+                    settings: settings,
+                    modelContext: modelContext,
+                    onProgress: nil
+                )
+                
+                await MainActor.run {
+                    translatedAbstract = translated
+                    isTranslatingAbstract = false
+                }
+            } catch {
+                await MainActor.run {
+                    abstractTranslationError = error.localizedDescription
+                    isTranslatingAbstract = false
+                }
+            }
         }
     }
 
