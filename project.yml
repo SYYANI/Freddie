@@ -36,7 +36,7 @@ targets:
         ENABLE_TESTABILITY: YES
         CODE_SIGN_STYLE: Automatic
         CURRENT_PROJECT_VERSION: 15
-        MARKETING_VERSION: 0.2.4
+        MARKETING_VERSION: 0.2.5
   ReadPaperTests:
     type: bundle.unit-test
     platform: macOS
