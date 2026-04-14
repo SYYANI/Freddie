@@ -46,6 +46,40 @@ final class LLMConfigurationBootstrapperTests: XCTestCase {
     }
 
     @MainActor
+    func testInspectorCollapsedFieldHasDefaultValue() throws {
+        let bootstrapper = LLMConfigurationBootstrapper()
+        let container = try makeContainer()
+        let modelContext = ModelContext(container)
+
+        let settings = try bootstrapper.ensureBootstrap(modelContext: modelContext)
+        
+        // 新创建的settings应该有nil值，resolvedInspectorCollapsed返回false
+        XCTAssertNil(settings.inspectorCollapsed)
+        XCTAssertFalse(settings.resolvedInspectorCollapsed)
+    }
+
+    @MainActor
+    func testInspectorCollapsedFieldCanBeUpdated() throws {
+        let bootstrapper = LLMConfigurationBootstrapper()
+        let container = try makeContainer()
+        let modelContext = ModelContext(container)
+
+        let settings = try bootstrapper.ensureBootstrap(modelContext: modelContext)
+        
+        // 更新inspectorCollapsed字段
+        settings.inspectorCollapsed = true
+        settings.modifiedAt = Date()
+        try modelContext.save()
+        
+        // 重新获取并验证
+        let fetchDescriptor = FetchDescriptor<AppSettings>()
+        let fetchedSettings = try modelContext.fetch(fetchDescriptor).first
+        XCTAssertNotNil(fetchedSettings)
+        XCTAssertEqual(fetchedSettings!.inspectorCollapsed, true)
+        XCTAssertTrue(fetchedSettings!.resolvedInspectorCollapsed)
+    }
+
+    @MainActor
     private func makeContainer() throws -> ModelContainer {
         let schema = Schema([
             AppSettings.self,

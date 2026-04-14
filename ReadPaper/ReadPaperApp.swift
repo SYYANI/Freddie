@@ -55,7 +55,12 @@ enum ReadPaperModelStore {
             applicationSupportDirectory: applicationSupportDirectory
         )
 
-        let configuration = ModelConfiguration("ReadPaper", schema: schema, url: storeURL)
+        let configuration = ModelConfiguration(
+            schema: schema,
+            url: storeURL,
+            allowsSave: true
+        )
+        
         return try ModelContainer(for: schema, configurations: [configuration])
     }
 

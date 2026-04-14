@@ -9,7 +9,6 @@ struct ContentView: View {
     @Query(sort: \Note.modifiedAt, order: .reverse) private var notes: [Note]
     @Query private var settingsRows: [AppSettings]
 
-    @SceneStorage("contentView.isInspectorCollapsed") private var isInspectorCollapsed = false
     @State private var selectedPaperID: UUID?
     @State private var readerMode: ReaderMode = .pdf
     @State private var displayMode: TranslationDisplayMode = .bilingual
@@ -26,6 +25,27 @@ struct ContentView: View {
             return paper
         }
         return papers.first
+    }
+
+    private var isInspectorCollapsed: Bool {
+        settings?.resolvedInspectorCollapsed ?? false
+    }
+
+    private var inspectorCollapsedBinding: Binding<Bool> {
+        Binding(
+            get: { isInspectorCollapsed },
+            set: { newValue in
+                if let settings = settings, settings.inspectorCollapsed != newValue {
+                    settings.inspectorCollapsed = newValue
+                    settings.modifiedAt = Date()
+                    do {
+                        try modelContext.save()
+                    } catch {
+                        assertionFailure("Failed to save inspector collapsed state: \(error.localizedDescription)")
+                    }
+                }
+            }
+        )
     }
 
     var body: some View {
@@ -46,7 +66,7 @@ struct ContentView: View {
                 settings: settings,
                 readerMode: $readerMode,
                 displayMode: $displayMode,
-                isInspectorCollapsed: $isInspectorCollapsed
+                isInspectorCollapsed: inspectorCollapsedBinding
             )
             .navigationSplitViewColumnWidth(min: 520, ideal: 760)
         } detail: {

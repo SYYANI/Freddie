@@ -11,6 +11,7 @@ final class AppSettings {
     var htmlTranslationConcurrency: Int
     var babelDocQPS: Int
     var babelDocVersion: String
+    var inspectorCollapsed: Bool?
     var createdAt: Date
     var modifiedAt: Date
 
@@ -23,6 +24,7 @@ final class AppSettings {
         htmlTranslationConcurrency: Int = 4,
         babelDocQPS: Int = 4,
         babelDocVersion: String = "0.5.24",
+        inspectorCollapsed: Bool? = nil,
         createdAt: Date = Date(),
         modifiedAt: Date = Date()
     ) {
@@ -34,7 +36,12 @@ final class AppSettings {
         self.htmlTranslationConcurrency = htmlTranslationConcurrency
         self.babelDocQPS = babelDocQPS
         self.babelDocVersion = babelDocVersion
+        self.inspectorCollapsed = inspectorCollapsed
         self.createdAt = createdAt
         self.modifiedAt = modifiedAt
+    }
+
+    var resolvedInspectorCollapsed: Bool {
+        inspectorCollapsed ?? false
     }
 }
