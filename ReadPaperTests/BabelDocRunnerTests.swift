@@ -175,13 +175,13 @@ final class BabelDocRunnerTests: XCTestCase {
 
         let parsed = parser.consume(ProcessOutputEvent(
             channel: .standardError,
-            text: "using sk-secret\nstill working\n"
+            text: "ERROR: using sk-secret\nCRITICAL: still working\n"
         ))
         XCTAssertEqual(
             parsed.statusMessages,
             [
-                "BabelDOC error: using <redacted>",
-                "BabelDOC error: still working"
+                "BabelDOC error: ERROR: using <redacted>",
+                "BabelDOC error: CRITICAL: still working"
             ]
         )
 
