@@ -118,6 +118,7 @@ final class BabelDocRunnerTests: XCTestCase {
         XCTAssertTrue(argsWithRange.contains("--pages"))
         let pagesIndex = argsWithRange.firstIndex(of: "--pages")!
         XCTAssertEqual(argsWithRange[pagesIndex + 1], "1-10")
+        XCTAssertTrue(argsWithRange.contains("--only-include-translated-page"))
 
         let argsNoRange = BabelDocRunner.arguments(
             inputPDF: input,
@@ -128,6 +129,7 @@ final class BabelDocRunnerTests: XCTestCase {
             pageRange: nil
         )
         XCTAssertFalse(argsNoRange.contains("--pages"))
+        XCTAssertFalse(argsNoRange.contains("--only-include-translated-page"))
 
         let redacted = BabelDocRunner.redactedArguments(
             inputPDF: input,

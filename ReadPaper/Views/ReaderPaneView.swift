@@ -703,6 +703,20 @@ struct ReaderPaneView: View {
                 statusMessage = String(localized: "Translating PDF with BabelDOC...", bundle: bundle)
                 let outputDirectory = try PaperFileStore().translationsDirectory(for: paper)
                 let toolEnvironment = try toolManager.environment()
+
+                guard let existingDoc = PDFDocument(url: existingAttachment.fileURL) else {
+                    throw PDFMergerError.failedToOpenFile(existingAttachment.fileURL.path)
+                }
+                let trimmedExisting: PDFDocument = {
+                    let doc = PDFDocument()
+                    let pageCount = min(currentLastPage, existingDoc.pageCount)
+                    for i in 0..<pageCount {
+                        guard let page = existingDoc.page(at: i) else { continue }
+                        doc.insert(page, at: i)
+                    }
+                    return doc
+                }()
+
                 let incrementPDF = try await BabelDocRunner().translatePDF(
                     inputPDF: pdfAttachment.fileURL,
                     outputDirectory: outputDirectory,
@@ -735,10 +749,9 @@ struct ReaderPaneView: View {
                 )
                 try Task.checkCancellation()
 
-                let existingURL = existingAttachment.fileURL
                 let mergedFilename = "merged-\(nextBatch)-\(UUID().uuidString.prefix(8)).pdf"
                 let mergedURL = outputDirectory.appendingPathComponent(mergedFilename)
-                let _ = try PDFMerger.merge(existing: existingURL, increment: incrementPDF, output: mergedURL)
+                let _ = try PDFMerger.merge(existing: trimmedExisting, increment: incrementPDF, output: mergedURL)
 
                 existingAttachment.filePath = mergedURL.path
                 existingAttachment.filename = mergedFilename

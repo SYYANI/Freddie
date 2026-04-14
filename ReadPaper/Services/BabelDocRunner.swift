@@ -228,6 +228,7 @@ struct BabelDocRunner {
         ]
         if let range = pageRange {
             args += ["--pages", "\(range.lowerBound)-\(range.upperBound)"]
+            args += ["--only-include-translated-page"]
         }
         return args
     }

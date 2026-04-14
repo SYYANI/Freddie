@@ -2675,6 +2675,17 @@
         }
       }
     },
+    "Translation (partial)" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "翻译（部分）"
+          }
+        }
+      }
+    },
     "Translation" : {
       "extractionState" : "stale",
       "localizations" : {

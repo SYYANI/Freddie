@@ -1,18 +1,15 @@
 import PDFKit
 
 struct PDFMerger {
-    static func merge(existing: URL, increment: URL, output: URL) throws -> URL {
-        guard let existingDoc = PDFDocument(url: existing) else {
-            throw PDFMergerError.failedToOpenFile(existing.path)
-        }
+    static func merge(existing: PDFDocument, increment: URL, output: URL) throws -> URL {
         guard let incrementDoc = PDFDocument(url: increment) else {
             throw PDFMergerError.failedToOpenFile(increment.path)
         }
 
         let merged = PDFDocument()
         var index = 0
-        for i in 0..<existingDoc.pageCount {
-            guard let page = existingDoc.page(at: i) else { continue }
+        for i in 0..<existing.pageCount {
+            guard let page = existing.page(at: i) else { continue }
             merged.insert(page, at: index)
             index += 1
         }
@@ -26,6 +23,13 @@ struct PDFMerger {
             throw PDFMergerError.failedToWriteOutput(output.path)
         }
         return output
+    }
+
+    static func merge(existing: URL, increment: URL, output: URL) throws -> URL {
+        guard let existingDoc = PDFDocument(url: existing) else {
+            throw PDFMergerError.failedToOpenFile(existing.path)
+        }
+        return try merge(existing: existingDoc, increment: increment, output: output)
     }
 }
 

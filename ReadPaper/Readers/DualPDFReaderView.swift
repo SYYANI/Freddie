@@ -1,3 +1,4 @@
+import PDFKit
 import SwiftUI
 
 struct DualPDFReaderView: View {
@@ -7,6 +8,13 @@ struct DualPDFReaderView: View {
     @Binding var pageIndex: Int
     var reloadToken: Int = 0
     @State private var translatedPageIndex = 0
+    @State private var translatedPageCount: Int = 0
+
+    private var isPartialTranslation: Bool {
+        guard translatedPageCount > 0,
+              let originalDoc = originalURL.flatMap({ PDFDocument(url: $0) }) else { return false }
+        return translatedPageCount < originalDoc.pageCount
+    }
 
     var body: some View {
         HSplitView {
@@ -16,20 +24,39 @@ struct DualPDFReaderView: View {
                 }
             PDFReaderView(fileURL: translatedURL, pageIndex: $translatedPageIndex, reloadToken: reloadToken)
                 .overlay(alignment: .topLeading) {
-                    readerLabel(String(localized: "Translation", bundle: bundle))
+                    if isPartialTranslation {
+                        readerLabel(String(localized: "Translation (partial)", bundle: bundle))
+                    } else {
+                        readerLabel(String(localized: "Translation", bundle: bundle))
+                    }
                 }
         }
         .onAppear {
-            translatedPageIndex = pageIndex
+            translatedPageIndex = min(pageIndex, maxTranslatedPage)
+            updateTranslatedPageCount()
         }
         .onChange(of: pageIndex) { _, newValue in
-            guard translatedPageIndex != newValue else { return }
-            translatedPageIndex = newValue
+            let target = min(newValue, maxTranslatedPage)
+            guard translatedPageIndex != target else { return }
+            translatedPageIndex = target
         }
         .onChange(of: translatedPageIndex) { _, newValue in
             guard pageIndex != newValue else { return }
-            pageIndex = newValue
+            if newValue <= maxTranslatedPage {
+                pageIndex = newValue
+            }
         }
+        .onChange(of: reloadToken) { _, _ in
+            updateTranslatedPageCount()
+        }
+    }
+
+    private var maxTranslatedPage: Int {
+        max(translatedPageCount - 1, 0)
+    }
+
+    private func updateTranslatedPageCount() {
+        translatedPageCount = translatedURL.flatMap { PDFDocument(url: $0)?.pageCount } ?? 0
     }
 
     private func readerLabel(_ value: String) -> some View {
