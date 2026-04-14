@@ -1,3 +1,4 @@
+import PDFKit
 import SwiftData
 import SwiftUI
 
@@ -22,6 +23,11 @@ struct ReaderPaneView: View {
         var summary: String
     }
 
+    private enum PDFTranslationScope {
+        case firstPages(Int)
+        case allPages
+    }
+
     @Environment(\.modelContext) private var modelContext
     @Environment(\.localizationBundle) private var bundle
     @Query(sort: \ReadingState.modifiedAt, order: .reverse) private var readingStates: [ReadingState]
@@ -36,6 +42,7 @@ struct ReaderPaneView: View {
     @State private var pdfPageIndex = 0
     @State private var htmlScrollRatio = 0.0
     @State private var htmlReloadToken = 0
+    @State private var pdfReloadToken = 0
     @State private var htmlSegmentUpdate: HTMLTranslationSegmentUpdate?
     @State private var isWorking = false
     @State private var isCancelling = false
@@ -44,6 +51,8 @@ struct ReaderPaneView: View {
     @State private var translationTask: Task<Void, Never>?
     @State private var lastPDFReaderMode: ReaderMode = .pdf
     @State private var suspendReadingStatePersistence = false
+    @State private var showPDFTranslationScopeDialog = false
+    @State private var pdfTranslationTotalPages: Int = 0
 
     private var pdfAttachment: PaperAttachment? {
         attachments.first { $0.kind == .pdf }
@@ -57,12 +66,39 @@ struct ReaderPaneView: View {
         attachments.first { $0.kind == .translatedPDF }
     }
 
+    private var originalPDFPageCount: Int? {
+        guard let url = pdfAttachment?.fileURL else { return nil }
+        return PDFDocument(url: url)?.pageCount
+    }
+
+    private var isPartialPDFTranslation: Bool {
+        guard let attachment = translatedPDFAttachment,
+              let lastPage = attachment.translatedLastPage,
+              let total = originalPDFPageCount
+        else { return false }
+        return lastPage < total
+    }
+
+    private var isNearTranslationEdge: Bool {
+        guard isPartialPDFTranslation,
+              let lastPage = translatedPDFAttachment?.translatedLastPage
+        else { return false }
+        return pdfPageIndex >= max(0, lastPage - 2)
+    }
+
     private var canTranslateHTML: Bool {
         htmlAttachment != nil && settings != nil
     }
 
     private var canTranslatePDF: Bool {
-        pdfAttachment != nil && settings != nil
+        pdfAttachment != nil && settings != nil && !isFullPDFTranslationComplete
+    }
+
+    private var isFullPDFTranslationComplete: Bool {
+        guard let attachment = translatedPDFAttachment else { return false }
+        guard let lastPage = attachment.translatedLastPage else { return true }
+        guard let total = originalPDFPageCount else { return true }
+        return lastPage >= total
     }
 
     private var translationControlsDisabled: Bool {
@@ -142,6 +178,21 @@ struct ReaderPaneView: View {
                 persistReadingStateIfNeeded()
             }
             .onDisappear(perform: persistReadingStateIfNeeded)
+            .confirmationDialog(
+                String(localized: "Choose Translation Scope", bundle: bundle),
+                isPresented: $showPDFTranslationScopeDialog,
+                titleVisibility: .visible
+            ) {
+                Button(String(localized: "First 10 Pages", bundle: bundle)) {
+                    startPDFTranslation(scope: .firstPages(10))
+                }
+                Button(String(localized: "All Pages", bundle: bundle)) {
+                    startPDFTranslation(scope: .allPages)
+                }
+                Button(String(localized: "Cancel", bundle: bundle), role: .cancel) {}
+            } message: {
+                Text(AppLocalization.format("This PDF has %d pages. Translating the first 10 pages is faster.", pdfTranslationTotalPages))
+            }
     }
 
     private var readerSurface: some View {
@@ -159,6 +210,11 @@ struct ReaderPaneView: View {
             }
 
             content
+
+            if isNearTranslationEdge && !isWorking {
+                translateMoreBanner
+                Divider()
+            }
         }
     }
 
@@ -317,8 +373,13 @@ struct ReaderPaneView: View {
             Button {
                 translatePDF()
             } label: {
-                Label(String(localized: "Translate PDF", bundle: bundle), systemImage: "doc")
-                    .labelStyle(.titleAndIcon)
+                if isPartialPDFTranslation {
+                    Label(String(localized: "Translate More PDF Pages", bundle: bundle), systemImage: "doc")
+                        .labelStyle(.titleAndIcon)
+                } else {
+                    Label(String(localized: "Translate PDF", bundle: bundle), systemImage: "doc")
+                        .labelStyle(.titleAndIcon)
+                }
             }
             .disabled(canTranslatePDF == false)
         } label: {
@@ -380,7 +441,8 @@ struct ReaderPaneView: View {
                     DualPDFReaderView(
                         originalURL: pdfAttachment?.fileURL,
                         translatedURL: translatedPDFAttachment?.fileURL,
-                        pageIndex: $pdfPageIndex
+                        pageIndex: $pdfPageIndex,
+                        reloadToken: pdfReloadToken
                     )
                 } else {
                     centeredUnavailableView(
@@ -394,7 +456,8 @@ struct ReaderPaneView: View {
                     fileURL: translatedPDFAttachment?.fileURL,
                     label: String(localized: "Translation", bundle: bundle),
                     emptyTitle: String(localized: "No translated PDF", bundle: bundle),
-                    emptyDescription: String(localized: "Run PDF translation first to read the translated PDF on its own.", bundle: bundle)
+                    emptyDescription: String(localized: "Run PDF translation first to read the translated PDF on its own.", bundle: bundle),
+                    reloadToken: pdfReloadToken
                 )
             }
         }
@@ -491,8 +554,37 @@ struct ReaderPaneView: View {
     }
 
     private func translatePDF() {
+        guard let pdfAttachment else { return }
+
+        if isPartialPDFTranslation {
+            extendPDFTranslation()
+            return
+        }
+
+        let url = pdfAttachment.fileURL
+        guard let document = PDFDocument(url: url) else { return }
+
+        let totalPages = document.pageCount
+        if totalPages > 10 {
+            pdfTranslationTotalPages = totalPages
+            showPDFTranslationScopeDialog = true
+        } else {
+            startPDFTranslation(scope: .allPages)
+        }
+    }
+
+    private func startPDFTranslation(scope: PDFTranslationScope) {
         guard let paper, let pdfAttachment, let settings else { return }
         let preferences = TranslationPreferencesSnapshot(settings)
+        let pageRange: ClosedRange<Int>? = {
+            switch scope {
+            case .firstPages(let count):
+                return 1...count
+            case .allPages:
+                return nil
+            }
+        }()
+
         translationProgress = nil
         isWorking = true
         isCancelling = false
@@ -524,6 +616,7 @@ struct ReaderPaneView: View {
                     apiKey: resolvedRoute.apiKey,
                     babelDocPythonExecutable: try toolManager.babelDocPythonExecutableURL(),
                     bridgeScript: try toolManager.ensureProgressBridgeScript(),
+                    pageRange: pageRange,
                     environment: toolEnvironment,
                     onStatusUpdate: { message in
                         Task { @MainActor in
@@ -546,15 +639,113 @@ struct ReaderPaneView: View {
                     }
                 )
                 try Task.checkCancellation()
+                let translatedLastPage: Int? = {
+                    switch scope {
+                    case .firstPages(let count):
+                        return count
+                    case .allPages:
+                        return nil
+                    }
+                }()
                 modelContext.insert(PaperAttachment(
                     paperID: paper.id,
                     kind: .translatedPDF,
                     source: .babeldoc,
                     filename: translated.lastPathComponent,
-                    filePath: translated.path
+                    filePath: translated.path,
+                    translatedLastPage: translatedLastPage
                 ))
                 try modelContext.save()
                 readerMode = .bilingualPDF
+                translationProgress = nil
+                statusMessage = String(localized: "PDF translation completed.", bundle: bundle)
+            } catch is CancellationError {
+                translationProgress = nil
+                statusMessage = String(localized: "Translation cancelled.", bundle: bundle)
+            } catch {
+                translationProgress = nil
+                statusMessage = AppLocalization.errorMessage(error, bundle: bundle)
+            }
+            isWorking = false
+            isCancelling = false
+            translationTask = nil
+        }
+    }
+
+    private func extendPDFTranslation() {
+        guard let paper, let pdfAttachment, let settings, let existingAttachment = translatedPDFAttachment, let currentLastPage = existingAttachment.translatedLastPage else { return }
+        guard let total = originalPDFPageCount, currentLastPage < total else { return }
+
+        let nextBatch = min(currentLastPage + 10, total)
+        let pageRange = (currentLastPage + 1)...nextBatch
+        let preferences = TranslationPreferencesSnapshot(settings)
+
+        translationProgress = nil
+        isWorking = true
+        isCancelling = false
+        statusMessage = String(localized: "Running BabelDOC...", bundle: bundle)
+        translationTask = Task {
+            do {
+                try Task.checkCancellation()
+                let resolvedRoute = try LLMRouteResolver().resolvePDFRoute(
+                    settings: settings,
+                    modelContext: modelContext
+                )
+                let toolManager = BabelDocToolManager()
+                if try toolManager.detect() != .ready {
+                    statusMessage = String(localized: "Installing BabelDOC...", bundle: bundle)
+                    let installResult = try await toolManager.installOrUpdateBabelDOC(version: preferences.babelDocVersion)
+                    try Task.checkCancellation()
+                    guard installResult.exitCode == 0 else {
+                        throw BabelDocRunError.failed(installResult.combinedOutput)
+                    }
+                }
+                statusMessage = String(localized: "Translating PDF with BabelDOC...", bundle: bundle)
+                let outputDirectory = try PaperFileStore().translationsDirectory(for: paper)
+                let toolEnvironment = try toolManager.environment()
+                let incrementPDF = try await BabelDocRunner().translatePDF(
+                    inputPDF: pdfAttachment.fileURL,
+                    outputDirectory: outputDirectory,
+                    preferences: preferences,
+                    route: resolvedRoute.snapshot,
+                    apiKey: resolvedRoute.apiKey,
+                    babelDocPythonExecutable: try toolManager.babelDocPythonExecutableURL(),
+                    bridgeScript: try toolManager.ensureProgressBridgeScript(),
+                    pageRange: pageRange,
+                    environment: toolEnvironment,
+                    onStatusUpdate: { message in
+                        Task { @MainActor in
+                            guard isWorking, !isCancelling else { return }
+                            if translationProgress == nil || message.hasPrefix(String(localized: "BabelDOC error", bundle: bundle)) {
+                                statusMessage = message
+                            }
+                        }
+                    },
+                    onProgressUpdate: { progress in
+                        Task { @MainActor in
+                            guard isWorking, !isCancelling else { return }
+                            translationProgress = TranslationProgressStatus(
+                                completed: progress.completed,
+                                total: progress.total,
+                                summary: progress.summary
+                            )
+                            statusMessage = progress.statusMessage
+                        }
+                    }
+                )
+                try Task.checkCancellation()
+
+                let existingURL = existingAttachment.fileURL
+                let mergedFilename = "merged-\(nextBatch)-\(UUID().uuidString.prefix(8)).pdf"
+                let mergedURL = outputDirectory.appendingPathComponent(mergedFilename)
+                let _ = try PDFMerger.merge(existing: existingURL, increment: incrementPDF, output: mergedURL)
+
+                existingAttachment.filePath = mergedURL.path
+                existingAttachment.filename = mergedFilename
+                existingAttachment.translatedLastPage = nextBatch
+                try modelContext.save()
+
+                pdfReloadToken += 1
                 translationProgress = nil
                 statusMessage = String(localized: "PDF translation completed.", bundle: bundle)
             } catch is CancellationError {
@@ -575,6 +766,29 @@ struct ReaderPaneView: View {
         isCancelling = true
         statusMessage = String(localized: "Cancelling translation...", bundle: bundle)
         translationTask?.cancel()
+    }
+
+    private var translateMoreBanner: some View {
+        let lastPage = translatedPDFAttachment?.translatedLastPage ?? 0
+        let total = originalPDFPageCount ?? 0
+        let nextEnd = min(lastPage + 10, total)
+        return HStack(spacing: 8) {
+            Text(AppLocalization.format("Translated pages 1–%@ of %@.", "\(lastPage)", "\(total)"))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Spacer(minLength: 0)
+            Button {
+                extendPDFTranslation()
+            } label: {
+                Text(AppLocalization.format("Translate pages %@–%@", "\(lastPage + 1)", "\(nextEnd)"))
+                    .font(.caption)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(Color(nsColor: .windowBackgroundColor))
     }
 
     private func syncReaderModeWithAvailableContent() {
@@ -601,10 +815,11 @@ struct ReaderPaneView: View {
         fileURL: URL?,
         label: String,
         emptyTitle: String,
-        emptyDescription: String
+        emptyDescription: String,
+        reloadToken: Int = 0
     ) -> some View {
         if fileURL != nil {
-            PDFReaderView(fileURL: fileURL, pageIndex: $pdfPageIndex)
+            PDFReaderView(fileURL: fileURL, pageIndex: $pdfPageIndex, reloadToken: reloadToken)
                 .overlay(alignment: .topLeading) {
                     readerLabel(label)
                 }

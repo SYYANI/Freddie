@@ -9,6 +9,7 @@ final class PaperAttachment {
     var sourceRawValue: String
     var filename: String
     var filePath: String
+    var translatedLastPage: Int?
     var createdAt: Date
 
     init(
@@ -18,6 +19,7 @@ final class PaperAttachment {
         source: AttachmentSource,
         filename: String,
         filePath: String,
+        translatedLastPage: Int? = nil,
         createdAt: Date = Date()
     ) {
         self.id = id
@@ -26,6 +28,7 @@ final class PaperAttachment {
         self.sourceRawValue = source.rawValue
         self.filename = filename
         self.filePath = filePath
+        self.translatedLastPage = translatedLastPage
         self.createdAt = createdAt
     }
 

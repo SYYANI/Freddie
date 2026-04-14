@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 63;
+	objectVersion = 77;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -54,6 +54,7 @@
 		8F01D2A7FAEBECCA4498C1F6 /* TranslationPreferencesSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90F28004ABD616B1A38ED52A /* TranslationPreferencesSnapshot.swift */; };
 		8F21B0920FE94C544A660F41 /* LLMProviderValidationUseCaseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F4C9C7E8DBB2B1F9EC96AEC /* LLMProviderValidationUseCaseTests.swift */; };
 		9AF25254E445348AEED63EF3 /* Enums.swift in Sources */ = {isa = PBXBuildFile; fileRef = 373A9197249BAD6010BCBDC2 /* Enums.swift */; };
+		A4C810807377A9223429FCFC /* PDFMerger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D1EFE344C89E41D1AB668B6 /* PDFMerger.swift */; };
 		A88C29934E8FE196990CAD61 /* LibrarySidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D81E9697498069EC2F633A5 /* LibrarySidebarView.swift */; };
 		AC53825B2170A562B9F9678C /* LLMProviderValidationUseCase.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46FC6C17BDF1F5821997810A /* LLMProviderValidationUseCase.swift */; };
 		B0CCC7F117E14A4307D15187 /* LLMRouteResolverTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BB7EF5837E7DBA280C8E44E /* LLMRouteResolverTests.swift */; };
@@ -108,7 +109,7 @@
 		40C65F7E1559275AA3A5AA9F /* HTMLTranslationPipelineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HTMLTranslationPipelineTests.swift; sourceTree = "<group>"; };
 		46FC6C17BDF1F5821997810A /* LLMProviderValidationUseCase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLMProviderValidationUseCase.swift; sourceTree = "<group>"; };
 		47E6A94B8E0829E8FD015D53 /* ArxivClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArxivClientTests.swift; sourceTree = "<group>"; };
-		4AD0F3DCACE64FFE539D2434 /* Freddie.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Freddie.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		4AD0F3DCACE64FFE539D2434 /* ReadPaper.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ReadPaper.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		51A72BDC5A78B51E6003243F /* PaperFileStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaperFileStore.swift; sourceTree = "<group>"; };
 		56425134B5A64FC38C9DC3B1 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		585E60D2D3441D8A764523FD /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
@@ -116,7 +117,7 @@
 		61B39EE919BF400C2E3155C6 /* PaperImporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaperImporter.swift; sourceTree = "<group>"; };
 		6430BCDDD5126C2478477D4B /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		6D2246237CB8E21F487FA0FF /* ReadPaperApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadPaperApp.swift; sourceTree = "<group>"; };
-		703C8DC726DF6251058E63C6 /* swift-readability */ = {isa = PBXFileReference; lastKnownFileType = folder; path = "swift-readability"; sourceTree = SOURCE_ROOT; };
+		703C8DC726DF6251058E63C6 /* swift-readability */ = {isa = PBXFileReference; lastKnownFileType = folder; name = "swift-readability"; path = "swift-readability"; sourceTree = SOURCE_ROOT; };
 		70518A1BB9FC4CC8F8EB38DF /* ReadingStateStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingStateStore.swift; sourceTree = "<group>"; };
 		706D7F40C6EF37BA2B90B166 /* OpenAICompatibleLLMProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAICompatibleLLMProvider.swift; sourceTree = "<group>"; };
 		756B3F8A255940BE24DE7FD6 /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
@@ -132,6 +133,7 @@
 		8817F3ED2BCD0D7DD32CE2FB /* Paper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Paper.swift; sourceTree = "<group>"; };
 		8970B5A2B0E4E782656BAFEF /* PaperAttachment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaperAttachment.swift; sourceTree = "<group>"; };
 		89FF6AD72E18C05D11EDCB30 /* DualPDFReaderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DualPDFReaderView.swift; sourceTree = "<group>"; };
+		8D1EFE344C89E41D1AB668B6 /* PDFMerger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PDFMerger.swift; sourceTree = "<group>"; };
 		8F53583985C4F77116460318 /* LLMConfigurationBootstrapperTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLMConfigurationBootstrapperTests.swift; sourceTree = "<group>"; };
 		901230971C8E7AE7E22E6181 /* HTMLReaderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HTMLReaderView.swift; sourceTree = "<group>"; };
 		90F28004ABD616B1A38ED52A /* TranslationPreferencesSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslationPreferencesSnapshot.swift; sourceTree = "<group>"; };
@@ -188,6 +190,7 @@
 				51A72BDC5A78B51E6003243F /* PaperFileStore.swift */,
 				61B39EE919BF400C2E3155C6 /* PaperImporter.swift */,
 				7E083AAB214008E4FF489EC9 /* PaperSelectionStore.swift */,
+				8D1EFE344C89E41D1AB668B6 /* PDFMerger.swift */,
 				F1D66200F6C63D43F207E0E0 /* ProcessRunner.swift */,
 				70518A1BB9FC4CC8F8EB38DF /* ReadingStateStore.swift */,
 				9B99DBBAB3B54CC7AB7DEF2F /* TranslationLLMClient.swift */,
@@ -297,7 +300,7 @@
 		EF36EA23E9C12D6765FFE9F9 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				4AD0F3DCACE64FFE539D2434 /* Freddie.app */,
+				4AD0F3DCACE64FFE539D2434 /* ReadPaper.app */,
 				81D379C5A3B056970FE8B41C /* ReadPaperTests.xctest */,
 			);
 			name = Products;
@@ -353,7 +356,7 @@
 				8C91D32341DE2A88D7364C3F /* Readability */,
 			);
 			productName = ReadPaper;
-			productReference = 4AD0F3DCACE64FFE539D2434 /* Freddie.app */;
+			productReference = 4AD0F3DCACE64FFE539D2434 /* ReadPaper.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -386,6 +389,7 @@
 				933D5A0492F73A9308551225 /* XCRemoteSwiftPackageReference "SwiftSoup" */,
 				EF98ECE644852981F660041E /* XCLocalSwiftPackageReference "swift-readability" */,
 			);
+			preferredProjectObjectVersion = 77;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -460,6 +464,7 @@
 				A88C29934E8FE196990CAD61 /* LibrarySidebarView.swift in Sources */,
 				D24C62A4F3063599D4B2803A /* Note.swift in Sources */,
 				44011348B63DB1A12EF73114 /* OpenAICompatibleLLMProvider.swift in Sources */,
+				A4C810807377A9223429FCFC /* PDFMerger.swift in Sources */,
 				48D5A00B8592D17446F4EC97 /* PDFReaderView.swift in Sources */,
 				D25D1824CBC8BFAB17784D12 /* Paper.swift in Sources */,
 				D36320A9561EC3B9A4C29B91 /* PaperAttachment.swift in Sources */,

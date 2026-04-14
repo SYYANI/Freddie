@@ -73,6 +73,7 @@ final class BabelDocRunnerTests: XCTestCase {
         XCTAssertTrue(arguments.contains("sk-secret"))
         XCTAssertTrue(arguments.contains("--report-interval"))
         XCTAssertTrue(arguments.contains("0.1"))
+        XCTAssertFalse(arguments.contains("--pages"))
 
         let redacted = BabelDocRunner.redact("token sk-secret leaked", apiKey: "sk-secret")
         XCTAssertEqual(redacted, "token <redacted> leaked")
@@ -82,6 +83,63 @@ final class BabelDocRunnerTests: XCTestCase {
             apiKey: "sk-secret"
         )
         XCTAssertEqual(status, "BabelDOC: working")
+    }
+
+    func testArgumentsWithPageRange() {
+        let preferences = TranslationPreferencesSnapshot(
+            targetLanguage: "zh-CN",
+            htmlTranslationConcurrency: 4,
+            babelDocQPS: 7,
+            babelDocVersion: "0.5.24"
+        )
+        let route = LLMModelRouteSnapshot(
+            providerProfileID: UUID(),
+            providerName: "Test Provider",
+            modelProfileID: UUID(),
+            modelProfileName: "Paper Model",
+            baseURL: "https://api.example.test/v1",
+            apiKeyRef: "provider-key",
+            modelName: "paper-model",
+            temperature: nil,
+            topP: nil,
+            maxTokens: nil
+        )
+        let input = URL(fileURLWithPath: "/tmp/paper.pdf")
+        let output = URL(fileURLWithPath: "/tmp/out", isDirectory: true)
+
+        let argsWithRange = BabelDocRunner.arguments(
+            inputPDF: input,
+            outputDirectory: output,
+            preferences: preferences,
+            route: route,
+            apiKey: "sk-secret",
+            pageRange: 1...10
+        )
+        XCTAssertTrue(argsWithRange.contains("--pages"))
+        let pagesIndex = argsWithRange.firstIndex(of: "--pages")!
+        XCTAssertEqual(argsWithRange[pagesIndex + 1], "1-10")
+
+        let argsNoRange = BabelDocRunner.arguments(
+            inputPDF: input,
+            outputDirectory: output,
+            preferences: preferences,
+            route: route,
+            apiKey: "sk-secret",
+            pageRange: nil
+        )
+        XCTAssertFalse(argsNoRange.contains("--pages"))
+
+        let redacted = BabelDocRunner.redactedArguments(
+            inputPDF: input,
+            outputDirectory: output,
+            preferences: preferences,
+            route: route,
+            pageRange: 11...20
+        )
+        XCTAssertTrue(redacted.contains("--pages"))
+        let rPagesIndex = redacted.firstIndex(of: "--pages")!
+        XCTAssertEqual(redacted[rPagesIndex + 1], "11-20")
+        XCTAssertFalse(redacted.contains("sk-secret"))
     }
 
     func testOutputParserDecodesStructuredBridgeEventsAcrossChunks() {

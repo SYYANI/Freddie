@@ -4,6 +4,7 @@ import SwiftUI
 struct PDFReaderView: NSViewRepresentable {
     var fileURL: URL?
     @Binding var pageIndex: Int
+    var reloadToken: Int = 0
 
     func makeNSView(context: Context) -> PDFView {
         let view = PDFView()
@@ -20,12 +21,14 @@ struct PDFReaderView: NSViewRepresentable {
         guard let fileURL else {
             view.document = nil
             context.coordinator.loadedURL = nil
+            context.coordinator.lastReloadToken = reloadToken
             context.coordinator.scheduleCurrentPageIndexUpdate()
             return
         }
-        if context.coordinator.loadedURL != fileURL {
+        if context.coordinator.loadedURL != fileURL || context.coordinator.lastReloadToken != reloadToken {
             view.document = PDFDocument(url: fileURL)
             context.coordinator.loadedURL = fileURL
+            context.coordinator.lastReloadToken = reloadToken
         }
         if let page = view.document?.page(at: pageIndex), view.currentPage != page {
             view.go(to: page)
@@ -40,6 +43,7 @@ struct PDFReaderView: NSViewRepresentable {
     @MainActor
     final class Coordinator: NSObject {
         var loadedURL: URL?
+        var lastReloadToken: Int = 0
         weak var pdfView: PDFView?
         var pageIndex: Binding<Int>
         private var isPageIndexUpdateScheduled = false

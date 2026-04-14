@@ -5,6 +5,7 @@ struct DualPDFReaderView: View {
     var originalURL: URL?
     var translatedURL: URL?
     @Binding var pageIndex: Int
+    var reloadToken: Int = 0
     @State private var translatedPageIndex = 0
 
     var body: some View {
@@ -13,7 +14,7 @@ struct DualPDFReaderView: View {
                 .overlay(alignment: .topLeading) {
                     readerLabel(String(localized: "Original", bundle: bundle))
                 }
-            PDFReaderView(fileURL: translatedURL, pageIndex: $translatedPageIndex)
+            PDFReaderView(fileURL: translatedURL, pageIndex: $translatedPageIndex, reloadToken: reloadToken)
                 .overlay(alignment: .topLeading) {
                     readerLabel(String(localized: "Translation", bundle: bundle))
                 }

@@ -149,6 +149,7 @@ struct BabelDocRunner {
         apiKey: String,
         babelDocPythonExecutable: URL,
         bridgeScript: URL,
+        pageRange: ClosedRange<Int>? = nil,
         environment: [String: String] = [:],
         onStatusUpdate: (@Sendable (String) -> Void)? = nil,
         onProgressUpdate: (@Sendable (BabelDocProgressUpdate) -> Void)? = nil
@@ -166,7 +167,8 @@ struct BabelDocRunner {
                 outputDirectory: outputDirectory,
                 preferences: preferences,
                 route: route,
-                apiKey: apiKey
+                apiKey: apiKey,
+                pageRange: pageRange
             ),
             environment: environment.merging(["PYTHONUNBUFFERED": "1"]) { _, new in new },
             currentDirectoryURL: outputDirectory,
@@ -207,9 +209,10 @@ struct BabelDocRunner {
         outputDirectory: URL,
         preferences: TranslationPreferencesSnapshot,
         route: LLMModelRouteSnapshot,
-        apiKey: String
+        apiKey: String,
+        pageRange: ClosedRange<Int>? = nil
     ) -> [String] {
-        [
+        var args = [
             "--openai",
             "--openai-model", route.modelName,
             "--openai-base-url", route.baseURL,
@@ -223,20 +226,26 @@ struct BabelDocRunner {
             "--no-dual",
             "--watermark-output-mode", "no_watermark"
         ]
+        if let range = pageRange {
+            args += ["--pages", "\(range.lowerBound)-\(range.upperBound)"]
+        }
+        return args
     }
 
     static func redactedArguments(
         inputPDF: URL,
         outputDirectory: URL,
         preferences: TranslationPreferencesSnapshot,
-        route: LLMModelRouteSnapshot
+        route: LLMModelRouteSnapshot,
+        pageRange: ClosedRange<Int>? = nil
     ) -> [String] {
         arguments(
             inputPDF: inputPDF,
             outputDirectory: outputDirectory,
             preferences: preferences,
             route: route,
-            apiKey: "<redacted>"
+            apiKey: "<redacted>",
+            pageRange: pageRange
         )
     }
 

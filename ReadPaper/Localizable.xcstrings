@@ -220,6 +220,17 @@
         }
       }
     },
+    "All Pages" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "所有页面"
+          }
+        }
+      }
+    },
     "Analyzing layout" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -602,6 +613,17 @@
         }
       }
     },
+    "Choose Translation Scope" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选择翻译范围"
+          }
+        }
+      }
+    },
     "Choose whether ReadPaper follows the macOS language setting or always uses English or Simplified Chinese." : {
       "localizations" : {
         "zh-Hans" : {
@@ -873,6 +895,28 @@
         }
       }
     },
+    "Failed to open PDF file: %@" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法打开 PDF 文件：%1$@"
+          }
+        }
+      }
+    },
+    "Failed to write merged PDF: %@" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法写入合并后的 PDF：%1$@"
+          }
+        }
+      }
+    },
     "Fast Model" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -913,6 +957,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在完成导入"
+          }
+        }
+      }
+    },
+    "First 10 Pages" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "前 10 页"
           }
         }
       }
@@ -2467,6 +2522,17 @@
         }
       }
     },
+    "This PDF has %d pages. Translating the first 10 pages is faster." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此 PDF 共 %1$d 页。翻译前 10 页速度更快。"
+          }
+        }
+      }
+    },
     "Title, authors, arXiv ID, and abstract." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2522,6 +2588,28 @@
         }
       }
     },
+    "Translate More PDF Pages" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "翻译更多 PDF 页面"
+          }
+        }
+      }
+    },
+    "Translate pages %@–%@" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "翻译第 %1$@–%2$@ 页"
+          }
+        }
+      }
+    },
     "Translate PDF" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2539,6 +2627,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "译文"
+          }
+        }
+      }
+    },
+    "Translated pages 1–%@ of %@." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已翻译第 1–%1$@ 页，共 %2$@ 页。"
           }
         }
       }
