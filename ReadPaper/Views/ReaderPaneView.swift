@@ -753,6 +753,12 @@ struct ReaderPaneView: View {
                 let mergedURL = outputDirectory.appendingPathComponent(mergedFilename)
                 let _ = try PDFMerger.merge(existing: trimmedExisting, increment: incrementPDF, output: mergedURL)
 
+                // Clean up old merged PDF file to prevent storage bloat
+                let oldFileURL = existingAttachment.fileURL
+                if oldFileURL != mergedURL {
+                    try? FileManager.default.removeItem(at: oldFileURL)
+                }
+
                 existingAttachment.filePath = mergedURL.path
                 existingAttachment.filename = mergedFilename
                 existingAttachment.translatedLastPage = nextBatch

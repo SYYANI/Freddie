@@ -9,11 +9,11 @@ struct DualPDFReaderView: View {
     var reloadToken: Int = 0
     @State private var translatedPageIndex = 0
     @State private var translatedPageCount: Int = 0
+    @State private var originalPageCount: Int = 0
 
     private var isPartialTranslation: Bool {
-        guard translatedPageCount > 0,
-              let originalDoc = originalURL.flatMap({ PDFDocument(url: $0) }) else { return false }
-        return translatedPageCount < originalDoc.pageCount
+        guard translatedPageCount > 0, originalPageCount > 0 else { return false }
+        return translatedPageCount < originalPageCount
     }
 
     var body: some View {
@@ -33,7 +33,7 @@ struct DualPDFReaderView: View {
         }
         .onAppear {
             translatedPageIndex = min(pageIndex, maxTranslatedPage)
-            updateTranslatedPageCount()
+            updatePageCounts()
         }
         .onChange(of: pageIndex) { _, newValue in
             let target = min(newValue, maxTranslatedPage)
@@ -47,12 +47,27 @@ struct DualPDFReaderView: View {
             }
         }
         .onChange(of: reloadToken) { _, _ in
+            updatePageCounts()
+        }
+        .onChange(of: originalURL) { _, _ in
+            updateOriginalPageCount()
+        }
+        .onChange(of: translatedURL) { _, _ in
             updateTranslatedPageCount()
         }
     }
 
     private var maxTranslatedPage: Int {
         max(translatedPageCount - 1, 0)
+    }
+
+    private func updatePageCounts() {
+        updateOriginalPageCount()
+        updateTranslatedPageCount()
+    }
+
+    private func updateOriginalPageCount() {
+        originalPageCount = originalURL.flatMap { PDFDocument(url: $0)?.pageCount } ?? 0
     }
 
     private func updateTranslatedPageCount() {

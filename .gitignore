@@ -5,3 +5,6 @@ mercury
 swift-readability
 temp
 err.log
+# Xcode user interface state
+*.xcuserstate
+xcuserdata/
