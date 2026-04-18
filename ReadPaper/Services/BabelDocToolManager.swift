@@ -3,14 +3,22 @@ import OSLog
 
 struct BabelDocToolManager {
     static let toolName = "BabelDOC"
+    static let latestVersionKeyword = "latest"
+    static let latestVersionMetadataURL = URL(string: "https://pypi.org/pypi/BabelDOC/json")!
 
     let fileStore: PaperFileStore
     let runner: ProcessRunner
+    let session: URLSession
     let logger = Logger(subsystem: "com.yiyan.ReadPaper", category: "BabelDocToolManager")
 
-    init(fileStore: PaperFileStore = PaperFileStore(), runner: ProcessRunner = ProcessRunner()) {
+    init(
+        fileStore: PaperFileStore = PaperFileStore(),
+        runner: ProcessRunner = ProcessRunner(),
+        session: URLSession = .shared
+    ) {
         self.fileStore = fileStore
         self.runner = runner
+        self.session = session
     }
 
     var toolRoot: URL {
@@ -125,12 +133,40 @@ struct BabelDocToolManager {
         return Self.parseInstalledVersion(from: result.combinedOutput)
     }
 
+    func latestPublishedVersion() async throws -> String {
+        var request = URLRequest(url: Self.latestVersionMetadataURL)
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+
+        let (data, response) = try await session.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw ToolInstallError.latestVersionLookupFailed("Missing HTTP response.")
+        }
+        guard (200...299).contains(httpResponse.statusCode) else {
+            throw ToolInstallError.latestVersionLookupFailed("HTTP \(httpResponse.statusCode)")
+        }
+
+        let payload = try JSONDecoder().decode(BabelDocReleaseMetadata.self, from: data)
+        guard let version = Self.normalizedExplicitVersion(payload.info.version) else {
+            throw ToolInstallError.invalidLatestBabelDocVersion(payload.info.version)
+        }
+        return version
+    }
+
+    func resolvedInstallVersion(_ requestedVersion: String) async throws -> String {
+        let trimmed = requestedVersion.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty || trimmed.caseInsensitiveCompare(Self.latestVersionKeyword) == .orderedSame {
+            return try await latestPublishedVersion()
+        }
+        return trimmed
+    }
+
     func installOrUpdateBabelDOC(version: String) async throws -> ProcessResult {
         try prepareDirectories()
         let uvURL = try await ensureUV()
+        let resolvedVersion = try await resolvedInstallVersion(version)
         let result = try await runner.run(
             executableURL: uvURL,
-            arguments: ["tool", "install", "--force", "BabelDOC==\(version)"],
+            arguments: ["tool", "install", "--force", "BabelDOC==\(resolvedVersion)"],
             environment: try environment(),
             currentDirectoryURL: try toolRoot
         )
@@ -242,6 +278,17 @@ struct BabelDocToolManager {
         ["/opt/homebrew/bin/uv", "/usr/local/bin/uv", "/usr/bin/uv"]
             .map { URL(fileURLWithPath: $0) }
             .first { FileManager.default.isExecutableFile(atPath: $0.path) }
+    }
+
+    private static func normalizedExplicitVersion(_ rawValue: String) -> String? {
+        let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.isEmpty == false else {
+            return nil
+        }
+        guard trimmed.caseInsensitiveCompare(latestVersionKeyword) != .orderedSame else {
+            return nil
+        }
+        return trimmed
     }
 
     private static func parseInstalledVersion(from output: String) -> String? {
@@ -358,9 +405,19 @@ if __name__ == "__main__":
 """#
 }
 
+private struct BabelDocReleaseMetadata: Decodable {
+    struct Info: Decodable {
+        let version: String
+    }
+
+    let info: Info
+}
+
 enum ToolInstallError: Error, LocalizedError {
     case uvInstallFailed(String)
     case invalidBabelDocLauncher(String)
+    case latestVersionLookupFailed(String)
+    case invalidLatestBabelDocVersion(String)
 
     var errorDescription: String? {
         switch self {
@@ -368,6 +425,10 @@ enum ToolInstallError: Error, LocalizedError {
             AppLocalization.format("uv installation failed: %@", output)
         case .invalidBabelDocLauncher(let path):
             AppLocalization.format("BabelDOC launcher is invalid: %@", path)
+        case .latestVersionLookupFailed(let details):
+            AppLocalization.format("Failed to fetch the latest BabelDOC version: %@", details)
+        case .invalidLatestBabelDocVersion(let version):
+            AppLocalization.format("The latest BabelDOC version could not be parsed: %@", version)
         }
     }
 }

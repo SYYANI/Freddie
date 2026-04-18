@@ -78,6 +78,8 @@ private struct SettingsForm: View {
     @State private var isInstallingBabelDOC = false
     @State private var installedBabelDocVersion: String?
     @State private var isLoadingInstalledBabelDocVersion = false
+    @State private var latestBabelDocVersion: String?
+    @State private var isLoadingLatestBabelDocVersion = false
 
     private let keychainStore = KeychainStore()
     private let validator = LLMProviderValidationUseCase()
@@ -221,6 +223,7 @@ private struct SettingsForm: View {
             _ = try? LLMConfigurationBootstrapper().ensureBootstrap(modelContext: modelContext)
             loadInitialSelectionIfNeeded()
             await refreshInstalledBabelDOCVersion()
+            await refreshLatestBabelDOCVersion()
         }
         .onChange(of: selectedProviderID) { _, _ in
             applySelectedProvider()
@@ -310,6 +313,17 @@ private struct SettingsForm: View {
                         }
                     }
 
+                    LabeledContent(String(localized: "Latest available version", bundle: bundle)) {
+                        if isLoadingLatestBabelDocVersion {
+                            ProgressView()
+                                .controlSize(.small)
+                        } else {
+                            Text(latestBabelDocVersion ?? String(localized: "Unavailable", bundle: bundle))
+                                .foregroundStyle(latestBabelDocVersion == nil ? .secondary : .primary)
+                                .textSelection(.enabled)
+                        }
+                    }
+
                     SettingsFieldRow(String(localized: "Target version", bundle: bundle)) {
                         SettingsPlainTextField(text: $settings.babelDocVersion)
                     }
@@ -324,6 +338,10 @@ private struct SettingsForm: View {
                     .disabled(isInstallingBabelDOC)
 
                     Text("The PDF translation tool is managed separately from the reader. Updating it here keeps the BabelDOC route ready when a paper needs full-PDF translation.", bundle: bundle)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+
+                    Text("Set the target version to \"latest\" to resolve the newest BabelDOC release from PyPI when installing. You can still enter a specific version to pin it.", bundle: bundle)
                         .font(.footnote)
                         .foregroundStyle(.secondary)
 
@@ -1344,6 +1362,17 @@ private struct SettingsForm: View {
             installedBabelDocVersion = try await BabelDocToolManager().installedVersion()
         } catch {
             installedBabelDocVersion = nil
+        }
+    }
+
+    private func refreshLatestBabelDOCVersion() async {
+        isLoadingLatestBabelDocVersion = true
+        defer { isLoadingLatestBabelDocVersion = false }
+
+        do {
+            latestBabelDocVersion = try await BabelDocToolManager().latestPublishedVersion()
+        } catch {
+            latestBabelDocVersion = nil
         }
     }
 

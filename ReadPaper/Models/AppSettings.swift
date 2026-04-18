@@ -23,7 +23,7 @@ final class AppSettings {
         targetLanguage: String = "zh-CN",
         htmlTranslationConcurrency: Int = 4,
         babelDocQPS: Int = 4,
-        babelDocVersion: String = "0.5.24",
+        babelDocVersion: String = "latest",
         inspectorCollapsed: Bool? = nil,
         createdAt: Date = Date(),
         modifiedAt: Date = Date()
