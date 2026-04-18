@@ -23,6 +23,9 @@
         }
       }
     },
+    "%@" : {
+
+    },
     "%@ must be a number." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -137,6 +140,7 @@
       }
     },
     "A model profile points to one provider and stores the exact chat model name plus optional sampling parameters. You can create separate profiles for fast HTML translation and heavier PDF work." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -209,6 +213,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "添加论文"
+          }
+        }
+      }
+    },
+    "Advanced Parameters" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "高级参数"
           }
         }
       }
@@ -702,6 +716,7 @@
       }
     },
     "Create one provider for each OpenAI-compatible endpoint you want to use. The API key is stored in Keychain, so leaving the API key field blank while editing an existing provider keeps the saved key." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -986,6 +1001,7 @@
       }
     },
     "For a typical setup, fill in the service base URL, paste the API key, set a lightweight test model, then click Save and Test." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -1323,6 +1339,17 @@
         }
       }
     },
+    "Less" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "更少"
+          }
+        }
+      }
+    },
     "Loading title, authors, abstract, and links for %@." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1485,6 +1512,17 @@
         }
       }
     },
+    "More" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "更多"
+          }
+        }
+      }
+    },
     "New" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1497,6 +1535,7 @@
       }
     },
     "New Model" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -1507,6 +1546,7 @@
       }
     },
     "New Provider" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -1887,6 +1927,7 @@
       }
     },
     "Profile name is only for display inside ReadPaper. Model name must match the real model identifier accepted by your provider." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -2044,6 +2085,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "准备开始阅读"
+          }
+        }
+      }
+    },
+    "Reset" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重置"
           }
         }
       }
@@ -2259,39 +2311,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "显示检查器"
-          }
-        }
-      }
-    },
-    "Original" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "原文"
-          }
-        }
-      }
-    },
-    "Less" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "更少"
-          }
-        }
-      }
-    },
-    "More" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "更多"
           }
         }
       }

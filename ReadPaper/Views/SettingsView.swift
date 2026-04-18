@@ -72,6 +72,7 @@ private struct SettingsForm: View {
     @State private var modelStatusMessage: String?
     @State private var modelOutputPreview: String?
     @State private var isTestingModel = false
+    @State private var showsModelAdvancedOptions = false
 
     @State private var generalStatusMessage: String?
     @State private var isInstallingBabelDOC = false
@@ -83,19 +84,27 @@ private struct SettingsForm: View {
 
     private var sortedProviders: [LLMProviderProfile] {
         providers.sorted { lhs, rhs in
-            if lhs.modifiedAt != rhs.modifiedAt {
-                return lhs.modifiedAt > rhs.modifiedAt
+            if lhs.isEnabled != rhs.isEnabled {
+                return lhs.isEnabled
             }
-            return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+            let comparison = lhs.name.localizedCaseInsensitiveCompare(rhs.name)
+            if comparison != .orderedSame {
+                return comparison == .orderedAscending
+            }
+            return lhs.modifiedAt > rhs.modifiedAt
         }
     }
 
     private var sortedModels: [LLMModelProfile] {
         models.sorted { lhs, rhs in
-            if lhs.modifiedAt != rhs.modifiedAt {
-                return lhs.modifiedAt > rhs.modifiedAt
+            if lhs.isEnabled != rhs.isEnabled {
+                return lhs.isEnabled
             }
-            return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+            let comparison = lhs.name.localizedCaseInsensitiveCompare(rhs.name)
+            if comparison != .orderedSame {
+                return comparison == .orderedAscending
+            }
+            return lhs.modifiedAt > rhs.modifiedAt
         }
     }
 
@@ -109,6 +118,13 @@ private struct SettingsForm: View {
 
     private var selectedModelLastTestedAt: Date? {
         selectedModel?.lastTestedAt
+    }
+
+    private var selectedModelSubtitle: String? {
+        guard let selectedModel else { return nil }
+        let providerName = providers.first(where: { $0.id == selectedModel.providerID })?.name
+            ?? String(localized: "Unknown Provider", bundle: bundle)
+        return "\(providerName) / \(selectedModel.modelName)"
     }
 
     private var configuredProviderCount: Int {
@@ -367,38 +383,89 @@ private struct SettingsForm: View {
 
     private var providerTab: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Form {
-                Section(String(localized: "Provider Guide", bundle: bundle)) {
-                    Text("Create one provider for each OpenAI-compatible endpoint you want to use. The API key is stored in Keychain, so leaving the API key field blank while editing an existing provider keeps the saved key.", bundle: bundle)
-                        .fixedSize(horizontal: false, vertical: true)
+            settingsIntroCard(
+                title: String(localized: "Providers", bundle: bundle),
+                bodyText: String(
+                    localized: "Create one provider for each OpenAI-compatible endpoint you want to use. The API key is stored in Keychain, so leaving the API key field blank while editing an existing provider keeps the saved key.",
+                    bundle: bundle
+                ),
+                footnote: String(
+                    localized: "For a typical setup, fill in the service base URL, paste the API key, set a lightweight test model, then click Save and Test.",
+                    bundle: bundle
+                )
+            )
 
-                    Text("For a typical setup, fill in the service base URL, paste the API key, set a lightweight test model, then click Save and Test.", bundle: bundle)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+            llmWorkspace(
+                leftPanel: providerListPanel,
+                rightPanel: providerDetailPanel
+            )
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .padding(20)
+    }
+
+    private var modelTab: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            settingsIntroCard(
+                title: String(localized: "Models", bundle: bundle),
+                bodyText: String(
+                    localized: "A model profile points to one provider and stores the exact chat model name plus optional sampling parameters. You can create separate profiles for fast HTML translation and heavier PDF work.",
+                    bundle: bundle
+                ),
+                footnote: String(
+                    localized: "Profile name is only for display inside ReadPaper. Model name must match the real model identifier accepted by your provider.",
+                    bundle: bundle
+                )
+            )
+
+            llmWorkspace(
+                leftPanel: modelListPanel,
+                rightPanel: modelDetailPanel
+            )
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .padding(20)
+    }
+
+    private var providerListPanel: some View {
+        entityListPanel(
+            title: String(localized: "Providers", bundle: bundle),
+            count: sortedProviders.count
+        ) {
+            List(selection: $selectedProviderID) {
+                ForEach(sortedProviders, id: \.id) { provider in
+                    providerListRow(provider)
+                        .tag(Optional(provider.id))
                 }
+            }
+            .listStyle(.inset(alternatesRowBackgrounds: false))
+        } toolbar: {
+            Button {
+                resetProviderForm()
+            } label: {
+                Image(systemName: "plus")
+            }
+            .help(String(localized: "New Provider", bundle: bundle))
 
-                Section(String(localized: "Selection", bundle: bundle)) {
-                    Picker(String(localized: "Selected Provider", bundle: bundle), selection: $selectedProviderID) {
-                        Text("New Provider", bundle: bundle).tag(Optional<UUID>.none)
-                        ForEach(sortedProviders, id: \.id) { provider in
-                            Text(provider.name).tag(Optional(provider.id))
-                        }
-                    }
+            Button(role: .destructive) {
+                deleteSelectedProvider()
+            } label: {
+                Image(systemName: "trash")
+            }
+            .disabled(selectedProvider == nil)
+            .help(String(localized: "Delete", bundle: bundle))
+        }
+    }
 
-                    HStack(alignment: .center, spacing: 12) {
-                        Button(String(localized: "New", bundle: bundle)) {
-                            resetProviderForm()
-                        }
+    private var providerDetailPanel: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                detailHeader(
+                    title: selectedProvider?.name ?? String(localized: "New Provider", bundle: bundle),
+                    subtitle: selectedProvider?.baseURL
+                )
 
-                        Button(String(localized: "Delete", bundle: bundle), role: .destructive) {
-                            deleteSelectedProvider()
-                        }
-                        .disabled(selectedProvider == nil)
-                    }
-                }
-
-                Section(selectedProvider == nil ? String(localized: "New Provider", bundle: bundle) : String(localized: "Configuration", bundle: bundle)) {
+                settingsCard(String(localized: "Configuration", bundle: bundle)) {
                     SettingsFieldRow(String(localized: "Display name", bundle: bundle)) {
                         SettingsPlainTextField(text: $providerName)
                     }
@@ -411,15 +478,28 @@ private struct SettingsForm: View {
                     SettingsFieldRow(String(localized: "Test model", bundle: bundle)) {
                         SettingsPlainTextField(text: $providerTestModel)
                     }
-                    Toggle(String(localized: "Enabled", bundle: bundle), isOn: $providerEnabled)
-                        .toggleStyle(.checkbox)
+                    SettingsFieldRow(String(localized: "Enabled", bundle: bundle)) {
+                        Toggle("", isOn: $providerEnabled)
+                            .labelsHidden()
+                            .toggleStyle(.checkbox)
+                    }
                 }
 
-                Section(String(localized: "Actions", bundle: bundle)) {
-                    HStack(alignment: .center, spacing: 12) {
+                settingsCard(String(localized: "Actions", bundle: bundle)) {
+                    HStack(spacing: 10) {
                         Button(String(localized: "Save", bundle: bundle)) {
                             saveProvider()
                         }
+                        .buttonStyle(.borderedProminent)
+
+                        Button(String(localized: "Reset", bundle: bundle)) {
+                            if selectedProvider == nil {
+                                resetProviderForm()
+                            } else {
+                                applySelectedProvider()
+                            }
+                        }
+
                         Button(
                             isTestingProvider
                                 ? String(localized: "Testing...", bundle: bundle)
@@ -442,53 +522,59 @@ private struct SettingsForm: View {
                     }
                 }
             }
-            .formStyle(.grouped)
-
-            Spacer(minLength: 0)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 4)
+            .padding(.vertical, 2)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .padding(20)
     }
 
-    private var modelTab: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Form {
-                Section(String(localized: "Model Guide", bundle: bundle)) {
-                    Text("A model profile points to one provider and stores the exact chat model name plus optional sampling parameters. You can create separate profiles for fast HTML translation and heavier PDF work.", bundle: bundle)
-                        .fixedSize(horizontal: false, vertical: true)
-
-                    Text("Profile name is only for display inside ReadPaper. Model name must match the real model identifier accepted by your provider.", bundle: bundle)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+    private var modelListPanel: some View {
+        entityListPanel(
+            title: String(localized: "Models", bundle: bundle),
+            count: sortedModels.count
+        ) {
+            List(selection: $selectedModelID) {
+                ForEach(sortedModels, id: \.id) { model in
+                    modelListRow(model)
+                        .tag(Optional(model.id))
                 }
+            }
+            .listStyle(.inset(alternatesRowBackgrounds: false))
+        } toolbar: {
+            Button {
+                resetModelForm()
+            } label: {
+                Image(systemName: "plus")
+            }
+            .help(String(localized: "New Model", bundle: bundle))
 
-                Section(String(localized: "Selection", bundle: bundle)) {
-                    Picker(String(localized: "Selected Model", bundle: bundle), selection: $selectedModelID) {
-                        Text("New Model", bundle: bundle).tag(Optional<UUID>.none)
-                        ForEach(sortedModels, id: \.id) { model in
-                            Text(modelDisplayName(model)).tag(Optional(model.id))
-                        }
-                    }
+            Button(role: .destructive) {
+                deleteSelectedModel()
+            } label: {
+                Image(systemName: "trash")
+            }
+            .disabled(selectedModel == nil)
+            .help(String(localized: "Delete", bundle: bundle))
+        }
+    }
 
-                    HStack(alignment: .center, spacing: 12) {
-                        Button(String(localized: "New", bundle: bundle)) {
-                            resetModelForm()
-                        }
+    private var modelDetailPanel: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                detailHeader(
+                    title: selectedModel?.name ?? String(localized: "New Model", bundle: bundle),
+                    subtitle: selectedModelSubtitle
+                )
 
-                        Button(String(localized: "Delete", bundle: bundle), role: .destructive) {
-                            deleteSelectedModel()
+                settingsCard(String(localized: "Configuration", bundle: bundle)) {
+                    SettingsFieldRow(String(localized: "Provider", bundle: bundle)) {
+                        Picker(String(localized: "Provider", bundle: bundle), selection: $modelProviderID) {
+                            Text("Select Provider", bundle: bundle).tag(Optional<UUID>.none)
+                            ForEach(sortedProviders, id: \.id) { provider in
+                                Text(provider.name).tag(Optional(provider.id))
+                            }
                         }
-                        .disabled(selectedModel == nil)
-                    }
-                }
-
-                Section(selectedModel == nil ? String(localized: "New Model", bundle: bundle) : String(localized: "Configuration", bundle: bundle)) {
-                    Picker(String(localized: "Provider", bundle: bundle), selection: $modelProviderID) {
-                        Text("Select Provider", bundle: bundle).tag(Optional<UUID>.none)
-                        ForEach(sortedProviders, id: \.id) { provider in
-                            Text(provider.name).tag(Optional(provider.id))
-                        }
+                        .labelsHidden()
                     }
                     SettingsFieldRow(String(localized: "Profile name", bundle: bundle)) {
                         SettingsPlainTextField(text: $modelName)
@@ -496,24 +582,48 @@ private struct SettingsForm: View {
                     SettingsFieldRow(String(localized: "Model name", bundle: bundle)) {
                         SettingsPlainTextField(text: $modelIdentifier)
                     }
-                    SettingsFieldRow(String(localized: "Temperature", bundle: bundle)) {
-                        SettingsPlainTextField(text: $modelTemperature)
+                    SettingsFieldRow(String(localized: "Enabled", bundle: bundle)) {
+                        Toggle("", isOn: $modelEnabled)
+                            .labelsHidden()
+                            .toggleStyle(.checkbox)
                     }
-                    SettingsFieldRow(String(localized: "Top-P", bundle: bundle)) {
-                        SettingsPlainTextField(text: $modelTopP)
+
+                    Divider()
+
+                    DisclosureGroup(isExpanded: $showsModelAdvancedOptions) {
+                        VStack(alignment: .leading, spacing: 12) {
+                            SettingsFieldRow(String(localized: "Temperature", bundle: bundle)) {
+                                SettingsPlainTextField(text: $modelTemperature)
+                            }
+                            SettingsFieldRow(String(localized: "Top-P", bundle: bundle)) {
+                                SettingsPlainTextField(text: $modelTopP)
+                            }
+                            SettingsFieldRow(String(localized: "Max tokens", bundle: bundle)) {
+                                SettingsPlainTextField(text: $modelMaxTokens)
+                            }
+                        }
+                        .padding(.top, 8)
+                    } label: {
+                        Text("Advanced Parameters", bundle: bundle)
+                            .font(.subheadline.weight(.medium))
                     }
-                    SettingsFieldRow(String(localized: "Max tokens", bundle: bundle)) {
-                        SettingsPlainTextField(text: $modelMaxTokens)
-                    }
-                    Toggle(String(localized: "Enabled", bundle: bundle), isOn: $modelEnabled)
-                        .toggleStyle(.checkbox)
                 }
 
-                Section(String(localized: "Actions", bundle: bundle)) {
-                    HStack(alignment: .center, spacing: 12) {
+                settingsCard(String(localized: "Actions", bundle: bundle)) {
+                    HStack(spacing: 10) {
                         Button(String(localized: "Save", bundle: bundle)) {
                             saveModel()
                         }
+                        .buttonStyle(.borderedProminent)
+
+                        Button(String(localized: "Reset", bundle: bundle)) {
+                            if selectedModel == nil {
+                                resetModelForm()
+                            } else {
+                                applySelectedModel()
+                            }
+                        }
+
                         Button(
                             isTestingModel
                                 ? String(localized: "Testing...", bundle: bundle)
@@ -547,12 +657,10 @@ private struct SettingsForm: View {
                     }
                 }
             }
-            .formStyle(.grouped)
-
-            Spacer(minLength: 0)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 4)
+            .padding(.vertical, 2)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .padding(20)
     }
 
     @ViewBuilder
@@ -561,6 +669,182 @@ private struct SettingsForm: View {
             .font(.footnote)
             .foregroundStyle(AppLocalization.isErrorMessage(message, bundle: bundle) ? .red : .secondary)
             .textSelection(.enabled)
+    }
+
+    private func settingsIntroCard(title: String, bodyText: String, footnote: String) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.title3.weight(.semibold))
+
+            Text(bodyText)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Text(footnote)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(18)
+        .background(panelBackground)
+    }
+
+    private func llmWorkspace<LeftPanel: View, RightPanel: View>(
+        leftPanel: LeftPanel,
+        rightPanel: RightPanel
+    ) -> some View {
+        HSplitView {
+            leftPanel
+                .frame(minWidth: 260, idealWidth: 310, maxWidth: 360, maxHeight: .infinity)
+
+            rightPanel
+                .frame(minWidth: 420, maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        }
+    }
+
+    private func entityListPanel<ListContent: View, ToolbarContent: View>(
+        title: String,
+        count: Int,
+        @ViewBuilder content: () -> ListContent,
+        @ViewBuilder toolbar: () -> ToolbarContent
+    ) -> some View {
+        VStack(spacing: 0) {
+            HStack(alignment: .center, spacing: 12) {
+                Text(title)
+                    .font(.headline)
+
+                Text("\(count)")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(
+                        Capsule(style: .continuous)
+                            .fill(Color(nsColor: .quaternaryLabelColor).opacity(0.16))
+                    )
+
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+
+            Divider()
+
+            content()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            Divider()
+
+            HStack(spacing: 8) {
+                toolbar()
+                Spacer(minLength: 0)
+            }
+            .buttonStyle(.borderless)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(Color(nsColor: .windowBackgroundColor).opacity(0.65))
+        }
+        .background(panelBackground)
+    }
+
+    private func detailHeader(title: String, subtitle: String?) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.title3.weight(.semibold))
+
+            if let subtitle, subtitle.isEmpty == false {
+                Text(subtitle)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func settingsCard<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text(title)
+                .font(.headline)
+
+            content()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(18)
+        .background(panelBackground)
+    }
+
+    private var panelBackground: some View {
+        RoundedRectangle(cornerRadius: 16, style: .continuous)
+            .fill(Color(nsColor: .controlBackgroundColor))
+    }
+
+    private func providerListRow(_ provider: LLMProviderProfile) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .center, spacing: 8) {
+                Text(provider.name)
+                    .font(.body.weight(.medium))
+                    .lineLimit(1)
+
+                Spacer(minLength: 0)
+
+                if hasStoredAPIKey(ref: provider.apiKeyRef) {
+                    Image(systemName: "key.fill")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Image(systemName: provider.isEnabled ? "checkmark.circle.fill" : "slash.circle")
+                    .font(.caption)
+                    .foregroundStyle(provider.isEnabled ? .green : .secondary)
+            }
+
+            Text(provider.baseURL)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .textSelection(.enabled)
+        }
+        .padding(.vertical, 4)
+        .opacity(provider.isEnabled ? 1 : 0.68)
+    }
+
+    private func modelListRow(_ model: LLMModelProfile) -> some View {
+        let providerName = providers.first(where: { $0.id == model.providerID })?.name
+            ?? String(localized: "Unknown Provider", bundle: bundle)
+
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .center, spacing: 8) {
+                Text(model.name)
+                    .font(.body.weight(.medium))
+                    .lineLimit(1)
+
+                Spacer(minLength: 0)
+
+                if model.lastTestedAt != nil {
+                    Image(systemName: "checkmark.seal")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Image(systemName: model.isEnabled ? "checkmark.circle.fill" : "slash.circle")
+                    .font(.caption)
+                    .foregroundStyle(model.isEnabled ? .green : .secondary)
+            }
+
+            Text(providerName)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+
+            Text(model.modelName)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .textSelection(.enabled)
+        }
+        .padding(.vertical, 4)
+        .opacity(model.isEnabled ? 1 : 0.68)
     }
 
     private var gettingStartedPanel: some View {
@@ -736,6 +1020,8 @@ private struct SettingsForm: View {
         providerTestModel = provider.testModel
         providerEnabled = provider.isEnabled
         providerHasStoredAPIKey = hasStoredAPIKey(ref: provider.apiKeyRef)
+        providerStatusMessage = nil
+        providerOutputPreview = nil
     }
 
     private func applySelectedModel() {
@@ -750,6 +1036,9 @@ private struct SettingsForm: View {
         modelTopP = model.topP.map { String($0) } ?? ""
         modelMaxTokens = model.maxTokens.map { String($0) } ?? ""
         modelEnabled = model.isEnabled
+        showsModelAdvancedOptions = model.temperature != nil || model.topP != nil || model.maxTokens != nil
+        modelStatusMessage = nil
+        modelOutputPreview = nil
     }
 
     private func resetProviderForm() {
@@ -773,6 +1062,7 @@ private struct SettingsForm: View {
         modelTopP = ""
         modelMaxTokens = ""
         modelEnabled = true
+        showsModelAdvancedOptions = false
         modelStatusMessage = nil
         modelOutputPreview = nil
     }
@@ -1119,12 +1409,15 @@ private struct SettingsFieldRow<Content: View>: View {
     }
 
     var body: some View {
-        LabeledContent {
+        HStack(alignment: .firstTextBaseline, spacing: 18) {
+            Text(title)
+                .foregroundStyle(.secondary)
+                .frame(width: 140, alignment: .leading)
+
             content
                 .frame(minWidth: 260, idealWidth: 320, maxWidth: .infinity, alignment: .leading)
-        } label: {
-            Text(title)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
