@@ -27,6 +27,10 @@ enum BabelDocInstallSource: String, CaseIterable, Identifiable, Sendable {
         }
     }
 
+    var simplePackageIndexURL: URL {
+        defaultIndexURL.appendingPathComponent("babeldoc", isDirectory: true)
+    }
+
     static func stored(userDefaults: UserDefaults = .standard) -> Self {
         guard
             let rawValue = userDefaults.string(forKey: userDefaultsKey),
@@ -183,22 +187,12 @@ struct BabelDocToolManager {
     }
 
     func latestPublishedVersion() async throws -> String {
-        var request = URLRequest(url: installSource.metadataURL)
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-
-        let (data, response) = try await session.data(for: request)
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw ToolInstallError.latestVersionLookupFailed("Missing HTTP response.")
+        do {
+            return try await latestPublishedVersionFromSimpleIndex()
+        } catch {
+            logger.error("Falling back to BabelDOC metadata lookup after simple index lookup failed: \(error.localizedDescription, privacy: .public)")
+            return try await latestPublishedVersionFromMetadata()
         }
-        guard (200...299).contains(httpResponse.statusCode) else {
-            throw ToolInstallError.latestVersionLookupFailed("HTTP \(httpResponse.statusCode)")
-        }
-
-        let payload = try JSONDecoder().decode(BabelDocReleaseMetadata.self, from: data)
-        guard let version = Self.normalizedExplicitVersion(payload.info.version) else {
-            throw ToolInstallError.invalidLatestBabelDocVersion(payload.info.version)
-        }
-        return version
     }
 
     func resolvedInstallVersion(_ requestedVersion: String) async throws -> String {
@@ -258,6 +252,47 @@ struct BabelDocToolManager {
                 try fm.createDirectory(at: directory, withIntermediateDirectories: true)
             }
         }
+    }
+
+    private func latestPublishedVersionFromSimpleIndex() async throws -> String {
+        var request = URLRequest(url: installSource.simplePackageIndexURL)
+        request.setValue("text/html, application/xhtml+xml", forHTTPHeaderField: "Accept")
+
+        let (data, response) = try await session.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw ToolInstallError.latestVersionLookupFailed("Missing HTTP response.")
+        }
+        guard (200...299).contains(httpResponse.statusCode) else {
+            throw ToolInstallError.latestVersionLookupFailed("HTTP \(httpResponse.statusCode)")
+        }
+
+        let versions = Self.extractVersionsFromSimpleIndex(data)
+        guard let version = versions.max()?.rawValue else {
+            throw ToolInstallError.latestVersionLookupFailed("No BabelDOC versions found in simple index.")
+        }
+        return version
+    }
+
+    private func latestPublishedVersionFromMetadata() async throws -> String {
+        var request = URLRequest(url: installSource.metadataURL)
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+
+        let (data, response) = try await session.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw ToolInstallError.latestVersionLookupFailed("Missing HTTP response.")
+        }
+        guard (200...299).contains(httpResponse.statusCode) else {
+            throw ToolInstallError.latestVersionLookupFailed("HTTP \(httpResponse.statusCode)")
+        }
+
+        let payload = try JSONDecoder().decode(BabelDocReleaseMetadata.self, from: data)
+        if let version = payload.releaseVersions.compactMap(PythonPackageVersion.init).max()?.rawValue {
+            return version
+        }
+        guard let version = Self.normalizedExplicitVersion(payload.info.version) else {
+            throw ToolInstallError.invalidLatestBabelDocVersion(payload.info.version)
+        }
+        return version
     }
 
     private func resolveExecutable(named executableName: String) throws -> URL? {
@@ -385,6 +420,34 @@ struct BabelDocToolManager {
         return lines.first
     }
 
+    private static func extractVersionsFromSimpleIndex(_ data: Data) -> Set<PythonPackageVersion> {
+        let page = String(decoding: data, as: UTF8.self)
+        var matches = Set<PythonPackageVersion>()
+
+        for pattern in [
+            #"(?i)\bbabeldoc-([0-9][A-Za-z0-9.!+_]*)-[^"'<>/\s]+\.whl\b"#,
+            #"(?i)\bbabeldoc-([0-9][A-Za-z0-9.!+_]*)\.(?:tar\.gz|zip)\b"#
+        ] {
+            guard let regex = try? NSRegularExpression(pattern: pattern) else {
+                continue
+            }
+
+            let nsRange = NSRange(page.startIndex..<page.endIndex, in: page)
+            for match in regex.matches(in: page, range: nsRange) {
+                guard
+                    match.numberOfRanges >= 2,
+                    let range = Range(match.range(at: 1), in: page),
+                    let version = PythonPackageVersion(String(page[range]))
+                else {
+                    continue
+                }
+                matches.insert(version)
+            }
+        }
+
+        return matches
+    }
+
     static func installArguments(version: String, source: BabelDocInstallSource) -> [String] {
         [
             "tool", "install",
@@ -504,6 +567,180 @@ private struct BabelDocReleaseMetadata: Decodable {
     }
 
     let info: Info
+    let releases: [String: [ReleaseFile]]?
+
+    var releaseVersions: [String] {
+        releases.map { Array($0.keys) } ?? []
+    }
+}
+
+private struct ReleaseFile: Decodable {}
+
+private struct PythonPackageVersion: Comparable, Hashable {
+    struct PreRelease: Hashable {
+        enum Label: Int {
+            case alpha
+            case beta
+            case releaseCandidate
+        }
+
+        let label: Label
+        let number: Int
+    }
+
+    private enum Stage: Int {
+        case development
+        case preRelease
+        case final
+        case postRelease
+    }
+
+    let rawValue: String
+
+    private let release: [Int]
+    private let preRelease: PreRelease?
+    private let postRelease: Int?
+    private let developmentRelease: Int?
+
+    init?(_ rawValue: String) {
+        let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.isEmpty == false else {
+            return nil
+        }
+
+        let canonical = trimmed.split(separator: "+", maxSplits: 1).first.map(String.init) ?? trimmed
+        let pattern = #"(?i)^v?(\d+(?:\.\d+)*)(?:(a|b|rc)(\d*))?(?:\.post(\d+))?(?:\.dev(\d+))?$"#
+        guard
+            let regex = try? NSRegularExpression(pattern: pattern),
+            let match = regex.firstMatch(
+                in: canonical,
+                range: NSRange(canonical.startIndex..<canonical.endIndex, in: canonical)
+            )
+        else {
+            return nil
+        }
+
+        func capture(_ index: Int) -> String? {
+            guard
+                match.numberOfRanges > index,
+                let range = Range(match.range(at: index), in: canonical)
+            else {
+                return nil
+            }
+            return String(canonical[range])
+        }
+
+        guard let releaseString = capture(1) else {
+            return nil
+        }
+
+        let release = releaseString
+            .split(separator: ".")
+            .compactMap { Int($0) }
+        guard release.isEmpty == false else {
+            return nil
+        }
+
+        let preRelease: PreRelease?
+        if let labelString = capture(2)?.lowercased() {
+            let label: PreRelease.Label?
+            switch labelString {
+            case "a":
+                label = .alpha
+            case "b":
+                label = .beta
+            case "rc":
+                label = .releaseCandidate
+            default:
+                label = nil
+            }
+
+            guard let label else {
+                return nil
+            }
+
+            preRelease = PreRelease(
+                label: label,
+                number: Int(capture(3) ?? "") ?? 0
+            )
+        } else {
+            preRelease = nil
+        }
+
+        self.rawValue = trimmed
+        self.release = release
+        self.preRelease = preRelease
+        self.postRelease = Int(capture(4) ?? "")
+        self.developmentRelease = Int(capture(5) ?? "")
+    }
+
+    static func < (lhs: Self, rhs: Self) -> Bool {
+        let maxCount = max(lhs.release.count, rhs.release.count)
+        for index in 0..<maxCount {
+            let left = index < lhs.release.count ? lhs.release[index] : 0
+            let right = index < rhs.release.count ? rhs.release[index] : 0
+            if left != right {
+                return left < right
+            }
+        }
+
+        let lhsStage = lhs.stage
+        let rhsStage = rhs.stage
+        if lhsStage != rhsStage {
+            return lhsStage.rawValue < rhsStage.rawValue
+        }
+
+        switch lhsStage {
+        case .development:
+            let preComparison = compareOptionalPreRelease(lhs.preRelease, rhs.preRelease, nilIsLower: true)
+            if preComparison != 0 {
+                return preComparison < 0
+            }
+            return (lhs.developmentRelease ?? 0) < (rhs.developmentRelease ?? 0)
+        case .preRelease:
+            return compareOptionalPreRelease(lhs.preRelease, rhs.preRelease, nilIsLower: false) < 0
+        case .final:
+            return false
+        case .postRelease:
+            return (lhs.postRelease ?? 0) < (rhs.postRelease ?? 0)
+        }
+    }
+
+    private var stage: Stage {
+        if developmentRelease != nil {
+            return .development
+        }
+        if preRelease != nil {
+            return .preRelease
+        }
+        if postRelease != nil {
+            return .postRelease
+        }
+        return .final
+    }
+
+    private static func compareOptionalPreRelease(
+        _ lhs: PreRelease?,
+        _ rhs: PreRelease?,
+        nilIsLower: Bool
+    ) -> Int {
+        switch (lhs, rhs) {
+        case let (left?, right?):
+            if left.label != right.label {
+                return left.label.rawValue < right.label.rawValue ? -1 : 1
+            }
+            if left.number != right.number {
+                return left.number < right.number ? -1 : 1
+            }
+            return 0
+        case (nil, nil):
+            return 0
+        case (nil, _):
+            return nilIsLower ? -1 : 1
+        case (_, nil):
+            return nilIsLower ? 1 : -1
+        }
+    }
 }
 
 enum ToolInstallError: Error, LocalizedError {

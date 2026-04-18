@@ -72,27 +72,28 @@ final class BabelDocToolManagerTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: try manager.toolRoot.path))
     }
 
-    func testLatestPublishedVersionParsesPyPIResponse() async throws {
+    func testLatestPublishedVersionParsesPyPISimpleIndex() async throws {
         let session = makeSession()
         MockBabelDocMetadataURLProtocol.requestHandler = { request in
-            XCTAssertEqual(request.url?.absoluteString, "https://pypi.org/pypi/BabelDOC/json")
+            XCTAssertEqual(request.url?.absoluteString, "https://pypi.org/simple/babeldoc/")
             let body = """
-            {
-              "info": {
-                "version": "0.6.1"
-              }
-            }
+            <html>
+              <body>
+                <a href="https://files.pythonhosted.org/packages/babeldoc-0.6.0-py3-none-any.whl">babeldoc-0.6.0-py3-none-any.whl</a>
+                <a href="https://files.pythonhosted.org/packages/babeldoc-0.6.1.tar.gz">babeldoc-0.6.1.tar.gz</a>
+              </body>
+            </html>
             """
             let response = HTTPURLResponse(
                 url: try XCTUnwrap(request.url),
                 statusCode: 200,
                 httpVersion: nil,
-                headerFields: ["Content-Type": "application/json"]
+                headerFields: ["Content-Type": "text/html; charset=utf-8"]
             )!
             return (response, Data(body.utf8))
         }
 
-        let manager = BabelDocToolManager(session: session)
+        let manager = BabelDocToolManager(session: session, installSource: .official)
 
         let version = try await manager.latestPublishedVersion()
 
@@ -100,25 +101,82 @@ final class BabelDocToolManagerTests: XCTestCase {
         XCTAssertEqual(MockBabelDocMetadataURLProtocol.requestCount, 1)
     }
 
-    func testLatestPublishedVersionUsesTsinghuaMetadataWhenSelected() async throws {
+    func testLatestPublishedVersionUsesTsinghuaSimpleIndexWhenSelected() async throws {
         let session = makeSession()
         MockBabelDocMetadataURLProtocol.requestHandler = { request in
-            XCTAssertEqual(request.url?.absoluteString, "https://pypi.tuna.tsinghua.edu.cn/pypi/BabelDOC/json")
+            XCTAssertEqual(request.url?.absoluteString, "https://pypi.tuna.tsinghua.edu.cn/simple/babeldoc/")
             let response = HTTPURLResponse(
                 url: try XCTUnwrap(request.url),
                 statusCode: 200,
                 httpVersion: nil,
-                headerFields: ["Content-Type": "application/json"]
+                headerFields: ["Content-Type": "text/html; charset=utf-8"]
             )!
-            return (response, Data(#"{"info":{"version":"0.6.3"}}"#.utf8))
+            return (
+                response,
+                Data(
+                    #"""
+                    <html>
+                      <body>
+                        <a href="https://pypi.tuna.tsinghua.edu.cn/packages/babeldoc-0.6.2-py3-none-any.whl">babeldoc-0.6.2-py3-none-any.whl</a>
+                        <a href="https://pypi.tuna.tsinghua.edu.cn/packages/babeldoc-0.6.4-py3-none-any.whl">babeldoc-0.6.4-py3-none-any.whl</a>
+                      </body>
+                    </html>
+                    """#.utf8
+                )
+            )
         }
 
         let manager = BabelDocToolManager(session: session, installSource: .tsinghua)
 
         let version = try await manager.latestPublishedVersion()
 
-        XCTAssertEqual(version, "0.6.3")
+        XCTAssertEqual(version, "0.6.4")
         XCTAssertEqual(MockBabelDocMetadataURLProtocol.requestCount, 1)
+    }
+
+    func testLatestPublishedVersionFallsBackToMetadataReleasesWhenSimpleIndexIsStale() async throws {
+        let session = makeSession()
+        MockBabelDocMetadataURLProtocol.requestHandler = { request in
+            let response = HTTPURLResponse(
+                url: try XCTUnwrap(request.url),
+                statusCode: 200,
+                httpVersion: nil,
+                headerFields: [
+                    "Content-Type": request.url?.absoluteString.contains("/simple/") == true
+                        ? "text/html; charset=utf-8"
+                        : "application/json"
+                ]
+            )!
+
+            if request.url?.absoluteString == "https://pypi.tuna.tsinghua.edu.cn/simple/babeldoc/" {
+                return (response, Data("<html><body>No package links yet.</body></html>".utf8))
+            }
+
+            XCTAssertEqual(request.url?.absoluteString, "https://pypi.tuna.tsinghua.edu.cn/pypi/BabelDOC/json")
+            return (
+                response,
+                Data(
+                    #"""
+                    {
+                      "info": {
+                        "version": "0.6.2"
+                      },
+                      "releases": {
+                        "0.6.2": [],
+                        "0.6.5": []
+                      }
+                    }
+                    """#.utf8
+                )
+            )
+        }
+
+        let manager = BabelDocToolManager(session: session, installSource: .tsinghua)
+
+        let version = try await manager.latestPublishedVersion()
+
+        XCTAssertEqual(version, "0.6.5")
+        XCTAssertEqual(MockBabelDocMetadataURLProtocol.requestCount, 2)
     }
 
     func testResolvedInstallVersionUsesLatestKeywordAndEmptyValue() async throws {
@@ -128,12 +186,23 @@ final class BabelDocToolManagerTests: XCTestCase {
                 url: try XCTUnwrap(request.url),
                 statusCode: 200,
                 httpVersion: nil,
-                headerFields: ["Content-Type": "application/json"]
+                headerFields: ["Content-Type": "text/html; charset=utf-8"]
             )!
-            return (response, Data(#"{"info":{"version":"0.6.2"}}"#.utf8))
+            return (
+                response,
+                Data(
+                    #"""
+                    <html>
+                      <body>
+                        <a href="https://files.pythonhosted.org/packages/babeldoc-0.6.2-py3-none-any.whl">babeldoc-0.6.2-py3-none-any.whl</a>
+                      </body>
+                    </html>
+                    """#.utf8
+                )
+            )
         }
 
-        let manager = BabelDocToolManager(session: session)
+        let manager = BabelDocToolManager(session: session, installSource: .official)
 
         let latestKeywordVersion = try await manager.resolvedInstallVersion("latest")
         let emptyVersion = try await manager.resolvedInstallVersion("   ")
@@ -150,7 +219,7 @@ final class BabelDocToolManagerTests: XCTestCase {
             throw URLError(.badURL)
         }
 
-        let manager = BabelDocToolManager(session: session)
+        let manager = BabelDocToolManager(session: session, installSource: .official)
 
         let version = try await manager.resolvedInstallVersion("0.5.24")
 
