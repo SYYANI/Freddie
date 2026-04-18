@@ -9,6 +9,45 @@ private enum SettingsTab: String, Hashable {
     case models
 }
 
+enum SettingsGeneralStatusSource: Equatable {
+    case generic
+    case babelDocReady
+}
+
+struct SettingsGeneralStatus: Equatable {
+    var message: String?
+    var source: SettingsGeneralStatusSource?
+
+    static func generic(_ message: String?) -> Self {
+        Self(message: message, source: message == nil ? nil : .generic)
+    }
+
+    static func babelDocReady(installedVersion: String?, bundle: Bundle) -> Self {
+        guard let installedVersion else {
+            return Self()
+        }
+
+        return Self(
+            message: String(
+                format: String(localized: "BabelDOC is ready. Installed version: %@.", bundle: bundle),
+                installedVersion
+            ),
+            source: .babelDocReady
+        )
+    }
+
+    mutating func syncInstalledBabelDocVersion(_ installedVersion: String?, bundle: Bundle) {
+        guard source == .babelDocReady else { return }
+
+        guard let installedVersion else {
+            self = Self()
+            return
+        }
+
+        self = .babelDocReady(installedVersion: installedVersion, bundle: bundle)
+    }
+}
+
 struct SettingsView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.localizationBundle) private var bundle
@@ -74,7 +113,7 @@ private struct SettingsForm: View {
     @State private var isTestingModel = false
     @State private var showsModelAdvancedOptions = false
 
-    @State private var generalStatusMessage: String?
+    @State private var generalStatus = SettingsGeneralStatus()
     @State private var isInstallingBabelDOC = false
     @State private var installedBabelDocVersion: String?
     @State private var isLoadingInstalledBabelDocVersion = false
@@ -345,7 +384,7 @@ private struct SettingsForm: View {
                         .font(.footnote)
                         .foregroundStyle(.secondary)
 
-                    if let generalStatusMessage {
+                    if let generalStatusMessage = generalStatus.message {
                         statusLabel(generalStatusMessage)
                     }
                 }
@@ -1328,7 +1367,7 @@ private struct SettingsForm: View {
 
     private func installBabelDOC() {
         isInstallingBabelDOC = true
-        generalStatusMessage = String(localized: "Installing BabelDOC...", bundle: bundle)
+        generalStatus = .generic(String(localized: "Installing BabelDOC...", bundle: bundle))
 
         Task { @MainActor in
             defer { isInstallingBabelDOC = false }
@@ -1337,19 +1376,14 @@ private struct SettingsForm: View {
                 let result = try await BabelDocToolManager().installOrUpdateBabelDOC(version: settings.babelDocVersion)
                 if result.exitCode == 0 {
                     await refreshInstalledBabelDOCVersion()
-                    if let installedBabelDocVersion {
-                        generalStatusMessage = String(
-                            format: String(localized: "BabelDOC is ready. Installed version: %@.", bundle: bundle),
-                            installedBabelDocVersion
-                        )
-                    } else {
-                        generalStatusMessage = String(localized: "BabelDOC is ready.", bundle: bundle)
-                    }
+                    generalStatus = .babelDocReady(installedVersion: installedBabelDocVersion, bundle: bundle)
                 } else {
-                    generalStatusMessage = AppLocalization.format("Error: %@", bundle: bundle, result.combinedOutput)
+                    generalStatus = .generic(
+                        AppLocalization.format("Error: %@", bundle: bundle, result.combinedOutput)
+                    )
                 }
             } catch {
-                generalStatusMessage = AppLocalization.errorMessage(error, bundle: bundle)
+                generalStatus = .generic(AppLocalization.errorMessage(error, bundle: bundle))
             }
         }
     }
@@ -1363,6 +1397,8 @@ private struct SettingsForm: View {
         } catch {
             installedBabelDocVersion = nil
         }
+
+        generalStatus.syncInstalledBabelDocVersion(installedBabelDocVersion, bundle: bundle)
     }
 
     private func refreshLatestBabelDOCVersion() async {
