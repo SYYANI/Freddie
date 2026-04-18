@@ -8,6 +8,70 @@ final class BabelDocToolManagerTests: XCTestCase {
         super.tearDown()
     }
 
+    func testInstallCancellationRemovesDownloadedCache() async throws {
+        let (manager, rootURL) = try makeTemporaryManager(
+            runner: ProcessRunner { _, _, _, _, _ in
+                throw CancellationError()
+            }
+        )
+        defer { try? FileManager.default.removeItem(at: rootURL) }
+
+        try writeExecutable("#!/bin/sh\n", to: manager.uvExecutableURL)
+        let cachedWheel = try manager.cacheDirectory.appendingPathComponent("BabelDOC.whl")
+        try FileManager.default.createDirectory(
+            at: cachedWheel.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        FileManager.default.createFile(atPath: cachedWheel.path, contents: Data("partial".utf8))
+
+        do {
+            _ = try await manager.installOrUpdateBabelDOC(version: "0.6.1")
+            XCTFail("Expected installation cancellation.")
+        } catch is CancellationError {
+            // Expected path.
+        }
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: try manager.cacheDirectory.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: try manager.toolRoot.path))
+    }
+
+    func testRemoveDownloadedCacheDeletesOnlyCacheDirectory() throws {
+        let (manager, rootURL) = try makeTemporaryManager()
+        defer { try? FileManager.default.removeItem(at: rootURL) }
+
+        let cacheFile = try manager.cacheDirectory.appendingPathComponent("download.tmp")
+        let keepFile = try manager.toolBinDirectory.appendingPathComponent("babeldoc")
+        try FileManager.default.createDirectory(
+            at: cacheFile.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try FileManager.default.createDirectory(
+            at: keepFile.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        FileManager.default.createFile(atPath: cacheFile.path, contents: Data("cache".utf8))
+        FileManager.default.createFile(atPath: keepFile.path, contents: Data("keep".utf8))
+
+        try manager.removeDownloadedCache()
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: try manager.cacheDirectory.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: keepFile.path))
+    }
+
+    func testRemoveBabelDOCDeletesManagedToolDirectory() throws {
+        let (manager, rootURL) = try makeTemporaryManager()
+        defer { try? FileManager.default.removeItem(at: rootURL) }
+
+        let executable = try manager.babelDocExecutableURL
+        try writeExecutable("#!/bin/sh\n", to: executable)
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: try manager.toolRoot.path))
+
+        try manager.removeBabelDOC()
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: try manager.toolRoot.path))
+    }
+
     func testLatestPublishedVersionParsesPyPIResponse() async throws {
         let session = makeSession()
         MockBabelDocMetadataURLProtocol.requestHandler = { request in
@@ -33,6 +97,27 @@ final class BabelDocToolManagerTests: XCTestCase {
         let version = try await manager.latestPublishedVersion()
 
         XCTAssertEqual(version, "0.6.1")
+        XCTAssertEqual(MockBabelDocMetadataURLProtocol.requestCount, 1)
+    }
+
+    func testLatestPublishedVersionUsesTsinghuaMetadataWhenSelected() async throws {
+        let session = makeSession()
+        MockBabelDocMetadataURLProtocol.requestHandler = { request in
+            XCTAssertEqual(request.url?.absoluteString, "https://pypi.tuna.tsinghua.edu.cn/pypi/BabelDOC/json")
+            let response = HTTPURLResponse(
+                url: try XCTUnwrap(request.url),
+                statusCode: 200,
+                httpVersion: nil,
+                headerFields: ["Content-Type": "application/json"]
+            )!
+            return (response, Data(#"{"info":{"version":"0.6.3"}}"#.utf8))
+        }
+
+        let manager = BabelDocToolManager(session: session, installSource: .tsinghua)
+
+        let version = try await manager.latestPublishedVersion()
+
+        XCTAssertEqual(version, "0.6.3")
         XCTAssertEqual(MockBabelDocMetadataURLProtocol.requestCount, 1)
     }
 
@@ -73,10 +158,45 @@ final class BabelDocToolManagerTests: XCTestCase {
         XCTAssertEqual(MockBabelDocMetadataURLProtocol.requestCount, 0)
     }
 
+    func testInstallArgumentsUseSelectedSourceIndex() {
+        XCTAssertEqual(
+            BabelDocToolManager.installArguments(version: "0.6.1", source: .official),
+            ["tool", "install", "--force", "--default-index", "https://pypi.org/simple", "BabelDOC==0.6.1"]
+        )
+        XCTAssertEqual(
+            BabelDocToolManager.installArguments(version: "0.6.1", source: .tsinghua),
+            ["tool", "install", "--force", "--default-index", "https://pypi.tuna.tsinghua.edu.cn/simple", "BabelDOC==0.6.1"]
+        )
+    }
+
     private func makeSession() -> URLSession {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [MockBabelDocMetadataURLProtocol.self]
         return URLSession(configuration: configuration)
+    }
+
+    private func makeTemporaryManager(
+        runner: ProcessRunner = ProcessRunner()
+    ) throws -> (manager: BabelDocToolManager, rootURL: URL) {
+        let rootURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: rootURL, withIntermediateDirectories: true)
+        return (
+            BabelDocToolManager(
+                fileStore: PaperFileStore(applicationSupportDirectory: rootURL),
+                runner: runner
+            ),
+            rootURL
+        )
+    }
+
+    private func writeExecutable(_ contents: String, to url: URL) throws {
+        try FileManager.default.createDirectory(
+            at: url.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try contents.write(to: url, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: url.path)
     }
 }
 

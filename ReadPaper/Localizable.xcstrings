@@ -553,6 +553,28 @@
         }
       }
     },
+    "Cancelled BabelDOC installation and removed downloaded cache." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已取消 BabelDOC 安装，并移除了已下载的缓存。"
+          }
+        }
+      }
+    },
+    "Cancelling BabelDOC installation..." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在取消 BabelDOC 安装..."
+          }
+        }
+      }
+    },
     "Cancelling translation..." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -658,6 +680,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "选择哪个模型驱动 HTML 翻译，以及哪个模型用于 BabelDOC/PDF 翻译。"
+          }
+        }
+      }
+    },
+    "Choose which package index uv uses for BabelDOC installs. Official PyPI uses the default upstream index, while Tsinghua mirror uses the TUNA mirror for faster access in some regions. Latest version lookup follows the selected source." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选择 uv 安装 BabelDOC 时使用的包索引。官方 PyPI 使用默认上游源；清华镜像使用 TUNA 镜像，适合部分地区更快访问。最新版本查询也会跟随当前所选源。"
           }
         }
       }
@@ -1262,6 +1294,17 @@
         }
       }
     },
+    "Install source" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "安装源"
+          }
+        }
+      }
+    },
     "Installing BabelDOC..." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1717,6 +1760,16 @@
         }
       }
     },
+    "Official PyPI" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "官方 PyPI"
+          }
+        }
+      }
+    },
     "OK" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2111,6 +2164,39 @@
         }
       }
     },
+    "Remove BabelDOC" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "移除 BabelDOC"
+          }
+        }
+      }
+    },
+    "Removed BabelDOC." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已移除 BabelDOC。"
+          }
+        }
+      }
+    },
+    "Removing BabelDOC..." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在移除 BabelDOC..."
+          }
+        }
+      }
+    },
     "Reset" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2294,12 +2380,12 @@
         }
       }
     },
-    "Set the target version to \"latest\" to resolve the newest BabelDOC release from PyPI when installing. You can still enter a specific version to pin it." : {
+    "Set the target version to \"latest\" to resolve the newest BabelDOC release from the selected source when installing. You can still enter a specific version to pin it." : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "将目标版本设为“latest”后，安装时会从 PyPI 解析最新的 BabelDOC 发布版本。你仍然可以输入具体版本来固定它。"
+            "value" : "将目标版本设为“latest”后，安装时会从当前选中的源解析最新的 BabelDOC 发布版本。你仍然可以输入具体版本来固定它。"
           }
         }
       }
@@ -2846,6 +2932,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在尝试备用 HTML 来源"
+          }
+        }
+      }
+    },
+    "Tsinghua mirror" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "清华镜像"
           }
         }
       }

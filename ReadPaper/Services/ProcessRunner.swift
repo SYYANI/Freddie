@@ -23,6 +23,20 @@ struct ProcessOutputEvent: Sendable {
 }
 
 struct ProcessRunner {
+    typealias RunImplementation = @Sendable (
+        URL,
+        [String],
+        [String: String],
+        URL?,
+        (@Sendable (ProcessOutputEvent) -> Void)?
+    ) async throws -> ProcessResult
+
+    private let implementation: RunImplementation?
+
+    init(implementation: RunImplementation? = nil) {
+        self.implementation = implementation
+    }
+
     func run(
         executableURL: URL,
         arguments: [String],
@@ -30,6 +44,16 @@ struct ProcessRunner {
         currentDirectoryURL: URL? = nil,
         onOutput: (@Sendable (ProcessOutputEvent) -> Void)? = nil
     ) async throws -> ProcessResult {
+        if let implementation {
+            return try await implementation(
+                executableURL,
+                arguments,
+                environment,
+                currentDirectoryURL,
+                onOutput
+            )
+        }
+
         let cancellation = ProcessRunCancellation()
         return try await withTaskCancellationHandler {
             try Task.checkCancellation()

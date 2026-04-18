@@ -40,6 +40,12 @@ xcodebuild -project ReadPaper.xcodeproj -scheme ReadPaper -destination 'platform
 xcodebuild -project ReadPaper.xcodeproj -scheme ReadPaper -destination 'platform=macOS' -derivedDataPath .DerivedData test
 ```
 
+窄改动只跑相关测试时，可直接指定 `-only-testing`，例如验证 BabelDOC 安装/版本解析相关改动：
+
+```sh
+xcodebuild -project ReadPaper.xcodeproj -scheme ReadPaper -destination 'platform=macOS' -derivedDataPath .DerivedData -only-testing:ReadPaperTests/BabelDocToolManagerTests test
+```
+
 GitHub Actions 构建 DMG：
 
 - 仓库已包含 [`.github/workflows/release.yml`](/Users/yiyan/Desktop/read-paper/.github/workflows/release.yml)，支持在 GitHub Actions 上构建 DMG；触发方式为手动 `workflow_dispatch` 或推送 `v*` tag。
@@ -134,6 +140,12 @@ LLM 配置现已拆成独立 SwiftData 模型：`LLMProviderProfile` 负责 prov
 ## 测试建议
 
 窄改动优先跑相关测试文件；跨服务或模型改动跑完整 `ReadPaper` scheme 测试。
+
+针对单个测试类做快速回归时，优先使用下面这种命令形式，避免每次都跑完整测试集：
+
+```sh
+xcodebuild -project ReadPaper.xcodeproj -scheme ReadPaper -destination 'platform=macOS' -derivedDataPath .DerivedData -only-testing:ReadPaperTests/BabelDocToolManagerTests test
+```
 
 重点测试映射：
 

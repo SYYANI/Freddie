@@ -1,24 +1,63 @@
 import Foundation
 import OSLog
 
+enum BabelDocInstallSource: String, CaseIterable, Identifiable, Sendable {
+    case official
+    case tsinghua
+
+    static let userDefaultsKey = "ReadPaper.Settings.BabelDocInstallSource"
+
+    var id: String { rawValue }
+
+    var defaultIndexURL: URL {
+        switch self {
+        case .official:
+            URL(string: "https://pypi.org/simple")!
+        case .tsinghua:
+            URL(string: "https://pypi.tuna.tsinghua.edu.cn/simple")!
+        }
+    }
+
+    var metadataURL: URL {
+        switch self {
+        case .official:
+            URL(string: "https://pypi.org/pypi/BabelDOC/json")!
+        case .tsinghua:
+            URL(string: "https://pypi.tuna.tsinghua.edu.cn/pypi/BabelDOC/json")!
+        }
+    }
+
+    static func stored(userDefaults: UserDefaults = .standard) -> Self {
+        guard
+            let rawValue = userDefaults.string(forKey: userDefaultsKey),
+            let source = Self(rawValue: rawValue)
+        else {
+            return .official
+        }
+        return source
+    }
+}
+
 struct BabelDocToolManager {
     static let toolName = "BabelDOC"
     static let latestVersionKeyword = "latest"
-    static let latestVersionMetadataURL = URL(string: "https://pypi.org/pypi/BabelDOC/json")!
 
     let fileStore: PaperFileStore
     let runner: ProcessRunner
     let session: URLSession
+    let installSource: BabelDocInstallSource
     let logger = Logger(subsystem: "com.yiyan.ReadPaper", category: "BabelDocToolManager")
 
     init(
         fileStore: PaperFileStore = PaperFileStore(),
         runner: ProcessRunner = ProcessRunner(),
-        session: URLSession = .shared
+        session: URLSession = .shared,
+        installSource: BabelDocInstallSource = .stored()
     ) {
         self.fileStore = fileStore
         self.runner = runner
         self.session = session
+        self.installSource = installSource
     }
 
     var toolRoot: URL {
@@ -48,6 +87,12 @@ struct BabelDocToolManager {
     var progressBridgeScriptURL: URL {
         get throws {
             try toolRoot.appendingPathComponent("babeldoc_progress_bridge.py")
+        }
+    }
+
+    var cacheDirectory: URL {
+        get throws {
+            try toolRoot.appendingPathComponent("cache", isDirectory: true)
         }
     }
 
@@ -113,6 +158,10 @@ struct BabelDocToolManager {
         return .missing
     }
 
+    func hasManagedInstallation() throws -> Bool {
+        fileStore.fileManager.fileExists(atPath: try toolRoot.path)
+    }
+
     func installedVersion() async throws -> String? {
         let executableURL = try babelDocExecutableURL
         guard FileManager.default.isExecutableFile(atPath: executableURL.path) else {
@@ -134,7 +183,7 @@ struct BabelDocToolManager {
     }
 
     func latestPublishedVersion() async throws -> String {
-        var request = URLRequest(url: Self.latestVersionMetadataURL)
+        var request = URLRequest(url: installSource.metadataURL)
         request.setValue("application/json", forHTTPHeaderField: "Accept")
 
         let (data, response) = try await session.data(for: request)
@@ -161,20 +210,39 @@ struct BabelDocToolManager {
     }
 
     func installOrUpdateBabelDOC(version: String) async throws -> ProcessResult {
-        try prepareDirectories()
-        let uvURL = try await ensureUV()
-        let resolvedVersion = try await resolvedInstallVersion(version)
-        let result = try await runner.run(
-            executableURL: uvURL,
-            arguments: ["tool", "install", "--force", "BabelDOC==\(resolvedVersion)"],
-            environment: try environment(),
-            currentDirectoryURL: try toolRoot
-        )
-        guard result.exitCode == 0 else {
-            logger.error("BabelDOC installation failed: \(result.combinedOutput, privacy: .public)")
+        do {
+            try prepareDirectories()
+            let uvURL = try await ensureUV()
+            let resolvedVersion = try await resolvedInstallVersion(version)
+            let result = try await runner.run(
+                executableURL: uvURL,
+                arguments: Self.installArguments(version: resolvedVersion, source: installSource),
+                environment: try environment(),
+                currentDirectoryURL: try toolRoot
+            )
+            guard result.exitCode == 0 else {
+                logger.error("BabelDOC installation failed: \(result.combinedOutput, privacy: .public)")
+                return result
+            }
             return result
+        } catch {
+            if Self.isCancellation(error) || Task.isCancelled {
+                do {
+                    try removeDownloadedCache()
+                } catch {
+                    logger.error("Failed to clear BabelDOC download cache after cancellation: \(error.localizedDescription, privacy: .public)")
+                }
+            }
+            throw error
         }
-        return result
+    }
+
+    func removeDownloadedCache() throws {
+        try removeManagedItem(at: cacheDirectory)
+    }
+
+    func removeBabelDOC() throws {
+        try removeManagedItem(at: toolRoot)
     }
 
     private func prepareDirectories() throws {
@@ -184,7 +252,7 @@ struct BabelDocToolManager {
             try toolBinDirectory,
             try toolRoot.appendingPathComponent("tools", isDirectory: true),
             try toolRoot.appendingPathComponent("python", isDirectory: true),
-            try toolRoot.appendingPathComponent("cache", isDirectory: true)
+            try cacheDirectory
         ] {
             if !fm.fileExists(atPath: directory.path) {
                 try fm.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -280,6 +348,12 @@ struct BabelDocToolManager {
             .first { FileManager.default.isExecutableFile(atPath: $0.path) }
     }
 
+    private func removeManagedItem(at url: URL) throws {
+        let fm = fileStore.fileManager
+        guard fm.fileExists(atPath: url.path) else { return }
+        try fm.removeItem(at: url)
+    }
+
     private static func normalizedExplicitVersion(_ rawValue: String) -> String? {
         let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.isEmpty == false else {
@@ -309,6 +383,25 @@ struct BabelDocToolManager {
         }
 
         return lines.first
+    }
+
+    static func installArguments(version: String, source: BabelDocInstallSource) -> [String] {
+        [
+            "tool", "install",
+            "--force",
+            "--default-index", source.defaultIndexURL.absoluteString,
+            "BabelDOC==\(version)"
+        ]
+    }
+
+    private static func isCancellation(_ error: Error) -> Bool {
+        if error is CancellationError {
+            return true
+        }
+        if let urlError = error as? URLError, urlError.code == .cancelled {
+            return true
+        }
+        return false
     }
 
     private static let progressBridgeScript = #"""
