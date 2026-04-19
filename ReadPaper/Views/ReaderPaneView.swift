@@ -597,7 +597,7 @@ struct ReaderPaneView: View {
                     modelContext: modelContext
                 )
                 let toolManager = BabelDocToolManager()
-                if try toolManager.detect() != .ready {
+                if try await toolManager.needsInstallOrRepair() {
                     statusMessage = String(localized: "Installing BabelDOC...", bundle: bundle)
                     let installResult = try await toolManager.installOrUpdateBabelDOC(version: preferences.babelDocVersion)
                     try Task.checkCancellation()
@@ -692,7 +692,7 @@ struct ReaderPaneView: View {
                     modelContext: modelContext
                 )
                 let toolManager = BabelDocToolManager()
-                if try toolManager.detect() != .ready {
+                if try await toolManager.needsInstallOrRepair() {
                     statusMessage = String(localized: "Installing BabelDOC...", bundle: bundle)
                     let installResult = try await toolManager.installOrUpdateBabelDOC(version: preferences.babelDocVersion)
                     try Task.checkCancellation()

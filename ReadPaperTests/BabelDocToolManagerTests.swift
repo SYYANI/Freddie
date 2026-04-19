@@ -72,6 +72,48 @@ final class BabelDocToolManagerTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: try manager.toolRoot.path))
     }
 
+    func testNeedsInstallOrRepairRejectsPython314Runtime() async throws {
+        let (manager, rootURL) = try makeTemporaryManager(
+            runner: ProcessRunner { executableURL, arguments, _, _, _ in
+                XCTAssertEqual(executableURL.lastPathComponent, "python3")
+                XCTAssertEqual(arguments, ["--version"])
+                return ProcessResult(
+                    exitCode: 0,
+                    standardOutput: "Python 3.14.0\n",
+                    standardError: ""
+                )
+            }
+        )
+        defer { try? FileManager.default.removeItem(at: rootURL) }
+
+        try writeExecutable("#!/bin/sh\n", to: manager.babelDocExecutableURL)
+        try writeExecutable("#!/bin/sh\n", to: try manager.toolBinDirectory.appendingPathComponent("python3"))
+
+        let needsRepair = try await manager.needsInstallOrRepair()
+        XCTAssertTrue(needsRepair)
+    }
+
+    func testNeedsInstallOrRepairAcceptsPython313Runtime() async throws {
+        let (manager, rootURL) = try makeTemporaryManager(
+            runner: ProcessRunner { executableURL, arguments, _, _, _ in
+                XCTAssertEqual(executableURL.lastPathComponent, "python3")
+                XCTAssertEqual(arguments, ["--version"])
+                return ProcessResult(
+                    exitCode: 0,
+                    standardOutput: "Python 3.13.7\n",
+                    standardError: ""
+                )
+            }
+        )
+        defer { try? FileManager.default.removeItem(at: rootURL) }
+
+        try writeExecutable("#!/bin/sh\n", to: manager.babelDocExecutableURL)
+        try writeExecutable("#!/bin/sh\n", to: try manager.toolBinDirectory.appendingPathComponent("python3"))
+
+        let needsRepair = try await manager.needsInstallOrRepair()
+        XCTAssertFalse(needsRepair)
+    }
+
     func testLatestPublishedVersionParsesPyPISimpleIndex() async throws {
         let session = makeSession()
         MockBabelDocMetadataURLProtocol.requestHandler = { request in
@@ -230,11 +272,25 @@ final class BabelDocToolManagerTests: XCTestCase {
     func testInstallArgumentsUseSelectedSourceIndex() {
         XCTAssertEqual(
             BabelDocToolManager.installArguments(version: "0.6.1", source: .official),
-            ["tool", "install", "--force", "--default-index", "https://pypi.org/simple", "BabelDOC==0.6.1"]
+            [
+                "tool", "install",
+                "--force",
+                "--python", "3.13",
+                "--managed-python",
+                "--default-index", "https://pypi.org/simple",
+                "BabelDOC==0.6.1"
+            ]
         )
         XCTAssertEqual(
             BabelDocToolManager.installArguments(version: "0.6.1", source: .tsinghua),
-            ["tool", "install", "--force", "--default-index", "https://pypi.tuna.tsinghua.edu.cn/simple", "BabelDOC==0.6.1"]
+            [
+                "tool", "install",
+                "--force",
+                "--python", "3.13",
+                "--managed-python",
+                "--default-index", "https://pypi.tuna.tsinghua.edu.cn/simple",
+                "BabelDOC==0.6.1"
+            ]
         )
     }
 

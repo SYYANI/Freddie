@@ -45,6 +45,8 @@ enum BabelDocInstallSource: String, CaseIterable, Identifiable, Sendable {
 struct BabelDocToolManager {
     static let toolName = "BabelDOC"
     static let latestVersionKeyword = "latest"
+    static let preferredPythonVersion = "3.13"
+    static let firstUnsupportedPythonMinorVersion = 14
 
     let fileStore: PaperFileStore
     let runner: ProcessRunner
@@ -119,7 +121,7 @@ struct BabelDocToolManager {
         for candidateName in ["python3", "python"] {
             let sibling = launcherURL.deletingLastPathComponent().appendingPathComponent(candidateName)
             if fm.isExecutableFile(atPath: sibling.path) {
-                return sibling
+                return sibling.resolvingSymlinksInPath()
             }
         }
 
@@ -127,12 +129,12 @@ struct BabelDocToolManager {
         if let execPath = Self.extractExecPath(from: launcher) {
             let direct = URL(fileURLWithPath: execPath)
             if fm.isExecutableFile(atPath: direct.path) {
-                return direct
+                return direct.resolvingSymlinksInPath()
             }
         }
 
         if let shebangPath = try Self.extractShebangExecutable(from: launcher, resolveExecutable: resolveExecutable(named:)) {
-            return shebangPath
+            return shebangPath.resolvingSymlinksInPath()
         }
 
         throw ToolInstallError.invalidBabelDocLauncher(launcherURL.path)
@@ -160,6 +162,38 @@ struct BabelDocToolManager {
             return .ready
         }
         return .missing
+    }
+
+    func needsInstallOrRepair() async throws -> Bool {
+        guard try detect() == .ready else {
+            return true
+        }
+
+        let pythonExecutable: URL
+        do {
+            pythonExecutable = try babelDocPythonExecutableURL()
+        } catch {
+            return true
+        }
+
+        if Self.isUnsupportedPythonExecutablePath(pythonExecutable.path) {
+            return true
+        }
+
+        do {
+            let result = try await runner.run(
+                executableURL: pythonExecutable,
+                arguments: ["--version"],
+                environment: try environment(),
+                currentDirectoryURL: try toolRoot
+            )
+            guard result.exitCode == 0 else {
+                return true
+            }
+            return Self.isUnsupportedPythonVersionOutput(result.combinedOutput)
+        } catch {
+            return true
+        }
     }
 
     func hasManagedInstallation() throws -> Bool {
@@ -452,9 +486,42 @@ struct BabelDocToolManager {
         [
             "tool", "install",
             "--force",
+            "--python", preferredPythonVersion,
+            "--managed-python",
             "--default-index", source.defaultIndexURL.absoluteString,
             "BabelDOC==\(version)"
         ]
+    }
+
+    static func isUnsupportedPythonExecutablePath(_ path: String) -> Bool {
+        isUnsupportedPythonVersionOutput(path)
+    }
+
+    static func isUnsupportedPythonVersionOutput(_ output: String) -> Bool {
+        pythonMinorVersion(from: output).map { $0 >= firstUnsupportedPythonMinorVersion } ?? false
+    }
+
+    private static func pythonMinorVersion(from text: String) -> Int? {
+        for pattern in [
+            #"(?i)\bpython\s+3\.(\d+)(?:\.\d+)?\b"#,
+            #"(?i)\bpython3\.(\d+)\b"#,
+            #"(?i)\bcpython-3\.(\d+)(?:\.\d+)?\b"#
+        ] {
+            guard let regex = try? NSRegularExpression(pattern: pattern) else {
+                continue
+            }
+            let nsRange = NSRange(text.startIndex..<text.endIndex, in: text)
+            guard
+                let match = regex.firstMatch(in: text, range: nsRange),
+                match.numberOfRanges >= 2,
+                let range = Range(match.range(at: 1), in: text),
+                let minor = Int(text[range])
+            else {
+                continue
+            }
+            return minor
+        }
+        return nil
     }
 
     private static func isCancellation(_ error: Error) -> Bool {

@@ -111,6 +111,7 @@ LLM 配置现已拆成独立 SwiftData 模型：`LLMProviderProfile` 负责 prov
 - Reader 和设置页里的 LLM 错误要尽量按场景区分，例如 HTML 路由缺失、PDF 路由缺失、provider 被禁用、API key 缺失、测试模型不可用，而不是统一报成一个笼统的缺配置错误。
 - BabelDOC 通过 `BabelDocRunner` 和 `ProcessRunner` 启动外部进程，参数中的模型、base URL 和 API key 来自 PDF route snapshot；API key 要使用现有 redaction 逻辑，不要把外部工具失败吞掉成静默失败。
 - BabelDOC 的 launcher 可能是 `uv tool install` 生成的 `sh` 包装器，第一行 shebang 不一定就是实际 Python 解释器；改启动逻辑时要兼容“同目录 venv `python3`/`python` + shell wrapper `exec .../python3`”这类结构，不要简单假设 `#!/usr/bin/env python3`。
+- ReadPaper 管理的 BabelDOC 安装应优先使用 uv-managed Python 3.13；已遇到 Python 3.14 下 BabelDOC 运行时报 `_WorkItem.__init__` 参数不匹配的兼容性问题。判断 BabelDOC 是否可用时不要只检查 `bin/babeldoc` 是否可执行，还要确认 launcher 背后的 Python 版本可用；如果用户把 `/Users/.../Library/Application Support/ReadPaper/Tools/BabelDOC/bin/babeldoc` 手工改成指向 `~/.local/bin/babeldoc` 一类工作版本的 symlink，后续改安装、探测或移除逻辑时要避免误判为内置版本已经健康。
 - `ProcessRunner` 需要持续 draining stdout/stderr，并正确响应取消；改动时保留大输出和取消相关测试。
 
 ## 实现约定
