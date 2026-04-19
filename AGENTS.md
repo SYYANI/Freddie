@@ -107,6 +107,7 @@ LLM 配置现已拆成独立 SwiftData 模型：`LLMProviderProfile` 负责 prov
 - 增量 PDF 翻译时，BabelDOC 可能只产出当前批次的译文页，阅读器中的 `translatedPDF` 也可能暂时只覆盖前 N 页。改 BabelDOC 参数、译文合并或阅读器展示时，要保留“partial translation”语义：双栏模式允许原文继续翻到后续页，译文侧只在自己的可用范围内 clamp，并继续支持后续批次合并、刷新和续翻。
 - 设置页中的翻译配置已拆成 `Translation`、`Providers`、`Models` 三个区块。后续扩展优先沿用这个结构，不要再加回“单 Base URL + 三个模型名”的旧表单。
 - 设置页中的 BabelDOC 区域要区分“当前已安装版本”和“目标版本”：当前版本应来自对本地 `babeldoc` 可执行文件的实际探测并只读展示，目标版本才是用户可编辑、用于 `uv tool install ... BabelDOC==<version>` 的配置值；不要把可编辑输入框误当成已安装状态展示。
+- 设置页中的 BabelDOC 安装源支持官方 PyPI 与清华 TUNA mirror 切换。该偏好当前通过 `BabelDocInstallSource.userDefaultsKey` / `@AppStorage` 落到 UserDefaults，刻意不新增 `AppSettings` SwiftData 字段以降低旧 store 兼容风险。改 BabelDOC 安装链路时，不要重新硬编码单一 PyPI 源；`BabelDocToolManager` 应根据所选源同时切换 latest metadata URL 和 `uv tool install --default-index ... BabelDOC==<version>` 参数，阅读器里的自动安装也应沿用同一默认读取逻辑。
 - macOS 设置页的字符串输入框在快速切换焦点，尤其配合中文输入法或其他有 marked text / suggestions / Writing Tools 参与的输入路径时，可能打出 `NSXPCDecoder validateAllowedClass:forKey:` 且 allowed classes 含 `NSObject` 的系统警告。当前经验判断这更像 AppKit / 输入法 / Writing Tools 的系统日志，而不是项目里某个业务 `NSSecureCoding` 白名单真的写错。遇到这类报错时，先排查是否发生在设置页输入焦点切换，而不要优先沿 SwiftData、Keychain 或业务解码链路误判。
 - Reader 和设置页里的 LLM 错误要尽量按场景区分，例如 HTML 路由缺失、PDF 路由缺失、provider 被禁用、API key 缺失、测试模型不可用，而不是统一报成一个笼统的缺配置错误。
 - BabelDOC 通过 `BabelDocRunner` 和 `ProcessRunner` 启动外部进程，参数中的模型、base URL 和 API key 来自 PDF route snapshot；API key 要使用现有 redaction 逻辑，不要把外部工具失败吞掉成静默失败。
@@ -155,6 +156,7 @@ xcodebuild -project ReadPaper.xcodeproj -scheme ReadPaper -destination 'platform
 - 本地 PDF 导入、arXiv ID 误判回归、arXiv 导入进度阶段：`PaperImporterTests`
 - HTML 导入、本地化与 Readability 回退：`HTMLLocalizerTests`
 - HTML 候选抽取、占位符保护、译文插入：`HTMLTranslationPipelineTests`
+- BabelDOC 安装源、latest 版本解析、uv 安装参数：`BabelDocToolManagerTests`
 - BabelDOC 参数、progress bridge、敏感信息遮蔽、子进程输出/取消：`BabelDocRunnerTests`
 - provider 校验、base URL 规范化、连接测试：`LLMProviderValidationUseCaseTests`
 - provider/model route 解析与缺配置错误：`LLMRouteResolverTests`
