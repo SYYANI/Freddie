@@ -5,6 +5,7 @@ import SwiftUI
 private enum SettingsTab: String, Hashable {
     case general
     case reader
+    case export
     case providers
     case models
 }
@@ -89,6 +90,8 @@ private struct SettingsForm: View {
     @AppStorage("ReadPaper.Settings.SelectedTab") private var selectedTabRawValue = SettingsTab.general.rawValue
     @AppStorage("ReadPaper.Settings.DidDismissGettingStarted") private var didDismissGettingStarted = false
     @AppStorage(BabelDocInstallSource.userDefaultsKey) private var babelDocInstallSourceRawValue = BabelDocInstallSource.official.rawValue
+    @AppStorage(PaperDigestExportConfiguration.templateKey) private var digestExportTemplate = PaperDigestExportPolicy.defaultMarkdownTemplate
+    @AppStorage(PaperDigestExportConfiguration.directoryDisplayPathKey) private var digestExportDirectoryPath = ""
 
     @State private var selectedProviderID: UUID?
     @State private var providerName = ""
@@ -123,6 +126,8 @@ private struct SettingsForm: View {
     @State private var isLoadingInstalledBabelDocVersion = false
     @State private var latestBabelDocVersion: String?
     @State private var isLoadingLatestBabelDocVersion = false
+    @State private var digestTemplateInsertion: String?
+    @State private var exportStatusMessage: String?
 
     private let keychainStore = KeychainStore()
     private let validator = LLMProviderValidationUseCase()
@@ -254,6 +259,12 @@ private struct SettingsForm: View {
                 .tag(SettingsTab.reader)
                 .tabItem {
                     Label(String(localized: "Reader", bundle: bundle), systemImage: "book.closed")
+                }
+
+            exportTab
+                .tag(SettingsTab.export)
+                .tabItem {
+                    Label(String(localized: "Export", bundle: bundle), systemImage: "square.and.arrow.up")
                 }
 
             providerTab
@@ -468,6 +479,80 @@ private struct SettingsForm: View {
                     Text("Choose which saved model profile powers HTML translation and the BabelDOC PDF route inside the reader.", bundle: bundle)
                         .font(.footnote)
                         .foregroundStyle(.secondary)
+                }
+            }
+            .formStyle(.grouped)
+
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .padding(20)
+    }
+
+    private var exportTab: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Form {
+                Section(String(localized: "Digest Export", bundle: bundle)) {
+                    LabeledContent(String(localized: "Export directory", bundle: bundle)) {
+                        Text(
+                            digestExportDirectoryPath.isEmpty
+                                ? String(localized: "Not configured", bundle: bundle)
+                                : digestExportDirectoryPath
+                        )
+                        .foregroundStyle(digestExportDirectoryPath.isEmpty ? .secondary : .primary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .textSelection(.enabled)
+                    }
+
+                    HStack(spacing: 10) {
+                        Button(String(localized: "Choose Folder", bundle: bundle)) {
+                            chooseDigestExportDirectory()
+                        }
+                        .buttonStyle(.borderedProminent)
+
+                        Button(String(localized: "Clear", bundle: bundle), role: .destructive) {
+                            clearDigestExportDirectory()
+                        }
+                        .disabled(digestExportDirectoryPath.isEmpty)
+                    }
+
+                    Text("Markdown export requires a configured folder. Copy Digest can still use the template without an export folder.", bundle: bundle)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+
+                Section(String(localized: "Markdown Template", bundle: bundle)) {
+                    SettingsTemplateTextEditor(
+                        text: $digestExportTemplate,
+                        pendingInsertion: $digestTemplateInsertion
+                    )
+                    .frame(minHeight: 280)
+
+                    HStack(spacing: 10) {
+                        Menu {
+                            ForEach(PaperDigestExportPolicy.templatePlaceholderTokens, id: \.self) { token in
+                                Button(token) {
+                                    digestTemplateInsertion = token
+                                }
+                            }
+                        } label: {
+                            Label(String(localized: "Insert Placeholder", bundle: bundle), systemImage: "text.badge.plus")
+                        }
+
+                        Button(String(localized: "Reset Default Template", bundle: bundle)) {
+                            digestExportTemplate = PaperDigestExportPolicy.defaultMarkdownTemplate
+                            exportStatusMessage = String(localized: "Default digest template restored.", bundle: bundle)
+                        }
+                    }
+
+                    Text("Available placeholders: {{dateISO}}, {{title}}, {{slug}}, {{authors}}, {{identifier}}, {{sourceTitle}}, {{sourceURL}}, {{metadataBlock}}, {{abstractBlock}}, {{notesBlock}}, {{generatedBy}}.", bundle: bundle)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+
+                    if let exportStatusMessage {
+                        statusLabel(exportStatusMessage)
+                    }
                 }
             }
             .formStyle(.grouped)
@@ -1492,6 +1577,35 @@ private struct SettingsForm: View {
         }
     }
 
+    private func chooseDigestExportDirectory() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.canCreateDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.prompt = String(localized: "Choose", bundle: bundle)
+        panel.message = String(localized: "Choose a folder for Markdown digest exports.", bundle: bundle)
+        if digestExportDirectoryPath.isEmpty == false {
+            panel.directoryURL = URL(fileURLWithPath: digestExportDirectoryPath, isDirectory: true)
+        }
+
+        guard panel.runModal() == .OK, let directoryURL = panel.url else { return }
+
+        do {
+            try PaperDigestExportConfiguration().saveExportDirectory(directoryURL)
+            digestExportDirectoryPath = directoryURL.path
+            exportStatusMessage = String(localized: "Export directory saved.", bundle: bundle)
+        } catch {
+            exportStatusMessage = AppLocalization.errorMessage(error, bundle: bundle)
+        }
+    }
+
+    private func clearDigestExportDirectory() {
+        PaperDigestExportConfiguration().clearExportDirectory()
+        digestExportDirectoryPath = ""
+        exportStatusMessage = String(localized: "Export directory cleared.", bundle: bundle)
+    }
+
     private func loadStoredAPIKey(ref: String) throws -> String {
         let value = try keychainStore.load(account: ref)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         guard value.isEmpty == false else {
@@ -1665,6 +1779,102 @@ private struct SettingsSecureTextField: NSViewRepresentable {
             textField.allowsWritingToolsAffordance = false
         }
         coordinator.configureEditorIfNeeded(for: textField)
+    }
+}
+
+private struct SettingsTemplateTextEditor: NSViewRepresentable {
+    @Binding var text: String
+    @Binding var pendingInsertion: String?
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(text: $text)
+    }
+
+    func makeNSView(context: Context) -> NSScrollView {
+        let scrollView = NSScrollView()
+        scrollView.hasVerticalScroller = true
+        scrollView.hasHorizontalScroller = false
+        scrollView.autohidesScrollers = true
+        scrollView.borderType = .bezelBorder
+
+        let textView = NSTextView()
+        textView.delegate = context.coordinator
+        textView.string = text
+        textView.isRichText = false
+        textView.isEditable = true
+        textView.isSelectable = true
+        textView.allowsUndo = true
+        textView.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
+        textView.textContainerInset = NSSize(width: 8, height: 8)
+        textView.minSize = NSSize(width: 0, height: 0)
+        textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+        textView.isVerticallyResizable = true
+        textView.isHorizontallyResizable = false
+        textView.autoresizingMask = [.width]
+        textView.textContainer?.containerSize = NSSize(width: scrollView.contentSize.width, height: CGFloat.greatestFiniteMagnitude)
+        textView.textContainer?.widthTracksTextView = true
+        configure(textView)
+
+        scrollView.documentView = textView
+        return scrollView
+    }
+
+    func updateNSView(_ nsView: NSScrollView, context: Context) {
+        guard let textView = nsView.documentView as? NSTextView else { return }
+        configure(textView)
+
+        if textView.string != text {
+            let selectedRange = textView.selectedRange()
+            textView.string = text
+            textView.setSelectedRange(NSRange(
+                location: min(selectedRange.location, (textView.string as NSString).length),
+                length: 0
+            ))
+        }
+
+        if let pendingInsertion {
+            textView.insertText(pendingInsertion, replacementRange: textView.selectedRange())
+            text = textView.string
+            let insertion = $pendingInsertion
+            DispatchQueue.main.async {
+                insertion.wrappedValue = nil
+            }
+        }
+    }
+
+    private func configure(_ textView: NSTextView) {
+        textView.isAutomaticQuoteSubstitutionEnabled = false
+        textView.isAutomaticDashSubstitutionEnabled = false
+        textView.isAutomaticTextReplacementEnabled = false
+        textView.isAutomaticSpellingCorrectionEnabled = false
+        textView.isContinuousSpellCheckingEnabled = false
+        textView.isGrammarCheckingEnabled = false
+        textView.isAutomaticTextCompletionEnabled = false
+        textView.smartInsertDeleteEnabled = false
+        if #available(macOS 15.0, *) {
+            textView.writingToolsBehavior = .none
+        }
+    }
+
+    final class Coordinator: NSObject, NSTextViewDelegate {
+        @Binding private var text: String
+
+        init(text: Binding<String>) {
+            _text = text
+        }
+
+        func textDidChange(_ notification: Notification) {
+            guard let textView = notification.object as? NSTextView else { return }
+            text = textView.string
+        }
+
+        func textShouldEndEditing(_ textObject: NSText) -> Bool {
+            if let textView = textObject as? NSTextView {
+                textView.unmarkText()
+                textView.inputContext?.discardMarkedText()
+            }
+            return true
+        }
     }
 }
 

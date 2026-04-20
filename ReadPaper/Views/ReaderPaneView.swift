@@ -35,6 +35,7 @@ struct ReaderPaneView: View {
 
     var paper: Paper?
     var attachments: [PaperAttachment]
+    var notes: [Note]
     var settings: AppSettings?
     @Binding var readerMode: ReaderMode
     @Binding var displayMode: TranslationDisplayMode
@@ -55,6 +56,8 @@ struct ReaderPaneView: View {
     @State private var suspendReadingStatePersistence = false
     @State private var showPDFTranslationScopeDialog = false
     @State private var pdfTranslationTotalPages: Int = 0
+    @State private var digestNoticeMessage: String?
+    @State private var digestErrorMessage: String?
 
     private var pdfAttachment: PaperAttachment? {
         attachments.first { $0.kind == .pdf }
@@ -195,6 +198,36 @@ struct ReaderPaneView: View {
             } message: {
                 Text(AppLocalization.format("This PDF has %d pages. Translating the first 10 pages is faster.", pdfTranslationTotalPages))
             }
+            .alert(
+                String(localized: "Digest Ready", bundle: bundle),
+                isPresented: Binding(
+                    get: { digestNoticeMessage != nil },
+                    set: { isPresented in
+                        if !isPresented {
+                            digestNoticeMessage = nil
+                        }
+                    }
+                )
+            ) {
+                Button(String(localized: "OK", bundle: bundle), role: .cancel) {}
+            } message: {
+                Text(digestNoticeMessage ?? "")
+            }
+            .alert(
+                String(localized: "Unable to Create Digest", bundle: bundle),
+                isPresented: Binding(
+                    get: { digestErrorMessage != nil },
+                    set: { isPresented in
+                        if !isPresented {
+                            digestErrorMessage = nil
+                        }
+                    }
+                )
+            ) {
+                Button(String(localized: "OK", bundle: bundle), role: .cancel) {}
+            } message: {
+                Text(digestErrorMessage ?? "")
+            }
     }
 
     private var readerSurface: some View {
@@ -266,6 +299,7 @@ struct ReaderPaneView: View {
 
             ToolbarItemGroup(placement: .primaryAction) {
                 translationMenu
+                exportMenu
 
                 if isWorking {
                     Button {
@@ -391,6 +425,75 @@ struct ReaderPaneView: View {
         .menuIndicator(.hidden)
         .disabled(translationControlsDisabled)
         .help(translationMenuHelpText)
+    }
+
+    private var exportMenu: some View {
+        Menu {
+            Button {
+                copyDigest()
+            } label: {
+                Label(String(localized: "Copy Digest", bundle: bundle), systemImage: "doc.on.doc")
+                    .labelStyle(.titleAndIcon)
+            }
+
+            Button {
+                exportDigest()
+            } label: {
+                Label(String(localized: "Export Markdown", bundle: bundle), systemImage: "square.and.arrow.up")
+                    .labelStyle(.titleAndIcon)
+            }
+        } label: {
+            Label(String(localized: "Export", bundle: bundle), systemImage: "square.and.arrow.up")
+                .labelStyle(.iconOnly)
+        }
+        .menuIndicator(.hidden)
+        .help(String(localized: "Export Digest", bundle: bundle))
+    }
+
+    private func copyDigest() {
+        digestErrorMessage = nil
+        guard let content = makeDigestContent() else { return }
+
+        let markdown = PaperDigestExportPolicy.makeMarkdown(
+            content: content,
+            bundle: bundle,
+            template: PaperDigestExportConfiguration().template
+        )
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(markdown, forType: .string)
+        digestNoticeMessage = String(localized: "Digest copied to the clipboard.", bundle: bundle)
+    }
+
+    private func exportDigest() {
+        digestErrorMessage = nil
+        guard let content = makeDigestContent() else { return }
+
+        do {
+            let targetURL = try PaperDigestExporter().export(content: content, bundle: bundle)
+            digestNoticeMessage = String(
+                format: String(localized: "Digest exported to %@.", bundle: bundle),
+                targetURL.lastPathComponent
+            )
+        } catch {
+            digestErrorMessage = error.localizedDescription
+        }
+    }
+
+    private func makeDigestContent() -> PaperDigestContent? {
+        guard let paper else { return nil }
+
+        do {
+            try modelContext.save()
+        } catch {
+            digestErrorMessage = error.localizedDescription
+            return nil
+        }
+
+        guard let content = PaperDigestExportPolicy.makeContent(paper: paper, notes: notes) else {
+            digestErrorMessage = String(localized: "This paper does not have enough metadata to create a digest.", bundle: bundle)
+            return nil
+        }
+        return content
     }
 
     private var translationMenuHelpText: String {

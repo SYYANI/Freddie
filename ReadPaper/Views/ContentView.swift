@@ -63,6 +63,7 @@ struct ContentView: View {
             ReaderPaneView(
                 paper: selectedPaper,
                 attachments: attachments.filter { $0.paperID == selectedPaper?.id },
+                notes: notes.filter { $0.paperID == selectedPaper?.id },
                 settings: settings,
                 readerMode: $readerMode,
                 displayMode: $displayMode,

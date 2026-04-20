@@ -151,7 +151,14 @@
       }
     },
     "Abstract" : {
-
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "摘要"
+          }
+        }
+      }
     },
     "Actions" : {
       "extractionState" : "stale",
@@ -357,6 +364,27 @@
         }
       }
     },
+    "Authors" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "作者"
+          }
+        }
+      }
+    },
+    "Available placeholders: {{dateISO}}, {{title}}, {{slug}}, {{authors}}, {{identifier}}, {{sourceTitle}}, {{sourceURL}}, {{metadataBlock}}, {{abstractBlock}}, {{notesBlock}}, {{generatedBy}}." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "可用占位符：{{dateISO}}、{{title}}、{{slug}}、{{authors}}、{{identifier}}、{{sourceTitle}}、{{sourceURL}}、{{metadataBlock}}、{{abstractBlock}}、{{notesBlock}}、{{generatedBy}}。"
+          }
+        }
+      }
+    },
     "BabelDOC" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -531,6 +559,17 @@
         }
       }
     },
+    "by %@" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "作者：%1$@"
+          }
+        }
+      }
+    },
     "Cancel" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -619,6 +658,28 @@
         }
       }
     },
+    "Choose" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选择"
+          }
+        }
+      }
+    },
+    "Choose a folder for Markdown digest exports." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选择用于导出 Markdown 文摘的文件夹。"
+          }
+        }
+      }
+    },
     "Choose a PDF translation model in Settings first." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -637,6 +698,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "请先在 Settings 中选择一个 HTML 翻译模型。"
+          }
+        }
+      }
+    },
+    "Choose Folder" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选择文件夹"
           }
         }
       }
@@ -704,6 +776,17 @@
         }
       }
     },
+    "Clear" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "清除"
+          }
+        }
+      }
+    },
     "Close" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -743,6 +826,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "复制 BabelDOC 日志路径"
+          }
+        }
+      }
+    },
+    "Copy Digest" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "复制文摘"
           }
         }
       }
@@ -787,6 +881,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "当前已安装版本"
+          }
+        }
+      }
+    },
+    "Default digest template restored." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已恢复默认文摘模板。"
           }
         }
       }
@@ -864,6 +969,61 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "删除论文？"
+          }
+        }
+      }
+    },
+    "Digest" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "文摘"
+          }
+        }
+      }
+    },
+    "Digest copied to the clipboard." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "文摘已复制到剪贴板。"
+          }
+        }
+      }
+    },
+    "Digest Export" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "文摘导出"
+          }
+        }
+      }
+    },
+    "Digest exported to %@." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "文摘已导出到 %1$@。"
+          }
+        }
+      }
+    },
+    "Digest Ready" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "文摘已准备好"
           }
         }
       }
@@ -952,6 +1112,83 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "错误：%1$@"
+          }
+        }
+      }
+    },
+    "Export" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "导出"
+          }
+        }
+      }
+    },
+    "Export Digest" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "导出文摘"
+          }
+        }
+      }
+    },
+    "Export directory" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "导出目录"
+          }
+        }
+      }
+    },
+    "Export directory cleared." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已清除导出目录。"
+          }
+        }
+      }
+    },
+    "Export directory saved." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已保存导出目录。"
+          }
+        }
+      }
+    },
+    "Export Markdown" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "导出 Markdown"
+          }
+        }
+      }
+    },
+    "Export the current paper metadata, abstract, and notes as a Markdown digest." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "将当前论文的元数据、摘要和笔记导出为 Markdown 文摘。"
           }
         }
       }
@@ -1072,6 +1309,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "通用"
+          }
+        }
+      }
+    },
+    "Generated by Freddie" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "由 Freddie 生成"
           }
         }
       }
@@ -1231,6 +1479,17 @@
         }
       }
     },
+    "Identifier" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "标识符"
+          }
+        }
+      }
+    },
     "Import" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1280,6 +1539,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "从 arXiv 导入"
+          }
+        }
+      }
+    },
+    "Insert Placeholder" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "插入占位符"
           }
         }
       }
@@ -1454,6 +1724,27 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在从 %1$@ 本地化论文正文，以便阅读和翻译。"
+          }
+        }
+      }
+    },
+    "Markdown export requires a configured folder. Copy Digest can still use the template without an export folder." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Markdown 导出需要先配置文件夹。复制文摘无需导出文件夹，仍会使用模板。"
+          }
+        }
+      }
+    },
+    "Markdown Template" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Markdown 模板"
           }
         }
       }
@@ -1740,6 +2031,17 @@
         }
       }
     },
+    "Not configured" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未配置"
+          }
+        }
+      }
+    },
     "Not installed" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1853,6 +2155,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "原文"
+          }
+        }
+      }
+    },
+    "Page" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "页码"
           }
         }
       }
@@ -2219,6 +2532,17 @@
         }
       }
     },
+    "Reset Default Template" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重置默认模板"
+          }
+        }
+      }
+    },
     "Retried with resolved endpoint %@." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2391,6 +2715,17 @@
         }
       }
     },
+    "Set an export directory in Settings > Export before exporting Markdown." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "导出 Markdown 前，请先在 Settings > Export 中设置导出目录。"
+          }
+        }
+      }
+    },
     "Set the target version to \"latest\" to resolve the newest BabelDOC release from the selected source when installing. You can still enter a specific version to pin it." : {
       "localizations" : {
         "zh-Hans" : {
@@ -2462,6 +2797,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "跳过"
+          }
+        }
+      }
+    },
+    "Source" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "来源"
           }
         }
       }
@@ -2597,6 +2943,28 @@
         }
       }
     },
+    "The configured export directory is unavailable: %@" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已配置的导出目录不可用：%1$@"
+          }
+        }
+      }
+    },
+    "The configured export directory is unavailable." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已配置的导出目录不可用。"
+          }
+        }
+      }
+    },
     "The latest BabelDOC version could not be parsed: %@" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2724,6 +3092,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "这条笔记将被永久删除。"
+          }
+        }
+      }
+    },
+    "This paper does not have enough metadata to create a digest." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这篇论文没有足够的元数据来生成文摘。"
           }
         }
       }
@@ -2964,6 +3343,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "清华镜像"
+          }
+        }
+      }
+    },
+    "Unable to Create Digest" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法生成文摘"
           }
         }
       }
