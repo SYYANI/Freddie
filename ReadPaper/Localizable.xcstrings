@@ -2715,13 +2715,13 @@
         }
       }
     },
-    "Set an export directory in Settings > Export before exporting Markdown." : {
+    "Set an export directory in Settings > Digest before exporting Markdown." : {
       "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "导出 Markdown 前，请先在 Settings > Export 中设置导出目录。"
+            "value" : "导出 Markdown 前，请先在 Settings > Digest 中设置导出目录。"
           }
         }
       }

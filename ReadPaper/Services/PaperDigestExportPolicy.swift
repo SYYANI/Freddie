@@ -545,7 +545,7 @@ enum PaperDigestExportError: LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case .missingExportDirectory:
-            return AppLocalization.localized("Set an export directory in Settings > Export before exporting Markdown.")
+            return AppLocalization.localized("Set an export directory in Settings > Digest before exporting Markdown.")
         case .exportDirectoryUnavailable(let path):
             guard path.isEmpty == false else {
                 return AppLocalization.localized("The configured export directory is unavailable.")

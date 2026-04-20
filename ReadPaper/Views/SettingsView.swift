@@ -5,7 +5,7 @@ import SwiftUI
 private enum SettingsTab: String, Hashable {
     case general
     case reader
-    case export
+    case digest
     case providers
     case models
 }
@@ -127,7 +127,7 @@ private struct SettingsForm: View {
     @State private var latestBabelDocVersion: String?
     @State private var isLoadingLatestBabelDocVersion = false
     @State private var digestTemplateInsertion: String?
-    @State private var exportStatusMessage: String?
+    @State private var digestStatusMessage: String?
 
     private let keychainStore = KeychainStore()
     private let validator = LLMProviderValidationUseCase()
@@ -261,10 +261,10 @@ private struct SettingsForm: View {
                     Label(String(localized: "Reader", bundle: bundle), systemImage: "book.closed")
                 }
 
-            exportTab
-                .tag(SettingsTab.export)
+            digestTab
+                .tag(SettingsTab.digest)
                 .tabItem {
-                    Label(String(localized: "Export", bundle: bundle), systemImage: "square.and.arrow.up")
+                    Label(String(localized: "Digest", bundle: bundle), systemImage: "doc.plaintext")
                 }
 
             providerTab
@@ -489,7 +489,7 @@ private struct SettingsForm: View {
         .padding(20)
     }
 
-    private var exportTab: some View {
+    private var digestTab: some View {
         VStack(alignment: .leading, spacing: 12) {
             Form {
                 Section(String(localized: "Digest Export", bundle: bundle)) {
@@ -542,7 +542,7 @@ private struct SettingsForm: View {
 
                         Button(String(localized: "Reset Default Template", bundle: bundle)) {
                             digestExportTemplate = PaperDigestExportPolicy.defaultMarkdownTemplate
-                            exportStatusMessage = String(localized: "Default digest template restored.", bundle: bundle)
+                            digestStatusMessage = String(localized: "Default digest template restored.", bundle: bundle)
                         }
                     }
 
@@ -550,8 +550,8 @@ private struct SettingsForm: View {
                         .font(.footnote)
                         .foregroundStyle(.secondary)
 
-                    if let exportStatusMessage {
-                        statusLabel(exportStatusMessage)
+                    if let digestStatusMessage {
+                        statusLabel(digestStatusMessage)
                     }
                 }
             }
@@ -1594,16 +1594,16 @@ private struct SettingsForm: View {
         do {
             try PaperDigestExportConfiguration().saveExportDirectory(directoryURL)
             digestExportDirectoryPath = directoryURL.path
-            exportStatusMessage = String(localized: "Export directory saved.", bundle: bundle)
+            digestStatusMessage = String(localized: "Export directory saved.", bundle: bundle)
         } catch {
-            exportStatusMessage = AppLocalization.errorMessage(error, bundle: bundle)
+            digestStatusMessage = AppLocalization.errorMessage(error, bundle: bundle)
         }
     }
 
     private func clearDigestExportDirectory() {
         PaperDigestExportConfiguration().clearExportDirectory()
         digestExportDirectoryPath = ""
-        exportStatusMessage = String(localized: "Export directory cleared.", bundle: bundle)
+        digestStatusMessage = String(localized: "Export directory cleared.", bundle: bundle)
     }
 
     private func loadStoredAPIKey(ref: String) throws -> String {
