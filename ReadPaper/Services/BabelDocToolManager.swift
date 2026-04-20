@@ -121,7 +121,7 @@ struct BabelDocToolManager {
         for candidateName in ["python3", "python"] {
             let sibling = launcherURL.deletingLastPathComponent().appendingPathComponent(candidateName)
             if fm.isExecutableFile(atPath: sibling.path) {
-                return sibling.resolvingSymlinksInPath()
+                return sibling
             }
         }
 
@@ -129,12 +129,12 @@ struct BabelDocToolManager {
         if let execPath = Self.extractExecPath(from: launcher) {
             let direct = URL(fileURLWithPath: execPath)
             if fm.isExecutableFile(atPath: direct.path) {
-                return direct.resolvingSymlinksInPath()
+                return direct
             }
         }
 
         if let shebangPath = try Self.extractShebangExecutable(from: launcher, resolveExecutable: resolveExecutable(named:)) {
-            return shebangPath.resolvingSymlinksInPath()
+            return shebangPath
         }
 
         throw ToolInstallError.invalidBabelDocLauncher(launcherURL.path)
@@ -190,7 +190,17 @@ struct BabelDocToolManager {
             guard result.exitCode == 0 else {
                 return true
             }
-            return Self.isUnsupportedPythonVersionOutput(result.combinedOutput)
+            if Self.isUnsupportedPythonVersionOutput(result.combinedOutput) {
+                return true
+            }
+
+            let importResult = try await runner.run(
+                executableURL: pythonExecutable,
+                arguments: Self.babelDocImportCheckArguments,
+                environment: try environment(),
+                currentDirectoryURL: try toolRoot
+            )
+            return importResult.exitCode != 0
         } catch {
             return true
         }
@@ -492,6 +502,11 @@ struct BabelDocToolManager {
             "BabelDOC==\(version)"
         ]
     }
+
+    static let babelDocImportCheckArguments = [
+        "-c",
+        "import babeldoc; import babeldoc.format.pdf.high_level; import babeldoc.main"
+    ]
 
     static func isUnsupportedPythonExecutablePath(_ path: String) -> Bool {
         isUnsupportedPythonVersionOutput(path)

@@ -97,10 +97,17 @@ final class BabelDocToolManagerTests: XCTestCase {
         let (manager, rootURL) = try makeTemporaryManager(
             runner: ProcessRunner { executableURL, arguments, _, _, _ in
                 XCTAssertEqual(executableURL.lastPathComponent, "python3")
-                XCTAssertEqual(arguments, ["--version"])
+                if arguments == ["--version"] {
+                    return ProcessResult(
+                        exitCode: 0,
+                        standardOutput: "Python 3.13.7\n",
+                        standardError: ""
+                    )
+                }
+                XCTAssertEqual(arguments, BabelDocToolManager.babelDocImportCheckArguments)
                 return ProcessResult(
                     exitCode: 0,
-                    standardOutput: "Python 3.13.7\n",
+                    standardOutput: "",
                     standardError: ""
                 )
             }
@@ -112,6 +119,67 @@ final class BabelDocToolManagerTests: XCTestCase {
 
         let needsRepair = try await manager.needsInstallOrRepair()
         XCTAssertFalse(needsRepair)
+    }
+
+    func testNeedsInstallOrRepairRejectsMissingBabelDocModule() async throws {
+        let (manager, rootURL) = try makeTemporaryManager(
+            runner: ProcessRunner { executableURL, arguments, _, _, _ in
+                XCTAssertEqual(executableURL.lastPathComponent, "python3")
+                if arguments == ["--version"] {
+                    return ProcessResult(
+                        exitCode: 0,
+                        standardOutput: "Python 3.13.7\n",
+                        standardError: ""
+                    )
+                }
+                XCTAssertEqual(arguments, BabelDocToolManager.babelDocImportCheckArguments)
+                return ProcessResult(
+                    exitCode: 1,
+                    standardOutput: "",
+                    standardError: "ModuleNotFoundError: No module named 'babeldoc'\n"
+                )
+            }
+        )
+        defer { try? FileManager.default.removeItem(at: rootURL) }
+
+        try writeExecutable("#!/bin/sh\n", to: manager.babelDocExecutableURL)
+        try writeExecutable("#!/bin/sh\n", to: try manager.toolBinDirectory.appendingPathComponent("python3"))
+
+        let needsRepair = try await manager.needsInstallOrRepair()
+        XCTAssertTrue(needsRepair)
+    }
+
+    func testBabelDocPythonExecutablePreservesVenvSymlink() throws {
+        let (manager, rootURL) = try makeTemporaryManager()
+        defer { try? FileManager.default.removeItem(at: rootURL) }
+
+        let venvBin = try manager.toolRoot
+            .appendingPathComponent("tools", isDirectory: true)
+            .appendingPathComponent("babeldoc", isDirectory: true)
+            .appendingPathComponent("bin", isDirectory: true)
+        try FileManager.default.createDirectory(at: venvBin, withIntermediateDirectories: true)
+
+        let launcher = venvBin.appendingPathComponent("babeldoc")
+        try writeExecutable("#!/bin/sh\n", to: launcher)
+
+        let basePython = try manager.toolRoot
+            .appendingPathComponent("python", isDirectory: true)
+            .appendingPathComponent("cpython-3.13.7-macos-aarch64-none", isDirectory: true)
+            .appendingPathComponent("bin", isDirectory: true)
+            .appendingPathComponent("python3.13")
+        try writeExecutable("#!/bin/sh\n", to: basePython)
+
+        let venvPython = venvBin.appendingPathComponent("python3")
+        try FileManager.default.createSymbolicLink(at: venvPython, withDestinationURL: basePython)
+
+        let publicLauncher = try manager.babelDocExecutableURL
+        try FileManager.default.createDirectory(
+            at: publicLauncher.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try FileManager.default.createSymbolicLink(at: publicLauncher, withDestinationURL: launcher)
+
+        XCTAssertEqual(try manager.babelDocPythonExecutableURL().path, venvPython.path)
     }
 
     func testLatestPublishedVersionParsesPyPISimpleIndex() async throws {
