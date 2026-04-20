@@ -159,17 +159,18 @@ struct BabelDocRunner {
         }
 
         let startedAt = Date()
+        let babelDocArguments = Self.arguments(
+            inputPDF: inputPDF,
+            outputDirectory: outputDirectory,
+            preferences: preferences,
+            route: route,
+            apiKey: apiKey,
+            pageRange: pageRange
+        )
         let outputParser = BabelDocOutputParser(apiKey: apiKey)
         let result = try await processRunner.run(
             executableURL: babelDocPythonExecutable,
-            arguments: [bridgeScript.path] + Self.arguments(
-                inputPDF: inputPDF,
-                outputDirectory: outputDirectory,
-                preferences: preferences,
-                route: route,
-                apiKey: apiKey,
-                pageRange: pageRange
-            ),
+            arguments: [bridgeScript.path] + babelDocArguments,
             environment: environment.merging(["PYTHONUNBUFFERED": "1"]) { _, new in new },
             currentDirectoryURL: outputDirectory,
             onOutput: { event in
@@ -191,15 +192,40 @@ struct BabelDocRunner {
         }
         guard result.exitCode == 0 else {
             let output = Self.sanitizedOutput(result.combinedOutput, apiKey: apiKey)
-            throw BabelDocRunError.failed(
-                output.isEmpty
-                    ? AppLocalization.format("BabelDOC exited with code %d.", result.exitCode)
-                    : output
+            let message = output.isEmpty
+                ? AppLocalization.format("BabelDOC exited with code %d.", result.exitCode)
+                : output
+            let logURL = try? Self.writeFailureLog(
+                reason: message,
+                result: result,
+                inputPDF: inputPDF,
+                outputDirectory: outputDirectory,
+                babelDocPythonExecutable: babelDocPythonExecutable,
+                bridgeScript: bridgeScript,
+                arguments: [bridgeScript.path] + babelDocArguments,
+                apiKey: apiKey,
+                startedAt: startedAt
             )
+            if let logURL {
+                throw BabelDocRunError.failedWithLog(message, logURL)
+            }
+            throw BabelDocRunError.failed(message)
         }
 
         guard let translated = try newestPDF(in: outputDirectory, after: startedAt) else {
-            throw PaperImportError.noTranslatedPDFProduced
+            let reason = AppLocalization.localized("BabelDOC finished without producing a translated PDF.")
+            let logURL = try? Self.writeFailureLog(
+                reason: reason,
+                result: result,
+                inputPDF: inputPDF,
+                outputDirectory: outputDirectory,
+                babelDocPythonExecutable: babelDocPythonExecutable,
+                bridgeScript: bridgeScript,
+                arguments: [bridgeScript.path] + babelDocArguments,
+                apiKey: apiKey,
+                startedAt: startedAt
+            )
+            throw BabelDocRunError.noTranslatedPDFProduced(logURL)
         }
         return translated
     }
@@ -370,6 +396,89 @@ struct BabelDocRunner {
         return Array(lines.suffix(20)).joined(separator: "\n")
     }
 
+    static func writeFailureLog(
+        reason: String,
+        result: ProcessResult,
+        inputPDF: URL,
+        outputDirectory: URL,
+        babelDocPythonExecutable: URL,
+        bridgeScript: URL,
+        arguments: [String],
+        apiKey: String,
+        startedAt: Date,
+        fileManager: FileManager = .default
+    ) throws -> URL {
+        if !fileManager.fileExists(atPath: outputDirectory.path) {
+            try fileManager.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+        }
+
+        let timestamp = Self.logTimestamp(for: Date())
+        let logURL = outputDirectory.appendingPathComponent("babeldoc-error-\(timestamp)-\(UUID().uuidString.prefix(8)).log")
+        let content = Self.failureLogContent(
+            reason: reason,
+            result: result,
+            inputPDF: inputPDF,
+            outputDirectory: outputDirectory,
+            babelDocPythonExecutable: babelDocPythonExecutable,
+            bridgeScript: bridgeScript,
+            arguments: arguments,
+            apiKey: apiKey,
+            startedAt: startedAt,
+            generatedAt: Date()
+        )
+        try content.write(to: logURL, atomically: true, encoding: .utf8)
+        return logURL
+    }
+
+    static func failureLogContent(
+        reason: String,
+        result: ProcessResult,
+        inputPDF: URL,
+        outputDirectory: URL,
+        babelDocPythonExecutable: URL,
+        bridgeScript: URL,
+        arguments: [String],
+        apiKey: String,
+        startedAt: Date,
+        generatedAt: Date
+    ) -> String {
+        let redactedArguments = arguments.map { redact($0, apiKey: apiKey).singleLineForLog }
+        let standardOutput = redact(result.standardOutput, apiKey: apiKey)
+        let standardError = redact(result.standardError, apiKey: apiKey)
+        let lines = [
+            "ReadPaper BabelDOC failure log",
+            "Generated at: \(Self.isoTimestamp(for: generatedAt))",
+            "Started at: \(Self.isoTimestamp(for: startedAt))",
+            "Reason: \(redact(reason, apiKey: apiKey).singleLineForLog)",
+            "Exit code: \(result.exitCode)",
+            "",
+            "Input PDF: \(inputPDF.path.singleLineForLog)",
+            "Output directory: \(outputDirectory.path.singleLineForLog)",
+            "Python executable: \(babelDocPythonExecutable.path.singleLineForLog)",
+            "Bridge script: \(bridgeScript.path.singleLineForLog)",
+            "",
+            "Arguments:",
+            redactedArguments.map { "  \($0)" }.joined(separator: "\n"),
+            "",
+            "Standard output:",
+            standardOutput.isEmpty ? "(empty)" : standardOutput,
+            "",
+            "Standard error:",
+            standardError.isEmpty ? "(empty)" : standardError
+        ]
+        return lines.joined(separator: "\n")
+    }
+
+    private static func isoTimestamp(for date: Date) -> String {
+        ISO8601DateFormatter().string(from: date)
+    }
+
+    private static func logTimestamp(for date: Date) -> String {
+        isoTimestamp(for: date)
+            .replacingOccurrences(of: ":", with: "")
+            .replacingOccurrences(of: ".", with: "-")
+    }
+
     private func newestPDF(in directory: URL, after start: Date) throws -> URL? {
         let urls = try FileManager.default.contentsOfDirectory(
             at: directory,
@@ -401,11 +510,36 @@ private extension String {
 
 enum BabelDocRunError: Error, LocalizedError {
     case failed(String)
+    case failedWithLog(String, URL)
+    case noTranslatedPDFProduced(URL?)
+
+    var logURL: URL? {
+        switch self {
+        case .failed:
+            return nil
+        case .failedWithLog(_, let url):
+            return url
+        case .noTranslatedPDFProduced(let url):
+            return url
+        }
+    }
 
     var errorDescription: String? {
         switch self {
         case .failed(let output):
             AppLocalization.format("BabelDOC failed: %@", output)
+        case .failedWithLog(let output, _):
+            AppLocalization.format("BabelDOC failed: %@", output)
+        case .noTranslatedPDFProduced:
+            AppLocalization.localized("BabelDOC finished without producing a translated PDF.")
         }
+    }
+}
+
+private extension String {
+    var singleLineForLog: String {
+        replacingOccurrences(of: "\r\n", with: "\\n")
+            .replacingOccurrences(of: "\n", with: "\\n")
+            .replacingOccurrences(of: "\r", with: "\\n")
     }
 }

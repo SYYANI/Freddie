@@ -1,3 +1,4 @@
+import AppKit
 import PDFKit
 import SwiftData
 import SwiftUI
@@ -49,6 +50,7 @@ struct ReaderPaneView: View {
     @State private var statusMessage: String?
     @State private var translationProgress: TranslationProgressStatus?
     @State private var translationTask: Task<Void, Never>?
+    @State private var pdfTranslationErrorLogURL: URL?
     @State private var lastPDFReaderMode: ReaderMode = .pdf
     @State private var suspendReadingStatePersistence = false
     @State private var showPDFTranslationScopeDialog = false
@@ -482,6 +484,26 @@ struct ReaderPaneView: View {
                         .font(.caption.monospacedDigit())
                         .foregroundStyle(.tertiary)
                 }
+
+                if pdfTranslationErrorLogURL != nil {
+                    Button {
+                        revealPDFTranslationErrorLog()
+                    } label: {
+                        Label(String(localized: "Show BabelDOC Log", bundle: bundle), systemImage: "doc.text.magnifyingglass")
+                    }
+                    .labelStyle(.iconOnly)
+                    .buttonStyle(.borderless)
+                    .help(String(localized: "Show BabelDOC Log", bundle: bundle))
+
+                    Button {
+                        copyPDFTranslationErrorLogPath()
+                    } label: {
+                        Label(String(localized: "Copy BabelDOC Log Path", bundle: bundle), systemImage: "doc.on.doc")
+                    }
+                    .labelStyle(.iconOnly)
+                    .buttonStyle(.borderless)
+                    .help(String(localized: "Copy BabelDOC Log Path", bundle: bundle))
+                }
             }
 
             if let translationProgress, translationProgress.total > 0 {
@@ -500,6 +522,7 @@ struct ReaderPaneView: View {
         let preferences = TranslationPreferencesSnapshot(settings)
         htmlSegmentUpdate = nil
         translationProgress = nil
+        pdfTranslationErrorLogURL = nil
         isWorking = true
         isCancelling = false
         statusMessage = String(localized: "Translating HTML...", bundle: bundle)
@@ -544,8 +567,7 @@ struct ReaderPaneView: View {
                 translationProgress = nil
                 statusMessage = String(localized: "Translation cancelled.", bundle: bundle)
             } catch {
-                translationProgress = nil
-                statusMessage = AppLocalization.errorMessage(error, bundle: bundle)
+                handleTranslationError(error)
             }
             isWorking = false
             isCancelling = false
@@ -586,6 +608,7 @@ struct ReaderPaneView: View {
         }()
 
         translationProgress = nil
+        pdfTranslationErrorLogURL = nil
         isWorking = true
         isCancelling = false
         statusMessage = String(localized: "Running BabelDOC...", bundle: bundle)
@@ -661,10 +684,10 @@ struct ReaderPaneView: View {
                 statusMessage = String(localized: "PDF translation completed.", bundle: bundle)
             } catch is CancellationError {
                 translationProgress = nil
+                pdfTranslationErrorLogURL = nil
                 statusMessage = String(localized: "Translation cancelled.", bundle: bundle)
             } catch {
-                translationProgress = nil
-                statusMessage = AppLocalization.errorMessage(error, bundle: bundle)
+                handleTranslationError(error)
             }
             isWorking = false
             isCancelling = false
@@ -681,6 +704,7 @@ struct ReaderPaneView: View {
         let preferences = TranslationPreferencesSnapshot(settings)
 
         translationProgress = nil
+        pdfTranslationErrorLogURL = nil
         isWorking = true
         isCancelling = false
         statusMessage = String(localized: "Running BabelDOC...", bundle: bundle)
@@ -769,10 +793,10 @@ struct ReaderPaneView: View {
                 statusMessage = String(localized: "PDF translation completed.", bundle: bundle)
             } catch is CancellationError {
                 translationProgress = nil
+                pdfTranslationErrorLogURL = nil
                 statusMessage = String(localized: "Translation cancelled.", bundle: bundle)
             } catch {
-                translationProgress = nil
-                statusMessage = AppLocalization.errorMessage(error, bundle: bundle)
+                handleTranslationError(error)
             }
             isWorking = false
             isCancelling = false
@@ -785,6 +809,27 @@ struct ReaderPaneView: View {
         isCancelling = true
         statusMessage = String(localized: "Cancelling translation...", bundle: bundle)
         translationTask?.cancel()
+    }
+
+    private func handleTranslationError(_ error: Error) {
+        translationProgress = nil
+        if let babelDocError = error as? BabelDocRunError {
+            pdfTranslationErrorLogURL = babelDocError.logURL
+        } else {
+            pdfTranslationErrorLogURL = nil
+        }
+        statusMessage = AppLocalization.errorMessage(error, bundle: bundle)
+    }
+
+    private func revealPDFTranslationErrorLog() {
+        guard let pdfTranslationErrorLogURL else { return }
+        NSWorkspace.shared.activateFileViewerSelecting([pdfTranslationErrorLogURL])
+    }
+
+    private func copyPDFTranslationErrorLogPath() {
+        guard let pdfTranslationErrorLogURL else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(pdfTranslationErrorLogURL.path, forType: .string)
     }
 
     private var translateMoreBanner: some View {

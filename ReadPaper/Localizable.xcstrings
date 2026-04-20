@@ -736,6 +736,17 @@
         }
       }
     },
+    "Copy BabelDOC Log Path" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "复制 BabelDOC 日志路径"
+          }
+        }
+      }
+    },
     "Create at least one enabled model profile and attach it to a provider with a saved API key." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2407,6 +2418,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "设置"
+          }
+        }
+      }
+    },
+    "Show BabelDOC Log" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "显示 BabelDOC 日志"
           }
         }
       }

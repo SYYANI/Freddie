@@ -197,6 +197,49 @@ final class BabelDocRunnerTests: XCTestCase {
         XCTAssertEqual(sanitized, "visible <redacted> output")
     }
 
+    func testTranslatePDFWritesRedactedFailureLogOnProcessFailure() async throws {
+        let fm = FileManager.default
+        let tempRoot = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let outputDirectory = tempRoot.appendingPathComponent("translations", isDirectory: true)
+        try fm.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: tempRoot) }
+
+        let runner = BabelDocRunner(processRunner: ProcessRunner { _, _, _, _, _ in
+            ProcessResult(
+                exitCode: 42,
+                standardOutput: "stdout mentions sk-secret\n",
+                standardError: "stderr mentions sk-secret\n"
+            )
+        })
+
+        do {
+            _ = try await runner.translatePDF(
+                inputPDF: tempRoot.appendingPathComponent("paper.pdf"),
+                outputDirectory: outputDirectory,
+                preferences: Self.preferences,
+                route: Self.route,
+                apiKey: "sk-secret",
+                babelDocPythonExecutable: URL(fileURLWithPath: "/tmp/python"),
+                bridgeScript: URL(fileURLWithPath: "/tmp/babeldoc_progress_bridge.py")
+            )
+            XCTFail("Expected BabelDOC failure.")
+        } catch let error as BabelDocRunError {
+            guard let logURL = error.logURL else {
+                XCTFail("Expected failure log URL.")
+                return
+            }
+            let log = try String(contentsOf: logURL, encoding: .utf8)
+            XCTAssertTrue(log.contains("ReadPaper BabelDOC failure log"))
+            XCTAssertTrue(log.contains("Exit code: 42"))
+            XCTAssertTrue(log.contains("stdout mentions <redacted>"))
+            XCTAssertTrue(log.contains("stderr mentions <redacted>"))
+            XCTAssertTrue(log.contains("--openai-api-key"))
+            XCTAssertFalse(log.contains("sk-secret"))
+        } catch {
+            XCTFail("Expected BabelDocRunError, got \(error).")
+        }
+    }
+
     func testProcessRunnerDrainsLargeOutputWhileProcessRuns() async throws {
         let result = try await ProcessRunner().run(
             executableURL: URL(fileURLWithPath: "/bin/sh"),
@@ -248,6 +291,32 @@ final class BabelDocRunnerTests: XCTestCase {
         } catch is CancellationError {
             // Expected path.
         }
+    }
+}
+
+private extension BabelDocRunnerTests {
+    static var preferences: TranslationPreferencesSnapshot {
+        TranslationPreferencesSnapshot(
+            targetLanguage: "zh-CN",
+            htmlTranslationConcurrency: 4,
+            babelDocQPS: 7,
+            babelDocVersion: "0.5.24"
+        )
+    }
+
+    static var route: LLMModelRouteSnapshot {
+        LLMModelRouteSnapshot(
+            providerProfileID: UUID(),
+            providerName: "Test Provider",
+            modelProfileID: UUID(),
+            modelProfileName: "Paper Model",
+            baseURL: "https://api.example.test/v1",
+            apiKeyRef: "provider-key",
+            modelName: "paper-model",
+            temperature: nil,
+            topP: nil,
+            maxTokens: nil
+        )
     }
 }
 
