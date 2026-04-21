@@ -95,6 +95,9 @@
         }
       }
     },
+    "•" : {
+
+    },
     "1. Save a provider API key" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -798,6 +801,16 @@
         }
       }
     },
+    "Click to edit note" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "点击编辑笔记"
+          }
+        }
+      }
+    },
     "Close" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1090,6 +1103,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在下载 PDF"
+          }
+        }
+      }
+    },
+    "Edit note" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "编辑笔记"
+          }
+        }
+      }
+    },
+    "Edit Note" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "编辑笔记"
           }
         }
       }

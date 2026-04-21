@@ -567,6 +567,8 @@ private struct NoteEditor: View {
     let onOpenAnchor: (() -> Void)?
     let onDelete: () -> Void
     let onFocusApplied: () -> Void
+    @State private var isEditing = false
+    @State private var isEditorFocusPending = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -613,27 +615,52 @@ private struct NoteEditor: View {
                     )
             }
 
-            InsetTextView(
-                text: Binding(
-                    get: { note.body },
-                    set: { newValue in
-                        note.body = newValue
-                        note.modifiedAt = Date()
+            if isEditing {
+                InsetTextView(
+                    text: Binding(
+                        get: { note.body },
+                        set: { newValue in
+                            note.body = newValue
+                            note.modifiedAt = Date()
+                        }
+                    ),
+                    shouldFocus: shouldFocus || isEditorFocusPending,
+                    onFocusApplied: handleEditorFocusApplied,
+                    onEditingBegan: {
+                        isEditing = true
+                    },
+                    onEditingEnded: {
+                        isEditorFocusPending = false
+                        isEditing = false
                     }
-                ),
-                shouldFocus: shouldFocus,
-                onFocusApplied: onFocusApplied
-            )
-                .frame(minHeight: 90)
-                .background(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(Color(nsColor: .textBackgroundColor))
                 )
-                .overlay {
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .stroke(.quaternary)
-                        .allowsHitTesting(false)
+                    .frame(minHeight: 90)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(Color(nsColor: .textBackgroundColor))
+                    )
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .stroke(.quaternary)
+                            .allowsHitTesting(false)
+                    }
+
+                if note.body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
+                    notePreviewCard(isInteractive: false)
                 }
+            } else {
+                notePreview
+            }
+        }
+        .onAppear {
+            if shouldFocus {
+                beginEditing()
+            }
+        }
+        .onChange(of: shouldFocus) { _, newValue in
+            if newValue {
+                beginEditing()
+            }
         }
     }
 
@@ -646,15 +673,85 @@ private struct NoteEditor: View {
         }
         return nil
     }
+
+    private var notePreview: some View {
+        notePreviewCard(isInteractive: true)
+    }
+
+    private func notePreviewCard(isInteractive: Bool) -> some View {
+        Group {
+            notePreviewContent
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(Color(nsColor: .controlBackgroundColor))
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(Color.primary.opacity(0.08))
+                .allowsHitTesting(false)
+        }
+        .modifier(NotePreviewInteractionModifier(isInteractive: isInteractive, beginEditing: beginEditing))
+    }
+
+    @ViewBuilder
+    private var notePreviewContent: some View {
+        if note.body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            HStack {
+                Text("Click to edit note", bundle: bundle)
+                    .foregroundStyle(.secondary)
+                Spacer()
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 12)
+        } else {
+            NoteMarkdownPreviewView(markdown: note.body)
+                .frame(minHeight: 72, maxHeight: 180)
+        }
+    }
+
+    private func beginEditing() {
+        isEditing = true
+        isEditorFocusPending = true
+    }
+
+    private func handleEditorFocusApplied() {
+        isEditorFocusPending = false
+        onFocusApplied()
+    }
+}
+
+private struct NotePreviewInteractionModifier: ViewModifier {
+    let isInteractive: Bool
+    let beginEditing: () -> Void
+
+    func body(content: Content) -> some View {
+        if isInteractive {
+            content
+                .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .onTapGesture {
+                    beginEditing()
+                }
+        } else {
+            content
+        }
+    }
 }
 
 private struct InsetTextView: NSViewRepresentable {
     @Binding var text: String
     var shouldFocus: Bool
     var onFocusApplied: () -> Void
+    var onEditingBegan: () -> Void = {}
+    var onEditingEnded: () -> Void = {}
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(text: $text, onFocusApplied: onFocusApplied)
+        Coordinator(
+            text: $text,
+            onFocusApplied: onFocusApplied,
+            onEditingBegan: onEditingBegan,
+            onEditingEnded: onEditingEnded
+        )
     }
 
     func makeNSView(context: Context) -> NSScrollView {
@@ -681,6 +778,14 @@ private struct InsetTextView: NSViewRepresentable {
         textView.isAutomaticQuoteSubstitutionEnabled = false
         textView.isAutomaticDashSubstitutionEnabled = false
         textView.isAutomaticTextReplacementEnabled = false
+        textView.isAutomaticSpellingCorrectionEnabled = false
+        textView.isContinuousSpellCheckingEnabled = false
+        textView.isGrammarCheckingEnabled = false
+        textView.isAutomaticTextCompletionEnabled = false
+        textView.smartInsertDeleteEnabled = false
+        if #available(macOS 15.0, *) {
+            textView.writingToolsBehavior = .none
+        }
         textView.font = .preferredFont(forTextStyle: .body)
         textView.string = text
         textView.textContainerInset = NSSize(width: 10, height: 10)
@@ -696,6 +801,8 @@ private struct InsetTextView: NSViewRepresentable {
 
     func updateNSView(_ nsView: NSScrollView, context: Context) {
         guard let textView = nsView.documentView as? NSTextView else { return }
+        context.coordinator.hostScrollView = nsView
+
         if textView.string != text {
             textView.string = text
         }
@@ -703,21 +810,54 @@ private struct InsetTextView: NSViewRepresentable {
         context.coordinator.applyFocusIfNeeded(to: textView, shouldFocus: shouldFocus)
     }
 
+    static func dismantleNSView(_ nsView: NSScrollView, coordinator: Coordinator) {
+        coordinator.stopOutsideClickMonitoring()
+    }
+
     final class Coordinator: NSObject, NSTextViewDelegate {
         @Binding private var text: String
         private let onFocusApplied: () -> Void
+        private let onEditingBegan: () -> Void
+        private let onEditingEnded: () -> Void
         private var hasAppliedFocus = false
         private var isFocusScheduled = false
         private var focusGeneration = 0
+        weak var hostScrollView: NSScrollView?
+        private var outsideClickMonitor: Any?
 
-        init(text: Binding<String>, onFocusApplied: @escaping () -> Void) {
+        init(
+            text: Binding<String>,
+            onFocusApplied: @escaping () -> Void,
+            onEditingBegan: @escaping () -> Void,
+            onEditingEnded: @escaping () -> Void
+        ) {
             _text = text
             self.onFocusApplied = onFocusApplied
+            self.onEditingBegan = onEditingBegan
+            self.onEditingEnded = onEditingEnded
         }
 
         func textDidChange(_ notification: Notification) {
             guard let textView = notification.object as? NSTextView else { return }
             text = textView.string
+        }
+
+        func textDidBeginEditing(_ notification: Notification) {
+            startOutsideClickMonitoring()
+            onEditingBegan()
+        }
+
+        func textDidEndEditing(_ notification: Notification) {
+            stopOutsideClickMonitoring()
+            onEditingEnded()
+        }
+
+        func textShouldEndEditing(_ textObject: NSText) -> Bool {
+            if let textView = textObject as? NSTextView {
+                textView.unmarkText()
+                textView.inputContext?.discardMarkedText()
+            }
+            return true
         }
 
         @MainActor
@@ -744,15 +884,53 @@ private struct InsetTextView: NSViewRepresentable {
 
                 if window.firstResponder === textView {
                     self.hasAppliedFocus = true
+                    self.startOutsideClickMonitoring()
                     self.onFocusApplied()
                     return
                 }
 
                 if window.makeFirstResponder(textView) {
                     self.hasAppliedFocus = true
+                    self.startOutsideClickMonitoring()
                     self.onFocusApplied()
                 }
             }
+        }
+
+        private func startOutsideClickMonitoring() {
+            guard outsideClickMonitor == nil else { return }
+
+            outsideClickMonitor = NSEvent.addLocalMonitorForEvents(
+                matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]
+            ) { [weak self] event in
+                guard let self,
+                      let scrollView = self.hostScrollView,
+                      let window = scrollView.window,
+                      event.window === window else {
+                    return event
+                }
+
+                let pointInWindow = event.locationInWindow
+                let pointInScrollView = scrollView.convert(pointInWindow, from: nil)
+                let isInsideEditor = scrollView.bounds.contains(pointInScrollView)
+
+                if !isInsideEditor {
+                    window.makeFirstResponder(nil)
+                }
+
+                return event
+            }
+        }
+
+        func stopOutsideClickMonitoring() {
+            if let outsideClickMonitor {
+                NSEvent.removeMonitor(outsideClickMonitor)
+                self.outsideClickMonitor = nil
+            }
+        }
+
+        deinit {
+            stopOutsideClickMonitoring()
         }
     }
 }
