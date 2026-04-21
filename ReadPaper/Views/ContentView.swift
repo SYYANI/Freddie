@@ -12,6 +12,9 @@ struct ContentView: View {
     @State private var selectedPaperID: UUID?
     @State private var readerMode: ReaderMode = .pdf
     @State private var displayMode: TranslationDisplayMode = .bilingual
+    @State private var noteSelectionContext: NoteSelectionContext?
+    @State private var focusedNoteID: UUID?
+    @State private var noteNavigationRequest: NoteNavigationRequest?
     @State private var isAddingPaper = false
     @State private var paperPendingDeletion: Paper?
     @State private var deletionErrorMessage: String?
@@ -67,14 +70,21 @@ struct ContentView: View {
                 settings: settings,
                 readerMode: $readerMode,
                 displayMode: $displayMode,
-                isInspectorCollapsed: inspectorCollapsedBinding
+                isInspectorCollapsed: inspectorCollapsedBinding,
+                noteSelectionContext: $noteSelectionContext,
+                noteNavigationRequest: $noteNavigationRequest,
+                onCreateAnchoredNote: createNoteFromCurrentSelection
             )
             .navigationSplitViewColumnWidth(min: 520, ideal: 760)
         } detail: {
             InspectorPaneView(
                 paper: selectedPaper,
                 notes: notes.filter { $0.paperID == selectedPaper?.id },
-                isCollapsed: isInspectorCollapsed
+                isCollapsed: isInspectorCollapsed,
+                currentSelectionContext: noteSelectionContext,
+                focusedNoteID: $focusedNoteID,
+                onCreateNote: createNoteFromCurrentSelection,
+                onOpenNoteAnchor: openNoteAnchor
             )
             .navigationSplitViewColumnWidth(
                 min: isInspectorCollapsed ? 0 : 280,
@@ -131,6 +141,9 @@ struct ContentView: View {
             syncSelectionWithAvailablePapers()
         }
         .onChange(of: selectedPaperID) { _, newValue in
+            noteSelectionContext = nil
+            focusedNoteID = nil
+            noteNavigationRequest = nil
             persistSelectedPaperIDIfNeeded(newValue)
         }
     }
@@ -207,6 +220,35 @@ struct ContentView: View {
         } catch {
             assertionFailure("Failed to save selected paper: \(error.localizedDescription)")
         }
+    }
+
+    private func createNoteFromCurrentSelection() {
+        guard let paper = selectedPaper else { return }
+
+        let note = Note(
+            paperID: paper.id,
+            attachmentID: noteSelectionContext?.attachmentID,
+            quote: noteSelectionContext?.trimmedQuote ?? "",
+            body: "",
+            pageIndex: noteSelectionContext?.pageIndex,
+            htmlSelector: noteSelectionContext?.htmlSelector
+        )
+        modelContext.insert(note)
+
+        do {
+            try modelContext.save()
+            if isInspectorCollapsed {
+                inspectorCollapsedBinding.wrappedValue = false
+            }
+            focusedNoteID = note.id
+        } catch {
+            modelContext.rollback()
+            assertionFailure("Failed to save note: \(error.localizedDescription)")
+        }
+    }
+
+    private func openNoteAnchor(_ note: Note) {
+        noteNavigationRequest = note.navigationRequest
     }
 
 }

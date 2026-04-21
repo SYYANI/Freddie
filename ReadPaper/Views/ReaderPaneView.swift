@@ -40,6 +40,9 @@ struct ReaderPaneView: View {
     @Binding var readerMode: ReaderMode
     @Binding var displayMode: TranslationDisplayMode
     @Binding var isInspectorCollapsed: Bool
+    @Binding var noteSelectionContext: NoteSelectionContext?
+    @Binding var noteNavigationRequest: NoteNavigationRequest?
+    var onCreateAnchoredNote: () -> Void
 
     @State private var pdfPageIndex = 0
     @State private var htmlScrollRatio = 0.0
@@ -165,12 +168,14 @@ struct ReaderPaneView: View {
             }
             .onAppear(perform: restoreReadingStateForCurrentPaper)
             .onChange(of: paper?.id) { _, _ in
+                noteSelectionContext = nil
                 restoreReadingStateForCurrentPaper()
             }
             .onChange(of: readerAvailability) { _, _ in
                 syncReaderModeWithAvailableContent()
             }
             .onChange(of: readerMode) { _, newValue in
+                noteSelectionContext = nil
                 if newValue != .html {
                     lastPDFReaderMode = normalizedPDFReaderMode(newValue)
                 }
@@ -178,6 +183,9 @@ struct ReaderPaneView: View {
             }
             .onChange(of: pdfPageIndex) { _, _ in
                 persistReadingStateIfNeeded()
+            }
+            .onChange(of: noteNavigationRequest?.id) { _, _ in
+                revealNoteAnchorIfNeeded()
             }
             .onChange(of: htmlScrollRatio) { _, _ in
                 persistReadingStateIfNeeded()
@@ -298,6 +306,7 @@ struct ReaderPaneView: View {
             }
 
             ToolbarItemGroup(placement: .primaryAction) {
+                noteSelectionButton
                 translationMenu
                 exportMenu
 
@@ -345,6 +354,24 @@ struct ReaderPaneView: View {
                 )
             }
         }
+    }
+
+    private var noteSelectionButton: some View {
+        Button {
+            onCreateAnchoredNote()
+        } label: {
+            Label(String(localized: "Add Note", bundle: bundle), systemImage: "plus.circle")
+                .labelStyle(.iconOnly)
+        }
+        .disabled(noteSelectionContext == nil)
+        .help(noteSelectionButtonHelpText)
+    }
+
+    private var noteSelectionButtonHelpText: String {
+        if noteSelectionContext != nil {
+            return String(localized: "Add Note to Current Selection", bundle: bundle)
+        }
+        return String(localized: "Select text in PDF or HTML to attach a note.", bundle: bundle)
     }
 
     private var readerModePicker: some View {
@@ -522,10 +549,13 @@ struct ReaderPaneView: View {
                 if let htmlFileURL = htmlAttachment?.fileURL {
                     HTMLReaderView(
                         fileURL: htmlFileURL,
+                        attachmentID: htmlAttachment?.id,
                         displayMode: displayMode,
                         reloadToken: htmlReloadToken,
                         scrollRatio: $htmlScrollRatio,
-                        segmentUpdate: htmlSegmentUpdate
+                        segmentUpdate: htmlSegmentUpdate,
+                        noteNavigationRequest: noteNavigationRequest,
+                        onNoteSelectionChanged: handleNoteSelectionChange
                     )
                 } else {
                     centeredUnavailableView(
@@ -537,6 +567,7 @@ struct ReaderPaneView: View {
             case .pdf:
                 labeledPDFReader(
                     fileURL: pdfAttachment?.fileURL,
+                    attachmentID: pdfAttachment?.id,
                     label: String(localized: "Original", bundle: bundle),
                     emptyTitle: String(localized: "No PDF available", bundle: bundle),
                     emptyDescription: String(localized: "Import a PDF or fetch one from arXiv to read it here.", bundle: bundle)
@@ -545,9 +576,12 @@ struct ReaderPaneView: View {
                 if translatedPDFAttachment != nil {
                     DualPDFReaderView(
                         originalURL: pdfAttachment?.fileURL,
+                        originalAttachmentID: pdfAttachment?.id,
                         translatedURL: translatedPDFAttachment?.fileURL,
+                        translatedAttachmentID: translatedPDFAttachment?.id,
                         pageIndex: $pdfPageIndex,
-                        reloadToken: pdfReloadToken
+                        reloadToken: pdfReloadToken,
+                        onNoteSelectionChanged: handleNoteSelectionChange
                     )
                 } else {
                     centeredUnavailableView(
@@ -559,6 +593,7 @@ struct ReaderPaneView: View {
             case .translatedPDF:
                 labeledPDFReader(
                     fileURL: translatedPDFAttachment?.fileURL,
+                    attachmentID: translatedPDFAttachment?.id,
                     label: String(localized: "Translation", bundle: bundle),
                     emptyTitle: String(localized: "No translated PDF", bundle: bundle),
                     emptyDescription: String(localized: "Run PDF translation first to read the translated PDF on its own.", bundle: bundle),
@@ -980,13 +1015,20 @@ struct ReaderPaneView: View {
     @ViewBuilder
     private func labeledPDFReader(
         fileURL: URL?,
+        attachmentID: UUID?,
         label: String,
         emptyTitle: String,
         emptyDescription: String,
         reloadToken: Int = 0
     ) -> some View {
         if fileURL != nil {
-            PDFReaderView(fileURL: fileURL, pageIndex: $pdfPageIndex, reloadToken: reloadToken)
+            PDFReaderView(
+                fileURL: fileURL,
+                attachmentID: attachmentID,
+                pageIndex: $pdfPageIndex,
+                reloadToken: reloadToken,
+                onNoteSelectionChanged: handleNoteSelectionChange
+            )
                 .overlay(alignment: .topLeading) {
                     readerLabel(label)
                 }
@@ -1127,6 +1169,56 @@ struct ReaderPaneView: View {
             .padding(.vertical, 4)
             .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6))
             .padding(8)
+    }
+
+    private func handleNoteSelectionChange(_ selection: NoteSelectionContext?) {
+        noteSelectionContext = selection
+    }
+
+    private func revealNoteAnchorIfNeeded() {
+        guard let request = noteNavigationRequest else { return }
+
+        if request.htmlSelector != nil, htmlAttachment != nil {
+            updateWithoutPersistingReadingState {
+                displayMode = .bilingual
+                readerMode = .html
+            }
+            return
+        }
+
+        guard let targetPageIndex = request.pageIndex else { return }
+        let targetMode = preferredReaderMode(for: request)
+
+        updateWithoutPersistingReadingState {
+            readerMode = targetMode
+            if targetMode != .html {
+                lastPDFReaderMode = normalizedPDFReaderMode(targetMode)
+            }
+            pdfPageIndex = max(0, targetPageIndex)
+        }
+    }
+
+    private func preferredReaderMode(for request: NoteNavigationRequest) -> ReaderMode {
+        if request.htmlSelector != nil, htmlAttachment != nil {
+            return .html
+        }
+
+        if request.attachmentID == translatedPDFAttachment?.id, translatedPDFAttachment != nil {
+            if pdfAttachment != nil {
+                return .bilingualPDF
+            }
+            return .translatedPDF
+        }
+
+        if pdfAttachment != nil {
+            return .pdf
+        }
+
+        if translatedPDFAttachment != nil {
+            return .translatedPDF
+        }
+
+        return readerMode
     }
 
     private func normalizedPDFReaderMode(_ mode: ReaderMode) -> ReaderMode {

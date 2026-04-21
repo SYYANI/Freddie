@@ -213,6 +213,17 @@
         }
       }
     },
+    "Add Note to Current Selection" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "为当前选区添加笔记"
+          }
+        }
+      }
+    },
     "Add Paper" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1356,6 +1367,16 @@
         }
       }
     },
+    "Go to Selection" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "跳到标记位置"
+          }
+        }
+      }
+    },
     "Grouping paragraphs" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1432,6 +1453,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "HTML 模型"
+          }
+        }
+      }
+    },
+    "HTML selection" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "HTML 选区"
           }
         }
       }
@@ -2682,6 +2714,17 @@
         }
       }
     },
+    "Select text in PDF or HTML to attach a note." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在 PDF 或 HTML 中选中文本后即可附加笔记。"
+          }
+        }
+      }
+    },
     "Selected Model" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2700,6 +2743,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "已选 Provider"
+          }
+        }
+      }
+    },
+    "Selected text will be attached to the next note." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "当前选中文本会附加到下一条笔记。"
           }
         }
       }

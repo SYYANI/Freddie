@@ -7,7 +7,6 @@ struct InspectorPaneView: View {
     @Environment(\.localizationBundle) private var bundle
     @State private var notePendingDeletion: Note?
     @State private var noteDeletionErrorMessage: String?
-    @State private var focusedNoteID: UUID?
     @State private var isAbstractExpanded = false
     @State private var isTranslatingAbstract = false
     @State private var abstractTranslationError: String?
@@ -15,6 +14,10 @@ struct InspectorPaneView: View {
     var paper: Paper?
     var notes: [Note]
     var isCollapsed: Bool
+    var currentSelectionContext: NoteSelectionContext?
+    @Binding var focusedNoteID: UUID?
+    var onCreateNote: () -> Void
+    var onOpenNoteAnchor: (Note) -> Void
 
     var body: some View {
         Group {
@@ -76,7 +79,7 @@ struct InspectorPaneView: View {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 18) {
                             metadataSection(paper)
-                            notesSection(paper)
+                            notesSection()
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(16)
@@ -146,7 +149,7 @@ struct InspectorPaneView: View {
                 Spacer()
                 
                 HStack(spacing: 8) {
-                    if let translatedAbstract = translatedAbstract {
+                    if translatedAbstract != nil {
                         Button {
                             self.translatedAbstract = nil
                         } label: {
@@ -282,17 +285,28 @@ struct InspectorPaneView: View {
         }
     }
 
-    private func notesSection(_ paper: Paper) -> some View {
+    private func notesSection() -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text("Notes", bundle: bundle)
                     .font(.headline)
                 Spacer()
                 Button {
-                    addNote(for: paper)
+                    onCreateNote()
                 } label: {
-                    Label(String(localized: "Add Note", bundle: bundle), systemImage: "plus")
+                    Label(
+                        currentSelectionContext != nil
+                            ? String(localized: "Add Note to Current Selection", bundle: bundle)
+                            : String(localized: "Add Note", bundle: bundle),
+                        systemImage: "plus"
+                    )
                 }
+            }
+
+            if currentSelectionContext != nil {
+                Text("Selected text will be attached to the next note.", bundle: bundle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             if notes.isEmpty {
@@ -303,7 +317,8 @@ struct InspectorPaneView: View {
                 ForEach(notes) { note in
                     NoteEditor(
                         note: note,
-                        shouldFocus: focusedNoteID == note.id
+                        shouldFocus: focusedNoteID == note.id,
+                        onOpenAnchor: note.hasAnchor ? { onOpenNoteAnchor(note) } : nil
                     ) {
                         notePendingDeletion = note
                     } onFocusApplied: {
@@ -314,13 +329,6 @@ struct InspectorPaneView: View {
                 }
             }
         }
-    }
-
-    private func addNote(for paper: Paper) {
-        let note = Note(paperID: paper.id, body: "")
-        modelContext.insert(note)
-        try? modelContext.save()
-        focusedNoteID = note.id
     }
 
     private func deleteNote(_ note: Note) {
@@ -443,6 +451,7 @@ private struct NoteEditor: View {
     @Environment(\.localizationBundle) private var bundle
     @Bindable var note: Note
     let shouldFocus: Bool
+    let onOpenAnchor: (() -> Void)?
     let onDelete: () -> Void
     let onFocusApplied: () -> Void
 
@@ -459,6 +468,36 @@ private struct NoteEditor: View {
                 }
                 .buttonStyle(.borderless)
                 .help(String(localized: "Delete note", bundle: bundle))
+            }
+
+            if let anchorSummary = noteAnchorSummary {
+                HStack(spacing: 8) {
+                    Label(anchorSummary, systemImage: note.pageIndex != nil ? "bookmark" : "text.alignleft")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    if let onOpenAnchor {
+                        Button(action: onOpenAnchor) {
+                            Text("Go to Selection", bundle: bundle)
+                                .font(.caption.weight(.medium))
+                        }
+                        .buttonStyle(.borderless)
+                    }
+                }
+            }
+
+            if let quote = note.trimmedQuote {
+                Text(quote)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(Color(nsColor: .controlBackgroundColor))
+                    )
             }
 
             InsetTextView(
@@ -483,6 +522,16 @@ private struct NoteEditor: View {
                         .allowsHitTesting(false)
                 }
         }
+    }
+
+    private var noteAnchorSummary: String? {
+        if let pageIndex = note.pageIndex {
+            return "\(String(localized: "Page", bundle: bundle)) \(pageIndex + 1)"
+        }
+        if note.normalizedHTMLSelector != nil {
+            return String(localized: "HTML selection", bundle: bundle)
+        }
+        return nil
     }
 }
 
