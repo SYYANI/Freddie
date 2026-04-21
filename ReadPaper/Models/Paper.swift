@@ -121,4 +121,25 @@ final class Paper {
             .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
     }
+
+    static func editableAuthorsText(_ authors: [String]) -> String {
+        authors
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: ", ")
+    }
+
+    static func decodeEditableAuthors(_ text: String) -> [String] {
+        text
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .split(whereSeparator: { character in
+                character == "\n" ||
+                character == "," ||
+                character == "，" ||
+                character == ";" ||
+                character == "；"
+            })
+            .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+    }
 }

@@ -3,14 +3,22 @@ import SwiftData
 import SwiftUI
 
 struct InspectorPaneView: View {
+    private enum MetadataField: Hashable {
+        case authors
+    }
+
     @Environment(\.modelContext) private var modelContext
     @Environment(\.localizationBundle) private var bundle
     @State private var notePendingDeletion: Note?
     @State private var noteDeletionErrorMessage: String?
+    @State private var authorsSaveErrorMessage: String?
     @State private var isAbstractExpanded = false
     @State private var isTranslatingAbstract = false
     @State private var abstractTranslationError: String?
     @State private var translatedAbstract: String?
+    @State private var isEditingAuthors = false
+    @State private var authorsDraft = ""
+    @FocusState private var focusedMetadataField: MetadataField?
     var paper: Paper?
     var notes: [Note]
     var isCollapsed: Bool
@@ -29,6 +37,12 @@ struct InspectorPaneView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Color(nsColor: .windowBackgroundColor))
+        .onAppear {
+            syncMetadataEditorState(with: paper)
+        }
+        .onChange(of: paper?.id) { _, _ in
+            syncMetadataEditorState(with: paper)
+        }
         .confirmationDialog(
             String(localized: "Delete Note?", bundle: bundle),
             isPresented: Binding(
@@ -125,18 +139,65 @@ struct InspectorPaneView: View {
             Text(paper.title)
                 .font(.title3.weight(.semibold))
                 .textSelection(.enabled)
-            Text(paper.displayAuthors)
-                .foregroundStyle(.secondary)
-                .textSelection(.enabled)
+            authorsView(for: paper)
             if let identifierText = paper.metadataIdentifierText {
                 Text(identifierText)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .textSelection(.enabled)
             }
+            if let authorsSaveErrorMessage {
+                Text(authorsSaveErrorMessage)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
             if !paper.abstractText.isEmpty {
                 abstractView(paper.abstractText)
             }
+        }
+    }
+
+    @ViewBuilder
+    private func authorsView(for paper: Paper) -> some View {
+        if isEditingAuthors {
+            TextField("", text: $authorsDraft, axis: .vertical)
+                .textFieldStyle(.plain)
+                .font(.body)
+                .foregroundStyle(.secondary)
+                .lineLimit(1...3)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(Color(nsColor: .textBackgroundColor))
+                )
+                .overlay {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .strokeBorder(Color.accentColor.opacity(0.22), lineWidth: 1)
+                }
+                .focused($focusedMetadataField, equals: .authors)
+                .onSubmit {
+                    commitAuthorsEdits(for: paper)
+                }
+                .onChange(of: focusedMetadataField) { _, newValue in
+                    if newValue != .authors, isEditingAuthors {
+                        commitAuthorsEdits(for: paper)
+                    }
+                }
+                .onExitCommand {
+                    cancelAuthorsEditing(for: paper)
+                }
+        } else {
+            Button {
+                beginAuthorsEditing(for: paper)
+            } label: {
+                Text(paper.displayAuthors)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
         }
     }
     
@@ -344,6 +405,58 @@ struct InspectorPaneView: View {
             modelContext.rollback()
             notePendingDeletion = nil
             noteDeletionErrorMessage = error.localizedDescription
+        }
+    }
+
+    private func syncMetadataEditorState(with paper: Paper?) {
+        authorsSaveErrorMessage = nil
+        isEditingAuthors = false
+        focusedMetadataField = nil
+        authorsDraft = paper.map { Paper.editableAuthorsText($0.authors) } ?? ""
+    }
+
+    private func beginAuthorsEditing(for paper: Paper) {
+        authorsSaveErrorMessage = nil
+        authorsDraft = Paper.editableAuthorsText(paper.authors)
+        isEditingAuthors = true
+        focusedMetadataField = .authors
+    }
+
+    private func cancelAuthorsEditing(for paper: Paper) {
+        authorsSaveErrorMessage = nil
+        authorsDraft = Paper.editableAuthorsText(paper.authors)
+        isEditingAuthors = false
+        focusedMetadataField = nil
+    }
+
+    private func commitAuthorsEdits(for paper: Paper) {
+        let updatedAuthors = Paper.decodeEditableAuthors(authorsDraft)
+        guard updatedAuthors != paper.authors else {
+            authorsDraft = Paper.editableAuthorsText(updatedAuthors)
+            isEditingAuthors = false
+            focusedMetadataField = nil
+            authorsSaveErrorMessage = nil
+            return
+        }
+
+        let previousAuthors = paper.authors
+        let previousModifiedAt = paper.modifiedAt
+        paper.authors = updatedAuthors
+        paper.modifiedAt = Date()
+
+        do {
+            try modelContext.save()
+            authorsDraft = Paper.editableAuthorsText(updatedAuthors)
+            isEditingAuthors = false
+            focusedMetadataField = nil
+            authorsSaveErrorMessage = nil
+        } catch {
+            modelContext.rollback()
+            paper.authors = previousAuthors
+            paper.modifiedAt = previousModifiedAt
+            authorsDraft = Paper.editableAuthorsText(previousAuthors)
+            authorsSaveErrorMessage = error.localizedDescription
+            focusedMetadataField = .authors
         }
     }
     

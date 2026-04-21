@@ -154,6 +154,24 @@ final class PaperDigestExportPolicyTests: XCTestCase {
         )
     }
 
+    func testEditableAuthorsHelpersRoundTripCommonInputFormats() {
+        let authors = Paper.decodeEditableAuthors(
+            """
+            Ada Lovelace, Alan Turing
+            Grace Hopper；Linus Torvalds
+            """
+        )
+
+        XCTAssertEqual(
+            authors,
+            ["Ada Lovelace", "Alan Turing", "Grace Hopper", "Linus Torvalds"]
+        )
+        XCTAssertEqual(
+            Paper.editableAuthorsText(authors),
+            "Ada Lovelace, Alan Turing, Grace Hopper, Linus Torvalds"
+        )
+    }
+
     func testExportWithoutConfiguredDirectoryThrows() throws {
         let defaults = try makeIsolatedDefaults()
         let paper = Paper(title: "No Directory Paper")
