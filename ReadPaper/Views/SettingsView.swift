@@ -90,6 +90,8 @@ private struct SettingsForm: View {
     @AppStorage("ReadPaper.Settings.SelectedTab") private var selectedTabRawValue = SettingsTab.general.rawValue
     @AppStorage("ReadPaper.Settings.DidDismissGettingStarted") private var didDismissGettingStarted = false
     @AppStorage(BabelDocInstallSource.userDefaultsKey) private var babelDocInstallSourceRawValue = BabelDocInstallSource.official.rawValue
+    @AppStorage(PDFDisplayAppearance.userDefaultsKey)
+    private var pdfDisplayAppearanceRawValue = PDFDisplayAppearance.defaultValue.rawValue
     @AppStorage(PaperDigestExportConfiguration.templateKey) private var digestExportTemplate = PaperDigestExportPolicy.defaultMarkdownTemplate
     @AppStorage(PaperDigestExportConfiguration.directoryDisplayPathKey) private var digestExportDirectoryPath = ""
 
@@ -237,6 +239,13 @@ private struct SettingsForm: View {
         Binding(
             get: { BabelDocInstallSource(rawValue: babelDocInstallSourceRawValue) ?? .official },
             set: { babelDocInstallSourceRawValue = $0.rawValue }
+        )
+    }
+
+    private var pdfDisplayAppearanceBinding: Binding<PDFDisplayAppearance> {
+        Binding(
+            get: { PDFDisplayAppearance.resolve(rawValue: pdfDisplayAppearanceRawValue) },
+            set: { pdfDisplayAppearanceRawValue = $0.rawValue }
         )
     }
 
@@ -444,6 +453,20 @@ private struct SettingsForm: View {
     private var readerTab: some View {
         VStack(alignment: .leading, spacing: 12) {
             Form {
+                Section(String(localized: "PDF Appearance", bundle: bundle)) {
+                    Picker(String(localized: "PDF Appearance", bundle: bundle), selection: pdfDisplayAppearanceBinding) {
+                        Text("Default", bundle: bundle).tag(PDFDisplayAppearance.defaultMode)
+                        Text("Dark", bundle: bundle).tag(PDFDisplayAppearance.dark)
+                        Text("Paper Tone", bundle: bundle).tag(PDFDisplayAppearance.paper)
+                    }
+                    .pickerStyle(.segmented)
+
+                    Text("Choose the default look for PDF reading. Default keeps the original rendering, Dark inverts the PDF canvas for low-light reading, and Paper Tone adds a warm paper-like tint.", bundle: bundle)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
                 Section(String(localized: "How to use translation", bundle: bundle)) {
                     Text("After selecting routes here, go back to the main window, import a paper, open it in the reader, and use the Translate button in the toolbar.", bundle: bundle)
                         .fixedSize(horizontal: false, vertical: true)

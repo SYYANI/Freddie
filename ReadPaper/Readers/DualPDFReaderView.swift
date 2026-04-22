@@ -7,6 +7,7 @@ struct DualPDFReaderView: View {
     var originalAttachmentID: UUID? = nil
     var translatedURL: URL?
     var translatedAttachmentID: UUID? = nil
+    var displayAppearance: PDFDisplayAppearance = .defaultMode
     @Binding var pageIndex: Int
     var reloadToken: Int = 0
     var onNoteSelectionChanged: ((NoteSelectionContext?) -> Void)? = nil
@@ -27,7 +28,7 @@ struct DualPDFReaderView: View {
 
     var body: some View {
         HSplitView {
-            PDFReaderView(
+            themedPDFReader(
                 fileURL: originalURL,
                 attachmentID: originalAttachmentID,
                 pageIndex: $pageIndex
@@ -37,7 +38,7 @@ struct DualPDFReaderView: View {
                 .overlay(alignment: .topLeading) {
                     readerLabel(String(localized: "Original", bundle: bundle))
                 }
-            PDFReaderView(
+            themedPDFReader(
                 fileURL: translatedURL,
                 attachmentID: translatedAttachmentID,
                 pageIndex: $translatedPageIndex,
@@ -105,6 +106,25 @@ struct DualPDFReaderView: View {
 
     private func updateTranslatedPageCount() {
         translatedPageCount = translatedURL.flatMap { PDFDocument(url: $0)?.pageCount } ?? 0
+    }
+
+    private func themedPDFReader(
+        fileURL: URL?,
+        attachmentID: UUID?,
+        pageIndex: Binding<Int>,
+        reloadToken: Int = 0,
+        onSelectionChanged: @escaping (NoteSelectionContext?) -> Void
+    ) -> some View {
+        PDFDisplaySurface(appearance: displayAppearance) {
+            PDFReaderView(
+                fileURL: fileURL,
+                attachmentID: attachmentID,
+                displayAppearance: displayAppearance,
+                pageIndex: pageIndex,
+                reloadToken: reloadToken,
+                onNoteSelectionChanged: onSelectionChanged
+            )
+        }
     }
 
     private func readerLabel(_ value: String) -> some View {

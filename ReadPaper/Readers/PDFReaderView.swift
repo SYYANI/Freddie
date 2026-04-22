@@ -1,9 +1,83 @@
 import PDFKit
 import SwiftUI
 
+enum PDFDisplayAppearance: String, CaseIterable, Identifiable {
+    case defaultMode = "default"
+    case dark
+    case paper
+
+    static let userDefaultsKey = "ReadPaper.Reader.PDFDisplayAppearance"
+    static let defaultValue: Self = .defaultMode
+
+    var id: String { rawValue }
+
+    static func resolve(rawValue: String) -> Self {
+        Self(rawValue: rawValue) ?? defaultValue
+    }
+}
+
+extension PDFDisplayAppearance {
+    var pdfBackgroundColor: NSColor {
+        switch self {
+        case .defaultMode:
+            return .textBackgroundColor
+        case .dark:
+            // Keep the PDFView background light so the difference blend can invert
+            // both the page and the surrounding canvas into a dark reading surface.
+            return NSColor(calibratedWhite: 0.96, alpha: 1)
+        case .paper:
+            return NSColor(calibratedRed: 0.96, green: 0.93, blue: 0.86, alpha: 1)
+        }
+    }
+
+    var surfaceColor: Color {
+        Color(nsColor: pdfBackgroundColor)
+    }
+}
+
+struct PDFDisplaySurface<Content: View>: View {
+    var appearance: PDFDisplayAppearance
+    @ViewBuilder var content: () -> Content
+
+    var body: some View {
+        content()
+            .background(appearance.surfaceColor)
+            .compositingGroup()
+            .overlay {
+                overlay
+            }
+    }
+
+    @ViewBuilder
+    private var overlay: some View {
+        switch appearance {
+        case .defaultMode:
+            EmptyView()
+        case .dark:
+            Rectangle()
+                .fill(Color.white)
+                .blendMode(.difference)
+                .allowsHitTesting(false)
+        case .paper:
+            LinearGradient(
+                colors: [
+                    Color(red: 0.99, green: 0.97, blue: 0.91),
+                    Color(red: 0.92, green: 0.88, blue: 0.77)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .blendMode(.multiply)
+            .opacity(0.38)
+            .allowsHitTesting(false)
+        }
+    }
+}
+
 struct PDFReaderView: NSViewRepresentable {
     var fileURL: URL?
     var attachmentID: UUID? = nil
+    var displayAppearance: PDFDisplayAppearance = .defaultMode
     @Binding var pageIndex: Int
     var reloadToken: Int = 0
     var onNoteSelectionChanged: ((NoteSelectionContext?) -> Void)? = nil
@@ -14,12 +88,13 @@ struct PDFReaderView: NSViewRepresentable {
         view.displayMode = .singlePageContinuous
         view.displayDirection = .vertical
         view.displaysPageBreaks = true
-        view.backgroundColor = .textBackgroundColor
+        applyDisplayAppearance(displayAppearance, to: view)
         context.coordinator.attach(to: view)
         return view
     }
 
     func updateNSView(_ view: PDFView, context: Context) {
+        applyDisplayAppearance(displayAppearance, to: view)
         context.coordinator.attachmentID = attachmentID
         context.coordinator.onNoteSelectionChanged = onNoteSelectionChanged
 
@@ -50,6 +125,10 @@ struct PDFReaderView: NSViewRepresentable {
             pageIndex: $pageIndex,
             onNoteSelectionChanged: onNoteSelectionChanged
         )
+    }
+
+    private func applyDisplayAppearance(_ appearance: PDFDisplayAppearance, to view: PDFView) {
+        view.backgroundColor = appearance.pdfBackgroundColor
     }
 
     @MainActor

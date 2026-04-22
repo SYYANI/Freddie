@@ -737,6 +737,16 @@
         }
       }
     },
+    "Choose the default look for PDF reading. Default keeps the original rendering, Dark inverts the PDF canvas for low-light reading, and Paper Tone adds a warm paper-like tint." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选择 PDF 阅读的默认外观。默认保留原始渲染，深色会反相 PDF 画面以便低光环境阅读，纸质会加入温暖的纸张色调。"
+          }
+        }
+      }
+    },
     "Choose Translation Scope" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -903,6 +913,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "当前已安装版本"
+          }
+        }
+      }
+    },
+    "Dark" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "深色"
+          }
+        }
+      }
+    },
+    "Default" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "默认"
           }
         }
       }
@@ -2265,8 +2295,29 @@
         }
       }
     },
+    "Paper Tone" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "纸质"
+          }
+        }
+      }
+    },
     "PDF" : {
 
+    },
+    "PDF Appearance" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PDF 外观"
+          }
+        }
+      }
     },
     "PDF Display" : {
       "extractionState" : "stale",

@@ -32,6 +32,8 @@ struct ReaderPaneView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.localizationBundle) private var bundle
     @Query(sort: \ReadingState.modifiedAt, order: .reverse) private var readingStates: [ReadingState]
+    @AppStorage(PDFDisplayAppearance.userDefaultsKey)
+    private var pdfDisplayAppearanceRawValue = PDFDisplayAppearance.defaultValue.rawValue
 
     var paper: Paper?
     var attachments: [PaperAttachment]
@@ -125,6 +127,10 @@ struct ReaderPaneView: View {
     private var readingState: ReadingState? {
         guard let paper else { return nil }
         return readingStates.first { $0.paperID == paper.id }
+    }
+
+    private var pdfDisplayAppearance: PDFDisplayAppearance {
+        PDFDisplayAppearance.resolve(rawValue: pdfDisplayAppearanceRawValue)
     }
 
     private var primaryReaderMode: Binding<PrimaryReaderMode> {
@@ -579,6 +585,7 @@ struct ReaderPaneView: View {
                         originalAttachmentID: pdfAttachment?.id,
                         translatedURL: translatedPDFAttachment?.fileURL,
                         translatedAttachmentID: translatedPDFAttachment?.id,
+                        displayAppearance: pdfDisplayAppearance,
                         pageIndex: $pdfPageIndex,
                         reloadToken: pdfReloadToken,
                         onNoteSelectionChanged: handleNoteSelectionChange
@@ -1022,13 +1029,16 @@ struct ReaderPaneView: View {
         reloadToken: Int = 0
     ) -> some View {
         if fileURL != nil {
-            PDFReaderView(
-                fileURL: fileURL,
-                attachmentID: attachmentID,
-                pageIndex: $pdfPageIndex,
-                reloadToken: reloadToken,
-                onNoteSelectionChanged: handleNoteSelectionChange
-            )
+            PDFDisplaySurface(appearance: pdfDisplayAppearance) {
+                PDFReaderView(
+                    fileURL: fileURL,
+                    attachmentID: attachmentID,
+                    displayAppearance: pdfDisplayAppearance,
+                    pageIndex: $pdfPageIndex,
+                    reloadToken: reloadToken,
+                    onNoteSelectionChanged: handleNoteSelectionChange
+                )
+            }
                 .overlay(alignment: .topLeading) {
                     readerLabel(label)
                 }
