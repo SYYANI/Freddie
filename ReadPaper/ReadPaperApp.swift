@@ -19,7 +19,16 @@ struct ReadPaperApp: App {
         WindowGroup {
             ContentView()
                 .environment(\.localizationBundle, bundle)
+                .frame(
+                    minWidth: MainWindowMetrics.minWidth,
+                    minHeight: MainWindowMetrics.minHeight
+                )
         }
+        .defaultSize(
+            width: MainWindowMetrics.defaultWidth,
+            height: MainWindowMetrics.defaultHeight
+        )
+        .windowResizability(.contentMinSize)
         .modelContainer(sharedModelContainer)
 
         Settings {
@@ -29,6 +38,13 @@ struct ReadPaperApp: App {
                 .frame(width: 920, height: 720)
         }
     }
+}
+
+private enum MainWindowMetrics {
+    static let defaultWidth: CGFloat = 1220
+    static let defaultHeight: CGFloat = 780
+    static let minWidth: CGFloat = 1040
+    static let minHeight: CGFloat = 640
 }
 
 enum ReadPaperModelStore {

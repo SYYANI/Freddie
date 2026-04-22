@@ -741,8 +741,6 @@ private struct SettingsForm: View {
                         .toggleStyle(.checkbox)
                 }
 
-                Divider()
-
                 DisclosureGroup(isExpanded: $showsModelAdvancedOptions) {
                     VStack(alignment: .leading, spacing: 12) {
                         SettingsFieldRow(String(localized: "Temperature", bundle: bundle)) {
