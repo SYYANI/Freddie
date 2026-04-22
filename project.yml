@@ -35,8 +35,8 @@ targets:
         SWIFT_VERSION: 6.0
         ENABLE_TESTABILITY: YES
         CODE_SIGN_STYLE: Automatic
-        CURRENT_PROJECT_VERSION: 21
-        MARKETING_VERSION: 0.3.1
+        CURRENT_PROJECT_VERSION: 22
+        MARKETING_VERSION: 0.3.2
   ReadPaperTests:
     type: bundle.unit-test
     platform: macOS
