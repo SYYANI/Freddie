@@ -143,7 +143,6 @@
       }
     },
     "A model profile points to one provider and stores the exact chat model name plus optional sampling parameters. You can create separate profiles for fast HTML translation and heavier PDF work." : {
-      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -877,7 +876,6 @@
       }
     },
     "Create one provider for each OpenAI-compatible endpoint you want to use. The API key is stored in Keychain, so leaving the API key field blank while editing an existing provider keeps the saved key." : {
-      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -1338,7 +1336,6 @@
       }
     },
     "For a typical setup, fill in the service base URL, paste the API key, set a lightweight test model, then click Save and Test." : {
-      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -2393,7 +2390,6 @@
       }
     },
     "Profile name is only for display inside ReadPaper. Model name must match the real model identifier accepted by your provider." : {
-      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
