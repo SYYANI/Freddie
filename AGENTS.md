@@ -6,10 +6,11 @@
 
 ReadPaper 是一个 macOS SwiftUI 论文阅读应用，使用 SwiftData 做本地数据模型，PDFKit 处理本地 PDF 轻量文本抽取，`swift-readability` 处理 arXiv/ar5iv HTML 正文抽取，SwiftSoup 处理 HTML 本地化和 HTML 段落翻译。项目最低 macOS 版本为 14.0，Swift 版本为 6.0，Xcode 项目由 `project.yml` 描述，依赖 SwiftSoup、`swift-readability` 和 `SwiftOpenAI`。
 
-核心能力分成三条路径：
+核心能力分成四条路径：
 
 - 本地 PDF：导入 PDF，抽取 Info dictionary 和前几页文本，只用于标题、作者和 arXiv ID 等轻量识别；不要把 PDF 纯文本当成稳定全文结构。本地 PDF 里的 `arxivID` 只应在出现明确 arXiv 上下文时写入，例如 `arXiv:2303.08774` 或 `arxiv.org` / `ar5iv.labs.arxiv.org` 链接；不要把 DOI、Crossref 链接或其他编号片段误识别成 arXiv ID。若能从 PDF 正文或元信息中可靠提取 DOI，可把 DOI 作为无 arXiv 时的降级展示标识。
 - arXiv 论文：通过 arXiv API 获取元数据和 PDF，优先保存 `https://arxiv.org/html/{id}`，失败后回退到 `https://ar5iv.labs.arxiv.org/html/{id}`；获取 HTML 后优先用 `swift-readability` 提炼正文，再把 HTML、CSS、图片等资源本地化，若正文抽取失败再回退到原始 HTML。通过 arXiv ID/URL 导入时，不要只给一个不透明的 loading spinner；应尽量向用户暴露当前所处阶段，例如 ID 规范化、元数据获取、PDF 下载、HTML 获取/回退、最终入库保存。
+- 网页导入：输入任意 HTTP/HTTPS 网页 URL，通过 `normalizeWebPageURL` 规范化 URL（自动补齐 https、去除 fragment）；用 `HTMLLocalizer` 的 `swift-readability` 路径下载并提炼正文，同时本地化页面中的 CSS、图片等链接资源；若 title 元素可解析则使用提取的标题，否则依次回退到 URL path 组件和 host，最终回退到"Untitled Web Page"。通过 `WebPageImportProgress` 反馈分步骤进度（URL 校验 → 网页抓取 → 创建库条目 → 最终保存），与 arXiv 导入一样使用确定型进度条。网页内容以本地化 HTML 形式保存为 `paper.html`，与 arXiv HTML 共用同一套展示和翻译管线。导入时以 URL 去重（`htmlURLString`），不依赖 arXiv ID。
 - 翻译阅读：HTML 走 SwiftSoup DOM 分段翻译并插入 `.rp-translation-block`；完整 PDF 翻译交给外部 BabelDOC CLI，输出翻译 PDF 后用双栏 PDF 阅读器展示。PDF 翻译现在也支持按页增量生成与续翻，过程中译文 PDF 可能只是覆盖前 N 页的 partial 文档；进度与阅读器状态都要显式体现这一点。PDF 翻译进度也应尽量使用确定型进度条，而不是长期停留在无上下文的 spinner。
 
 `refer.md` 是当前项目 PDF/HTML/翻译架构的设计参考，涉及结构化处理、翻译流程或展示策略时先读它。
@@ -63,7 +64,7 @@ GitHub Actions 构建 DMG：
 - `ReadPaper/Views/`：SwiftUI 界面，包含主布局、导入面板、阅读工具栏、设置页和检查器。
 - `ReadPaper/Readers/`：PDF、HTML、双语 PDF 阅读器。
 - `ReadPaper/Services/`：导入、arXiv API、HTML 本地化、翻译、BabelDOC、Keychain、文件存储、子进程运行等业务服务。
-- `ReadPaperTests/`：XCTest 单元测试，重点覆盖 arXiv ID/Atom 解析、文件存储、HTML 翻译管线、BabelDOC 参数和进程运行。
+- `ReadPaperTests/`：XCTest 单元测试，重点覆盖 arXiv ID/Atom 解析、文件存储、HTML 翻译管线、BabelDOC 参数、进程运行和网页导入。
 - `ReadPaper/Localizable.xcstrings`：应用自有 UI、状态文案和错误文案的字符串目录，当前以英文 source string 为 key，并提供 `en` / `zh-Hans`。
 - `ReadPaper/InfoPlist.xcstrings`：Info.plist 对用户可见文案的字符串目录，例如 `NSDocumentsFolderUsageDescription`。
 - `project.yml`：XcodeGen 的项目源配置。调整 target、依赖、构建设置时改这里并重新生成项目。
@@ -85,9 +86,9 @@ SwiftData 元数据 store 也应视为该目录的一部分：当前显式落在
 
 SwiftData schema 变更要特别谨慎：历史上已经出现过“新版本删改 `AppSettings` 字段并写回 `ReadPaper.store`，随后旧版 `Freddie 0.1.8 (9)` 再打开同一份 store 时，在 `ReadPaperApp.init()` 创建 `ModelContainer` 阶段直接 `fatalError` 崩溃”的问题。对于会落盘的模型字段，尤其是 `AppSettings`、`LLMProviderProfile`、`LLMModelProfile` 这类启动早期就会参与建库/开库的类型，不要只改当前代码里的 `@Model` 定义；必须同时考虑旧 store 兼容、`SchemaMigrationPlan` / `VersionedSchema`、或至少临时保留兼容字段，避免发布后出现“新库打不开旧版 / 旧版打不开新库”的双向不兼容。
 
-`paper.html` 当前默认保存的是适合阅读和翻译的本地化 HTML；对于 arXiv/ar5iv 导入，它通常是 `swift-readability` 提炼后的正文包装页，而不是原站完整页面快照。改导入链路时要注意这一展示语义。
+`paper.html` 当前默认保存的是适合阅读和翻译的本地化 HTML；对于 arXiv/ar5iv 导入，它通常是 `swift-readability` 提炼后的正文包装页，而不是原站完整页面快照。对于网页导入，同样走 `swift-readability` 提炼正文后以本地化 HTML 保存，与 arXiv HTML 共用同一套展示和翻译管线。改导入链路时要注意这一展示语义。
 
-附件通过 `PaperAttachment` 记录，类型包括 `pdf`、`html`、`translatedPDF` 和 `resource`，来源包括 `arxivPDF`、`arxivHTML`、`localImport`、`babeldoc` 和 `generated`。`translatedPDF` 在增量翻译路径下还会用 `translatedLastPage` 表示当前已覆盖到原文的最后一页；改文件写入、合并续翻或替换译文文件时，要同时维护附件记录、`translatedLastPage` 语义和 SwiftData 保存时机。
+附件通过 `PaperAttachment` 记录，类型包括 `pdf`、`html`、`translatedPDF` 和 `resource`，来源包括 `arxivPDF`、`arxivHTML`、`localImport`、`webPage`、`babeldoc` 和 `generated`。`translatedPDF` 在增量翻译路径下还会用 `translatedLastPage` 表示当前已覆盖到原文的最后一页；改文件写入、合并续翻或替换译文文件时，要同时维护附件记录、`translatedLastPage` 语义和 SwiftData 保存时机。
 
 LLM 配置现已拆成独立 SwiftData 模型：`LLMProviderProfile` 负责 provider 名称、`baseURL`、`apiKeyRef`、`testModel` 和启用状态，`LLMModelProfile` 负责模型名、所属 provider 和高级参数。`AppSettings` 只保留全局翻译偏好与当前选中的 HTML/PDF model profile；运行时路由解析不再依赖旧的单 Base URL / 多 legacy model name 配置。
 
@@ -130,6 +131,7 @@ LLM 配置现已拆成独立 SwiftData 模型：`LLMProviderProfile` 负责 prov
 - `DualPDFReaderView` 的双向页码同步要区分“共享的原文阅读位置”和“译文侧可显示范围”。如果翻译 PDF 只是 partial 文档，译文侧 `translatedPageIndex` 可以 clamp 到当前最大可用页，但不要把原文侧共享的 `pageIndex` 反向夹回 partial 范围，否则会导致 original PDF 无法翻到后续未翻译页面。
 - PDF 阅读位置恢复与持久化时，`ReadingState` 中保存的 `pageIndex` 仍应表达用户在原文坐标系里的上次位置。双栏或纯译文视图在打开时，以及 translated page count 发生变化时，应把译文侧位置同步到 `min(savedOriginalPageIndex, translatedLastAvailablePage)`；但不要因此把 original `pageIndex` 改写成更小值。关闭应用后二次打开时，至少要保证译文侧落到与上次阅读位置对应的可用页，而不是回到首页。
 - arXiv 导入进度要尽量使用确定型、分步骤的状态反馈；如果链路已知关键阶段，至少同时展示当前步骤标题和阶段性说明，不要退回成只有转圈、没有上下文的等待态。若 HTML 主源失败并回退到备用源，也要把“正在尝试备用源”明确告诉用户。
+- 网页导入进度同样使用确定型、分步骤的状态反馈，通过 `WebPageImportProgress` 暴露 URL 校验 → 网页抓取 → 创建库条目 → 最终保存四个阶段。不要在导入过程中退回成无上下文的 spinner。
 - 网络和子进程路径要可测试：通过可注入的 `URLSession`、`FileManager`、`ProcessRunner` 或配置快照传入依赖。
 - 处理本地文件时使用 `URL`/`FileManager`，不要拼接易碎路径字符串，除非已有模型字段需要保存 `.path`。
 - 涉及 SwiftData 的异步 UI 流程目前多在 `@MainActor` 上运行；改并发代码时显式考虑 actor 隔离和取消。
@@ -153,7 +155,7 @@ xcodebuild -project ReadPaper.xcodeproj -scheme ReadPaper -destination 'platform
 
 - arXiv ID、Atom XML：`ArxivClientTests`
 - 文件目录和附件写入：`PaperFileStoreTests`
-- 本地 PDF 导入、arXiv ID 误判回归、arXiv 导入进度阶段：`PaperImporterTests`
+- 本地 PDF 导入、arXiv ID 误判回归、arXiv 导入进度阶段、网页导入与 Readability 正文抽取：`PaperImporterTests`
 - HTML 导入、本地化与 Readability 回退：`HTMLLocalizerTests`
 - HTML 候选抽取、占位符保护、译文插入：`HTMLTranslationPipelineTests`
 - BabelDOC 安装源、latest 版本解析、uv 安装参数：`BabelDocToolManagerTests`

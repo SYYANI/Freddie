@@ -158,6 +158,15 @@ struct WebPageImportProgress: Equatable {
         )
     }
 
+    static func downloadingPDF(from url: URL) -> Self {
+        Self(
+            stage: .fetchingHTML,
+            fractionCompleted: 0.35,
+            title: AppLocalization.localized("Downloading PDF"),
+            detail: AppLocalization.format("Saving the source PDF for %@ to your local library.", url.host ?? url.absoluteString)
+        )
+    }
+
     static func finalizing() -> Self {
         Self(
             stage: .finalizing,

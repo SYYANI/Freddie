@@ -263,6 +263,66 @@ final class PaperImporterTests: XCTestCase {
     }
 
     @MainActor
+    func testImportWebPageDetectsPDFContentTypeAndSavesAsPDF() async throws {
+        let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: rootURL) }
+
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [MockPaperImporterURLProtocol.self]
+        let session = URLSession(configuration: configuration)
+
+        MockPaperImporterURLProtocol.requestHandler = { request in
+            let url = try XCTUnwrap(request.url)
+
+            switch (url.host, url.path) {
+            case ("example.com", "/paper.pdf"):
+                return (
+                    HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: ["Content-Type": "application/pdf"])!,
+                    Data("%PDF-1.4 test".utf8)
+                )
+            default:
+                XCTFail("Unexpected request: \(url.absoluteString)")
+                throw URLError(.badURL)
+            }
+        }
+
+        let importer = PaperImporter(
+            fileStore: PaperFileStore(applicationSupportDirectory: rootURL),
+            htmlLocalizer: HTMLLocalizer(session: session, fileManager: .default),
+            session: session
+        )
+        let modelContext = ModelContext(try makeContainer())
+        var progressEvents: [WebPageImportProgress] = []
+
+        let paper = try await importer.importWebPage("https://example.com/paper.pdf", modelContext: modelContext) { progress in
+            progressEvents.append(progress)
+        }
+
+        XCTAssertEqual(
+            progressEvents.map(\.stage),
+            [
+                .validatingURL,
+                .validatingURL,
+                .fetchingHTML,
+                .fetchingHTML,
+                .creatingLibraryEntry,
+                .finalizing
+            ]
+        )
+        XCTAssertEqual(progressEvents[safe: 3]?.title, "Downloading PDF")
+        XCTAssertEqual(paper.htmlURLString, "https://example.com/paper.pdf")
+        XCTAssertEqual(paper.pdfURLString, "https://example.com/paper.pdf")
+        XCTAssertEqual(paper.title, "paper")
+
+        let attachments = try modelContext.fetch(FetchDescriptor<PaperAttachment>())
+        let attachment = try XCTUnwrap(attachments.first)
+        XCTAssertEqual(attachments.count, 1)
+        XCTAssertEqual(attachment.kind, .pdf)
+        XCTAssertEqual(attachment.source, .webPage)
+        XCTAssertTrue(attachment.filename.hasSuffix(".pdf"))
+    }
+
+    @MainActor
     private func makeContainer() throws -> ModelContainer {
         let schema = Schema([
             Paper.self,

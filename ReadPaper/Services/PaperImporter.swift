@@ -141,12 +141,28 @@ final class PaperImporter {
         paper.localDirectoryPath = try fileStore.directory(for: paper.id).path
 
         do {
+            onProgress?(.fetchingHTML(from: sourceURL))
+            let (data, response) = try await session.data(from: sourceURL)
+            if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+                throw URLError(.badServerResponse)
+            }
+
+            if (response as? HTTPURLResponse)?.mimeType?.lowercased() == "application/pdf" {
+                return try await importWebPagePDF(
+                    data: data,
+                    sourceURL: sourceURL,
+                    paper: paper,
+                    modelContext: modelContext,
+                    onProgress: onProgress
+                )
+            }
+
             let outputURL = try fileStore.directory(for: paper.id).appendingPathComponent("paper.html")
             let resourcesDirectory = try fileStore.resourcesDirectory(for: paper)
 
-            onProgress?(.fetchingHTML(from: sourceURL))
-            let htmlURL = try await htmlLocalizer.fetchAndLocalize(
-                from: sourceURL,
+            let htmlURL = try await htmlLocalizer.localize(
+                htmlData: data,
+                sourceURL: sourceURL,
                 outputURL: outputURL,
                 resourcesDirectory: resourcesDirectory
             )
@@ -169,6 +185,56 @@ final class PaperImporter {
             try? fileStore.removeDirectory(for: paper.id)
             throw error
         }
+    }
+
+    private func importWebPagePDF(
+        data: Data,
+        sourceURL: URL,
+        paper: Paper,
+        modelContext: ModelContext,
+        onProgress: ((WebPageImportProgress) -> Void)?
+    ) async throws -> Paper {
+        onProgress?(.downloadingPDF(from: sourceURL))
+
+        let pdfFile = try fileStore.write(data, named: "paper.pdf", for: paper.id)
+        paper.pdfURLString = sourceURL.absoluteString
+
+        if let pdfDocument = PDFDocument(data: data) {
+            let attributes = pdfDocument.documentAttributes ?? [:]
+            let extractedTitle = (attributes[PDFDocumentAttribute.titleAttribute] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let extractedAuthor = (attributes[PDFDocumentAttribute.authorAttribute] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let text = Self.extractText(from: pdfDocument, maxPages: 3)
+            let searchableText = ([text] + Self.extractMetadataStrings(from: attributes))
+                .filter { !$0.isEmpty }
+                .joined(separator: "\n")
+            let arxiv = Self.extractArxivID(from: searchableText)
+            let doi = Self.extractDOI(from: searchableText)
+
+            if let title = extractedTitle, !title.isEmpty {
+                paper.title = title
+            }
+            paper.arxivID = arxiv?.baseID
+            paper.arxivVersion = arxiv?.version
+            paper.doi = doi
+            if let author = extractedAuthor {
+                paper.authors = [author]
+            }
+        }
+
+        onProgress?(.creatingLibraryEntry(title: paper.title))
+
+        modelContext.insert(paper)
+        modelContext.insert(PaperAttachment(
+            paperID: paper.id,
+            kind: .pdf,
+            source: .webPage,
+            filename: pdfFile.lastPathComponent,
+            filePath: pdfFile.path
+        ))
+
+        onProgress?(.finalizing())
+        try modelContext.save()
+        return paper
     }
 
     func importArxivHTMLIfAvailable(

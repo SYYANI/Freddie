@@ -69,6 +69,7 @@ struct HTMLLocalizer: @unchecked Sendable {
 
     func makeDocumentForLocalization(html: String, sourceURL: URL) throws -> Document {
         let document = try SwiftSoup.parse(html, sourceURL.absoluteString)
+        try reconcileCharsetDeclaration(in: document)
         try absolutizeHyperlinks(in: document, baseURL: sourceURL)
         try document.select("base[href]").remove()
 
@@ -224,6 +225,31 @@ struct HTMLLocalizer: @unchecked Sendable {
         parts.append(#"<article class="rp-readability-content">\#(result.content)</article>"#)
         parts.append("</main>")
         return parts.joined()
+    }
+
+    private func reconcileCharsetDeclaration(in document: Document) throws {
+        let knownEquivPatterns = [
+            "content-type",
+            "Content-Type",
+        ]
+        for meta in try document.select("meta[http-equiv]").array() {
+            let equiv = (try? meta.attr("http-equiv")) ?? ""
+            if knownEquivPatterns.contains(equiv) {
+                try meta.remove()
+            }
+        }
+        try document.select("meta[charset]").remove()
+
+        if let head = document.head() {
+            let charsetMeta = try document.createElement("meta")
+            try charsetMeta.attr("charset", "UTF-8")
+            let existingMetaTags = try head.children().array()
+            if let firstMeta = existingMetaTags.first(where: { $0.tagName() == "meta" }) {
+                try firstMeta.before(charsetMeta.outerHtml())
+            } else if let firstChild = existingMetaTags.first {
+                try firstChild.before(charsetMeta.outerHtml())
+            }
+        }
     }
 
     private func absolutizeHyperlinks(in document: Document, baseURL: URL) throws {
