@@ -876,11 +876,22 @@
       }
     },
     "Controls the default translation target and the amount of parallel work used for HTML and BabelDOC translation jobs. Supported languages: English and Simplified Chinese." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "控制默认翻译目标，以及 HTML 和 BabelDOC 翻译任务的并行度。支持语言：英文和简体中文。"
+          }
+        }
+      }
+    },
+    "Controls the default translation target, HTML concurrency, BabelDOC request rate, and incremental PDF page batch size. Supported languages: English and Simplified Chinese." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "控制默认翻译目标、HTML 并发数、BabelDOC 请求速率，以及 PDF 增量翻译的每批页数。支持语言：英文和简体中文。"
           }
         }
       }
@@ -1395,6 +1406,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在完成导入"
+          }
+        }
+      }
+    },
+    "First %d Pages" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "前 %1$d 页"
           }
         }
       }
@@ -2462,6 +2484,17 @@
         }
       }
     },
+    "PDF pages per batch: %d" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PDF 每批页数：%1$d"
+          }
+        }
+      }
+    },
     "PDF/BabelDOC Model" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -3381,6 +3414,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "这篇论文没有足够的元数据来生成文摘。"
+          }
+        }
+      }
+    },
+    "This PDF has %d pages. Translating the first %d pages is faster." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此 PDF 共 %1$d 页。先翻译前 %2$d 页速度更快。"
           }
         }
       }

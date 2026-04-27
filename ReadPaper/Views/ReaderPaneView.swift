@@ -34,6 +34,8 @@ struct ReaderPaneView: View {
     @Query(sort: \ReadingState.modifiedAt, order: .reverse) private var readingStates: [ReadingState]
     @AppStorage(PDFDisplayAppearance.userDefaultsKey)
     private var pdfDisplayAppearanceRawValue = PDFDisplayAppearance.defaultValue.rawValue
+    @AppStorage(PDFTranslationBatchPreference.userDefaultsKey)
+    private var pdfTranslationBatchSizeRawValue = PDFTranslationBatchPreference.defaultValue
 
     var paper: Paper?
     var attachments: [PaperAttachment]
@@ -133,6 +135,10 @@ struct ReaderPaneView: View {
         PDFDisplayAppearance.resolve(rawValue: pdfDisplayAppearanceRawValue)
     }
 
+    private var pdfTranslationBatchSize: Int {
+        PDFTranslationBatchPreference.normalized(pdfTranslationBatchSizeRawValue)
+    }
+
     private var primaryReaderMode: Binding<PrimaryReaderMode> {
         Binding(
             get: {
@@ -202,15 +208,20 @@ struct ReaderPaneView: View {
                 isPresented: $showPDFTranslationScopeDialog,
                 titleVisibility: .visible
             ) {
-                Button(String(localized: "First 10 Pages", bundle: bundle)) {
-                    startPDFTranslation(scope: .firstPages(10))
+                Button(AppLocalization.format("First %d Pages", bundle: bundle, pdfTranslationBatchSize)) {
+                    startPDFTranslation(scope: .firstPages(pdfTranslationBatchSize))
                 }
                 Button(String(localized: "All Pages", bundle: bundle)) {
                     startPDFTranslation(scope: .allPages)
                 }
                 Button(String(localized: "Cancel", bundle: bundle), role: .cancel) {}
             } message: {
-                Text(AppLocalization.format("This PDF has %d pages. Translating the first 10 pages is faster.", pdfTranslationTotalPages))
+                Text(AppLocalization.format(
+                    "This PDF has %d pages. Translating the first %d pages is faster.",
+                    bundle: bundle,
+                    pdfTranslationTotalPages,
+                    pdfTranslationBatchSize
+                ))
             }
             .alert(
                 String(localized: "Digest Ready", bundle: bundle),
@@ -732,7 +743,7 @@ struct ReaderPaneView: View {
         guard let document = PDFDocument(url: url) else { return }
 
         let totalPages = document.pageCount
-        if totalPages > 10 {
+        if totalPages > pdfTranslationBatchSize {
             pdfTranslationTotalPages = totalPages
             showPDFTranslationScopeDialog = true
         } else {
@@ -746,7 +757,7 @@ struct ReaderPaneView: View {
         let pageRange: ClosedRange<Int>? = {
             switch scope {
             case .firstPages(let count):
-                return 1...count
+                return 1...PDFTranslationBatchPreference.normalized(count)
             case .allPages:
                 return nil
             }
@@ -810,7 +821,7 @@ struct ReaderPaneView: View {
                 let translatedLastPage: Int? = {
                     switch scope {
                     case .firstPages(let count):
-                        return count
+                        return PDFTranslationBatchPreference.normalized(count)
                     case .allPages:
                         return nil
                     }
@@ -844,7 +855,7 @@ struct ReaderPaneView: View {
         guard let paper, let pdfAttachment, let settings, let existingAttachment = translatedPDFAttachment, let currentLastPage = existingAttachment.translatedLastPage else { return }
         guard let total = originalPDFPageCount, currentLastPage < total else { return }
 
-        let nextBatch = min(currentLastPage + 10, total)
+        let nextBatch = min(currentLastPage + pdfTranslationBatchSize, total)
         let pageRange = (currentLastPage + 1)...nextBatch
         let preferences = TranslationPreferencesSnapshot(settings)
 
@@ -980,7 +991,7 @@ struct ReaderPaneView: View {
     private var translateMoreBanner: some View {
         let lastPage = translatedPDFAttachment?.translatedLastPage ?? 0
         let total = originalPDFPageCount ?? 0
-        let nextEnd = min(lastPage + 10, total)
+        let nextEnd = min(lastPage + pdfTranslationBatchSize, total)
         return HStack(spacing: 8) {
             Text(AppLocalization.format("Translated pages 1–%@ of %@.", "\(lastPage)", "\(total)"))
                 .font(.caption)

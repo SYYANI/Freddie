@@ -25,3 +25,13 @@ struct TranslationPreferencesSnapshot: Sendable {
         self.babelDocVersion = settings.babelDocVersion
     }
 }
+
+struct PDFTranslationBatchPreference {
+    static let userDefaultsKey = "ReadPaper.Settings.PDFTranslationPageBatchSize"
+    static let defaultValue = 10
+    static let allowedRange: ClosedRange<Int> = 1...50
+
+    static func normalized(_ value: Int) -> Int {
+        min(max(value, allowedRange.lowerBound), allowedRange.upperBound)
+    }
+}

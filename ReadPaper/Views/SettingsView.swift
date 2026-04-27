@@ -92,6 +92,8 @@ private struct SettingsForm: View {
     @AppStorage(BabelDocInstallSource.userDefaultsKey) private var babelDocInstallSourceRawValue = BabelDocInstallSource.official.rawValue
     @AppStorage(PDFDisplayAppearance.userDefaultsKey)
     private var pdfDisplayAppearanceRawValue = PDFDisplayAppearance.defaultValue.rawValue
+    @AppStorage(PDFTranslationBatchPreference.userDefaultsKey)
+    private var pdfTranslationBatchSizeRawValue = PDFTranslationBatchPreference.defaultValue
     @AppStorage(PaperDigestExportConfiguration.templateKey) private var digestExportTemplate = PaperDigestExportPolicy.defaultMarkdownTemplate
     @AppStorage(PaperDigestExportConfiguration.directoryDisplayPathKey) private var digestExportDirectoryPath = ""
 
@@ -249,6 +251,13 @@ private struct SettingsForm: View {
         )
     }
 
+    private var pdfTranslationBatchSizeBinding: Binding<Int> {
+        Binding(
+            get: { PDFTranslationBatchPreference.normalized(pdfTranslationBatchSizeRawValue) },
+            set: { pdfTranslationBatchSizeRawValue = PDFTranslationBatchPreference.normalized($0) }
+        )
+    }
+
     var body: some View {
         TabView(selection: selectedTabBinding) {
             generalTab
@@ -363,8 +372,19 @@ private struct SettingsForm: View {
                         value: $settings.babelDocQPS,
                         in: 1...20
                     )
+                    Stepper(
+                        String(
+                            format: String(localized: "PDF pages per batch: %d", bundle: bundle),
+                            PDFTranslationBatchPreference.normalized(pdfTranslationBatchSizeRawValue)
+                        ),
+                        value: pdfTranslationBatchSizeBinding,
+                        in: PDFTranslationBatchPreference.allowedRange
+                    )
 
-                    Text("Controls the default translation target and the amount of parallel work used for HTML and BabelDOC translation jobs. Supported languages: English and Simplified Chinese.", bundle: bundle)
+                    Text(
+                        "Controls the default translation target, HTML concurrency, BabelDOC request rate, and incremental PDF page batch size. Supported languages: English and Simplified Chinese.",
+                        bundle: bundle
+                    )
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
