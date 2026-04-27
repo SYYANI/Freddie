@@ -198,7 +198,7 @@ final class PDFMergerTests: XCTestCase {
             onNoteSelectionChanged: nil
         )
         coordinator.attach(to: pdfView)
-        coordinator.prepareForProgrammaticPageRestore(to: pageIndex)
+        coordinator.prepareForProgrammaticPageRestore(to: PDFReadingPosition(pageIndex: pageIndex))
 
         guard let firstPage = document.page(at: 0),
               let restoredPage = document.page(at: 9),
@@ -218,6 +218,35 @@ final class PDFMergerTests: XCTestCase {
         pdfView.go(to: nextPage)
         coordinator.updateCurrentPageIndexIfNeeded()
         XCTAssertEqual(pageIndex, 10)
+    }
+
+    @MainActor
+    func testPDFReaderCoordinatorCapturesDestinationPointForReloadRestore() throws {
+        let document = createPDFDocument(withPageCount: 20)
+        let pdfView = PDFView(frame: NSRect(x: 0, y: 0, width: 600, height: 800))
+        pdfView.document = document
+
+        var pageIndex = 0
+        let coordinator = PDFReaderView.Coordinator(
+            attachmentID: nil,
+            pageIndex: Binding(
+                get: { pageIndex },
+                set: { pageIndex = $0 }
+            ),
+            onNoteSelectionChanged: nil
+        )
+        coordinator.attach(to: pdfView)
+
+        guard let page = document.page(at: 9) else {
+            return XCTFail("Expected test PDF page to exist")
+        }
+
+        let point = CGPoint(x: 24, y: 36)
+        pdfView.go(to: PDFDestination(page: page, at: point))
+        let position = coordinator.readingPosition(fallbackPageIndex: 0, in: pdfView)
+
+        XCTAssertEqual(position.pageIndex, 9)
+        XCTAssertNotNil(position.point)
     }
 
     func testDualPDFPageSyncDoesNotPropagateProgrammaticPartialClampToOriginal() {
