@@ -10,8 +10,10 @@ struct AddPaperSheet: View {
     @Binding var selectedPaperID: UUID?
 
     @State private var arxivInput = ""
+    @State private var webPageInput = ""
     @State private var isImporting = false
-    @State private var importProgress: ArxivImportProgress?
+    @State private var arxivImportProgress: ArxivImportProgress?
+    @State private var webPageImportProgress: WebPageImportProgress?
     @State private var errorMessage: String?
 
     var body: some View {
@@ -36,6 +38,22 @@ struct AddPaperSheet: View {
             Divider()
 
             VStack(alignment: .leading, spacing: 8) {
+                Text("Web page URL", bundle: bundle)
+                    .font(.headline)
+                TextField(
+                    String(localized: "https://example.com/paper.html", bundle: bundle),
+                    text: $webPageInput
+                )
+                    .textFieldStyle(.roundedBorder)
+                Button(String(localized: "Import web page", bundle: bundle)) {
+                    importWebPage()
+                }
+                .disabled(webPageInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isImporting)
+            }
+
+            Divider()
+
+            VStack(alignment: .leading, spacing: 8) {
                 Text("Local PDF", bundle: bundle)
                     .font(.headline)
                 Button(String(localized: "Choose PDF...", bundle: bundle)) {
@@ -45,8 +63,10 @@ struct AddPaperSheet: View {
             }
 
             if isImporting {
-                if let importProgress {
-                    importProgressView(importProgress)
+                if let arxivImportProgress {
+                    importProgressView(arxivImportProgress)
+                } else if let webPageImportProgress {
+                    importProgressView(webPageImportProgress)
                 } else {
                     ProgressView()
                 }
@@ -72,7 +92,8 @@ struct AddPaperSheet: View {
 
     private func importArxiv() {
         isImporting = true
-        importProgress = .resolvingInput()
+        arxivImportProgress = .resolvingInput()
+        webPageImportProgress = nil
         errorMessage = nil
         let input = arxivInput
         Task {
@@ -81,7 +102,7 @@ struct AddPaperSheet: View {
                     input,
                     modelContext: modelContext
                 ) { progress in
-                    importProgress = progress
+                    arxivImportProgress = progress
                 }
                 selectedPaperID = paper.id
                 isPresented = false
@@ -89,7 +110,31 @@ struct AddPaperSheet: View {
                 errorMessage = error.localizedDescription
             }
             isImporting = false
-            importProgress = nil
+            arxivImportProgress = nil
+        }
+    }
+
+    private func importWebPage() {
+        isImporting = true
+        arxivImportProgress = nil
+        webPageImportProgress = .validatingURL()
+        errorMessage = nil
+        let input = webPageInput
+        Task {
+            do {
+                let paper = try await PaperImporter().importWebPage(
+                    input,
+                    modelContext: modelContext
+                ) { progress in
+                    webPageImportProgress = progress
+                }
+                selectedPaperID = paper.id
+                isPresented = false
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+            isImporting = false
+            webPageImportProgress = nil
         }
     }
 
@@ -102,7 +147,8 @@ struct AddPaperSheet: View {
         guard panel.runModal() == .OK, let url = panel.url else { return }
 
         isImporting = true
-        importProgress = nil
+        arxivImportProgress = nil
+        webPageImportProgress = nil
         errorMessage = nil
         do {
             let paper = try PaperImporter().importLocalPDF(url, modelContext: modelContext)
@@ -115,24 +161,47 @@ struct AddPaperSheet: View {
     }
 
     private func importProgressView(_ progress: ArxivImportProgress) -> some View {
+        importProgressView(
+            stepLabel: progress.stepLabel,
+            fractionCompleted: progress.fractionCompleted,
+            title: progress.title,
+            detail: progress.detail
+        )
+    }
+
+    private func importProgressView(_ progress: WebPageImportProgress) -> some View {
+        importProgressView(
+            stepLabel: progress.stepLabel,
+            fractionCompleted: progress.fractionCompleted,
+            title: progress.title,
+            detail: progress.detail
+        )
+    }
+
+    private func importProgressView(
+        stepLabel: String,
+        fractionCompleted: Double,
+        title: String,
+        detail: String?
+    ) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline) {
-                Text(progress.stepLabel)
+                Text(stepLabel)
                     .font(.caption.weight(.medium))
                     .foregroundStyle(.secondary)
                 Spacer()
-                Text("\(Int(round(progress.fractionCompleted * 100)))%")
+                Text("\(Int(round(fractionCompleted * 100)))%")
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
             }
 
-            ProgressView(value: progress.fractionCompleted)
+            ProgressView(value: fractionCompleted)
                 .progressViewStyle(.linear)
 
-            Text(progress.title)
+            Text(title)
                 .font(.subheadline.weight(.semibold))
 
-            if let detail = progress.detail {
+            if let detail {
                 Text(detail)
                     .font(.callout)
                     .foregroundStyle(.secondary)

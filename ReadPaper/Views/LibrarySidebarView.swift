@@ -19,7 +19,7 @@ struct LibrarySidebarView: View {
                         Image(systemName: "doc.text.magnifyingglass")
                     }
                 } description: {
-                    Text("Add an arXiv ID, arXiv URL, or a local PDF. Before using translation, open Settings and save at least one LLM provider API key and model profile.", bundle: bundle)
+                    Text("Add an arXiv ID, arXiv URL, web page URL, or a local PDF. Before using translation, open Settings and save at least one LLM provider API key and model profile.", bundle: bundle)
                 } actions: {
                     HStack(spacing: 0) {
                         SettingsLink {

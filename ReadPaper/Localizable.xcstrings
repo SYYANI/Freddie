@@ -194,12 +194,34 @@
         }
       }
     },
+    "Add an arXiv ID, an arXiv URL, web page URL, or a local PDF from the library sidebar." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "从资料库侧边栏添加 arXiv ID、arXiv URL、网页 URL，或本地 PDF。"
+          }
+        }
+      }
+    },
     "Add an arXiv ID, arXiv URL, or a local PDF. Before using translation, open Settings and save at least one LLM provider API key and model profile." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "添加 arXiv ID、arXiv URL，或本地 PDF。使用翻译前，请先打开 Settings，至少保存一个 LLM provider API key 和模型配置。"
+          }
+        }
+      }
+    },
+    "Add an arXiv ID, arXiv URL, web page URL, or a local PDF. Before using translation, open Settings and save at least one LLM provider API key and model profile." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "添加 arXiv ID、arXiv URL、网页 URL，或本地 PDF。使用翻译前，请先打开 Settings，至少保存一个 LLM provider API key 和模型配置。"
           }
         }
       }
@@ -671,6 +693,17 @@
         }
       }
     },
+    "Checking web page URL" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在检查网页 URL"
+          }
+        }
+      }
+    },
     "Choose" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1124,6 +1157,17 @@
         }
       }
     },
+    "Downloading %@, extracting the readable article body, and localizing linked resources." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在下载 %1$@，提取可阅读正文，并本地化链接资源。"
+          }
+        }
+      }
+    },
     "Downloading PDF" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1329,6 +1373,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在获取阅读 HTML"
+          }
+        }
+      }
+    },
+    "Fetching web page" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在获取网页"
           }
         }
       }
@@ -1573,6 +1628,17 @@
         }
       }
     },
+    "https://example.com/paper.html" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "https://example.com/paper.html"
+          }
+        }
+      }
+    },
     "Identifier" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1607,6 +1673,7 @@
       }
     },
     "Import an arXiv paper or a local PDF from the sidebar. Once the first paper is added, HTML, PDF, bilingual reading, and translation tools all appear here." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -1616,12 +1683,33 @@
         }
       }
     },
+    "Import an arXiv paper or web page with HTML content to read it here." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "导入带 HTML 内容的 arXiv 论文或网页，即可在这里阅读。"
+          }
+        }
+      }
+    },
     "Import an arXiv paper with HTML content to read it here." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "导入一篇带 HTML 内容的 arXiv 论文，即可在这里阅读。"
+          }
+        }
+      }
+    },
+    "Import an arXiv paper, web page, or local PDF from the sidebar. Once the first paper is added, HTML, PDF, bilingual reading, and translation tools all appear here." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "从侧边栏导入 arXiv 论文、网页，或本地 PDF。添加第一篇论文后，HTML、PDF、双语阅读和翻译工具都会出现在这里。"
           }
         }
       }
@@ -1633,6 +1721,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "从 arXiv 导入"
+          }
+        }
+      }
+    },
+    "Import web page" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "导入网页"
           }
         }
       }
@@ -2125,6 +2224,17 @@
         }
       }
     },
+    "Normalizing the URL and checking whether it already exists in your library." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在规范化 URL，并检查它是否已经存在于你的资料库中。"
+          }
+        }
+      }
+    },
     "Not configured" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2195,6 +2305,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "仅支持 http:// 或 https:// Base URL。"
+          }
+        }
+      }
+    },
+    "Only http:// or https:// page URLs are supported." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "仅支持 http:// 或 https:// 网页 URL。"
           }
         }
       }
@@ -2359,6 +2480,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "请输入有效的 Base URL。"
+          }
+        }
+      }
+    },
+    "Please enter a valid web page URL." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请输入有效的网页 URL。"
           }
         }
       }
@@ -2718,6 +2850,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "保存"
+          }
+        }
+      }
+    },
+    "Saving the paper and localized HTML to your library." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在将论文和本地化 HTML 保存到你的资料库。"
           }
         }
       }
@@ -3570,6 +3713,17 @@
         }
       }
     },
+    "Untitled Web Page" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未命名网页"
+          }
+        }
+      }
+    },
     "Use the + button in the library to create the first paper record." : {
       "localizations" : {
         "zh-Hans" : {
@@ -3587,6 +3741,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "uv 安装失败：%1$@"
+          }
+        }
+      }
+    },
+    "Web page URL" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "网页 URL"
           }
         }
       }

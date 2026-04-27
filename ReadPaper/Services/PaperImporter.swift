@@ -1,6 +1,7 @@
 import Foundation
 import PDFKit
 import SwiftData
+import SwiftSoup
 
 @MainActor
 final class PaperImporter {
@@ -117,6 +118,57 @@ final class PaperImporter {
         ))
         try modelContext.save()
         return paper
+    }
+
+    func importWebPage(
+        _ rawValue: String,
+        modelContext: ModelContext,
+        onProgress: ((WebPageImportProgress) -> Void)? = nil
+    ) async throws -> Paper {
+        onProgress?(.validatingURL())
+        let sourceURL = try Self.normalizeWebPageURL(rawValue)
+        onProgress?(.validatingURL(urlString: sourceURL.absoluteString))
+
+        let existingPapers = try modelContext.fetch(FetchDescriptor<Paper>())
+        if let existing = existingPapers.first(where: { $0.htmlURLString == sourceURL.absoluteString }) {
+            return existing
+        }
+
+        let paper = Paper(
+            title: Self.fallbackWebPageTitle(for: sourceURL),
+            htmlURLString: sourceURL.absoluteString
+        )
+        paper.localDirectoryPath = try fileStore.directory(for: paper.id).path
+
+        do {
+            let outputURL = try fileStore.directory(for: paper.id).appendingPathComponent("paper.html")
+            let resourcesDirectory = try fileStore.resourcesDirectory(for: paper)
+
+            onProgress?(.fetchingHTML(from: sourceURL))
+            let htmlURL = try await htmlLocalizer.fetchAndLocalize(
+                from: sourceURL,
+                outputURL: outputURL,
+                resourcesDirectory: resourcesDirectory
+            )
+            paper.title = Self.extractHTMLTitle(from: htmlURL) ?? paper.title
+            onProgress?(.creatingLibraryEntry(title: paper.title))
+
+            modelContext.insert(paper)
+            modelContext.insert(PaperAttachment(
+                paperID: paper.id,
+                kind: .html,
+                source: .webPage,
+                filename: htmlURL.lastPathComponent,
+                filePath: htmlURL.path
+            ))
+
+            onProgress?(.finalizing())
+            try modelContext.save()
+            return paper
+        } catch {
+            try? fileStore.removeDirectory(for: paper.id)
+            throw error
+        }
     }
 
     func importArxivHTMLIfAvailable(
@@ -244,5 +296,61 @@ final class PaperImporter {
         }
 
         return nil
+    }
+
+    static func normalizeWebPageURL(_ rawValue: String) throws -> URL {
+        let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            throw PaperImportError.invalidWebPageURL
+        }
+
+        let candidate = trimmed.contains("://") ? trimmed : "https://\(trimmed)"
+        guard var components = URLComponents(string: candidate),
+              let scheme = components.scheme?.lowercased(),
+              components.host?.isEmpty == false else {
+            throw PaperImportError.invalidWebPageURL
+        }
+
+        guard ["http", "https"].contains(scheme) else {
+            throw PaperImportError.unsupportedWebPageURLScheme
+        }
+
+        components.scheme = scheme
+        components.fragment = nil
+        guard let url = components.url else {
+            throw PaperImportError.invalidWebPageURL
+        }
+        return url
+    }
+
+    static func fallbackWebPageTitle(for url: URL) -> String {
+        let pathTitle = url
+            .deletingPathExtension()
+            .lastPathComponent
+            .removingPercentEncoding?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if let pathTitle, !pathTitle.isEmpty, pathTitle != "/" {
+            return pathTitle.replacingOccurrences(of: "-", with: " ")
+        }
+
+        if let host = url.host, !host.isEmpty {
+            return host
+        }
+
+        return AppLocalization.localized("Untitled Web Page")
+    }
+
+    static func extractHTMLTitle(from htmlURL: URL) -> String? {
+        guard let html = try? String(contentsOf: htmlURL, encoding: .utf8),
+              let document = try? SwiftSoup.parse(html) else {
+            return nil
+        }
+        guard let titleElement = try? document.select("title").first(),
+              let title = try? titleElement.text().trimmingCharacters(in: .whitespacesAndNewlines),
+              !title.isEmpty else {
+            return nil
+        }
+        return title
     }
 }

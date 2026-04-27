@@ -13,6 +13,7 @@ enum AttachmentSource: String, Codable, CaseIterable, Identifiable {
     case arxivPDF
     case arxivHTML
     case localImport
+    case webPage
     case babeldoc
     case generated
 
@@ -57,6 +58,8 @@ enum ToolInstallStatus: String, Codable, CaseIterable, Identifiable {
 
 enum PaperImportError: Error, LocalizedError {
     case invalidArxivIdentifier(String)
+    case invalidWebPageURL
+    case unsupportedWebPageURLScheme
     case missingPDF
     case missingHTML
     case unsupportedFile(URL)
@@ -66,6 +69,10 @@ enum PaperImportError: Error, LocalizedError {
         switch self {
         case .invalidArxivIdentifier(let rawValue):
             AppLocalization.format("Invalid arXiv identifier: %@", rawValue)
+        case .invalidWebPageURL:
+            AppLocalization.localized("Please enter a valid web page URL.")
+        case .unsupportedWebPageURLScheme:
+            AppLocalization.localized("Only http:// or https:// page URLs are supported.")
         case .missingPDF:
             AppLocalization.localized("No PDF attachment is available for this paper.")
         case .missingHTML:

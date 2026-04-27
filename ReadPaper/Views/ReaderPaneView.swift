@@ -567,7 +567,7 @@ struct ReaderPaneView: View {
                     centeredUnavailableView(
                         String(localized: "No HTML available", bundle: bundle),
                         systemImage: "doc.text",
-                        description: Text("Import an arXiv paper with HTML content to read it here.", bundle: bundle)
+                        description: Text("Import an arXiv paper or web page with HTML content to read it here.", bundle: bundle)
                     )
                 }
             case .pdf:
@@ -1080,7 +1080,7 @@ struct ReaderPaneView: View {
                     Text("Build your local paper desk", bundle: bundle)
                         .font(.system(size: 30, weight: .semibold, design: .rounded))
 
-                    Text("Import an arXiv paper or a local PDF from the sidebar. Once the first paper is added, HTML, PDF, bilingual reading, and translation tools all appear here.", bundle: bundle)
+                    Text("Import an arXiv paper, web page, or local PDF from the sidebar. Once the first paper is added, HTML, PDF, bilingual reading, and translation tools all appear here.", bundle: bundle)
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -1096,7 +1096,7 @@ struct ReaderPaneView: View {
                     emptyStateCard(
                         title: String(localized: "Import", bundle: bundle),
                         systemImage: "square.and.arrow.down",
-                        description: String(localized: "Add an arXiv ID, an arXiv URL, or a local PDF from the library sidebar.", bundle: bundle)
+                        description: String(localized: "Add an arXiv ID, an arXiv URL, web page URL, or a local PDF from the library sidebar.", bundle: bundle)
                     )
                     emptyStateCard(
                         title: String(localized: "Read", bundle: bundle),

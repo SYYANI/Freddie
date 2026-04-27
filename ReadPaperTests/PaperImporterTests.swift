@@ -184,6 +184,85 @@ final class PaperImporterTests: XCTestCase {
     }
 
     @MainActor
+    func testImportWebPageLocalizesStaticURLWithReadability() async throws {
+        let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: rootURL) }
+
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [MockPaperImporterURLProtocol.self]
+        let session = URLSession(configuration: configuration)
+
+        MockPaperImporterURLProtocol.requestHandler = { request in
+            let url = try XCTUnwrap(request.url)
+
+            switch (url.host, url.path) {
+            case ("example.com", "/paper"):
+                let paragraph = String(repeating: "This static page content should survive readability extraction. ", count: 12)
+                let html = """
+                <html>
+                <head><title>Readable Static Page</title></head>
+                <body>
+                <nav>Site navigation should not be part of the saved article.</nav>
+                <article>
+                <h1>Readable Static Page</h1>
+                <p>\(paragraph)</p>
+                <img src="/figure.png">
+                </article>
+                </body>
+                </html>
+                """
+                return (
+                    HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: ["Content-Type": "text/html"])!,
+                    Data(html.utf8)
+                )
+            case ("example.com", "/figure.png"):
+                return (
+                    HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: ["Content-Type": "image/png"])!,
+                    Data([0x89, 0x50, 0x4E, 0x47])
+                )
+            default:
+                XCTFail("Unexpected request: \(url.absoluteString)")
+                throw URLError(.badURL)
+            }
+        }
+
+        let importer = PaperImporter(
+            fileStore: PaperFileStore(applicationSupportDirectory: rootURL),
+            htmlLocalizer: HTMLLocalizer(session: session, fileManager: .default),
+            session: session
+        )
+        let modelContext = ModelContext(try makeContainer())
+        var progressEvents: [WebPageImportProgress] = []
+
+        let paper = try await importer.importWebPage("https://example.com/paper#comments", modelContext: modelContext) { progress in
+            progressEvents.append(progress)
+        }
+
+        XCTAssertEqual(
+            progressEvents.map(\.stage),
+            [
+                .validatingURL,
+                .validatingURL,
+                .fetchingHTML,
+                .creatingLibraryEntry,
+                .finalizing
+            ]
+        )
+        XCTAssertEqual(paper.htmlURLString, "https://example.com/paper")
+        XCTAssertTrue(paper.title.contains("Readable Static Page"))
+
+        let attachments = try modelContext.fetch(FetchDescriptor<PaperAttachment>())
+        let attachment = try XCTUnwrap(attachments.first)
+        XCTAssertEqual(attachments.count, 1)
+        XCTAssertEqual(attachment.kind, .html)
+        XCTAssertEqual(attachment.source, .webPage)
+
+        let localizedHTML = try String(contentsOf: attachment.fileURL, encoding: .utf8)
+        XCTAssertTrue(localizedHTML.contains("rp-readability-content"))
+        XCTAssertFalse(localizedHTML.contains("Site navigation"))
+    }
+
+    @MainActor
     private func makeContainer() throws -> ModelContainer {
         let schema = Schema([
             Paper.self,

@@ -28,7 +28,7 @@ final class NoteMarkdownRendererTests: XCTestCase {
         XCTAssertFalse(rendered.string.contains("```"))
     }
 
-    func testRenderKeepsMarkdownLinkAttribute() {
+    func testRenderKeepsMarkdownLinkAttribute() throws {
         let rendered = NoteMarkdownRenderer.render("Visit [OpenAI](https://openai.com/docs)")
         let range = NSRange(try XCTUnwrap(rendered.string.range(of: "OpenAI")), in: rendered.string)
         let link = rendered.attribute(.link, at: range.location, effectiveRange: nil) as? URL
