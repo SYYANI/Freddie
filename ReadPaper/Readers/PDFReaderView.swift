@@ -102,19 +102,24 @@ struct PDFReaderView: NSViewRepresentable {
             view.document = nil
             context.coordinator.loadedURL = nil
             context.coordinator.lastReloadToken = reloadToken
+            context.coordinator.clearProgrammaticPageRestore()
             context.coordinator.publishSelection(nil)
             context.coordinator.scheduleCurrentPageIndexUpdate()
             return
         }
-        if context.coordinator.loadedURL != fileURL || context.coordinator.lastReloadToken != reloadToken {
+        let shouldReloadDocument = context.coordinator.loadedURL != fileURL || context.coordinator.lastReloadToken != reloadToken
+        if shouldReloadDocument {
+            context.coordinator.prepareForProgrammaticPageRestore(to: pageIndex)
             view.document = PDFDocument(url: fileURL)
             context.coordinator.loadedURL = fileURL
             context.coordinator.lastReloadToken = reloadToken
             context.coordinator.publishSelection(nil)
         }
-        if let page = view.document?.page(at: pageIndex), view.currentPage != page {
-            view.go(to: page)
-        }
+        context.coordinator.restorePageIndex(
+            pageIndex,
+            in: view,
+            suppressIntermediateUpdates: shouldReloadDocument
+        )
         context.coordinator.scheduleCurrentPageIndexUpdate()
         context.coordinator.scheduleSelectionUpdate()
     }
@@ -142,6 +147,7 @@ struct PDFReaderView: NSViewRepresentable {
         private var isPageIndexUpdateScheduled = false
         private var isSelectionUpdateScheduled = false
         private var lastPublishedSelection: NoteSelectionContext?
+        private var pendingProgrammaticPageIndex: Int?
 
         init(
             attachmentID: UUID?,
@@ -190,6 +196,39 @@ struct PDFReaderView: NSViewRepresentable {
             }
         }
 
+        func prepareForProgrammaticPageRestore(to requestedPageIndex: Int) {
+            pendingProgrammaticPageIndex = max(0, requestedPageIndex)
+        }
+
+        func clearProgrammaticPageRestore() {
+            pendingProgrammaticPageIndex = nil
+        }
+
+        func restorePageIndex(
+            _ requestedPageIndex: Int,
+            in pdfView: PDFView,
+            suppressIntermediateUpdates: Bool
+        ) {
+            guard let document = pdfView.document, document.pageCount > 0 else {
+                clearProgrammaticPageRestore()
+                return
+            }
+
+            let targetIndex = Self.clampedPageIndex(requestedPageIndex, pageCount: document.pageCount)
+            guard let page = document.page(at: targetIndex) else {
+                clearProgrammaticPageRestore()
+                return
+            }
+
+            if suppressIntermediateUpdates || pdfView.currentPage != page {
+                pendingProgrammaticPageIndex = targetIndex
+            }
+
+            if pdfView.currentPage != page {
+                pdfView.go(to: page)
+            }
+        }
+
         func scheduleSelectionUpdate() {
             guard !isSelectionUpdateScheduled else { return }
             isSelectionUpdateScheduled = true
@@ -201,7 +240,7 @@ struct PDFReaderView: NSViewRepresentable {
             }
         }
 
-        private func updateCurrentPageIndexIfNeeded() {
+        func updateCurrentPageIndexIfNeeded() {
             guard let pdfView,
                   let document = pdfView.document,
                   let currentPage = pdfView.currentPage else {
@@ -209,8 +248,19 @@ struct PDFReaderView: NSViewRepresentable {
             }
 
             let currentIndex = document.index(for: currentPage)
+            guard currentIndex != NSNotFound else { return }
+
+            if let pendingProgrammaticPageIndex {
+                guard currentIndex == pendingProgrammaticPageIndex else { return }
+                self.pendingProgrammaticPageIndex = nil
+            }
+
             guard currentIndex != pageIndex.wrappedValue else { return }
             pageIndex.wrappedValue = currentIndex
+        }
+
+        private static func clampedPageIndex(_ pageIndex: Int, pageCount: Int) -> Int {
+            min(max(0, pageIndex), max(pageCount - 1, 0))
         }
 
         @objc

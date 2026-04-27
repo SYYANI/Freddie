@@ -15,6 +15,7 @@ struct DualPDFReaderView: View {
     @State private var translatedPageCount: Int = 0
     @State private var originalPageCount: Int = 0
     @State private var activeSelectionSource: SelectionSource?
+    @State private var pendingProgrammaticTranslatedPageTargets: Set<Int> = []
 
     private enum SelectionSource {
         case original
@@ -55,19 +56,20 @@ struct DualPDFReaderView: View {
                 }
         }
         .onAppear {
-            translatedPageIndex = min(pageIndex, maxTranslatedPage)
             updatePageCounts()
+            syncTranslatedPageFromOriginal(pageIndex)
         }
         .onChange(of: pageIndex) { _, newValue in
-            let target = min(newValue, maxTranslatedPage)
-            guard translatedPageIndex != target else { return }
-            translatedPageIndex = target
+            syncTranslatedPageFromOriginal(newValue)
         }
         .onChange(of: translatedPageIndex) { _, newValue in
-            guard pageIndex != newValue else { return }
-            if newValue <= maxTranslatedPage {
-                pageIndex = newValue
-            }
+            let target = DualPDFPageIndexSync.originalPageIndex(
+                forTranslatedPageIndex: newValue,
+                translatedPageCount: translatedPageCount,
+                pendingProgrammaticTargets: &pendingProgrammaticTranslatedPageTargets
+            )
+            guard let target, pageIndex != target else { return }
+            pageIndex = target
         }
         .onChange(of: reloadToken) { _, _ in
             updatePageCounts()
@@ -84,10 +86,7 @@ struct DualPDFReaderView: View {
         }
         .onChange(of: translatedPageCount) { _, newCount in
             guard newCount > 0 else { return }
-            let target = min(pageIndex, maxTranslatedPage)
-            if translatedPageIndex != target {
-                translatedPageIndex = target
-            }
+            syncTranslatedPageFromOriginal(pageIndex)
         }
     }
 
@@ -106,6 +105,17 @@ struct DualPDFReaderView: View {
 
     private func updateTranslatedPageCount() {
         translatedPageCount = translatedURL.flatMap { PDFDocument(url: $0)?.pageCount } ?? 0
+    }
+
+    private func syncTranslatedPageFromOriginal(_ originalPageIndex: Int) {
+        guard translatedPageCount > 0 else { return }
+        let target = DualPDFPageIndexSync.translatedPageIndex(
+            forOriginalPageIndex: originalPageIndex,
+            translatedPageCount: translatedPageCount
+        )
+        guard translatedPageIndex != target else { return }
+        pendingProgrammaticTranslatedPageTargets.insert(target)
+        translatedPageIndex = target
     }
 
     private func themedPDFReader(
@@ -146,5 +156,43 @@ struct DualPDFReaderView: View {
         guard activeSelectionSource == source else { return }
         activeSelectionSource = nil
         onNoteSelectionChanged?(nil)
+    }
+}
+
+struct DualPDFPageIndexSync {
+    static func translatedPageIndex(
+        forOriginalPageIndex originalPageIndex: Int,
+        translatedPageCount: Int
+    ) -> Int {
+        min(max(0, originalPageIndex), maxTranslatedPage(translatedPageCount))
+    }
+
+    static func originalPageIndex(
+        forTranslatedPageIndex translatedPageIndex: Int,
+        translatedPageCount: Int,
+        pendingProgrammaticTargets: inout Set<Int>
+    ) -> Int? {
+        guard translatedPageCount > 0 else {
+            pendingProgrammaticTargets.removeAll()
+            return nil
+        }
+
+        if pendingProgrammaticTargets.remove(translatedPageIndex) != nil {
+            return nil
+        }
+
+        if !pendingProgrammaticTargets.isEmpty {
+            pendingProgrammaticTargets.removeAll()
+        }
+
+        guard translatedPageIndex <= maxTranslatedPage(translatedPageCount) else {
+            return nil
+        }
+
+        return max(0, translatedPageIndex)
+    }
+
+    private static func maxTranslatedPage(_ translatedPageCount: Int) -> Int {
+        max(translatedPageCount - 1, 0)
     }
 }

@@ -1,4 +1,5 @@
 import PDFKit
+import SwiftUI
 import XCTest
 @testable import ReadPaper
 
@@ -179,5 +180,70 @@ final class PDFMergerTests: XCTestCase {
         let writeError = PDFMergerError.failedToWriteOutput("/path/to/output.pdf")
         XCTAssertNotNil(writeError.errorDescription)
         XCTAssertTrue(writeError.errorDescription?.contains("output.pdf") ?? false)
+    }
+
+    @MainActor
+    func testPDFReaderCoordinatorIgnoresTransientFirstPageDuringProgrammaticRestore() throws {
+        let document = createPDFDocument(withPageCount: 20)
+        let pdfView = PDFView()
+        pdfView.document = document
+
+        var pageIndex = 9
+        let coordinator = PDFReaderView.Coordinator(
+            attachmentID: nil,
+            pageIndex: Binding(
+                get: { pageIndex },
+                set: { pageIndex = $0 }
+            ),
+            onNoteSelectionChanged: nil
+        )
+        coordinator.attach(to: pdfView)
+        coordinator.prepareForProgrammaticPageRestore(to: pageIndex)
+
+        guard let firstPage = document.page(at: 0),
+              let restoredPage = document.page(at: 9),
+              let nextPage = document.page(at: 10)
+        else {
+            return XCTFail("Expected test PDF pages to exist")
+        }
+
+        pdfView.go(to: firstPage)
+        coordinator.updateCurrentPageIndexIfNeeded()
+        XCTAssertEqual(pageIndex, 9)
+
+        pdfView.go(to: restoredPage)
+        coordinator.updateCurrentPageIndexIfNeeded()
+        XCTAssertEqual(pageIndex, 9)
+
+        pdfView.go(to: nextPage)
+        coordinator.updateCurrentPageIndexIfNeeded()
+        XCTAssertEqual(pageIndex, 10)
+    }
+
+    func testDualPDFPageSyncDoesNotPropagateProgrammaticPartialClampToOriginal() {
+        var pendingProgrammaticTargets: Set<Int> = []
+        let translatedTarget = DualPDFPageIndexSync.translatedPageIndex(
+            forOriginalPageIndex: 14,
+            translatedPageCount: 10
+        )
+
+        XCTAssertEqual(translatedTarget, 9)
+
+        pendingProgrammaticTargets.insert(translatedTarget)
+        let propagatedOriginalPage = DualPDFPageIndexSync.originalPageIndex(
+            forTranslatedPageIndex: translatedTarget,
+            translatedPageCount: 10,
+            pendingProgrammaticTargets: &pendingProgrammaticTargets
+        )
+
+        XCTAssertNil(propagatedOriginalPage)
+        XCTAssertTrue(pendingProgrammaticTargets.isEmpty)
+
+        let userDrivenOriginalPage = DualPDFPageIndexSync.originalPageIndex(
+            forTranslatedPageIndex: 8,
+            translatedPageCount: 10,
+            pendingProgrammaticTargets: &pendingProgrammaticTargets
+        )
+        XCTAssertEqual(userDrivenOriginalPage, 8)
     }
 }
