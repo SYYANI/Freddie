@@ -8,3 +8,4 @@ err.log
 # Xcode user interface state
 *.xcuserstate
 xcuserdata/
+paper.html

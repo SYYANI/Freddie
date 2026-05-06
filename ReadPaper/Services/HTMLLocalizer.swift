@@ -200,6 +200,8 @@ struct HTMLLocalizer: @unchecked Sendable {
         .rp-readability-title { margin: 0; font-size: 2rem; line-height: 1.25; }
         .rp-readability-byline, .rp-readability-excerpt { color: #5f6368; margin-top: 0.75rem; }
         .rp-readability-content img, .rp-readability-content video, .rp-readability-content svg, .rp-readability-content math { max-width: 100%; }
+        .rp-readability-content .grid { display: block !important; }
+        .rp-readability-content .grid > * { width: 100% !important; max-width: 100% !important; grid-column: auto !important; }
         """)
         if let head = document.head() {
             try head.appendChild(style)
