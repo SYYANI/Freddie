@@ -76,6 +76,7 @@ final class PaperImporter {
         )
         onProgress?(.finalizing(htmlImported: htmlImported))
         try modelContext.save()
+        AuthorExtractionService.extractAuthorsIfNeeded(for: paper, modelContext: modelContext)
         return paper
     }
 
@@ -117,6 +118,7 @@ final class PaperImporter {
             filePath: pdfFile.path
         ))
         try modelContext.save()
+        AuthorExtractionService.extractAuthorsIfNeeded(for: paper, modelContext: modelContext)
         return paper
     }
 
@@ -145,7 +147,7 @@ final class PaperImporter {
             let request = BrowserRequestHeaders.request(for: sourceURL, accept: .document)
             let (data, response) = try await session.data(for: request)
             if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
-                throw URLError(.badServerResponse)
+                throw PaperImportError.webPageHTTPError(statusCode: http.statusCode)
             }
 
             if (response as? HTTPURLResponse)?.mimeType?.lowercased() == "application/pdf" {
@@ -181,6 +183,7 @@ final class PaperImporter {
 
             onProgress?(.finalizing())
             try modelContext.save()
+            AuthorExtractionService.extractAuthorsIfNeeded(for: paper, modelContext: modelContext)
             return paper
         } catch {
             try? fileStore.removeDirectory(for: paper.id)
@@ -235,6 +238,7 @@ final class PaperImporter {
 
         onProgress?(.finalizing())
         try modelContext.save()
+        AuthorExtractionService.extractAuthorsIfNeeded(for: paper, modelContext: modelContext)
         return paper
     }
 

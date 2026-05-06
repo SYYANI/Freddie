@@ -64,6 +64,7 @@ enum PaperImportError: Error, LocalizedError {
     case missingHTML
     case unsupportedFile(URL)
     case noTranslatedPDFProduced
+    case webPageHTTPError(statusCode: Int)
 
     var errorDescription: String? {
         switch self {
@@ -81,6 +82,8 @@ enum PaperImportError: Error, LocalizedError {
             AppLocalization.format("Unsupported file: %@", url.lastPathComponent)
         case .noTranslatedPDFProduced:
             AppLocalization.localized("BabelDOC finished without producing a translated PDF.")
+        case .webPageHTTPError(let statusCode):
+            AppLocalization.format("The web server returned an error (status %d).", statusCode)
         }
     }
 }

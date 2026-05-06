@@ -24,6 +24,7 @@
 		2A67FBACD9DFF394CBAE579C /* NoteAnchorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BF28DC82B3404FEF1D9A022 /* NoteAnchorTests.swift */; };
 		2BB02EE3F30D1B784E18E76D /* LLMConfigurationBootstrapperTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F53583985C4F77116460318 /* LLMConfigurationBootstrapperTests.swift */; };
 		2C8D91C15F399A50A83A3932 /* LocalizationBehaviorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6284FF10C8EE25EEC8F01C2 /* LocalizationBehaviorTests.swift */; };
+		3381238537D395BC60B00E4B /* AuthorExtractionServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D67BD823B796DB962CD1DFC /* AuthorExtractionServiceTests.swift */; };
 		342E4EEBBCCF4E8BD73D9258 /* BabelDocToolManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9B5558A93632CE3A9C970E6 /* BabelDocToolManager.swift */; };
 		355CDD9F6A668C753004CD24 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0F1DEEFF5B77D9A4472738A /* ContentView.swift */; };
 		39BDFACE0145666CF83BBDA3 /* NoteAnchor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 873608C4E855A8AC35CB5ABB /* NoteAnchor.swift */; };
@@ -74,6 +75,7 @@
 		CB62B878D017B8B63DD87EC3 /* SwiftOpenAI in Frameworks */ = {isa = PBXBuildFile; productRef = EE4DDECCCB601D6B09EF6428 /* SwiftOpenAI */; };
 		CDD53CBFA547C1A14BDA88A8 /* LLMConfigurationBootstrapper.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB7C7C27FFFA5ECF81AABA98 /* LLMConfigurationBootstrapper.swift */; };
 		CE6EA74BB0E98DA02686F87A /* LLMProviderProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A71EA857F167326A20E22DC /* LLMProviderProfile.swift */; };
+		CFD46FC01EB5D66B7085FC64 /* AuthorExtractionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 302B63A40C9C12372F265892 /* AuthorExtractionService.swift */; };
 		D24C62A4F3063599D4B2803A /* Note.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81666A1EE76A077C9CDB5FE7 /* Note.swift */; };
 		D25D1824CBC8BFAB17784D12 /* Paper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8817F3ED2BCD0D7DD32CE2FB /* Paper.swift */; };
 		D36320A9561EC3B9A4C29B91 /* PaperAttachment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8970B5A2B0E4E782656BAFEF /* PaperAttachment.swift */; };
@@ -106,11 +108,13 @@
 		1451FFF74A97B956BEB980F1 /* Hashing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Hashing.swift; sourceTree = "<group>"; };
 		155075041A25A22CFB1EB008 /* AddPaperSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddPaperSheet.swift; sourceTree = "<group>"; };
 		15605D44878CFDBFBF883E0F /* ReaderPaneView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReaderPaneView.swift; sourceTree = "<group>"; };
+		1D67BD823B796DB962CD1DFC /* AuthorExtractionServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthorExtractionServiceTests.swift; sourceTree = "<group>"; };
 		1F3BD00E94A0DB0958154C9B /* PaperImporterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaperImporterTests.swift; sourceTree = "<group>"; };
 		20565DE8852B9CB834E7BCDC /* LanguageManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LanguageManagerTests.swift; sourceTree = "<group>"; };
 		241BC82AE12D75C8F0E5E622 /* ReadingState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingState.swift; sourceTree = "<group>"; };
 		2A71EA857F167326A20E22DC /* LLMProviderProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLMProviderProfile.swift; sourceTree = "<group>"; };
 		2C19A691B904E57BC9E1D133 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
+		302B63A40C9C12372F265892 /* AuthorExtractionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthorExtractionService.swift; sourceTree = "<group>"; };
 		30444FC979F813B5B76B4726 /* HTMLTranslationPipeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HTMLTranslationPipeline.swift; sourceTree = "<group>"; };
 		31F4A5AE575B4BE0C4DE3E4A /* ReadingStateStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingStateStoreTests.swift; sourceTree = "<group>"; };
 		373A9197249BAD6010BCBDC2 /* Enums.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Enums.swift; sourceTree = "<group>"; };
@@ -198,6 +202,7 @@
 				3CA9993DFAA34B89EBCF9A67 /* AbstractTranslationService.swift */,
 				5AE04037B749D64F46B8231B /* ArxivClient.swift */,
 				E3B8354421E9159F37194453 /* ArxivImportProgress.swift */,
+				302B63A40C9C12372F265892 /* AuthorExtractionService.swift */,
 				9E035274FD9E699D832B4D4E /* BabelDocRunner.swift */,
 				F9B5558A93632CE3A9C970E6 /* BabelDocToolManager.swift */,
 				1451FFF74A97B956BEB980F1 /* Hashing.swift */,
@@ -268,6 +273,7 @@
 			children = (
 				9B03A755D2C413016DD2B35E /* AbstractTranslationServiceTests.swift */,
 				47E6A94B8E0829E8FD015D53 /* ArxivClientTests.swift */,
+				1D67BD823B796DB962CD1DFC /* AuthorExtractionServiceTests.swift */,
 				CD20AB596745F6A2DE939722 /* BabelDocRunnerTests.swift */,
 				E56EC341627319DA8CE698A6 /* BabelDocToolManagerTests.swift */,
 				12D0D021D11F5C98A60484A3 /* HTMLLocalizerTests.swift */,
@@ -451,6 +457,7 @@
 			files = (
 				1C6669C83135E5D444D3EC7E /* AbstractTranslationServiceTests.swift in Sources */,
 				55247C9ECE01BC43C04A1B23 /* ArxivClientTests.swift in Sources */,
+				3381238537D395BC60B00E4B /* AuthorExtractionServiceTests.swift in Sources */,
 				BBA7A714502F6AF34B631EDF /* BabelDocRunnerTests.swift in Sources */,
 				29FD8ED057281CD8A2576299 /* BabelDocToolManagerTests.swift in Sources */,
 				80C7EDF69B15F127372D926B /* HTMLLocalizerTests.swift in Sources */,
@@ -483,6 +490,7 @@
 				71CF6A923EFED0917CF9F58C /* AppSettings.swift in Sources */,
 				60130CE02ABCB946ABAC9A8A /* ArxivClient.swift in Sources */,
 				F4EDC902333FAE0E8269D73D /* ArxivImportProgress.swift in Sources */,
+				CFD46FC01EB5D66B7085FC64 /* AuthorExtractionService.swift in Sources */,
 				5863153059F6B2FD21F823A6 /* BabelDocRunner.swift in Sources */,
 				342E4EEBBCCF4E8BD73D9258 /* BabelDocToolManager.swift in Sources */,
 				355CDD9F6A668C753004CD24 /* ContentView.swift in Sources */,
@@ -568,7 +576,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 24;
+				CURRENT_PROJECT_VERSION = 25;
 				DEVELOPMENT_LANGUAGE = en;
 				ENABLE_TESTABILITY = YES;
 				INFOPLIST_FILE = ReadPaper/Info.plist;
@@ -578,7 +586,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 0.3.4;
+				MARKETING_VERSION = 0.3.5;
 				PRODUCT_BUNDLE_IDENTIFIER = com.yiyan.ReadPaper;
 				PRODUCT_MODULE_NAME = ReadPaper;
 				PRODUCT_NAME = Freddie;
@@ -712,7 +720,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 24;
+				CURRENT_PROJECT_VERSION = 25;
 				DEVELOPMENT_LANGUAGE = en;
 				ENABLE_TESTABILITY = YES;
 				INFOPLIST_FILE = ReadPaper/Info.plist;
@@ -722,7 +730,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 0.3.4;
+				MARKETING_VERSION = 0.3.5;
 				PRODUCT_BUNDLE_IDENTIFIER = com.yiyan.ReadPaper;
 				PRODUCT_MODULE_NAME = ReadPaper;
 				PRODUCT_NAME = Freddie;

@@ -339,6 +339,14 @@ enum BrowserRequestHeaders {
         request.setValue(chromeUserAgent, forHTTPHeaderField: "User-Agent")
         request.setValue(englishAcceptLanguage, forHTTPHeaderField: "Accept-Language")
         request.setValue(accept.value, forHTTPHeaderField: "Accept")
+        if case .document = accept {
+            request.setValue("max-age=0", forHTTPHeaderField: "Cache-Control")
+            request.setValue("document", forHTTPHeaderField: "Sec-Fetch-Dest")
+            request.setValue("navigate", forHTTPHeaderField: "Sec-Fetch-Mode")
+            request.setValue("none", forHTTPHeaderField: "Sec-Fetch-Site")
+            request.setValue("?1", forHTTPHeaderField: "Sec-Fetch-User")
+            request.setValue("1", forHTTPHeaderField: "Upgrade-Insecure-Requests")
+        }
         return request
     }
 }

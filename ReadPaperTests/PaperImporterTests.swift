@@ -330,6 +330,39 @@ final class PaperImporterTests: XCTestCase {
     }
 
     @MainActor
+    func testImportWebPageThrowsDescriptiveErrorOnNon200StatusCode() async throws {
+        let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: rootURL) }
+
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [MockPaperImporterURLProtocol.self]
+        let session = URLSession(configuration: configuration)
+
+        MockPaperImporterURLProtocol.requestHandler = { request in
+            let url = try XCTUnwrap(request.url)
+            return (
+                HTTPURLResponse(url: url, statusCode: 403, httpVersion: nil, headerFields: ["Content-Type": "text/html"])!,
+                Data()
+            )
+        }
+
+        let importer = PaperImporter(
+            fileStore: PaperFileStore(applicationSupportDirectory: rootURL),
+            htmlLocalizer: HTMLLocalizer(session: session, fileManager: .default),
+            session: session
+        )
+        let modelContext = ModelContext(try makeContainer())
+
+        do {
+            _ = try await importer.importWebPage("https://example.com/blocked", modelContext: modelContext)
+            XCTFail("Expected error")
+        } catch {
+            let localized = error.localizedDescription
+            XCTAssertTrue(localized.contains("403") || localized.contains("error"), "Message: \(localized)")
+        }
+    }
+
+    @MainActor
     private func makeContainer() throws -> ModelContainer {
         let schema = Schema([
             Paper.self,
