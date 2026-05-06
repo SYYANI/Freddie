@@ -142,7 +142,8 @@ final class PaperImporter {
 
         do {
             onProgress?(.fetchingHTML(from: sourceURL))
-            let (data, response) = try await session.data(from: sourceURL)
+            let request = BrowserRequestHeaders.request(for: sourceURL, accept: .document)
+            let (data, response) = try await session.data(for: request)
             if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
                 throw URLError(.badServerResponse)
             }

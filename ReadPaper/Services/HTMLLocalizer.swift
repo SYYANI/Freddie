@@ -12,7 +12,8 @@ struct HTMLLocalizer: @unchecked Sendable {
     }
 
     func fetchAndLocalize(from sourceURL: URL, outputURL: URL, resourcesDirectory: URL) async throws -> URL {
-        let (data, response) = try await session.data(from: sourceURL)
+        let request = BrowserRequestHeaders.request(for: sourceURL, accept: .document)
+        let (data, response) = try await session.data(for: request)
         if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
             throw URLError(.badServerResponse)
         }
@@ -276,7 +277,8 @@ struct HTMLLocalizer: @unchecked Sendable {
     }
 
     private func downloadData(from url: URL) async throws -> Data {
-        let (data, response) = try await session.data(from: url)
+        let request = BrowserRequestHeaders.request(for: url, accept: .resource)
+        let (data, response) = try await session.data(for: request)
         if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
             throw URLError(.badServerResponse)
         }
@@ -309,5 +311,32 @@ struct HTMLLocalizer: @unchecked Sendable {
             try data.write(to: target, options: .atomic)
         }
         return filename
+    }
+}
+
+enum BrowserRequestHeaders {
+    static let chromeUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    static let englishAcceptLanguage = "en-US,en;q=0.9"
+
+    enum Accept {
+        case document
+        case resource
+
+        fileprivate var value: String {
+            switch self {
+            case .document:
+                "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+            case .resource:
+                "*/*"
+            }
+        }
+    }
+
+    static func request(for url: URL, accept: Accept) -> URLRequest {
+        var request = URLRequest(url: url)
+        request.setValue(chromeUserAgent, forHTTPHeaderField: "User-Agent")
+        request.setValue(englishAcceptLanguage, forHTTPHeaderField: "Accept-Language")
+        request.setValue(accept.value, forHTTPHeaderField: "Accept")
+        return request
     }
 }

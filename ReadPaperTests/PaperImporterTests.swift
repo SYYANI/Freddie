@@ -194,9 +194,15 @@ final class PaperImporterTests: XCTestCase {
 
         MockPaperImporterURLProtocol.requestHandler = { request in
             let url = try XCTUnwrap(request.url)
+            XCTAssertEqual(request.value(forHTTPHeaderField: "User-Agent"), BrowserRequestHeaders.chromeUserAgent)
+            XCTAssertEqual(request.value(forHTTPHeaderField: "Accept-Language"), BrowserRequestHeaders.englishAcceptLanguage)
 
             switch (url.host, url.path) {
             case ("example.com", "/paper"):
+                XCTAssertEqual(
+                    request.value(forHTTPHeaderField: "Accept"),
+                    "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+                )
                 let paragraph = String(repeating: "This static page content should survive readability extraction. ", count: 12)
                 let html = """
                 <html>
@@ -216,6 +222,7 @@ final class PaperImporterTests: XCTestCase {
                     Data(html.utf8)
                 )
             case ("example.com", "/figure.png"):
+                XCTAssertEqual(request.value(forHTTPHeaderField: "Accept"), "*/*")
                 return (
                     HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: ["Content-Type": "image/png"])!,
                     Data([0x89, 0x50, 0x4E, 0x47])
