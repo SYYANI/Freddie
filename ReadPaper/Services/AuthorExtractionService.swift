@@ -79,6 +79,7 @@ struct AuthorExtractionService {
             for: paperID,
             modelContext: modelContext
         )
+        let fallbackOrganization = Self.inferSourceOrganization(from: currentHTMLURLString)
 
         let highConfidenceAuthors = Self.highConfidenceAuthors(from: localHTMLContext)
         if !highConfidenceAuthors.isEmpty {
@@ -87,44 +88,58 @@ struct AuthorExtractionService {
             return true
         }
 
-        let settings = try modelContext.fetch(FetchDescriptor<AppSettings>()).first ?? AppSettings()
+        do {
+            let settings = try modelContext.fetch(FetchDescriptor<AppSettings>()).first ?? AppSettings()
 
-        let route = try LLMRouteResolver().resolveHTMLRoute(
-            settings: settings,
-            modelContext: modelContext
-        )
+            let route = try LLMRouteResolver().resolveHTMLRoute(
+                settings: settings,
+                modelContext: modelContext
+            )
 
-        let userContent = Self.buildUserContent(
-            title: currentTitle,
-            abstract: currentAbstract,
-            htmlURLString: currentHTMLURLString,
-            localHTMLContext: localHTMLContext
-        )
+            let userContent = Self.buildUserContent(
+                title: currentTitle,
+                abstract: currentAbstract,
+                htmlURLString: currentHTMLURLString,
+                localHTMLContext: localHTMLContext
+            )
 
-        guard let baseURL = URL(string: route.snapshot.baseURL) else { return false }
+            guard let baseURL = URL(string: route.snapshot.baseURL) else {
+                throw LLMRouteError.invalidBaseURL(route.snapshot.baseURL)
+            }
 
-        let response = try await provider.complete(request: LLMCompletionRequest(
-            baseURL: baseURL,
-            apiKey: route.apiKey,
-            model: route.snapshot.modelName,
-            messages: [
-                LLMCompletionMessage(role: "system", content: Self.authorExtractionPrompt),
-                LLMCompletionMessage(role: "user", content: userContent)
-            ],
-            temperature: 0.1,
-            topP: nil,
-            maxTokens: 200,
-            timeoutProfile: .translationDefault
-        ))
+            let response = try await provider.complete(request: LLMCompletionRequest(
+                baseURL: baseURL,
+                apiKey: route.apiKey,
+                model: route.snapshot.modelName,
+                messages: [
+                    LLMCompletionMessage(role: "system", content: Self.authorExtractionPrompt),
+                    LLMCompletionMessage(role: "user", content: userContent)
+                ],
+                temperature: 0.1,
+                topP: nil,
+                maxTokens: 200,
+                timeoutProfile: .translationDefault
+            ))
 
-        let authors = Self.parseAuthors(from: response.text)
-        guard !authors.isEmpty else {
+            let authors = Self.parseAuthors(from: response.text)
+            if !authors.isEmpty {
+                try Self.assign(authors, to: paper, modelContext: modelContext)
+                Self.logger.info("Author extraction succeeded for \"\(paper.title, privacy: .public)\": \(authors.joined(separator: ", "), privacy: .public)")
+                return true
+            }
             Self.logger.warning("LLM response produced no authors for \"\(currentTitle, privacy: .public)\". Response: \"\(response.text, privacy: .public)\"")
-            return false
+        } catch {
+            guard fallbackOrganization != nil else { throw error }
+            Self.logger.warning("Author extraction LLM step failed for \"\(currentTitle, privacy: .public)\". Falling back to source organization. Error: \(error.localizedDescription, privacy: .public)")
         }
-        try Self.assign(authors, to: paper, modelContext: modelContext)
-        Self.logger.info("Author extraction succeeded for \"\(paper.title, privacy: .public)\": \(authors.joined(separator: ", "), privacy: .public)")
-        return true
+
+        if let fallbackOrganization {
+            try Self.assign([fallbackOrganization], to: paper, modelContext: modelContext)
+            Self.logger.info("Author extraction used source organization for \"\(paper.title, privacy: .public)\": \(fallbackOrganization, privacy: .public)")
+            return true
+        }
+
+        return false
     }
 
     static func buildUserContent(
@@ -156,6 +171,10 @@ struct AuthorExtractionService {
             parts.append("Source URL: \(urlString)")
         }
 
+        if let organization = inferSourceOrganization(from: htmlURLString) {
+            parts.append("Source organization inferred from URL: \(organization)")
+        }
+
         return parts.joined(separator: "\n")
     }
 
@@ -164,6 +183,7 @@ struct AuthorExtractionService {
     Given a paper's metadata and local HTML evidence, identify the author names. \
     Treat source URLs as metadata only; do not assume you can browse them. \
     Prefer explicit author metadata or bylines over title guesses. \
+    If no personal authors can be identified but a source organization is provided, return that organization name. \
     Return only the author names, one per line. \
     Do not include affiliations, numbering, prefixes, or any other text. \
     If no authors can be identified, return an empty response.
@@ -255,6 +275,11 @@ struct AuthorExtractionService {
             }
         }
 
+        let normalizedText = normalizeWhitespace(text)
+        if knownOrganizationNames.contains(normalizedText.lowercased()) {
+            return [normalizedText]
+        }
+
         let candidates = text
             .replacingOccurrences(of: #",\s*and\s+"#, with: "|||", options: .regularExpression)
             .replacingOccurrences(of: #"\s+and\s+"#, with: "|||", options: .regularExpression)
@@ -281,6 +306,32 @@ struct AuthorExtractionService {
             }
             return lower != "n/a" && lower != "none" && lower != "unknown"
         }
+    }
+
+    static func inferSourceOrganization(from urlString: String?) -> String? {
+        guard let rawValue = urlString?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !rawValue.isEmpty else {
+            return nil
+        }
+
+        let normalizedValue = rawValue.contains("://") ? rawValue : "https://\(rawValue)"
+        guard let url = URL(string: normalizedValue),
+              let host = url.host?.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: ".")),
+              !host.isEmpty else {
+            return nil
+        }
+
+        for (domain, organization) in knownSourceOrganizations {
+            if host == domain || host.hasSuffix(".\(domain)") {
+                return organization
+            }
+        }
+
+        guard let organizationLabel = organizationLabel(from: host) else {
+            return nil
+        }
+
+        return organizationName(from: organizationLabel)
     }
 
     private static func fetchPaper(id paperID: UUID, modelContext: ModelContext) throws -> Paper? {
@@ -355,5 +406,148 @@ struct AuthorExtractionService {
             .split(whereSeparator: { $0.isWhitespace })
             .joined(separator: " ")
             .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static let knownSourceOrganizations: [(domain: String, organization: String)] = [
+        ("openai.com", "OpenAI"),
+        ("ar5iv.labs.arxiv.org", "ar5iv"),
+        ("arxiv.org", "arXiv"),
+        ("aclanthology.org", "ACL Anthology"),
+        ("acm.org", "ACM"),
+        ("ieee.org", "IEEE"),
+        ("springer.com", "Springer"),
+        ("springernature.com", "Springer Nature"),
+        ("nature.com", "Nature"),
+        ("science.org", "Science"),
+        ("sciencedirect.com", "ScienceDirect"),
+        ("elsevier.com", "Elsevier"),
+        ("wiley.com", "Wiley"),
+        ("tandfonline.com", "Taylor & Francis"),
+        ("mit.edu", "MIT"),
+        ("stanford.edu", "Stanford"),
+        ("berkeley.edu", "UC Berkeley"),
+        ("cmu.edu", "Carnegie Mellon University"),
+        ("ox.ac.uk", "University of Oxford"),
+        ("cam.ac.uk", "University of Cambridge"),
+        ("harvard.edu", "Harvard University"),
+        ("google.com", "Google"),
+        ("googleblog.com", "Google"),
+        ("microsoft.com", "Microsoft"),
+        ("meta.com", "Meta"),
+        ("anthropic.com", "Anthropic"),
+        ("deepmind.google", "Google DeepMind")
+    ]
+
+    private static var knownOrganizationNames: Set<String> {
+        Set(knownSourceOrganizations.map { $0.organization.lowercased() })
+    }
+
+    private static let commonHostPrefixes: Set<String> = [
+        "www",
+        "m",
+        "mobile",
+        "amp",
+        "blog",
+        "blogs",
+        "research",
+        "news",
+        "press",
+        "developer",
+        "developers",
+        "docs",
+        "documentation",
+        "papers",
+        "proceedings",
+        "journals"
+    ]
+
+    private static let multiPartDomainSuffixes: Set<String> = [
+        "ac.cn",
+        "ac.jp",
+        "ac.kr",
+        "ac.uk",
+        "co.jp",
+        "co.kr",
+        "co.uk",
+        "com.au",
+        "com.cn",
+        "com.hk",
+        "com.sg",
+        "edu.au",
+        "edu.cn",
+        "edu.hk",
+        "edu.sg",
+        "net.cn",
+        "org.au",
+        "org.cn",
+        "org.uk"
+    ]
+
+    private static let organizationNameOverrides: [String: String] = [
+        "ai": "AI",
+        "acl": "ACL",
+        "acm": "ACM",
+        "arxiv": "arXiv",
+        "berkeley": "UC Berkeley",
+        "cmu": "Carnegie Mellon University",
+        "deepmind": "Google DeepMind",
+        "google": "Google",
+        "googleblog": "Google",
+        "ieee": "IEEE",
+        "mit": "MIT",
+        "openai": "OpenAI",
+        "sciencedirect": "ScienceDirect",
+        "springernature": "Springer Nature"
+    ]
+
+    private static func organizationLabel(from host: String) -> String? {
+        var labels = host
+            .split(separator: ".")
+            .map(String.init)
+            .filter { !$0.isEmpty }
+        guard labels.count >= 2 else { return nil }
+
+        while labels.count > 2, commonHostPrefixes.contains(labels[0]) {
+            labels.removeFirst()
+        }
+
+        let suffixLength = publicSuffixLength(for: labels)
+        let organizationIndex = labels.count - suffixLength - 1
+        guard labels.indices.contains(organizationIndex) else { return nil }
+
+        let label = labels[organizationIndex]
+            .trimmingCharacters(in: CharacterSet(charactersIn: "-_"))
+        guard label.count >= 2, label.rangeOfCharacter(from: .letters) != nil else {
+            return nil
+        }
+        return label
+    }
+
+    private static func publicSuffixLength(for labels: [String]) -> Int {
+        guard labels.count >= 2 else { return labels.count }
+
+        let lastTwo = labels.suffix(2).joined(separator: ".")
+        if multiPartDomainSuffixes.contains(lastTwo) {
+            return 2
+        }
+        return 1
+    }
+
+    private static func organizationName(from label: String) -> String {
+        let normalizedLabel = label.lowercased()
+        if let override = organizationNameOverrides[normalizedLabel] {
+            return override
+        }
+
+        return normalizedLabel
+            .split(separator: "-")
+            .map { word in
+                let value = String(word)
+                if let override = organizationNameOverrides[value] {
+                    return override
+                }
+                return value.prefix(1).uppercased() + String(value.dropFirst())
+            }
+            .joined(separator: " ")
     }
 }

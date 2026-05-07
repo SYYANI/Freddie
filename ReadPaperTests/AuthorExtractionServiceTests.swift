@@ -100,6 +100,11 @@ final class AuthorExtractionServiceTests: XCTestCase {
         XCTAssertEqual(result, ["John Smith", "Jane Doe"])
     }
 
+    func testParseAuthorsPreservesKnownOrganizationWithAmpersand() {
+        let result = AuthorExtractionService.parseAuthors(from: "Taylor & Francis")
+        XCTAssertEqual(result, ["Taylor & Francis"])
+    }
+
     func testParseAuthorsStripsByAndAffiliationMultiline() {
         let input = "By Ryan Lopopolo, Member of the Technical Staff\nJohn Smith, University of Science"
         let result = AuthorExtractionService.parseAuthors(from: input)
@@ -178,6 +183,7 @@ final class AuthorExtractionServiceTests: XCTestCase {
         XCTAssertTrue(result.contains("Local HTML byline candidates:\nBy Ryan Lopopolo, Member of the Technical Staff"))
         XCTAssertTrue(result.contains("Local HTML visible text excerpt:\nHarness engineering"))
         XCTAssertTrue(result.contains("Source URL: https://openai.com/index/harness-engineering/"))
+        XCTAssertTrue(result.contains("Source organization inferred from URL: OpenAI"))
     }
 
     // MARK: - local HTML context
@@ -250,6 +256,58 @@ final class AuthorExtractionServiceTests: XCTestCase {
 
         XCTAssertTrue(didExtract)
         XCTAssertEqual(paper.authors, ["Ryan Lopopolo"])
+    }
+
+    // MARK: - source organization fallback
+
+    func testInferSourceOrganizationUsesKnownDomainName() {
+        let organization = AuthorExtractionService.inferSourceOrganization(
+            from: "https://openai.com/index/harness-engineering/"
+        )
+
+        XCTAssertEqual(organization, "OpenAI")
+    }
+
+    func testInferSourceOrganizationFormatsRegistrableDomain() {
+        let organization = AuthorExtractionService.inferSourceOrganization(
+            from: "https://research.example-lab.org/papers/test"
+        )
+
+        XCTAssertEqual(organization, "Example Lab")
+    }
+
+    func testInferSourceOrganizationHandlesMultiPartSuffix() {
+        let organization = AuthorExtractionService.inferSourceOrganization(
+            from: "https://www.example-lab.ac.uk/research/test"
+        )
+
+        XCTAssertEqual(organization, "Example Lab")
+    }
+
+    func testInferSourceOrganizationReturnsNilForInvalidURL() {
+        XCTAssertNil(AuthorExtractionService.inferSourceOrganization(from: "not a url"))
+        XCTAssertNil(AuthorExtractionService.inferSourceOrganization(from: nil))
+    }
+
+    func testExtractAndAssignFallsBackToSourceOrganizationWithoutLLMRoute() async throws {
+        let paper = Paper(
+            title: "Harness engineering: leveraging Codex in an agent-first world",
+            authors: [],
+            htmlURLString: "https://openai.com/index/harness-engineering/"
+        )
+        modelContext.insert(paper)
+        try modelContext.save()
+
+        let didExtract = try await AuthorExtractionService().extractAndAssign(
+            paperID: paper.id,
+            title: paper.title,
+            abstract: paper.abstractText,
+            htmlURLString: paper.htmlURLString,
+            modelContext: modelContext
+        )
+
+        XCTAssertTrue(didExtract)
+        XCTAssertEqual(paper.authors, ["OpenAI"])
     }
 
     // MARK: - extractAuthorsIfNeeded guard conditions
