@@ -32,6 +32,36 @@ final class HTMLTranslationPipelineTests: XCTestCase {
     }
 
     @MainActor
+    func testTitleTranslationBlocksResetCrampedHeadingLayout() throws {
+        let html = """
+        <html>
+        <head>
+        <style>h1 { line-height: 0.7; max-height: 1em; overflow: hidden; }</style>
+        <style id="rp-translation-display-style">.rp-translation-block { color: red; }</style>
+        </head>
+        <body>
+        <h1>A title that will wrap after translation</h1>
+        </body>
+        </html>
+        """
+        let prepared = try HTMLTranslationPipeline.prepareDocument(html)
+        let candidate = try XCTUnwrap(prepared.candidates.first)
+        let output = try HTMLTranslationPipeline.applyTranslations(
+            toPreparedHTML: prepared.preparedHTML,
+            candidates: prepared.candidates,
+            translations: [
+                candidate.segmentID: "这是一个会在阅读器中换行的中文标题译文，用来验证标题译文不会上下重叠。"
+            ]
+        )
+
+        XCTAssertTrue(output.contains("<h1 class=\"rp-translation-block\""))
+        XCTAssertTrue(output.contains(".rp-translation-block:is(h1, h2, h3, h4, h5, h6)"))
+        XCTAssertTrue(output.contains("line-height: 1.45 !important"))
+        XCTAssertTrue(output.contains("max-height: none !important"))
+        XCTAssertFalse(output.contains("color: red"))
+    }
+
+    @MainActor
     func testTranslateHTMLUsesCacheOnlyWhenRouteMatches() async throws {
         let environment = try makeEnvironment()
         defer { try? FileManager.default.removeItem(at: environment.rootURL) }

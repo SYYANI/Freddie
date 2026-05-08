@@ -113,6 +113,43 @@ struct HTMLReaderView: NSViewRepresentable {
             const isTranslationElement = element =>
                 !!(element && element.matches && element.matches(translationSelector));
 
+            const translationDisplayCSS = `
+                html[data-rp-display-mode='original'] .rp-translation-block { display: none !important; }
+                html[data-rp-display-mode='translated'] [data-rp-source='true'] { display: none !important; }
+                .rp-translation-block {
+                    color: #1f4d3a;
+                    display: block !important;
+                    position: static !important;
+                    clear: both;
+                    height: auto !important;
+                    min-height: 0 !important;
+                    max-height: none !important;
+                    overflow: visible !important;
+                    white-space: normal !important;
+                    word-break: break-word;
+                    line-height: 1.55 !important;
+                    margin-top: 0.25em;
+                    box-sizing: border-box;
+                }
+                .rp-translation-block:is(h1, h2, h3, h4, h5, h6) {
+                    line-height: 1.45 !important;
+                    margin-top: 0.35em !important;
+                    margin-bottom: 0.75em !important;
+                }
+            `.trim();
+
+            const ensureTranslationDisplayStyle = () => {
+                let style = document.getElementById('rp-translation-display-style');
+                if (!style) {
+                    style = document.createElement('style');
+                    style.id = 'rp-translation-display-style';
+                    (document.head || document.documentElement).appendChild(style);
+                }
+                if (style.textContent !== translationDisplayCSS) {
+                    style.textContent = translationDisplayCSS;
+                }
+            };
+
             const originalChildren = parent =>
                 Array.from(parent?.children || []).filter(child => !isTranslationElement(child));
 
@@ -194,6 +231,8 @@ struct HTMLReaderView: NSViewRepresentable {
                     return null;
                 }
             };
+
+            ensureTranslationDisplayStyle();
 
             if (!document.getElementById('rp-note-anchor-style')) {
                 const style = document.createElement('style');

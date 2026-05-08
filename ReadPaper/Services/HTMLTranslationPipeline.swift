@@ -289,17 +289,38 @@ final class HTMLTranslationPipeline {
 
     private static func injectDisplayStyles(into document: Document) throws {
         let styleID = "rp-translation-display-style"
-        if try document.getElementById(styleID) != nil {
-            return
+        let style: Element
+        if let existing = try document.getElementById(styleID) {
+            style = existing
+        } else {
+            style = try document.createElement("style")
+            try style.attr("id", styleID)
         }
-        let style = try document.createElement("style")
-        try style.attr("id", styleID)
         try style.html("""
         html[data-rp-display-mode='original'] .rp-translation-block { display: none !important; }
         html[data-rp-display-mode='translated'] [data-rp-source='true'] { display: none !important; }
-        .rp-translation-block { color: #1f4d3a; margin-top: 0.25em; }
+        .rp-translation-block {
+            color: #1f4d3a;
+            display: block !important;
+            position: static !important;
+            clear: both;
+            height: auto !important;
+            min-height: 0 !important;
+            max-height: none !important;
+            overflow: visible !important;
+            white-space: normal !important;
+            word-break: break-word;
+            line-height: 1.55 !important;
+            margin-top: 0.25em;
+            box-sizing: border-box;
+        }
+        .rp-translation-block:is(h1, h2, h3, h4, h5, h6) {
+            line-height: 1.45 !important;
+            margin-top: 0.35em !important;
+            margin-bottom: 0.75em !important;
+        }
         """)
-        if let head = document.head() {
+        if style.parent() == nil, let head = document.head() {
             try head.appendChild(style)
         }
     }
