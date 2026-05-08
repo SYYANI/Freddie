@@ -39,7 +39,7 @@ struct HTMLLocalizer: @unchecked Sendable {
                 try link.tagName("style")
                 try link.removeAttr("href")
                 try link.removeAttr("rel")
-                try link.html("/* \(filename) */\n\(rewritten)")
+                try setRawStyleContent("/* \(filename) */\n\(rewritten)", on: link)
             } catch {
                 continue
             }
@@ -186,7 +186,7 @@ struct HTMLLocalizer: @unchecked Sendable {
         }
         let style = try document.createElement("style")
         try style.attr("id", styleID)
-        try style.html("""
+        try setRawStyleContent("""
         body.rp-readability-body { margin: 0; padding: 32px 24px 56px; }
         .rp-readability-shell { max-width: 980px; margin: 0 auto; }
         .rp-readability-header {
@@ -200,12 +200,34 @@ struct HTMLLocalizer: @unchecked Sendable {
         .rp-readability-title { margin: 0; font-size: 2rem; line-height: 1.25; }
         .rp-readability-byline, .rp-readability-excerpt { color: #5f6368; margin-top: 0.75rem; }
         .rp-readability-content img, .rp-readability-content video, .rp-readability-content svg, .rp-readability-content math { max-width: 100%; }
-        .rp-readability-content .grid { display: block !important; }
-        .rp-readability-content .grid > * { width: 100% !important; max-width: 100% !important; grid-column: auto !important; }
-        """)
+        .rp-readability-content .page,
+        .rp-readability-content .available-content,
+        .rp-readability-content .grid,
+        .rp-readability-content [class~='pc-display-grid'] {
+            display: block !important;
+        }
+        .rp-readability-content .page,
+        .rp-readability-content .available-content {
+            padding: 0 !important;
+        }
+        .rp-readability-content .page > *,
+        .rp-readability-content .available-content > *,
+        .rp-readability-content .grid > *,
+        .rp-readability-content [class~='pc-display-grid'] > * {
+            width: 100% !important;
+            max-width: 100% !important;
+            grid-column: auto !important;
+            box-sizing: border-box;
+        }
+        """, on: style)
         if let head = document.head() {
             try head.appendChild(style)
         }
+    }
+
+    private func setRawStyleContent(_ css: String, on style: Element) throws {
+        style.empty()
+        try style.appendChild(DataNode(Array(css.utf8), style.getBaseUriUTF8()))
     }
 
     private func renderReadableBody(for result: ReadabilityResult) -> String {
