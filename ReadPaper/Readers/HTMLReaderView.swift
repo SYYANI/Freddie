@@ -6,6 +6,7 @@ struct HTMLReaderView: NSViewRepresentable {
     var attachmentID: UUID? = nil
     var displayMode: TranslationDisplayMode
     var reloadToken: Int
+    var initialScrollRatio: Double
     @Binding var scrollRatio: Double
     var segmentUpdate: HTMLTranslationSegmentUpdate?
     var noteNavigationRequest: NoteNavigationRequest? = nil
@@ -48,7 +49,7 @@ struct HTMLReaderView: NSViewRepresentable {
                 readAccessURL: readAccessURL,
                 reloadToken: reloadToken,
                 preserveScrollPosition: false,
-                targetScrollRatio: scrollRatio,
+                targetScrollRatio: initialScrollRatio,
                 in: view
             )
             return

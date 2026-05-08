@@ -131,6 +131,10 @@ struct ReaderPaneView: View {
         return readingStates.first { $0.paperID == paper.id }
     }
 
+    private var restoredHTMLScrollRatio: Double {
+        ReadingStateStore.clampedScrollRatio(readingState?.scrollRatio ?? 0)
+    }
+
     private var pdfDisplayAppearance: PDFDisplayAppearance {
         PDFDisplayAppearance.resolve(rawValue: pdfDisplayAppearanceRawValue)
     }
@@ -569,6 +573,7 @@ struct ReaderPaneView: View {
                         attachmentID: htmlAttachment?.id,
                         displayMode: displayMode,
                         reloadToken: htmlReloadToken,
+                        initialScrollRatio: restoredHTMLScrollRatio,
                         scrollRatio: $htmlScrollRatio,
                         segmentUpdate: htmlSegmentUpdate,
                         noteNavigationRequest: noteNavigationRequest,
