@@ -138,6 +138,18 @@ struct HTMLReaderView: NSViewRepresentable {
                 }
             `.trim();
 
+            const readabilityLayoutRepairCSS = `
+                html[data-rp-page-padding-repair='true'] .rp-readability-content > #readability-page-1.page {
+                    padding: 32px 28px 56px !important;
+                    box-sizing: border-box;
+                }
+                @media (max-width: 720px) {
+                    html[data-rp-page-padding-repair='true'] .rp-readability-content > #readability-page-1.page {
+                        padding: 24px 18px 48px !important;
+                    }
+                }
+            `.trim();
+
             const ensureTranslationDisplayStyle = () => {
                 let style = document.getElementById('rp-translation-display-style');
                 if (!style) {
@@ -147,6 +159,33 @@ struct HTMLReaderView: NSViewRepresentable {
                 }
                 if (style.textContent !== translationDisplayCSS) {
                     style.textContent = translationDisplayCSS;
+                }
+            };
+
+            const ensureReadabilityLayoutRepairStyle = () => {
+                let style = document.getElementById('rp-readability-layout-repair-style');
+                if (!style) {
+                    style = document.createElement('style');
+                    style.id = 'rp-readability-layout-repair-style';
+                    (document.head || document.documentElement).appendChild(style);
+                }
+                if (style.textContent !== readabilityLayoutRepairCSS) {
+                    style.textContent = readabilityLayoutRepairCSS;
+                }
+            };
+
+            const updateReadabilityLayoutRepair = () => {
+                const style = document.getElementById('rp-readability-style');
+                const css = style?.textContent || '';
+                const hasOldPagePaddingReset =
+                    /\\.rp-readability-content\\s+\\.page\\s*,\\s*\\.rp-readability-content\\s+\\.available-content\\s*\\{[^}]*padding\\s*:\\s*0\\s*!important/i.test(css);
+                const hasReadabilityPage = !!document.querySelector('.rp-readability-content > #readability-page-1.page');
+
+                if (hasOldPagePaddingReset && hasReadabilityPage) {
+                    document.documentElement.setAttribute('data-rp-page-padding-repair', 'true');
+                    ensureReadabilityLayoutRepairStyle();
+                } else {
+                    document.documentElement.removeAttribute('data-rp-page-padding-repair');
                 }
             };
 
@@ -233,6 +272,7 @@ struct HTMLReaderView: NSViewRepresentable {
             };
 
             ensureTranslationDisplayStyle();
+            updateReadabilityLayoutRepair();
 
             if (!document.getElementById('rp-note-anchor-style')) {
                 const style = document.createElement('style');

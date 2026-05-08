@@ -87,7 +87,14 @@ final class HTMLLocalizerTests: XCTestCase {
         XCTAssertTrue(readabilityCSS.contains(".rp-readability-content .available-content"))
         XCTAssertTrue(readabilityCSS.contains(".rp-readability-content [class~='pc-display-grid']"))
         XCTAssertTrue(readabilityCSS.contains("display: block !important"))
-        XCTAssertTrue(readabilityCSS.contains("padding: 0 !important"))
+        XCTAssertNotNil(readabilityCSS.range(
+            of: #"\.rp-readability-content\s+\.available-content\s*\{\s*padding:\s*0\s*!important;\s*\}"#,
+            options: .regularExpression
+        ))
+        XCTAssertNil(readabilityCSS.range(
+            of: #"\.rp-readability-content\s+\.page[^{]*\{[^}]*padding:\s*0\s*!important"#,
+            options: .regularExpression
+        ))
     }
 
     func testLocalizeWritesDownloadedStylesAsRawCSS() async throws {

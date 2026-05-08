@@ -206,7 +206,6 @@ struct HTMLLocalizer: @unchecked Sendable {
         .rp-readability-content [class~='pc-display-grid'] {
             display: block !important;
         }
-        .rp-readability-content .page,
         .rp-readability-content .available-content {
             padding: 0 !important;
         }
