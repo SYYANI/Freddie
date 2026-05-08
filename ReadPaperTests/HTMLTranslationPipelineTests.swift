@@ -1,4 +1,5 @@
 import SwiftData
+import SwiftSoup
 import XCTest
 @testable import ReadPaper
 
@@ -59,6 +60,64 @@ final class HTMLTranslationPipelineTests: XCTestCase {
         XCTAssertTrue(output.contains("line-height: 1.45 !important"))
         XCTAssertTrue(output.contains("max-height: none !important"))
         XCTAssertFalse(output.contains("color: red"))
+    }
+
+    @MainActor
+    func testNestedListParagraphsDoNotCreateParentListCandidates() throws {
+        let html = """
+        <html><body>
+        <ul>
+        <li><p>Nested list paragraph that should be translated once only.</p></li>
+        <li>Plain list item that still needs its own translation.</li>
+        </ul>
+        </body></html>
+        """
+        let prepared = try HTMLTranslationPipeline.prepareDocument(html)
+
+        XCTAssertEqual(prepared.candidates.count, 2)
+        XCTAssertEqual(prepared.candidates.map(\.tagName), ["p", "li"])
+
+        let preparedDocument = try SwiftSoup.parse(prepared.preparedHTML)
+        let items = try preparedDocument.select("li").array()
+        XCTAssertEqual(items.count, 2)
+        XCTAssertFalse(items[0].hasAttr("data-rp-source"))
+        XCTAssertNotNil(try items[0].select("p[data-rp-source=true]").first())
+        XCTAssertTrue(items[1].hasAttr("data-rp-source"))
+
+        let translations = Dictionary(uniqueKeysWithValues: prepared.candidates.enumerated().map { index, candidate in
+            (candidate.segmentID, "Translated block \(index).")
+        })
+        let output = try HTMLTranslationPipeline.applyTranslations(
+            toPreparedHTML: prepared.preparedHTML,
+            candidates: prepared.candidates,
+            translations: translations
+        )
+        let translatedBlocks = try SwiftSoup.parse(output).select("body .rp-translation-block").array()
+        XCTAssertEqual(translatedBlocks.count, 2)
+        XCTAssertEqual(translatedBlocks.map { $0.tagName() }, ["p", "li"])
+    }
+
+    @MainActor
+    func testPrepareDocumentClearsStaleSourceMarkersFromSkippedContainers() throws {
+        let html = """
+        <html><body>
+        <ul>
+        <li data-rp-segment-id="old-li" data-rp-source="true">
+            <p data-rp-segment-id="old-p" data-rp-source="true">Nested paragraph with stale markers should keep only paragraph source markers.</p>
+            <p class="rp-translation-block" data-rp-translation="true" data-rp-source-segment-id="old-p">Old nested translation.</p>
+        </li>
+        <li class="rp-translation-block" data-rp-translation="true" data-rp-source-segment-id="old-li">Old parent translation.</li>
+        </ul>
+        </body></html>
+        """
+        let prepared = try HTMLTranslationPipeline.prepareDocument(html)
+        let preparedDocument = try SwiftSoup.parse(prepared.preparedHTML)
+
+        XCTAssertNil(try preparedDocument.select(".rp-translation-block").first())
+        XCTAssertNil(try preparedDocument.select("li[data-rp-source=true]").first())
+        XCTAssertNotNil(try preparedDocument.select("li p[data-rp-source=true]").first())
+        XCTAssertFalse(prepared.preparedHTML.contains("old-li"))
+        XCTAssertFalse(prepared.preparedHTML.contains("old-p"))
     }
 
     @MainActor

@@ -20,6 +20,8 @@ struct HTMLTranslationSegmentUpdate: Equatable, Sendable {
 
 @MainActor
 final class HTMLTranslationPipeline {
+    private static let candidateSelector = "p, h1, h2, h3, h4, h5, h6, figcaption, blockquote, li"
+
     private let client: TranslationLLMClientProtocol
 
     init(client: TranslationLLMClientProtocol = TranslationLLMClient()) {
@@ -177,11 +179,12 @@ final class HTMLTranslationPipeline {
     static func prepareDocument(_ html: String) throws -> (preparedHTML: String, candidates: [HTMLTranslationCandidate]) {
         let document = try SwiftSoup.parse(html)
         try removeExistingTranslationBlocks(from: document)
+        try removeExistingSourceMarkers(from: document)
         var candidates: [HTMLTranslationCandidate] = []
-        let selector = "p, h1, h2, h3, h4, h5, h6, figcaption, blockquote, li"
 
-        for element in try document.select(selector).array() {
+        for element in try document.select(candidateSelector).array() {
             if try shouldSkip(element) { continue }
+            if try hasTranslatableDescendant(in: element) { continue }
             let tagName = element.tagName()
             let protected = try protectedText(from: element)
             let minimumLength = tagName.hasPrefix("h") ? 2 : 10
@@ -242,6 +245,13 @@ final class HTMLTranslationPipeline {
         }
     }
 
+    private static func removeExistingSourceMarkers(from document: Document) throws {
+        for element in try document.select("[data-rp-segment-id], [data-rp-source]").array() {
+            try element.removeAttr("data-rp-segment-id")
+            try element.removeAttr("data-rp-source")
+        }
+    }
+
     private static func writeDocument(_ document: Document, to url: URL) throws {
         try document.outerHtml().write(to: url, atomically: true, encoding: .utf8)
     }
@@ -252,6 +262,20 @@ final class HTMLTranslationPipeline {
         }
         if element.parents().hasClass("rp-translation-block") {
             return true
+        }
+        return false
+    }
+
+    private static func hasTranslatableDescendant(in element: Element) throws -> Bool {
+        for descendant in try element.select(candidateSelector).array() {
+            if descendant === element { continue }
+            if try shouldSkip(descendant) { continue }
+            let tagName = descendant.tagName()
+            let protected = try protectedText(from: descendant)
+            let minimumLength = tagName.hasPrefix("h") ? 2 : 10
+            if protected.text.count >= minimumLength {
+                return true
+            }
         }
         return false
     }
