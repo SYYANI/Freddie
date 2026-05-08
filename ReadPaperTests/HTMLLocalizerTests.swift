@@ -144,6 +144,61 @@ final class HTMLLocalizerTests: XCTestCase {
         XCTAssertFalse(try downloadedStyle.outerHtml().contains("&gt;"))
     }
 
+    func testLocalizeTunesEmbeddedMediaForReaderPerformance() async throws {
+        let paragraph = String(repeating: "This is article content that should survive readability extraction. ", count: 12)
+        let html = """
+        <html>
+        <body>
+        <article>
+        <h1>Readable Title</h1>
+        <p>\(paragraph)</p>
+        <img src="/figure.png">
+        <video controls src="https://cdn.example.com/demo.mp4"></video>
+        <audio src="https://cdn.example.com/demo.mp3"></audio>
+        </article>
+        </body>
+        </html>
+        """
+
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [MockHTMLLocalizerURLProtocol.self]
+        let session = URLSession(configuration: configuration)
+        MockHTMLLocalizerURLProtocol.requestHandler = { request in
+            let url = try XCTUnwrap(request.url)
+            XCTAssertEqual(url.path, "/figure.png")
+            return (
+                HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: ["Content-Type": "image/png"])!,
+                Data([0x89, 0x50, 0x4E, 0x47])
+            )
+        }
+
+        let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: rootURL) }
+        let resourcesURL = rootURL.appendingPathComponent("Resources", isDirectory: true)
+        let outputURL = rootURL.appendingPathComponent("paper.html")
+
+        _ = try await HTMLLocalizer(session: session).localize(
+            htmlData: Data(html.utf8),
+            sourceURL: URL(string: "https://example.com/article")!,
+            outputURL: outputURL,
+            resourcesDirectory: resourcesURL
+        )
+
+        let output = try String(contentsOf: outputURL, encoding: .utf8)
+        let document = try SwiftSoup.parse(output)
+
+        let image = try XCTUnwrap(try document.select("img").first())
+        XCTAssertEqual(try image.attr("loading"), "lazy")
+        XCTAssertEqual(try image.attr("decoding"), "async")
+        XCTAssertTrue(try image.attr("src").hasPrefix("Resources/"))
+
+        let video = try XCTUnwrap(try document.select("video").first())
+        XCTAssertEqual(try video.attr("preload"), "none")
+
+        let audio = try XCTUnwrap(try document.select("audio").first())
+        XCTAssertEqual(try audio.attr("preload"), "none")
+    }
+
     func testMakeDocumentForLocalizationFallsBackWhenReadabilityCannotExtract() throws {
         let html = """
         <html>

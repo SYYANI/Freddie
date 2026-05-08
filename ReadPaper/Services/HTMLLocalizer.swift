@@ -63,6 +63,8 @@ struct HTMLLocalizer: @unchecked Sendable {
             try source.attr("srcset", rewritten)
         }
 
+        try tuneEmbeddedMediaLoading(in: document)
+
         let output = try document.outerHtml()
         try output.write(to: outputURL, atomically: true, encoding: .utf8)
         return outputURL
@@ -227,6 +229,25 @@ struct HTMLLocalizer: @unchecked Sendable {
     private func setRawStyleContent(_ css: String, on style: Element) throws {
         style.empty()
         try style.appendChild(DataNode(Array(css.utf8), style.getBaseUriUTF8()))
+    }
+
+    private func tuneEmbeddedMediaLoading(in document: Document) throws {
+        for image in try document.select("img[src]").array() {
+            if (try? image.attr("loading")).flatMap(nonEmpty) == nil {
+                try image.attr("loading", "lazy")
+            }
+            if (try? image.attr("decoding")).flatMap(nonEmpty) == nil {
+                try image.attr("decoding", "async")
+            }
+        }
+
+        // Imported reader pages should prioritize fast paper switching over eager media buffering.
+        for media in try document.select("video, audio").array() {
+            let preload = (try? media.attr("preload"))?.lowercased() ?? ""
+            if preload != "none" {
+                try media.attr("preload", "none")
+            }
+        }
     }
 
     private func renderReadableBody(for result: ReadabilityResult) -> String {

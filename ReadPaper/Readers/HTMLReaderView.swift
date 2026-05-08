@@ -18,6 +18,13 @@ struct HTMLReaderView: NSViewRepresentable {
         configuration.userContentController.add(context.coordinator, name: Coordinator.selectionMessageHandlerName)
         configuration.userContentController.addUserScript(
             WKUserScript(
+                source: Coordinator.mediaPreparationScript,
+                injectionTime: .atDocumentStart,
+                forMainFrameOnly: true
+            )
+        )
+        configuration.userContentController.addUserScript(
+            WKUserScript(
                 source: Coordinator.instrumentationScript,
                 injectionTime: .atDocumentEnd,
                 forMainFrameOnly: true
@@ -82,6 +89,84 @@ struct HTMLReaderView: NSViewRepresentable {
 
         static let scrollMessageHandlerName = "rpScroll"
         static let selectionMessageHandlerName = "rpSelection"
+        static let mediaPreparationScript = """
+        (() => {
+            if (window.__rpMediaPreparationInstalled) { return; }
+            window.__rpMediaPreparationInstalled = true;
+
+            const tuneImage = image => {
+                if (!(image instanceof HTMLImageElement)) { return; }
+                if (!image.hasAttribute('loading')) {
+                    image.setAttribute('loading', 'lazy');
+                }
+                if (!image.hasAttribute('decoding')) {
+                    image.setAttribute('decoding', 'async');
+                }
+            };
+
+            const tuneMedia = media => {
+                if (!(media instanceof HTMLMediaElement)) { return; }
+                if ((media.getAttribute('preload') || '').toLowerCase() !== 'none') {
+                    media.setAttribute('preload', 'none');
+                }
+            };
+
+            const tuneNode = node => {
+                if (!node || node.nodeType !== Node.ELEMENT_NODE) { return; }
+                const element = node;
+                if (element.tagName === 'IMG') {
+                    tuneImage(element);
+                } else if (element.tagName === 'VIDEO' || element.tagName === 'AUDIO') {
+                    tuneMedia(element);
+                }
+
+                if (!element.querySelectorAll) { return; }
+                element.querySelectorAll('img').forEach(tuneImage);
+                element.querySelectorAll('video, audio').forEach(tuneMedia);
+            };
+
+            const pauseAllMedia = () => {
+                document.querySelectorAll('video, audio').forEach(media => {
+                    try {
+                        media.pause();
+                    } catch {}
+                });
+            };
+
+            const installObserver = () => {
+                const root = document.documentElement;
+                if (!root) {
+                    requestAnimationFrame(installObserver);
+                    return;
+                }
+
+                tuneNode(root);
+                const observer = new MutationObserver(mutations => {
+                    mutations.forEach(mutation => {
+                        mutation.addedNodes.forEach(tuneNode);
+                        if (mutation.type === 'attributes') {
+                            tuneNode(mutation.target);
+                        }
+                    });
+                });
+                observer.observe(root, {
+                    childList: true,
+                    subtree: true,
+                    attributes: true,
+                    attributeFilter: ['src', 'srcset', 'poster']
+                });
+            };
+
+            document.addEventListener('DOMContentLoaded', () => tuneNode(document.documentElement), { once: true });
+            document.addEventListener('visibilitychange', () => {
+                if (document.hidden) {
+                    pauseAllMedia();
+                }
+            });
+            window.addEventListener('pagehide', pauseAllMedia);
+            installObserver();
+        })();
+        """
         static let instrumentationScript = """
         (() => {
             if (window.__rpReaderToolsInstalled) { return; }
