@@ -665,6 +665,18 @@ struct ReaderPaneView: View {
                     .buttonStyle(.borderless)
                     .help(String(localized: "Copy BabelDOC Log Path", bundle: bundle))
                 }
+
+                if statusMessage != nil, !isWorking {
+                    Button {
+                        dismissStatusMessage()
+                    } label: {
+                        Label(String(localized: "Close", bundle: bundle), systemImage: "xmark")
+                    }
+                    .labelStyle(.iconOnly)
+                    .buttonStyle(.borderless)
+                    .controlSize(.small)
+                    .help(String(localized: "Close", bundle: bundle))
+                }
             }
 
             if let translationProgress, translationProgress.total > 0 {
@@ -991,6 +1003,13 @@ struct ReaderPaneView: View {
         guard let pdfTranslationErrorLogURL else { return }
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(pdfTranslationErrorLogURL.path, forType: .string)
+    }
+
+    private func dismissStatusMessage() {
+        guard !isWorking else { return }
+        statusMessage = nil
+        translationProgress = nil
+        pdfTranslationErrorLogURL = nil
     }
 
     private var translateMoreBanner: some View {
