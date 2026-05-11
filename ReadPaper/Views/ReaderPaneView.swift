@@ -868,11 +868,12 @@ struct ReaderPaneView: View {
         }
     }
 
-    private func extendPDFTranslation() {
+    private func extendPDFTranslation(to requestedLastPage: Int? = nil) {
         guard let paper, let pdfAttachment, let settings, let existingAttachment = translatedPDFAttachment, let currentLastPage = existingAttachment.translatedLastPage else { return }
         guard let total = originalPDFPageCount, currentLastPage < total else { return }
 
-        let nextBatch = min(currentLastPage + pdfTranslationBatchSize, total)
+        let nextBatch = min(requestedLastPage ?? currentLastPage + pdfTranslationBatchSize, total)
+        guard nextBatch > currentLastPage else { return }
         let pageRange = (currentLastPage + 1)...nextBatch
         let preferences = TranslationPreferencesSnapshot(settings)
 
@@ -1029,6 +1030,17 @@ struct ReaderPaneView: View {
             }
             .buttonStyle(.bordered)
             .controlSize(.small)
+
+            if nextEnd < total {
+                Button {
+                    extendPDFTranslation(to: total)
+                } label: {
+                    Text("Translate All", bundle: bundle)
+                        .font(.caption)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)

@@ -3397,6 +3397,16 @@
         }
       }
     },
+    "Translate All": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "翻译全部"
+          }
+        }
+      }
+    },
     "Translate HTML": {
       "extractionState": "stale",
       "localizations": {
