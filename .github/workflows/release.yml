@@ -19,7 +19,7 @@ jobs:
       APP_PATH: build/DerivedData/Build/Products/Release/Freddie.app
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
       LOCAL_READABILITY_REPO: https://github.com/SYYANI/swift-readability.git
-      LOCAL_READABILITY_REF: 71d68f4c667856fd4c547c7c813476db5bdd56b1
+      LOCAL_READABILITY_REF: 5fabfd7dbb75c3a26cf459d6bc5a3b6897a319f4
     steps:
       - name: Checkout
         uses: actions/checkout@v6

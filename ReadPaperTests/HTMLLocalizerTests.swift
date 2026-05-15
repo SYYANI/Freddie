@@ -248,6 +248,58 @@ final class HTMLLocalizerTests: XCTestCase {
         XCTAssertEqual(try audio.attr("preload"), "none")
     }
 
+    func testLocalizePrefersDownloadedImageOverResponsiveRemoteCandidates() async throws {
+        let html = """
+        <html>
+        <body>
+        <article>
+        <p>Short article body.</p>
+        <picture>
+        <source type="image/webp" srcset="https://substackcdn.com/image/fetch/$s_!abc!, w_424, c_limit, f_webp, q_auto:good/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2Ffigure.jpeg 424w, https://substackcdn.com/image/fetch/$s_!abc!, w_848, c_limit, f_webp, q_auto:good/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2Ffigure.jpeg 848w" sizes="100vw">
+        <img src="/public/images/figure.jpeg" srcset="https://substackcdn.com/image/fetch/$s_!abc!,w_424,c_limit,f_auto,q_auto:good/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2Ffigure.jpeg 424w, https://substackcdn.com/image/fetch/$s_!abc!,w_848,c_limit,f_auto,q_auto:good/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2Ffigure.jpeg 848w" sizes="100vw">
+        </picture>
+        </article>
+        </body>
+        </html>
+        """
+
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [MockHTMLLocalizerURLProtocol.self]
+        let session = URLSession(configuration: configuration)
+        MockHTMLLocalizerURLProtocol.requestHandler = { request in
+            let url = try XCTUnwrap(request.url)
+            XCTAssertEqual(url.host, "example.com")
+            XCTAssertEqual(url.path, "/public/images/figure.jpeg")
+            return (
+                HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: ["Content-Type": "image/jpeg"])!,
+                Data([0xFF, 0xD8, 0xFF, 0xD9])
+            )
+        }
+
+        let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: rootURL) }
+        let resourcesURL = rootURL.appendingPathComponent("Resources", isDirectory: true)
+        let outputURL = rootURL.appendingPathComponent("paper.html")
+
+        _ = try await HTMLLocalizer(session: session).localize(
+            htmlData: Data(html.utf8),
+            sourceURL: URL(string: "https://example.com/article")!,
+            outputURL: outputURL,
+            resourcesDirectory: resourcesURL
+        )
+
+        let output = try String(contentsOf: outputURL, encoding: .utf8)
+        let document = try SwiftSoup.parse(output)
+
+        XCTAssertFalse(output.contains("substackcdn.com/image/fetch"))
+        XCTAssertEqual(try document.select("picture source").count, 0)
+
+        let image = try XCTUnwrap(try document.select("picture img").first())
+        XCTAssertTrue(try image.attr("src").hasPrefix("Resources/"))
+        XCTAssertEqual(try image.attr("srcset"), "")
+        XCTAssertEqual(try image.attr("sizes"), "")
+    }
+
     func testMakeDocumentForLocalizationFallsBackWhenReadabilityCannotExtract() throws {
         let html = """
         <html>

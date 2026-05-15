@@ -52,6 +52,7 @@ struct HTMLLocalizer: @unchecked Sendable {
                 let data = try await downloadData(from: resourceURL)
                 let filename = try writeResource(data, originalURL: resourceURL, resourcesDirectory: resourcesDirectory)
                 try image.attr("src", "Resources/\(filename)")
+                try preferLocalizedImageSource(for: image)
             } catch {
                 continue
             }
@@ -305,6 +306,16 @@ struct HTMLLocalizer: @unchecked Sendable {
                 try media.attr("preload", "none")
             }
         }
+    }
+
+    private func preferLocalizedImageSource(for image: Element) throws {
+        try image.removeAttr("srcset")
+        try image.removeAttr("sizes")
+
+        guard let picture = image.parent(), picture.tagName().lowercased() == "picture" else {
+            return
+        }
+        try picture.select("source").remove()
     }
 
     private func renderReadableBody(for result: ReadabilityResult) -> String {
