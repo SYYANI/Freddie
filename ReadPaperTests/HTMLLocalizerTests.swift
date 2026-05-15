@@ -144,6 +144,55 @@ final class HTMLLocalizerTests: XCTestCase {
         XCTAssertFalse(try downloadedStyle.outerHtml().contains("&gt;"))
     }
 
+    func testLocalizeSplitsReadabilityMarkdownPreIntoParagraphs() async throws {
+        let firstParagraph = String(repeating: "DwarfStar local inference prose with a preserved link. ", count: 8)
+        let secondParagraph = String(repeating: "Follow-up prose should become a separate translatable paragraph. ", count: 8)
+        let html = """
+        <html>
+        <head><title>A few words on DS4 - &lt;antirez&gt;</title></head>
+        <body>
+        <div id="content">
+        <section id="newslist"><article data-news-id="165"><h2><a href="/news/165">A few words on DS4</a></h2></article></section>
+        <topcomment>
+        <article class="comment" data-comment-id="165-" id="165-">
+        <span class="info"><span class="username"><a href="/user/antirez">antirez</a></span> 16 hours ago. 109571 views.</span>
+        <pre>\(firstParagraph)<a rel="nofollow" href="https://github.com/antirez/ds4">https://github.com/antirez/ds4</a>
+
+        \(secondParagraph)</pre>
+        </article>
+        </topcomment>
+        </div>
+        </body>
+        </html>
+        """
+
+        let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: rootURL) }
+        let resourcesURL = rootURL.appendingPathComponent("Resources", isDirectory: true)
+        let outputURL = rootURL.appendingPathComponent("paper.html")
+
+        _ = try await HTMLLocalizer().localize(
+            htmlData: Data(html.utf8),
+            sourceURL: URL(string: "https://antirez.com/news/165")!,
+            outputURL: outputURL,
+            resourcesDirectory: resourcesURL
+        )
+
+        let output = try String(contentsOf: outputURL, encoding: .utf8)
+        let document = try SwiftSoup.parse(output)
+        XCTAssertTrue(try document.select(".rp-readability-excerpt").text().contains("DwarfStar local inference prose"))
+        XCTAssertEqual(try document.select(".rp-readability-content pre[data-readability-pre-type=markdown]").count, 0)
+
+        let style = try XCTUnwrap(try document.getElementById("rp-readability-style"))
+        XCTAssertTrue(style.data().contains(".rp-readability-content p.rp-readability-prose-paragraph"))
+
+        let paragraphs = try document.select(".rp-readability-content article.comment > p.rp-readability-prose-paragraph").array()
+        XCTAssertEqual(paragraphs.count, 2)
+        XCTAssertTrue(try paragraphs[0].text().contains("DwarfStar local inference prose"))
+        XCTAssertTrue(try paragraphs[1].text().contains("Follow-up prose should become a separate"))
+        XCTAssertEqual(try paragraphs[0].select("a[href]").first()?.attr("href"), "https://github.com/antirez/ds4")
+    }
+
     func testLocalizeTunesEmbeddedMediaForReaderPerformance() async throws {
         let paragraph = String(repeating: "This is article content that should survive readability extraction. ", count: 12)
         let html = """

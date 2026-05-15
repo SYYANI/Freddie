@@ -157,6 +157,51 @@ struct HTMLLocalizer: @unchecked Sendable {
         try injectReadabilityStyles(into: document)
         try document.body()?.addClass("rp-readability-body")
         try document.body()?.html(renderReadableBody(for: result))
+        try splitMarkdownProsePreBlocks(in: document)
+    }
+
+    private func splitMarkdownProsePreBlocks(in document: Document) throws {
+        for pre in try document.select("pre[data-readability-pre-type=markdown]").array() {
+            let paragraphs = markdownProseParagraphHTML(from: try pre.html())
+            guard !paragraphs.isEmpty else { continue }
+
+            for paragraphHTML in paragraphs {
+                let paragraph = try document.createElement("p")
+                try paragraph.addClass("rp-readability-prose-paragraph")
+                try paragraph.html(paragraphHTML)
+                try pre.before(paragraph.outerHtml())
+            }
+            try pre.remove()
+        }
+    }
+
+    private func markdownProseParagraphHTML(from html: String) -> [String] {
+        let normalized = html
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
+        var paragraphs: [String] = []
+        var currentLines: [String] = []
+
+        func flushCurrentParagraph() {
+            let paragraph = currentLines
+                .joined(separator: "\n")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if !paragraph.isEmpty {
+                paragraphs.append(paragraph)
+            }
+            currentLines.removeAll(keepingCapacity: true)
+        }
+
+        for line in normalized.components(separatedBy: "\n") {
+            if line.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                flushCurrentParagraph()
+            } else {
+                currentLines.append(line)
+            }
+        }
+        flushCurrentParagraph()
+
+        return paragraphs
     }
 
     private func updateMetadata(from result: ReadabilityResult, in document: Document) throws {
@@ -200,7 +245,19 @@ struct HTMLLocalizer: @unchecked Sendable {
             box-sizing: border-box;
         }
         .rp-readability-title { margin: 0; font-size: 2rem; line-height: 1.25; }
-        .rp-readability-byline, .rp-readability-excerpt { color: #5f6368; margin-top: 0.75rem; }
+        .rp-readability-byline, .rp-readability-excerpt { color: #5f6368; margin-top: 0.75rem; line-height: 1.5; }
+        .rp-readability-content { color: #1f1f1f; font-size: 1rem; line-height: 1.65; }
+        .rp-readability-content p.rp-readability-prose-paragraph {
+            color: inherit !important;
+            font-size: inherit !important;
+            line-height: inherit !important;
+            margin: 0 0 1.1em 0 !important;
+        }
+        .rp-readability-content p.rp-readability-prose-paragraph a {
+            color: #335c85;
+            text-decoration: underline;
+            text-underline-offset: 0.16em;
+        }
         .rp-readability-content img, .rp-readability-content video, .rp-readability-content svg, .rp-readability-content math { max-width: 100%; }
         .rp-readability-content .page,
         .rp-readability-content .available-content,
