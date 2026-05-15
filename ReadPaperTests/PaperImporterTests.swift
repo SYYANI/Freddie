@@ -184,6 +184,116 @@ final class PaperImporterTests: XCTestCase {
     }
 
     @MainActor
+    func testImportArxivFallsBackToAbsPageWhenAPIIsRateLimited() async throws {
+        let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: rootURL) }
+
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [MockPaperImporterURLProtocol.self]
+        let session = URLSession(configuration: configuration)
+
+        MockPaperImporterURLProtocol.requestHandler = { request in
+            let url = try XCTUnwrap(request.url)
+
+            switch (url.host, url.path) {
+            case ("export.arxiv.org", "/api/query"):
+                XCTAssertEqual(request.value(forHTTPHeaderField: "Accept"), "application/atom+xml,application/xml;q=0.9,*/*;q=0.8")
+                return (
+                    HTTPURLResponse(url: url, statusCode: 429, httpVersion: nil, headerFields: ["Content-Type": "text/html"])!,
+                    Data("Rate exceeded.".utf8)
+                )
+            case ("arxiv.org", "/abs/2404.12365"):
+                XCTAssertEqual(request.value(forHTTPHeaderField: "User-Agent"), BrowserRequestHeaders.chromeUserAgent)
+                let html = """
+                <!doctype html>
+                <html>
+                <head>
+                  <title>[2404.12365] When LLMs are Unfit Use FastFit: Fast and Effective Text Classification with Many Classes</title>
+                  <link rel="canonical" href="https://arxiv.org/abs/2404.12365">
+                  <meta property="og:url" content="https://arxiv.org/abs/2404.12365v1">
+                  <meta name="citation_title" content="When LLMs are Unfit Use FastFit: Fast and Effective Text Classification with Many Classes">
+                  <meta name="citation_author" content="Yehudai, Asaf">
+                  <meta name="citation_author" content="Bendel, Elron">
+                  <meta name="citation_date" content="2024/04/18">
+                  <meta name="citation_pdf_url" content="https://arxiv.org/pdf/2404.12365">
+                </head>
+                <body>
+                  <blockquote class="abstract mathjax">
+                    <span class="descriptor">Abstract:</span>
+                    We present FastFit, a method for fast and accurate few-shot classification.
+                  </blockquote>
+                  <table><tr><td class="tablecell subjects">
+                    Computation and Language (cs.CL); Artificial Intelligence (cs.AI); Information Retrieval (cs.IR)
+                  </td></tr></table>
+                </body>
+                </html>
+                """
+                return (
+                    HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: ["Content-Type": "text/html"])!,
+                    Data(html.utf8)
+                )
+            case ("arxiv.org", "/pdf/2404.12365"):
+                XCTAssertEqual(request.value(forHTTPHeaderField: "User-Agent"), BrowserRequestHeaders.chromeUserAgent)
+                return (
+                    HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: ["Content-Type": "application/pdf"])!,
+                    Data("%PDF-1.4 fastfit test".utf8)
+                )
+            case ("arxiv.org", "/html/2404.12365"),
+                ("ar5iv.labs.arxiv.org", "/html/2404.12365"):
+                return (
+                    HTTPURLResponse(url: url, statusCode: 500, httpVersion: nil, headerFields: ["Content-Type": "text/html"])!,
+                    Data("Internal Error".utf8)
+                )
+            default:
+                XCTFail("Unexpected request: \(url.absoluteString)")
+                throw URLError(.badURL)
+            }
+        }
+
+        let importer = PaperImporter(
+            fileStore: PaperFileStore(applicationSupportDirectory: rootURL),
+            arxivClient: ArxivClient(session: session, minimumRequestInterval: 0),
+            htmlLocalizer: HTMLLocalizer(session: session, fileManager: .default),
+            session: session
+        )
+        let modelContext = ModelContext(try makeContainer())
+        var progressEvents: [ArxivImportProgress] = []
+
+        let paper = try await importer.importArxiv("2404.12365", modelContext: modelContext) { progress in
+            progressEvents.append(progress)
+        }
+
+        XCTAssertEqual(
+            progressEvents.map(\.stage),
+            [
+                .resolvingInput,
+                .resolvingInput,
+                .fetchingMetadata,
+                .creatingLibraryEntry,
+                .downloadingPDF,
+                .importingHTML,
+                .importingHTML,
+                .finalizing
+            ]
+        )
+        XCTAssertEqual(paper.arxivID, "2404.12365")
+        XCTAssertEqual(paper.arxivVersion, "v1")
+        XCTAssertEqual(paper.title, "When LLMs are Unfit Use FastFit: Fast and Effective Text Classification with Many Classes")
+        XCTAssertEqual(paper.authors, ["Yehudai, Asaf", "Bendel, Elron"])
+        XCTAssertEqual(paper.categories, ["cs.CL", "cs.AI", "cs.IR"])
+        XCTAssertTrue(paper.abstractText.contains("We present FastFit"))
+        XCTAssertEqual(paper.pdfURLString, "https://arxiv.org/pdf/2404.12365")
+        XCTAssertEqual(paper.htmlURLString, "https://arxiv.org/abs/2404.12365")
+        XCTAssertEqual(progressEvents.last?.detail, "Saving the paper and PDF. HTML was unavailable, so the import will finish with PDF only.")
+
+        let attachments = try modelContext.fetch(FetchDescriptor<PaperAttachment>())
+        let attachment = try XCTUnwrap(attachments.first)
+        XCTAssertEqual(attachments.count, 1)
+        XCTAssertEqual(attachment.kind, .pdf)
+        XCTAssertEqual(attachment.source, .arxivPDF)
+    }
+
+    @MainActor
     func testImportWebPageLocalizesStaticURLWithReadability() async throws {
         let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: rootURL) }

@@ -55,9 +55,10 @@ final class PaperImporter {
 
         if let pdfURL = metadata.pdfURL ?? URL(string: "https://arxiv.org/pdf/\(metadata.arxivID)") {
             onProgress?(.downloadingPDF(for: metadata.arxivID))
-            let (data, response) = try await session.data(from: pdfURL)
+            let request = BrowserRequestHeaders.request(for: pdfURL, accept: .resource)
+            let (data, response) = try await session.data(for: request)
             if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
-                throw URLError(.badServerResponse)
+                throw PaperImportError.arxivHTTPError(statusCode: http.statusCode)
             }
             let pdfFile = try fileStore.write(data, named: "paper.pdf", for: paper.id)
             modelContext.insert(PaperAttachment(

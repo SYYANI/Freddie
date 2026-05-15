@@ -65,6 +65,7 @@ enum PaperImportError: Error, LocalizedError {
     case unsupportedFile(URL)
     case noTranslatedPDFProduced
     case webPageHTTPError(statusCode: Int)
+    case arxivHTTPError(statusCode: Int)
 
     var errorDescription: String? {
         switch self {
@@ -84,6 +85,8 @@ enum PaperImportError: Error, LocalizedError {
             AppLocalization.localized("BabelDOC finished without producing a translated PDF.")
         case .webPageHTTPError(let statusCode):
             AppLocalization.format("The web server returned an error (status %d).", statusCode)
+        case .arxivHTTPError(let statusCode):
+            AppLocalization.format("arXiv returned an error (status %d). Please try again later.", statusCode)
         }
     }
 }
