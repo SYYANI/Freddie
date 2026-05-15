@@ -199,6 +199,10 @@ enum PaperDigestExportPolicy {
         return parts.joined(separator: "\n\n")
     }
 
+    static func makeSourceURL(paper: Paper) -> URL? {
+        sourceMetadata(for: paper).url
+    }
+
     static func makeFileName(title: String, exportDate: Date = Date()) -> String {
         "\(fileDateString(from: exportDate))-\(makeFileSlug(title: title)).md"
     }

@@ -64,6 +64,7 @@ struct ReaderPaneView: View {
     @State private var showPDFTranslationScopeDialog = false
     @State private var pdfTranslationTotalPages: Int = 0
     @State private var digestNoticeMessage: String?
+    @State private var digestNoticeTitle: String?
     @State private var digestErrorMessage: String?
 
     private var pdfAttachment: PaperAttachment? {
@@ -228,12 +229,13 @@ struct ReaderPaneView: View {
                 ))
             }
             .alert(
-                String(localized: "Digest Ready", bundle: bundle),
+                digestNoticeTitle ?? String(localized: "Digest Ready", bundle: bundle),
                 isPresented: Binding(
                     get: { digestNoticeMessage != nil },
                     set: { isPresented in
                         if !isPresented {
                             digestNoticeMessage = nil
+                            digestNoticeTitle = nil
                         }
                     }
                 )
@@ -478,6 +480,14 @@ struct ReaderPaneView: View {
     private var exportMenu: some View {
         Menu {
             Button {
+                copyLink()
+            } label: {
+                Label(String(localized: "Copy Link", bundle: bundle), systemImage: "link")
+                    .labelStyle(.titleAndIcon)
+            }
+            .disabled(sourceLinkURL == nil)
+
+            Button {
                 copyDigest()
             } label: {
                 Label(String(localized: "Copy Digest", bundle: bundle), systemImage: "doc.on.doc")
@@ -491,11 +501,26 @@ struct ReaderPaneView: View {
                     .labelStyle(.titleAndIcon)
             }
         } label: {
-            Label(String(localized: "Export", bundle: bundle), systemImage: "square.and.arrow.up")
+            Label(String(localized: "Share", bundle: bundle), systemImage: "square.and.arrow.up")
                 .labelStyle(.iconOnly)
         }
         .menuIndicator(.hidden)
-        .help(String(localized: "Export Digest", bundle: bundle))
+        .help(String(localized: "Share Paper", bundle: bundle))
+    }
+
+    private var sourceLinkURL: URL? {
+        guard let paper else { return nil }
+        return PaperDigestExportPolicy.makeSourceURL(paper: paper)
+    }
+
+    private func copyLink() {
+        digestErrorMessage = nil
+        guard let sourceLinkURL else { return }
+
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(sourceLinkURL.absoluteString, forType: .string)
+        digestNoticeTitle = String(localized: "Link Copied", bundle: bundle)
+        digestNoticeMessage = String(localized: "Link copied to the clipboard.", bundle: bundle)
     }
 
     private func copyDigest() {
@@ -509,6 +534,7 @@ struct ReaderPaneView: View {
         )
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(markdown, forType: .string)
+        digestNoticeTitle = String(localized: "Digest Ready", bundle: bundle)
         digestNoticeMessage = String(localized: "Digest copied to the clipboard.", bundle: bundle)
     }
 
@@ -518,6 +544,7 @@ struct ReaderPaneView: View {
 
         do {
             let targetURL = try PaperDigestExporter().export(content: content, bundle: bundle)
+            digestNoticeTitle = String(localized: "Digest Ready", bundle: bundle)
             digestNoticeMessage = String(
                 format: String(localized: "Digest exported to %@.", bundle: bundle),
                 targetURL.lastPathComponent

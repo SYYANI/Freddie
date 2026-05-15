@@ -115,6 +115,41 @@ final class PaperDigestExportPolicyTests: XCTestCase {
         XCTAssertTrue(markdown.contains("{{unknown}}"))
     }
 
+    func testSourceURLUsesBestAvailableExternalLink() throws {
+        let arxivPaper = Paper(
+            arxivID: "2303.08774",
+            doi: "10.1234/example",
+            title: "Arxiv Paper",
+            pdfURLString: "https://example.com/paper.pdf",
+            htmlURLString: "https://example.com/paper"
+        )
+        XCTAssertEqual(
+            PaperDigestExportPolicy.makeSourceURL(paper: arxivPaper)?.absoluteString,
+            "https://arxiv.org/abs/2303.08774"
+        )
+
+        let doiPaper = Paper(
+            doi: "10.1234/example",
+            title: "DOI Paper",
+            pdfURLString: "https://example.com/paper.pdf",
+            htmlURLString: "https://example.com/paper"
+        )
+        XCTAssertEqual(
+            PaperDigestExportPolicy.makeSourceURL(paper: doiPaper)?.absoluteString,
+            "https://doi.org/10.1234/example"
+        )
+
+        let webPaper = Paper(
+            title: "Web Paper",
+            pdfURLString: "https://example.com/paper.pdf",
+            htmlURLString: "https://example.com/paper"
+        )
+        XCTAssertEqual(
+            PaperDigestExportPolicy.makeSourceURL(paper: webPaper)?.absoluteString,
+            "https://example.com/paper"
+        )
+    }
+
     func testEmptyTemplateFallsBackToDefaultMarkdown() throws {
         let exportDate = Date(timeIntervalSince1970: 1_700_000_000)
         let paper = Paper(title: "Fallback Paper", authors: ["Ada Lovelace"])
