@@ -658,6 +658,7 @@ struct ReaderPaneView: View {
                         fileURL: htmlFileURL,
                         attachmentID: htmlAttachment?.id,
                         displayMode: displayMode,
+                        displayAppearance: pdfDisplayAppearance,
                         fontSize: htmlReaderFontSize,
                         reloadToken: htmlReloadToken,
                         initialScrollRatio: restoredHTMLScrollRatio,

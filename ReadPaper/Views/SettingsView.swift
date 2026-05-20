@@ -508,15 +508,15 @@ private struct SettingsForm: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
-                Section(String(localized: "PDF Appearance", bundle: bundle)) {
-                    Picker(String(localized: "PDF Appearance", bundle: bundle), selection: pdfDisplayAppearanceBinding) {
+                Section(String(localized: "Reader Appearance", bundle: bundle)) {
+                    Picker(String(localized: "Reader Appearance", bundle: bundle), selection: pdfDisplayAppearanceBinding) {
                         Text("Default", bundle: bundle).tag(PDFDisplayAppearance.defaultMode)
                         Text("Dark", bundle: bundle).tag(PDFDisplayAppearance.dark)
                         Text("Paper Tone", bundle: bundle).tag(PDFDisplayAppearance.paper)
                     }
                     .pickerStyle(.segmented)
 
-                    Text("Choose the default look for PDF reading. Default keeps the original rendering, Dark inverts the PDF canvas for low-light reading, and Paper Tone adds a warm paper-like tint.", bundle: bundle)
+                    Text("Choose the default look for reading. Default keeps the original rendering, Dark uses a low-light reading surface, and Paper Tone adds a warm paper-like tint to PDF and HTML content.", bundle: bundle)
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)

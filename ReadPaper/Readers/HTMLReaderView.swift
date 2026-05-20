@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import WebKit
 
@@ -11,10 +12,181 @@ enum HTMLReaderTypography {
     }
 }
 
+private extension PDFDisplayAppearance {
+    var htmlReaderBackgroundColor: NSColor {
+        switch self {
+        case .defaultMode:
+            return .textBackgroundColor
+        case .dark:
+            return NSColor(calibratedWhite: 0.09, alpha: 1)
+        case .paper:
+            return NSColor(calibratedRed: 0.95, green: 0.90, blue: 0.80, alpha: 1)
+        }
+    }
+
+    var htmlReaderCSS: String {
+        switch self {
+        case .defaultMode:
+            return ""
+        case .dark:
+            return """
+            :root { color-scheme: dark; }
+            html,
+            body {
+                background: #171717 !important;
+            }
+            body {
+                color: #e8e3d7 !important;
+            }
+            body.rp-readability-body {
+                background: #171717 !important;
+            }
+            body.rp-readability-body .rp-readability-shell,
+            body.rp-readability-body .rp-readability-header,
+            body.rp-readability-body .rp-readability-content {
+                color: #e8e3d7 !important;
+            }
+            body.rp-readability-body .rp-readability-title,
+            body.rp-readability-body .rp-readability-content h1,
+            body.rp-readability-body .rp-readability-content h2,
+            body.rp-readability-body .rp-readability-content h3,
+            body.rp-readability-body .rp-readability-content h4,
+            body.rp-readability-body .rp-readability-content h5,
+            body.rp-readability-body .rp-readability-content h6 {
+                color: #f5efe4 !important;
+            }
+            body.rp-readability-body .rp-readability-byline,
+            body.rp-readability-body .rp-readability-excerpt {
+                color: #aaa397 !important;
+            }
+            body.rp-readability-body .rp-readability-content a,
+            body:not(.rp-readability-body) a {
+                color: #9fc9ff !important;
+            }
+            body.rp-readability-body .rp-readability-content p.rp-readability-prose-paragraph,
+            body.rp-readability-body .rp-readability-content [data-rp-source='true'] {
+                color: inherit !important;
+            }
+            body.rp-readability-body .rp-translation-block,
+            body:not(.rp-readability-body) .rp-translation-block {
+                color: #9fd3aa !important;
+            }
+            body.rp-readability-body code,
+            body.rp-readability-body pre {
+                background: rgba(255, 255, 255, 0.08) !important;
+                color: #f1eadc !important;
+            }
+            body.rp-readability-body blockquote {
+                border-color: rgba(232, 227, 215, 0.28) !important;
+                color: #d5cec2 !important;
+            }
+            body.rp-readability-body table,
+            body.rp-readability-body th,
+            body.rp-readability-body td {
+                border-color: rgba(232, 227, 215, 0.24) !important;
+            }
+            body.rp-readability-body .rp-note-anchor-target,
+            body:not(.rp-readability-body) .rp-note-anchor-target {
+                outline-color: rgba(159, 211, 170, 0.52) !important;
+                background: rgba(159, 211, 170, 0.14) !important;
+            }
+            body:not(.rp-readability-body) {
+                background: #171717 !important;
+                color: #e8e3d7 !important;
+            }
+            """
+        case .paper:
+            return """
+            :root { color-scheme: light; }
+            html,
+            body {
+                background: #f4ecd9 !important;
+            }
+            body {
+                color: #2b261f !important;
+            }
+            html[data-rp-reader-appearance='paper']::before {
+                content: "";
+                position: fixed;
+                inset: 0;
+                pointer-events: none;
+                z-index: 2147483647;
+                background: linear-gradient(180deg, #fff8e8 0%, #e8dcc0 100%);
+                mix-blend-mode: multiply;
+                opacity: 0.32;
+            }
+            body.rp-readability-body {
+                background: #f4ecd9 !important;
+            }
+            body.rp-readability-body .rp-readability-shell,
+            body.rp-readability-body .rp-readability-header,
+            body.rp-readability-body .rp-readability-content {
+                color: #2b261f !important;
+            }
+            body.rp-readability-body .rp-readability-title,
+            body.rp-readability-body .rp-readability-content h1,
+            body.rp-readability-body .rp-readability-content h2,
+            body.rp-readability-body .rp-readability-content h3,
+            body.rp-readability-body .rp-readability-content h4,
+            body.rp-readability-body .rp-readability-content h5,
+            body.rp-readability-body .rp-readability-content h6 {
+                color: #211b14 !important;
+            }
+            body.rp-readability-body .rp-readability-byline,
+            body.rp-readability-body .rp-readability-excerpt {
+                color: #726752 !important;
+            }
+            body.rp-readability-body .rp-readability-content a,
+            body:not(.rp-readability-body) a {
+                color: #285f86 !important;
+            }
+            body.rp-readability-body .rp-readability-content p.rp-readability-prose-paragraph,
+            body.rp-readability-body .rp-readability-content [data-rp-source='true'] {
+                color: inherit !important;
+            }
+            body.rp-readability-body .rp-translation-block,
+            body:not(.rp-readability-body) .rp-translation-block {
+                color: #24533d !important;
+            }
+            body.rp-readability-body code,
+            body.rp-readability-body pre {
+                background: rgba(91, 67, 31, 0.10) !important;
+                color: #2b261f !important;
+            }
+            body.rp-readability-body blockquote {
+                border-color: rgba(87, 68, 37, 0.28) !important;
+                color: #4d4436 !important;
+            }
+            body.rp-readability-body table,
+            body.rp-readability-body th,
+            body.rp-readability-body td {
+                border-color: rgba(87, 68, 37, 0.24) !important;
+            }
+            body.rp-readability-body img,
+            body.rp-readability-body video,
+            body.rp-readability-body canvas,
+            body.rp-readability-body svg {
+                filter: sepia(0.08) saturate(0.96);
+            }
+            body.rp-readability-body .rp-note-anchor-target,
+            body:not(.rp-readability-body) .rp-note-anchor-target {
+                outline-color: rgba(36, 83, 61, 0.42) !important;
+                background: rgba(36, 83, 61, 0.10) !important;
+            }
+            body:not(.rp-readability-body) {
+                background: #f4ecd9 !important;
+                color: #2b261f !important;
+            }
+            """
+        }
+    }
+}
+
 struct HTMLReaderView: NSViewRepresentable {
     var fileURL: URL
     var attachmentID: UUID? = nil
     var displayMode: TranslationDisplayMode
+    var displayAppearance: PDFDisplayAppearance = .defaultMode
     var fontSize: Double = HTMLReaderTypography.defaultFontSize
     var reloadToken: Int
     var initialScrollRatio: Double
@@ -44,15 +216,18 @@ struct HTMLReaderView: NSViewRepresentable {
         )
         let view = WKWebView(frame: .zero, configuration: configuration)
         view.navigationDelegate = context.coordinator
+        applyHostDisplayAppearance(displayAppearance, to: view)
         return view
     }
 
     func updateNSView(_ view: WKWebView, context: Context) {
         context.coordinator.attachmentID = attachmentID
         context.coordinator.displayMode = displayMode
+        context.coordinator.displayAppearance = displayAppearance
         context.coordinator.fontSize = HTMLReaderTypography.clampFontSize(fontSize)
         context.coordinator.scrollRatio = $scrollRatio
         context.coordinator.onNoteSelectionChanged = onNoteSelectionChanged
+        applyHostDisplayAppearance(displayAppearance, to: view)
 
         let readAccessURL = fileURL.deletingLastPathComponent()
         if context.coordinator.loadedURL != fileURL {
@@ -81,6 +256,7 @@ struct HTMLReaderView: NSViewRepresentable {
 
         context.coordinator.applyDisplayMode(to: view)
         context.coordinator.applyReaderTypography(to: view)
+        context.coordinator.applyDisplayAppearance(to: view)
         context.coordinator.applySegmentUpdateIfNeeded(segmentUpdate, to: view)
         context.coordinator.applyNoteNavigationIfNeeded(noteNavigationRequest, to: view)
     }
@@ -90,6 +266,11 @@ struct HTMLReaderView: NSViewRepresentable {
             scrollRatio: $scrollRatio,
             onNoteSelectionChanged: onNoteSelectionChanged
         )
+    }
+
+    private func applyHostDisplayAppearance(_ appearance: PDFDisplayAppearance, to webView: WKWebView) {
+        webView.wantsLayer = true
+        webView.layer?.backgroundColor = appearance.htmlReaderBackgroundColor.cgColor
     }
 
     final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
@@ -455,6 +636,7 @@ struct HTMLReaderView: NSViewRepresentable {
         var loadedReloadToken: Int?
         var attachmentID: UUID?
         var displayMode: TranslationDisplayMode = .bilingual
+        var displayAppearance: PDFDisplayAppearance = .defaultMode
         var fontSize: Double = HTMLReaderTypography.defaultFontSize
         var scrollRatio: Binding<Double>
         var onNoteSelectionChanged: ((NoteSelectionContext?) -> Void)?
@@ -592,11 +774,48 @@ struct HTMLReaderView: NSViewRepresentable {
             )
         }
 
+        func applyDisplayAppearance(to webView: WKWebView) {
+            guard let appearanceValue = javaScriptStringLiteral(displayAppearance.rawValue),
+                  let cssValue = javaScriptStringLiteral(displayAppearance.htmlReaderCSS) else {
+                return
+            }
+
+            runJavaScript(
+                """
+                (() => {
+                    const appearance = \(appearanceValue);
+                    const css = \(cssValue);
+                    document.documentElement.setAttribute('data-rp-reader-appearance', appearance);
+
+                    const styleID = 'rp-reader-appearance-style';
+                    let style = document.getElementById(styleID);
+                    if (!css) {
+                        if (style) {
+                            style.remove();
+                        }
+                        return;
+                    }
+
+                    if (!style) {
+                        style = document.createElement('style');
+                        style.id = styleID;
+                        (document.head || document.documentElement).appendChild(style);
+                    }
+                    if (style.textContent !== css) {
+                        style.textContent = css;
+                    }
+                })();
+                """,
+                in: webView
+            )
+        }
+
         @MainActor
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             isDocumentReady = true
             applyDisplayMode(to: webView)
             applyReaderTypography(to: webView)
+            applyDisplayAppearance(to: webView)
             restoreScrollRatioIfNeeded(in: webView)
             flushPendingSegmentUpdates(in: webView)
             flushPendingNoteNavigationIfNeeded(in: webView)
