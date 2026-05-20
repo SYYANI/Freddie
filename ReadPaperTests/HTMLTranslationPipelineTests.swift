@@ -4,6 +4,12 @@ import XCTest
 @testable import ReadPaper
 
 final class HTMLTranslationPipelineTests: XCTestCase {
+    func testHTMLReaderTypographyClampsFontSize() {
+        XCTAssertEqual(HTMLReaderTypography.clampFontSize(8), 13)
+        XCTAssertEqual(HTMLReaderTypography.clampFontSize(17), 17)
+        XCTAssertEqual(HTMLReaderTypography.clampFontSize(40), 28)
+    }
+
     @MainActor
     func testExtractsSegmentsAndProtectsMathAndCitations() throws {
         let html = """

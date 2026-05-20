@@ -1,10 +1,21 @@
 import SwiftUI
 import WebKit
 
+enum HTMLReaderTypography {
+    static let fontSizeUserDefaultsKey = "ReadPaper.Reader.HTMLFontSize"
+    static let defaultFontSize: Double = 17
+    static let fontSizeRange: ClosedRange<Double> = 13...28
+
+    static func clampFontSize(_ value: Double) -> Double {
+        min(max(value, fontSizeRange.lowerBound), fontSizeRange.upperBound)
+    }
+}
+
 struct HTMLReaderView: NSViewRepresentable {
     var fileURL: URL
     var attachmentID: UUID? = nil
     var displayMode: TranslationDisplayMode
+    var fontSize: Double = HTMLReaderTypography.defaultFontSize
     var reloadToken: Int
     var initialScrollRatio: Double
     @Binding var scrollRatio: Double
@@ -39,6 +50,7 @@ struct HTMLReaderView: NSViewRepresentable {
     func updateNSView(_ view: WKWebView, context: Context) {
         context.coordinator.attachmentID = attachmentID
         context.coordinator.displayMode = displayMode
+        context.coordinator.fontSize = HTMLReaderTypography.clampFontSize(fontSize)
         context.coordinator.scrollRatio = $scrollRatio
         context.coordinator.onNoteSelectionChanged = onNoteSelectionChanged
 
@@ -68,6 +80,7 @@ struct HTMLReaderView: NSViewRepresentable {
         }
 
         context.coordinator.applyDisplayMode(to: view)
+        context.coordinator.applyReaderTypography(to: view)
         context.coordinator.applySegmentUpdateIfNeeded(segmentUpdate, to: view)
         context.coordinator.applyNoteNavigationIfNeeded(noteNavigationRequest, to: view)
     }
@@ -442,6 +455,7 @@ struct HTMLReaderView: NSViewRepresentable {
         var loadedReloadToken: Int?
         var attachmentID: UUID?
         var displayMode: TranslationDisplayMode = .bilingual
+        var fontSize: Double = HTMLReaderTypography.defaultFontSize
         var scrollRatio: Binding<Double>
         var onNoteSelectionChanged: ((NoteSelectionContext?) -> Void)?
         private var currentRequest: LoadRequest?
@@ -537,10 +551,52 @@ struct HTMLReaderView: NSViewRepresentable {
             )
         }
 
+        func applyReaderTypography(to webView: WKWebView) {
+            let clampedFontSize = Int(HTMLReaderTypography.clampFontSize(fontSize).rounded())
+            runJavaScript(
+                """
+                (() => {
+                    const css = `
+                        :root { --rp-reader-font-size: \(clampedFontSize)px; }
+                        body.rp-readability-body .rp-readability-content {
+                            font-size: var(--rp-reader-font-size) !important;
+                        }
+                        body.rp-readability-body .rp-readability-content p.rp-readability-prose-paragraph,
+                        body.rp-readability-body .rp-readability-content [data-rp-source='true'],
+                        body.rp-readability-body .rp-readability-content .rp-translation-block {
+                            font-size: var(--rp-reader-font-size) !important;
+                        }
+                        body.rp-readability-body .rp-readability-title {
+                            font-size: calc(var(--rp-reader-font-size) * 1.9) !important;
+                        }
+                        body.rp-readability-body .rp-readability-byline,
+                        body.rp-readability-body .rp-readability-excerpt {
+                            font-size: calc(var(--rp-reader-font-size) * 0.95) !important;
+                        }
+                        body:not(.rp-readability-body) {
+                            font-size: var(--rp-reader-font-size);
+                        }
+                    `.trim();
+                    let style = document.getElementById('rp-reader-typography-style');
+                    if (!style) {
+                        style = document.createElement('style');
+                        style.id = 'rp-reader-typography-style';
+                        (document.head || document.documentElement).appendChild(style);
+                    }
+                    if (style.textContent !== css) {
+                        style.textContent = css;
+                    }
+                })();
+                """,
+                in: webView
+            )
+        }
+
         @MainActor
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             isDocumentReady = true
             applyDisplayMode(to: webView)
+            applyReaderTypography(to: webView)
             restoreScrollRatioIfNeeded(in: webView)
             flushPendingSegmentUpdates(in: webView)
             flushPendingNoteNavigationIfNeeded(in: webView)

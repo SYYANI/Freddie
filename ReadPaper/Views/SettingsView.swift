@@ -94,6 +94,8 @@ private struct SettingsForm: View {
     private var pdfDisplayAppearanceRawValue = PDFDisplayAppearance.defaultValue.rawValue
     @AppStorage(PDFTranslationBatchPreference.userDefaultsKey)
     private var pdfTranslationBatchSizeRawValue = PDFTranslationBatchPreference.defaultValue
+    @AppStorage(HTMLReaderTypography.fontSizeUserDefaultsKey)
+    private var htmlReaderFontSize = HTMLReaderTypography.defaultFontSize
     @AppStorage(PaperDigestExportConfiguration.templateKey) private var digestExportTemplate = PaperDigestExportPolicy.defaultMarkdownTemplate
     @AppStorage(PaperDigestExportConfiguration.directoryDisplayPathKey) private var digestExportDirectoryPath = ""
 
@@ -256,6 +258,17 @@ private struct SettingsForm: View {
             get: { PDFTranslationBatchPreference.normalized(pdfTranslationBatchSizeRawValue) },
             set: { pdfTranslationBatchSizeRawValue = PDFTranslationBatchPreference.normalized($0) }
         )
+    }
+
+    private var htmlReaderFontSizeBinding: Binding<Double> {
+        Binding(
+            get: { HTMLReaderTypography.clampFontSize(htmlReaderFontSize) },
+            set: { htmlReaderFontSize = HTMLReaderTypography.clampFontSize($0) }
+        )
+    }
+
+    private var htmlReaderFontSizeValue: Int {
+        Int(HTMLReaderTypography.clampFontSize(htmlReaderFontSize).rounded())
     }
 
     var body: some View {
@@ -473,6 +486,28 @@ private struct SettingsForm: View {
     private var readerTab: some View {
         VStack(alignment: .leading, spacing: 12) {
             Form {
+                Section(String(localized: "HTML Typography", bundle: bundle)) {
+                    Stepper(value: htmlReaderFontSizeBinding, in: HTMLReaderTypography.fontSizeRange, step: 1) {
+                        HStack {
+                            Text("HTML Font Size", bundle: bundle)
+                            Spacer()
+                            Text("\(htmlReaderFontSizeValue)")
+                                .monospacedDigit()
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
+                    Button(String(localized: "Reset Font Size", bundle: bundle)) {
+                        htmlReaderFontSize = HTMLReaderTypography.defaultFontSize
+                    }
+                    .disabled(htmlReaderFontSizeValue == Int(HTMLReaderTypography.defaultFontSize))
+
+                    Text("Controls the base font size used for localized HTML reader content and translations.", bundle: bundle)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
                 Section(String(localized: "PDF Appearance", bundle: bundle)) {
                     Picker(String(localized: "PDF Appearance", bundle: bundle), selection: pdfDisplayAppearanceBinding) {
                         Text("Default", bundle: bundle).tag(PDFDisplayAppearance.defaultMode)

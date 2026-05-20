@@ -36,6 +36,8 @@ struct ReaderPaneView: View {
     private var pdfDisplayAppearanceRawValue = PDFDisplayAppearance.defaultValue.rawValue
     @AppStorage(PDFTranslationBatchPreference.userDefaultsKey)
     private var pdfTranslationBatchSizeRawValue = PDFTranslationBatchPreference.defaultValue
+    @AppStorage(HTMLReaderTypography.fontSizeUserDefaultsKey)
+    private var htmlReaderFontSize = HTMLReaderTypography.defaultFontSize
 
     var paper: Paper?
     var attachments: [PaperAttachment]
@@ -322,6 +324,9 @@ struct ReaderPaneView: View {
                 ToolbarItem(placement: .primaryAction) {
                     htmlDisplayPicker
                 }
+                ToolbarItem(placement: .primaryAction) {
+                    htmlTypographyMenu
+                }
             } else {
                 ToolbarItem(placement: .primaryAction) {
                     pdfDisplayPicker
@@ -423,6 +428,60 @@ struct ReaderPaneView: View {
         .fixedSize()
         .labelsHidden()
         .help(String(localized: "HTML Display Mode", bundle: bundle))
+    }
+
+    private var htmlTypographyMenu: some View {
+        Menu {
+            Button {
+                decreaseHTMLReaderFontSize()
+            } label: {
+                Label(String(localized: "Decrease Font Size", bundle: bundle), systemImage: "textformat.size.smaller")
+            }
+            .disabled(htmlReaderFontSize <= HTMLReaderTypography.fontSizeRange.lowerBound)
+
+            Button {
+                increaseHTMLReaderFontSize()
+            } label: {
+                Label(String(localized: "Increase Font Size", bundle: bundle), systemImage: "textformat.size.larger")
+            }
+            .disabled(htmlReaderFontSize >= HTMLReaderTypography.fontSizeRange.upperBound)
+
+            Divider()
+
+            Button {
+                resetHTMLReaderFontSize()
+            } label: {
+                Label(String(localized: "Reset Font Size", bundle: bundle), systemImage: "arrow.counterclockwise")
+            }
+            .disabled(htmlReaderFontSize == HTMLReaderTypography.defaultFontSize)
+        } label: {
+            Label(
+                String(
+                    format: String(localized: "Font Size: %d", bundle: bundle),
+                    Int(HTMLReaderTypography.clampFontSize(htmlReaderFontSize).rounded())
+                ),
+                systemImage: "textformat.size"
+            )
+        }
+        .labelStyle(.iconOnly)
+        .help(
+            String(
+                format: String(localized: "HTML Font Size: %d", bundle: bundle),
+                Int(HTMLReaderTypography.clampFontSize(htmlReaderFontSize).rounded())
+            )
+        )
+    }
+
+    private func decreaseHTMLReaderFontSize() {
+        htmlReaderFontSize = HTMLReaderTypography.clampFontSize(htmlReaderFontSize - 1)
+    }
+
+    private func increaseHTMLReaderFontSize() {
+        htmlReaderFontSize = HTMLReaderTypography.clampFontSize(htmlReaderFontSize + 1)
+    }
+
+    private func resetHTMLReaderFontSize() {
+        htmlReaderFontSize = HTMLReaderTypography.defaultFontSize
     }
 
     private func toggleInspectorCollapsed() {
@@ -599,6 +658,7 @@ struct ReaderPaneView: View {
                         fileURL: htmlFileURL,
                         attachmentID: htmlAttachment?.id,
                         displayMode: displayMode,
+                        fontSize: htmlReaderFontSize,
                         reloadToken: htmlReloadToken,
                         initialScrollRatio: restoredHTMLScrollRatio,
                         scrollRatio: $htmlScrollRatio,

@@ -886,6 +886,16 @@
         }
       }
     },
+    "Controls the base font size used for localized HTML reader content and translations." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "控制本地化 HTML 阅读内容和译文使用的基础字号。"
+          }
+        }
+      }
+    },
     "Controls the default translation target and the amount of parallel work used for HTML and BabelDOC translation jobs. Supported languages: English and Simplified Chinese." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -989,6 +999,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "深色"
+          }
+        }
+      }
+    },
+    "Decrease Font Size" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "减小字号"
           }
         }
       }
@@ -1464,6 +1485,17 @@
         }
       }
     },
+    "Font Size: %d" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "字号：%1$d"
+          }
+        }
+      }
+    },
     "For a typical setup, fill in the service base URL, paste the API key, set a lightweight test model, then click Save and Test." : {
       "localizations" : {
         "zh-Hans" : {
@@ -1607,6 +1639,27 @@
         }
       }
     },
+    "HTML Font Size" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "HTML 字号"
+          }
+        }
+      }
+    },
+    "HTML Font Size: %d" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "HTML 字号：%1$d"
+          }
+        }
+      }
+    },
     "HTML Model" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1646,6 +1699,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "HTML 翻译最适合带有 HTML 内容的 arXiv 论文。PDF 翻译使用 PDF/BabelDOC 路由，可生成译文 PDF 或左右对照的阅读模式。"
+          }
+        }
+      }
+    },
+    "HTML Typography" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "HTML 排版"
           }
         }
       }
@@ -1776,6 +1840,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "导入网页"
+          }
+        }
+      }
+    },
+    "Increase Font Size" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "增大字号"
           }
         }
       }
@@ -2862,6 +2937,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "重置默认模板"
+          }
+        }
+      }
+    },
+    "Reset Font Size" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重置字号"
           }
         }
       }
