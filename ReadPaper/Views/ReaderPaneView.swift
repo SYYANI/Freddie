@@ -435,14 +435,14 @@ struct ReaderPaneView: View {
             Button {
                 decreaseHTMLReaderFontSize()
             } label: {
-                Label(String(localized: "Decrease Font Size", bundle: bundle), systemImage: "textformat.size.smaller")
+                Label(String(localized: "Decrease Font Size", bundle: bundle), systemImage: "minus")
             }
             .disabled(htmlReaderFontSize <= HTMLReaderTypography.fontSizeRange.lowerBound)
 
             Button {
                 increaseHTMLReaderFontSize()
             } label: {
-                Label(String(localized: "Increase Font Size", bundle: bundle), systemImage: "textformat.size.larger")
+                Label(String(localized: "Increase Font Size", bundle: bundle), systemImage: "plus")
             }
             .disabled(htmlReaderFontSize >= HTMLReaderTypography.fontSizeRange.upperBound)
 
