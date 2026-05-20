@@ -338,6 +338,17 @@ final class HTMLTranslationPipeline {
             margin-top: 0.25em;
             box-sizing: border-box;
         }
+        html[data-rp-display-mode='bilingual'] .rp-readability-content [data-rp-source='true'] {
+            margin-bottom: 0.25em !important;
+        }
+        .rp-readability-content [data-rp-source='true'] + .rp-translation-block {
+            font-size: inherit !important;
+            line-height: inherit !important;
+            margin-left: 0 !important;
+            margin-right: 0 !important;
+            margin-top: 0 !important;
+            margin-bottom: 1.1em !important;
+        }
         .rp-translation-block:is(h1, h2, h3, h4, h5, h6) {
             line-height: 1.45 !important;
             margin-top: 0.35em !important;

@@ -180,7 +180,7 @@ final class HTMLLocalizerTests: XCTestCase {
 
         let output = try String(contentsOf: outputURL, encoding: .utf8)
         let document = try SwiftSoup.parse(output)
-        XCTAssertTrue(try document.select(".rp-readability-excerpt").text().contains("DwarfStar local inference prose"))
+        XCTAssertEqual(try document.select(".rp-readability-excerpt").count, 0)
         XCTAssertEqual(try document.select(".rp-readability-content pre[data-readability-pre-type=markdown]").count, 0)
 
         let style = try XCTUnwrap(try document.getElementById("rp-readability-style"))

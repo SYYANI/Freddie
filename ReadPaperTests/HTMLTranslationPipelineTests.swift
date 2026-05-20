@@ -57,6 +57,9 @@ final class HTMLTranslationPipelineTests: XCTestCase {
 
         XCTAssertTrue(output.contains("<h1 class=\"rp-translation-block\""))
         XCTAssertTrue(output.contains(".rp-translation-block:is(h1, h2, h3, h4, h5, h6)"))
+        XCTAssertTrue(output.contains(".rp-readability-content [data-rp-source='true'] + .rp-translation-block"))
+        XCTAssertTrue(output.contains("font-size: inherit !important"))
+        XCTAssertTrue(output.contains("margin-left: 0 !important"))
         XCTAssertTrue(output.contains("line-height: 1.45 !important"))
         XCTAssertTrue(output.contains("max-height: none !important"))
         XCTAssertFalse(output.contains("color: red"))

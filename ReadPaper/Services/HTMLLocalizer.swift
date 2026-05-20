@@ -329,7 +329,8 @@ struct HTMLLocalizer: @unchecked Sendable {
             if let byline = nonEmpty(result.byline) {
                 parts.append(#"<p class="rp-readability-byline">\#(escapeHTML(byline))</p>"#)
             }
-            if let excerpt = nonEmpty(result.excerpt) {
+            if let excerpt = nonEmpty(result.excerpt),
+               shouldRenderExcerpt(excerpt, contentHTML: result.content) {
                 parts.append(#"<p class="rp-readability-excerpt">\#(escapeHTML(excerpt))</p>"#)
             }
             parts.append("</div>")
@@ -338,6 +339,23 @@ struct HTMLLocalizer: @unchecked Sendable {
         parts.append(#"<article class="rp-readability-content">\#(result.content)</article>"#)
         parts.append("</main>")
         return parts.joined()
+    }
+
+    private func shouldRenderExcerpt(_ excerpt: String, contentHTML: String) -> Bool {
+        let normalizedExcerpt = normalizeVisibleText(excerpt)
+        guard !normalizedExcerpt.isEmpty else {
+            return false
+        }
+        let contentText = (try? SwiftSoup.parseBodyFragment(contentHTML).text()) ?? contentHTML
+        let normalizedContent = normalizeVisibleText(contentText)
+        return !normalizedContent.hasPrefix(normalizedExcerpt)
+    }
+
+    private func normalizeVisibleText(_ text: String) -> String {
+        text
+            .components(separatedBy: .whitespacesAndNewlines)
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
     }
 
     private func reconcileCharsetDeclaration(in document: Document) throws {
