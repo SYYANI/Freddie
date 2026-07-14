@@ -118,7 +118,10 @@ The repository includes a GitHub Actions workflow that can generate an unsigned 
 
 ## License
 
-This project is released under the MIT License. See [LICENSE](LICENSE).
+Copyright (c) 2026 SYYANI.
+
+This project is licensed under the GNU Affero General Public License v3.0
+(`AGPL-3.0-only`). See [LICENSE](LICENSE) for the full license text.
 
 ## Acknowledgements
 
