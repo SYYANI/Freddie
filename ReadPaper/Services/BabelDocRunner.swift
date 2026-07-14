@@ -141,6 +141,105 @@ struct BabelDocRunner {
         self.processRunner = processRunner
     }
 
+    func translatePDFNative(
+        inputPDF: URL,
+        outputDirectory: URL,
+        preferences: TranslationPreferencesSnapshot,
+        route: LLMModelRouteSnapshot,
+        apiKey: String,
+        tool: NativeBabelDocToolPaths,
+        pageRange: ClosedRange<Int>? = nil,
+        environment: [String: String] = [:],
+        onStatusUpdate: (@Sendable (String) -> Void)? = nil,
+        onProgressUpdate: (@Sendable (BabelDocProgressUpdate) -> Void)? = nil
+    ) async throws -> URL {
+        if !FileManager.default.fileExists(atPath: outputDirectory.path) {
+            try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+        }
+        let startedAt = Date()
+        let outputPDF = outputDirectory.appendingPathComponent(
+            "babeldoc-native-\(UUID().uuidString).pdf"
+        )
+        let arguments = Self.nativeArguments(
+            inputPDF: inputPDF,
+            outputPDF: outputPDF,
+            preferences: preferences,
+            route: route,
+            tool: tool,
+            pageRange: pageRange
+        )
+        let outputParser = BabelDocOutputParser(apiKey: apiKey)
+        let result = try await processRunner.run(
+            executableURL: tool.executable,
+            arguments: arguments,
+            environment: environment,
+            currentDirectoryURL: outputDirectory,
+            onOutput: { event in
+                let parsed = outputParser.consume(event)
+                parsed.progressUpdates.forEach { onProgressUpdate?($0) }
+                parsed.statusMessages.forEach { onStatusUpdate?($0) }
+            }
+        )
+        let finalParsed = outputParser.finish()
+        finalParsed.progressUpdates.forEach { onProgressUpdate?($0) }
+        finalParsed.statusMessages.forEach { onStatusUpdate?($0) }
+        guard result.exitCode == 0 else {
+            let output = Self.sanitizedOutput(result.combinedOutput, apiKey: apiKey)
+            let message = output.isEmpty
+                ? AppLocalization.format("BabelDOC exited with code %d.", result.exitCode)
+                : output
+            let logURL = try? Self.writeFailureLog(
+                reason: message,
+                result: result,
+                inputPDF: inputPDF,
+                outputDirectory: outputDirectory,
+                babelDocPythonExecutable: tool.executable,
+                bridgeScript: tool.layoutModel,
+                arguments: arguments,
+                apiKey: apiKey,
+                startedAt: startedAt
+            )
+            if let logURL { throw BabelDocRunError.failedWithLog(message, logURL) }
+            throw BabelDocRunError.failed(message)
+        }
+        guard FileManager.default.fileExists(atPath: outputPDF.path) else {
+            throw BabelDocRunError.noTranslatedPDFProduced(nil)
+        }
+        return outputPDF
+    }
+
+    static func nativeArguments(
+        inputPDF: URL,
+        outputPDF: URL,
+        preferences: TranslationPreferencesSnapshot,
+        route: LLMModelRouteSnapshot,
+        tool: NativeBabelDocToolPaths,
+        pageRange: ClosedRange<Int>? = nil
+    ) -> [String] {
+        var arguments = [
+            "--input", inputPDF.path,
+            "--output", outputPDF.path,
+            "--layout-model", tool.layoutModel.path,
+            "--mupdf-library", tool.mupdfLibrary.path,
+            "--font-directory", tool.fontDirectory.path,
+            "--openai-model", route.modelName,
+            "--openai-base-url", route.baseURL,
+            "--target-language", preferences.targetLanguage,
+            "--qps", "\(preferences.babelDocQPS)",
+            "--api-key-environment", "READPAPER_LLM_API_KEY",
+        ]
+        if let temperature = route.temperature {
+            arguments += ["--temperature", "\(temperature)"]
+        }
+        if let topP = route.topP { arguments += ["--top-p", "\(topP)"] }
+        if let maxTokens = route.maxTokens { arguments += ["--max-tokens", "\(maxTokens)"] }
+        if let pageRange {
+            arguments += ["--pages", "\(pageRange.lowerBound)-\(pageRange.upperBound)"]
+            arguments.append("--only-include-translated-pages")
+        }
+        return arguments
+    }
+
     func translatePDF(
         inputPDF: URL,
         outputDirectory: URL,
@@ -454,8 +553,8 @@ struct BabelDocRunner {
             "",
             "Input PDF: \(inputPDF.path.singleLineForLog)",
             "Output directory: \(outputDirectory.path.singleLineForLog)",
-            "Python executable: \(babelDocPythonExecutable.path.singleLineForLog)",
-            "Bridge script: \(bridgeScript.path.singleLineForLog)",
+            "Tool executable: \(babelDocPythonExecutable.path.singleLineForLog)",
+            "Support artifact: \(bridgeScript.path.singleLineForLog)",
             "",
             "Arguments:",
             redactedArguments.map { "  \($0)" }.joined(separator: "\n"),

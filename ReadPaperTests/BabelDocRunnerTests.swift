@@ -2,6 +2,34 @@ import XCTest
 @testable import ReadPaper
 
 final class BabelDocRunnerTests: XCTestCase {
+    func testNativeToolManagerValidatesRuntimeAndKeepsAPIKeyInEnvironment() throws {
+        let fm = FileManager.default
+        let tempRoot = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? fm.removeItem(at: tempRoot) }
+        let manager = BabelDocToolManager(
+            fileStore: PaperFileStore(applicationSupportDirectory: tempRoot)
+        )
+        let root = try manager.nativeToolRoot
+        let files = [
+            root.appendingPathComponent("bin/babeldoc-native"),
+            root.appendingPathComponent("lib/libmupdf.dylib"),
+            root.appendingPathComponent("lib/libzstd.dylib"),
+            root.appendingPathComponent("models/doclayout_yolo_docstructbench_imgsz1024.onnx"),
+        ]
+        for file in files {
+            try fm.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+            XCTAssertTrue(fm.createFile(atPath: file.path, contents: Data()))
+        }
+        try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: files[0].path)
+        try fm.createDirectory(at: root.appendingPathComponent("fonts"), withIntermediateDirectories: true)
+
+        let paths = try manager.nativeToolPaths()
+        let environment = try manager.nativeEnvironment(apiKey: "sk-secret")
+        XCTAssertEqual(paths.executable, files[0])
+        XCTAssertEqual(environment["READPAPER_LLM_API_KEY"], "sk-secret")
+        XCTAssertEqual(environment["BABELDOC_ZSTD_LIBRARY"], files[2].path)
+    }
+
     func testToolManagerFindsSiblingPythonForShellWrappedLauncher() throws {
         let fm = FileManager.default
         let tempRoot = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
@@ -142,6 +170,34 @@ final class BabelDocRunnerTests: XCTestCase {
         let rPagesIndex = redacted.firstIndex(of: "--pages")!
         XCTAssertEqual(redacted[rPagesIndex + 1], "11-20")
         XCTAssertFalse(redacted.contains("sk-secret"))
+    }
+
+    func testNativeArgumentsUseLocalAssetsAndNeverContainAPIKey() {
+        let tool = NativeBabelDocToolPaths(
+            executable: URL(fileURLWithPath: "/native/bin/babeldoc-native"),
+            mupdfLibrary: URL(fileURLWithPath: "/native/lib/libmupdf.dylib"),
+            zstdLibrary: URL(fileURLWithPath: "/native/lib/libzstd.dylib"),
+            layoutModel: URL(fileURLWithPath: "/native/models/layout.onnx"),
+            fontDirectory: URL(fileURLWithPath: "/native/fonts", isDirectory: true)
+        )
+        let output = URL(fileURLWithPath: "/tmp/translated.pdf")
+        let arguments = BabelDocRunner.nativeArguments(
+            inputPDF: URL(fileURLWithPath: "/tmp/source.pdf"),
+            outputPDF: output,
+            preferences: Self.preferences,
+            route: Self.route,
+            tool: tool,
+            pageRange: 11...20
+        )
+
+        XCTAssertEqual(arguments[arguments.firstIndex(of: "--output")! + 1], output.path)
+        XCTAssertTrue(arguments.contains(tool.layoutModel.path))
+        XCTAssertTrue(arguments.contains(tool.mupdfLibrary.path))
+        XCTAssertTrue(arguments.contains(tool.fontDirectory.path))
+        XCTAssertTrue(arguments.contains("--only-include-translated-pages"))
+        XCTAssertEqual(arguments[arguments.firstIndex(of: "--pages")! + 1], "11-20")
+        XCTAssertFalse(arguments.contains("sk-secret"))
+        XCTAssertFalse(arguments.contains("--openai-api-key"))
     }
 
     func testOutputParserDecodesStructuredBridgeEventsAcrossChunks() {

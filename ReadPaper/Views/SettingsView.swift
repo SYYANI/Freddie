@@ -308,7 +308,6 @@ private struct SettingsForm: View {
             _ = try? LLMConfigurationBootstrapper().ensureBootstrap(modelContext: modelContext)
             loadInitialSelectionIfNeeded()
             await refreshInstalledBabelDOCVersion()
-            await refreshLatestBabelDOCVersion()
         }
         .onChange(of: selectedProviderID) { _, _ in
             applySelectedProvider()
@@ -321,11 +320,6 @@ private struct SettingsForm: View {
         }
         .onChange(of: models.map(\.id)) { _, _ in
             normalizeSelections()
-        }
-        .onChange(of: babelDocInstallSourceRawValue) { _, _ in
-            Task { @MainActor in
-                await refreshLatestBabelDOCVersion()
-            }
         }
     }
 
@@ -403,7 +397,7 @@ private struct SettingsForm: View {
                 }
 
                 Section(String(localized: "BabelDOC", bundle: bundle)) {
-                    LabeledContent(String(localized: "Current installed version", bundle: bundle)) {
+                    LabeledContent("Native runtime") {
                         if isLoadingInstalledBabelDocVersion {
                             ProgressView()
                                 .controlSize(.small)
@@ -414,59 +408,7 @@ private struct SettingsForm: View {
                         }
                     }
 
-                    LabeledContent(String(localized: "Latest available version", bundle: bundle)) {
-                        if isLoadingLatestBabelDocVersion {
-                            ProgressView()
-                                .controlSize(.small)
-                        } else {
-                            Text(latestBabelDocVersion ?? String(localized: "Unavailable", bundle: bundle))
-                                .foregroundStyle(latestBabelDocVersion == nil ? .secondary : .primary)
-                                .textSelection(.enabled)
-                        }
-                    }
-
-                    Picker(String(localized: "Install source", bundle: bundle), selection: babelDocInstallSourceBinding) {
-                        Text("Official PyPI", bundle: bundle).tag(BabelDocInstallSource.official)
-                        Text("Tsinghua mirror", bundle: bundle).tag(BabelDocInstallSource.tsinghua)
-                    }
-                    .pickerStyle(.segmented)
-
-                    SettingsFieldRow(String(localized: "Target version", bundle: bundle)) {
-                        SettingsPlainTextField(text: $settings.babelDocVersion)
-                    }
-
-                    HStack(spacing: 10) {
-                        Button(
-                            isInstallingBabelDOC
-                                ? String(localized: "Installing...", bundle: bundle)
-                                : String(localized: "Install or update BabelDOC", bundle: bundle)
-                        ) {
-                            installBabelDOC()
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .disabled(isInstallingBabelDOC || isRemovingBabelDOC)
-
-                        if isInstallingBabelDOC {
-                            Button(String(localized: "Cancel", bundle: bundle)) {
-                                cancelBabelDOCInstallation()
-                            }
-                        } else {
-                            Button(String(localized: "Remove BabelDOC", bundle: bundle), role: .destructive) {
-                                removeBabelDOC()
-                            }
-                            .disabled(isRemovingBabelDOC || hasManagedBabelDOCFiles == false)
-                        }
-                    }
-
-                    Text("The PDF translation tool is managed separately from the reader. Updating it here keeps the BabelDOC route ready when a paper needs full-PDF translation.", bundle: bundle)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-
-                    Text("Set the target version to \"latest\" to resolve the newest BabelDOC release from the selected source when installing. You can still enter a specific version to pin it.", bundle: bundle)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-
-                    Text("Choose which package index uv uses for BabelDOC installs. Official PyPI uses the default upstream index, while Tsinghua mirror uses the TUNA mirror for faster access in some regions. Latest version lookup follows the selected source.", bundle: bundle)
+                    Text("PDF translation runs through the local Swift-native BabelDOC helper. Python, uv, and PyPI are not used by the reader translation path.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
 
@@ -1558,10 +1500,10 @@ private struct SettingsForm: View {
         defer { isLoadingInstalledBabelDocVersion = false }
 
         let manager = BabelDocToolManager()
-        hasManagedBabelDOCFiles = (try? manager.hasManagedInstallation()) ?? false
+        hasManagedBabelDOCFiles = (try? manager.nativeToolPaths()) != nil
 
         do {
-            installedBabelDocVersion = try await manager.installedVersion()
+            installedBabelDocVersion = try await manager.nativeInstalledVersion()
         } catch {
             installedBabelDocVersion = nil
         }

@@ -881,25 +881,17 @@ struct ReaderPaneView: View {
                     modelContext: modelContext
                 )
                 let toolManager = BabelDocToolManager()
-                if try await toolManager.needsInstallOrRepair() {
-                    statusMessage = String(localized: "Installing BabelDOC...", bundle: bundle)
-                    let installResult = try await toolManager.installOrUpdateBabelDOC(version: preferences.babelDocVersion)
-                    try Task.checkCancellation()
-                    guard installResult.exitCode == 0 else {
-                        throw BabelDocRunError.failed(installResult.combinedOutput)
-                    }
-                }
+                let nativeTool = try toolManager.nativeToolPaths()
                 statusMessage = String(localized: "Translating PDF with BabelDOC...", bundle: bundle)
                 let outputDirectory = try PaperFileStore().translationsDirectory(for: paper)
-                let toolEnvironment = try toolManager.environment()
-                let translated = try await BabelDocRunner().translatePDF(
+                let toolEnvironment = try toolManager.nativeEnvironment(apiKey: resolvedRoute.apiKey)
+                let translated = try await BabelDocRunner().translatePDFNative(
                     inputPDF: pdfAttachment.fileURL,
                     outputDirectory: outputDirectory,
                     preferences: preferences,
                     route: resolvedRoute.snapshot,
                     apiKey: resolvedRoute.apiKey,
-                    babelDocPythonExecutable: try toolManager.babelDocPythonExecutableURL(),
-                    bridgeScript: try toolManager.ensureProgressBridgeScript(),
+                    tool: nativeTool,
                     pageRange: pageRange,
                     environment: toolEnvironment,
                     onStatusUpdate: { message in
@@ -978,17 +970,10 @@ struct ReaderPaneView: View {
                     modelContext: modelContext
                 )
                 let toolManager = BabelDocToolManager()
-                if try await toolManager.needsInstallOrRepair() {
-                    statusMessage = String(localized: "Installing BabelDOC...", bundle: bundle)
-                    let installResult = try await toolManager.installOrUpdateBabelDOC(version: preferences.babelDocVersion)
-                    try Task.checkCancellation()
-                    guard installResult.exitCode == 0 else {
-                        throw BabelDocRunError.failed(installResult.combinedOutput)
-                    }
-                }
+                let nativeTool = try toolManager.nativeToolPaths()
                 statusMessage = String(localized: "Translating PDF with BabelDOC...", bundle: bundle)
                 let outputDirectory = try PaperFileStore().translationsDirectory(for: paper)
-                let toolEnvironment = try toolManager.environment()
+                let toolEnvironment = try toolManager.nativeEnvironment(apiKey: resolvedRoute.apiKey)
 
                 guard let existingDoc = PDFDocument(url: existingAttachment.fileURL) else {
                     throw PDFMergerError.failedToOpenFile(existingAttachment.fileURL.path)
@@ -1003,14 +988,13 @@ struct ReaderPaneView: View {
                     return doc
                 }()
 
-                let incrementPDF = try await BabelDocRunner().translatePDF(
+                let incrementPDF = try await BabelDocRunner().translatePDFNative(
                     inputPDF: pdfAttachment.fileURL,
                     outputDirectory: outputDirectory,
                     preferences: preferences,
                     route: resolvedRoute.snapshot,
                     apiKey: resolvedRoute.apiKey,
-                    babelDocPythonExecutable: try toolManager.babelDocPythonExecutableURL(),
-                    bridgeScript: try toolManager.ensureProgressBridgeScript(),
+                    tool: nativeTool,
                     pageRange: pageRange,
                     environment: toolEnvironment,
                     onStatusUpdate: { message in

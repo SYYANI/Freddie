@@ -835,6 +835,7 @@
       }
     },
     "Choose which package index uv uses for BabelDOC installs. Official PyPI uses the default upstream index, while Tsinghua mirror uses the TUNA mirror for faster access in some regions. Latest version lookup follows the selected source." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -2430,6 +2431,7 @@
       }
     },
     "Official PyPI" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -2624,6 +2626,9 @@
           }
         }
       }
+    },
+    "PDF translation runs through the local Swift-native BabelDOC helper. Python, uv, and PyPI are not used by the reader translation path." : {
+
     },
     "PDF/BabelDOC Model" : {
       "extractionState" : "stale",
@@ -3190,6 +3195,7 @@
       }
     },
     "Set the target version to \"latest\" to resolve the newest BabelDOC release from the selected source when installing. You can still enter a specific version to pin it." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -3462,6 +3468,7 @@
       }
     },
     "The PDF translation tool is managed separately from the reader. Updating it here keeps the BabelDOC route ready when a paper needs full-PDF translation." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -3855,6 +3862,7 @@
       }
     },
     "Tsinghua mirror" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
