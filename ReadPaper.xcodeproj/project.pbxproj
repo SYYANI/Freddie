@@ -137,7 +137,7 @@
 		40C65F7E1559275AA3A5AA9F /* HTMLTranslationPipelineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HTMLTranslationPipelineTests.swift; sourceTree = "<group>"; };
 		46FC6C17BDF1F5821997810A /* LLMProviderValidationUseCase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLMProviderValidationUseCase.swift; sourceTree = "<group>"; };
 		47E6A94B8E0829E8FD015D53 /* ArxivClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArxivClientTests.swift; sourceTree = "<group>"; };
-		4AD0F3DCACE64FFE539D2434 /* Freddie.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Freddie.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		4AD0F3DCACE64FFE539D2434 /* ReadPaper.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; name = ReadPaper.app; path = Freddie.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		51A72BDC5A78B51E6003243F /* PaperFileStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaperFileStore.swift; sourceTree = "<group>"; };
 		56425134B5A64FC38C9DC3B1 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		585E60D2D3441D8A764523FD /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
@@ -371,7 +371,7 @@
 			isa = PBXGroup;
 			children = (
 				F350E33882E3378286268635 /* BabelDocHelper */,
-				4AD0F3DCACE64FFE539D2434 /* Freddie.app */,
+				4AD0F3DCACE64FFE539D2434 /* ReadPaper.app */,
 				81D379C5A3B056970FE8B41C /* ReadPaperTests.xctest */,
 			);
 			name = Products;
@@ -416,6 +416,7 @@
 				D0DC07E8D50342E81BE76498 /* Sources */,
 				1ACB2FAA3037591AE16F4B6C /* Resources */,
 				51AAC6A661F36E6C22680184 /* Frameworks */,
+				8E25F0DE72FAAB2EE29D3173 /* Embed BabelDOC Runtime */,
 				A4D9FC13DD36F53C9790B96E /* Embed BabelDOC Helper */,
 			);
 			buildRules = (
@@ -431,7 +432,7 @@
 				BAFDD8F8E234BC26852B46CF /* BabelDocKit */,
 			);
 			productName = ReadPaper;
-			productReference = 4AD0F3DCACE64FFE539D2434 /* Freddie.app */;
+			productReference = 4AD0F3DCACE64FFE539D2434 /* ReadPaper.app */;
 			productType = "com.apple.product-type.application";
 		};
 		D6781FABC8FE8B0D1A78CD46 /* BabelDocHelper */ = {
@@ -511,6 +512,31 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
+		8E25F0DE72FAAB2EE29D3173 /* Embed BabelDOC Runtime */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(SRCROOT)/../reWriteBabelDoc/Sources/BabelDocKit/Resources/runtime-manifest.json",
+				"$(SRCROOT)/../reWriteBabelDoc/Vendor/MuPDF/lib/libmupdf.dylib",
+				"$(SRCROOT)/../reWriteBabelDoc/Vendor/Zstd/lib/libzstd.dylib",
+				"$(SRCROOT)/../reWriteBabelDoc/Vendor/Models/doclayout_yolo_docstructbench_imgsz1024.onnx",
+				"$(SRCROOT)/../reWriteBabelDoc/Vendor/Fonts/manifest.json",
+			);
+			name = "Embed BabelDOC Runtime";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/BabelDOCNative/runtime-manifest.json",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -euo pipefail\npython3 \"${SRCROOT}/../reWriteBabelDoc/tools/stage_native_runtime.py\" \\\n  --destination \"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/BabelDOCNative\"\n";
+		};
 		A4D9FC13DD36F53C9790B96E /* Embed BabelDOC Helper */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
@@ -688,12 +714,10 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 28;
 				DEVELOPMENT_LANGUAGE = en;
-				DEVELOPMENT_TEAM = 3VM5RUH8V5;
 				ENABLE_TESTABILITY = YES;
 				INFOPLIST_FILE = ReadPaper/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Freddie;
@@ -834,12 +858,10 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 28;
 				DEVELOPMENT_LANGUAGE = en;
-				DEVELOPMENT_TEAM = 3VM5RUH8V5;
 				ENABLE_TESTABILITY = YES;
 				INFOPLIST_FILE = ReadPaper/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Freddie;

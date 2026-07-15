@@ -103,7 +103,10 @@ Key locations there:
 
 - `ReadPaper.store`: the SwiftData store for papers, attachments, translation cache, provider/model profiles, and app settings
 - `Library/{paper UUID}/`: per-paper files such as `paper.pdf`, `paper.html`, `Resources/`, `translations/`, and `notes/`
-- `Tools/`: app-managed external tool files
+- `Tools/`: legacy or optional app-managed external tool files
+
+The native BabelDOC helper and its manifest-pinned MuPDF, zstd, layout model,
+and font runtime are bundled with the app; no separate runtime install step is required.
 
 Even though the app bundle name is `Freddie`, the on-disk application support directory currently remains `ReadPaper`.
 

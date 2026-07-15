@@ -47,6 +47,20 @@ targets:
         link: false
         embed: false
     postBuildScripts:
+      - name: Embed BabelDOC Runtime
+        script: |
+          set -euo pipefail
+          python3 "${SRCROOT}/../reWriteBabelDoc/tools/stage_native_runtime.py" \
+            --destination "${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/BabelDOCNative"
+        inputFiles:
+          - $(SRCROOT)/../reWriteBabelDoc/Sources/BabelDocKit/Resources/runtime-manifest.json
+          - $(SRCROOT)/../reWriteBabelDoc/Vendor/MuPDF/lib/libmupdf.dylib
+          - $(SRCROOT)/../reWriteBabelDoc/Vendor/Zstd/lib/libzstd.dylib
+          - $(SRCROOT)/../reWriteBabelDoc/Vendor/Models/doclayout_yolo_docstructbench_imgsz1024.onnx
+          - $(SRCROOT)/../reWriteBabelDoc/Vendor/Fonts/manifest.json
+        outputFiles:
+          - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/BabelDOCNative/runtime-manifest.json
+        basedOnDependencyAnalysis: false
       - name: Embed BabelDOC Helper
         script: |
           set -euo pipefail

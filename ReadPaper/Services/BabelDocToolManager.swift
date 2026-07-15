@@ -76,6 +76,7 @@ struct BabelDocToolManager {
     let session: URLSession
     let installSource: BabelDocInstallSource
     let nativeHelperURL: URL?
+    let nativeRuntimeRootURL: URL?
     let nativeRuntimeResolver: @Sendable (URL, URL) throws -> BabelDocRuntimeAssets
     let nativeHelperVerifier: @Sendable (URL, String?) throws -> Void
     let logger = Logger(subsystem: "com.yiyan.ReadPaper", category: "BabelDocToolManager")
@@ -86,6 +87,7 @@ struct BabelDocToolManager {
         session: URLSession = .shared,
         installSource: BabelDocInstallSource = .stored(),
         nativeHelperURL: URL? = nil,
+        nativeRuntimeRootURL: URL? = nil,
         nativeRuntimeResolver: @escaping @Sendable (URL, URL) throws -> BabelDocRuntimeAssets = { root, manifest in
             try BabelDocRuntimeVerifier.verifyRuntime(
                 at: root,
@@ -105,6 +107,7 @@ struct BabelDocToolManager {
         self.session = session
         self.installSource = installSource
         self.nativeHelperURL = nativeHelperURL
+        self.nativeRuntimeRootURL = nativeRuntimeRootURL
         self.nativeRuntimeResolver = nativeRuntimeResolver
         self.nativeHelperVerifier = nativeHelperVerifier
     }
@@ -117,7 +120,13 @@ struct BabelDocToolManager {
 
     var nativeToolRoot: URL {
         get throws {
-            try fileStore.toolDirectory.appendingPathComponent("BabelDOCNative", isDirectory: true)
+            if let nativeRuntimeRootURL {
+                return nativeRuntimeRootURL
+            }
+            guard let resources = Bundle.main.resourceURL else {
+                throw NativeBabelDocToolError.missingRuntime(Bundle.main.bundleURL.path)
+            }
+            return resources.appendingPathComponent("BabelDOCNative", isDirectory: true)
         }
     }
 

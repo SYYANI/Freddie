@@ -12,6 +12,7 @@ final class BabelDocRunnerTests: XCTestCase {
         let manager = BabelDocToolManager(
             fileStore: fileStore,
             nativeHelperURL: root.appendingPathComponent("helper"),
+            nativeRuntimeRootURL: root,
             nativeRuntimeResolver: { runtimeRoot, _ in
                 BabelDocRuntimeAssets(
                     root: runtimeRoot,
@@ -43,6 +44,22 @@ final class BabelDocRunnerTests: XCTestCase {
         XCTAssertEqual(environment["READPAPER_LLM_API_KEY"], "sk-secret")
         XCTAssertNil(environment["BABELDOC_ZSTD_LIBRARY"])
         XCTAssertEqual(paths.runtimeVersion, "1.0.0")
+    }
+
+    func testNativeRuntimeDefaultsToApplicationBundleResources() throws {
+        let fm = FileManager.default
+        let tempRoot = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? fm.removeItem(at: tempRoot) }
+        let fileStore = PaperFileStore(applicationSupportDirectory: tempRoot)
+        let manager = BabelDocToolManager(fileStore: fileStore)
+        let resources = try XCTUnwrap(Bundle.main.resourceURL)
+        let expected = resources.appendingPathComponent("BabelDOCNative", isDirectory: true)
+        let applicationSupportTools = try fileStore.toolDirectory
+
+        XCTAssertEqual(try manager.nativeToolRoot, expected)
+        XCTAssertFalse(
+            try manager.nativeToolRoot.path.hasPrefix(applicationSupportTools.path + "/")
+        )
     }
 
     func testToolManagerFindsSiblingPythonForShellWrappedLauncher() throws {
