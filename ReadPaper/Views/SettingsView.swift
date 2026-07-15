@@ -408,10 +408,6 @@ private struct SettingsForm: View {
                         }
                     }
 
-                    Text("PDF translation runs through the local Swift-native BabelDOC helper. Python, uv, and PyPI are not used by the reader translation path.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-
                     if let generalStatusMessage = generalStatus.message {
                         statusLabel(generalStatusMessage)
                     }

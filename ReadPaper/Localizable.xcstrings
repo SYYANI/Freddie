@@ -2627,9 +2627,6 @@
         }
       }
     },
-    "PDF translation runs through the local Swift-native BabelDOC helper. Python, uv, and PyPI are not used by the reader translation path." : {
-
-    },
     "PDF/BabelDOC Model" : {
       "extractionState" : "stale",
       "localizations" : {

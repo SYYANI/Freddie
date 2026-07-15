@@ -31,6 +31,7 @@ targets:
         SWIFT_VERSION: 6.0
         OTHER_SWIFT_FLAGS: -parse-as-library
         CODE_SIGN_STYLE: Automatic
+        SKIP_INSTALL: YES
   ReadPaper:
     type: application
     platform: macOS

@@ -685,6 +685,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.yiyan.ReadPaper.BabelDocHelper;
 				PRODUCT_NAME = "babeldoc-readpaper-helper";
 				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
 				SWIFT_VERSION = 6.0;
 			};
 			name = Release;
@@ -893,6 +894,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.yiyan.ReadPaper.BabelDocHelper;
 				PRODUCT_NAME = "babeldoc-readpaper-helper";
 				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
 				SWIFT_VERSION = 6.0;
 			};
 			name = Debug;
