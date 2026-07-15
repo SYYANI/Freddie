@@ -73,6 +73,7 @@
 		BBA7A714502F6AF34B631EDF /* BabelDocRunnerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD20AB596745F6A2DE939722 /* BabelDocRunnerTests.swift */; };
 		BC3E9654D7969BCA1EB3674C /* LanguageManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20565DE8852B9CB834E7BCDC /* LanguageManagerTests.swift */; };
 		BC6FBEC8FEB0CC15B6D7000D /* PaperFileStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6E92728C43A017D4F19D275 /* PaperFileStoreTests.swift */; };
+		BCA436B4169A300D72CEF0E7 /* StableNavigationSplitDividerHandle.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1066FFD97CD0FAFC6EBB7A6 /* StableNavigationSplitDividerHandle.swift */; };
 		BEBF197F4257357F15F0BCF7 /* NoteMarkdownPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72E527A1CB9BF6F7422C42BA /* NoteMarkdownPreview.swift */; };
 		CB62B878D017B8B63DD87EC3 /* SwiftOpenAI in Frameworks */ = {isa = PBXBuildFile; productRef = EE4DDECCCB601D6B09EF6428 /* SwiftOpenAI */; };
 		CDD53CBFA547C1A14BDA88A8 /* LLMConfigurationBootstrapper.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB7C7C27FFFA5ECF81AABA98 /* LLMConfigurationBootstrapper.swift */; };
@@ -182,6 +183,7 @@
 		CA58A9F6F623388F3F96A066 /* reWriteBabelDoc */ = {isa = PBXFileReference; lastKnownFileType = folder; name = reWriteBabelDoc; path = ../reWriteBabelDoc; sourceTree = SOURCE_ROOT; };
 		CD20AB596745F6A2DE939722 /* BabelDocRunnerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BabelDocRunnerTests.swift; sourceTree = "<group>"; };
 		CD96D614696B0206B44ABB70 /* KeychainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStore.swift; sourceTree = "<group>"; };
+		D1066FFD97CD0FAFC6EBB7A6 /* StableNavigationSplitDividerHandle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StableNavigationSplitDividerHandle.swift; sourceTree = "<group>"; };
 		DB7C7C27FFFA5ECF81AABA98 /* LLMConfigurationBootstrapper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLMConfigurationBootstrapper.swift; sourceTree = "<group>"; };
 		E0F1DEEFF5B77D9A4472738A /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		E342738FD553970643EE1F6D /* LanguageManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LanguageManager.swift; sourceTree = "<group>"; };
@@ -269,6 +271,7 @@
 				72E527A1CB9BF6F7422C42BA /* NoteMarkdownPreview.swift */,
 				15605D44878CFDBFBF883E0F /* ReaderPaneView.swift */,
 				585E60D2D3441D8A764523FD /* SettingsView.swift */,
+				D1066FFD97CD0FAFC6EBB7A6 /* StableNavigationSplitDividerHandle.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -646,6 +649,7 @@
 				89A6E060EB5C7613D3EC46CE /* ReadingState.swift in Sources */,
 				009848F8756B5F5DEC0BC6A9 /* ReadingStateStore.swift in Sources */,
 				5AD3BFC4315E9F41E1556652 /* SettingsView.swift in Sources */,
+				BCA436B4169A300D72CEF0E7 /* StableNavigationSplitDividerHandle.swift in Sources */,
 				06FF9EE63AC39F6DB1C926CA /* ToolInstallState.swift in Sources */,
 				8EE17DFD7C21CC7E55838CEC /* TranslationJob.swift in Sources */,
 				F58BF1CACEBE2065B792874B /* TranslationLLMClient.swift in Sources */,

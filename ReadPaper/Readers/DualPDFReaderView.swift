@@ -1,3 +1,4 @@
+import AppKit
 import PDFKit
 import SwiftUI
 
@@ -28,32 +29,10 @@ struct DualPDFReaderView: View {
     }
 
     var body: some View {
-        HSplitView {
-            themedPDFReader(
-                fileURL: originalURL,
-                attachmentID: originalAttachmentID,
-                pageIndex: $pageIndex
-            ) { selection in
-                handleSelectionChange(selection, source: .original)
-            }
-                .overlay(alignment: .topLeading) {
-                    readerLabel(String(localized: "Original", bundle: bundle))
-                }
-            themedPDFReader(
-                fileURL: translatedURL,
-                attachmentID: translatedAttachmentID,
-                pageIndex: $translatedPageIndex,
-                reloadToken: reloadToken
-            ) { selection in
-                handleSelectionChange(selection, source: .translated)
-            }
-                .overlay(alignment: .topLeading) {
-                    if isPartialTranslation {
-                        readerLabel(String(localized: "Translation (partial)", bundle: bundle))
-                    } else {
-                        readerLabel(String(localized: "Translation", bundle: bundle))
-                    }
-                }
+        StableHorizontalPDFSplitView {
+            originalReader
+        } trailing: {
+            translatedReader
         }
         .onAppear {
             updatePageCounts()
@@ -87,6 +66,37 @@ struct DualPDFReaderView: View {
         .onChange(of: translatedPageCount) { _, newCount in
             guard newCount > 0 else { return }
             syncTranslatedPageFromOriginal(pageIndex)
+        }
+    }
+
+    private var originalReader: some View {
+        themedPDFReader(
+            fileURL: originalURL,
+            attachmentID: originalAttachmentID,
+            pageIndex: $pageIndex
+        ) { selection in
+            handleSelectionChange(selection, source: .original)
+        }
+        .overlay(alignment: .topLeading) {
+            readerLabel(String(localized: "Original", bundle: bundle))
+        }
+    }
+
+    private var translatedReader: some View {
+        themedPDFReader(
+            fileURL: translatedURL,
+            attachmentID: translatedAttachmentID,
+            pageIndex: $translatedPageIndex,
+            reloadToken: reloadToken
+        ) { selection in
+            handleSelectionChange(selection, source: .translated)
+        }
+        .overlay(alignment: .topLeading) {
+            if isPartialTranslation {
+                readerLabel(String(localized: "Translation (partial)", bundle: bundle))
+            } else {
+                readerLabel(String(localized: "Translation", bundle: bundle))
+            }
         }
     }
 
@@ -156,6 +166,149 @@ struct DualPDFReaderView: View {
         guard activeSelectionSource == source else { return }
         activeSelectionSource = nil
         onNoteSelectionChanged?(nil)
+    }
+}
+
+struct DualPDFSplitLayout {
+    static let dividerWidth: CGFloat = 8
+    static let minimumPaneWidth: CGFloat = 180
+
+    static func leadingWidth(totalWidth: CGFloat, fraction: CGFloat) -> CGFloat {
+        let availableWidth = max(0, totalWidth - dividerWidth)
+        guard availableWidth > 0 else { return 0 }
+        return availableWidth * clampedFraction(fraction, availableWidth: availableWidth)
+    }
+
+    static func fraction(
+        afterDraggingBy delta: CGFloat,
+        totalWidth: CGFloat,
+        currentFraction: CGFloat
+    ) -> CGFloat {
+        let availableWidth = max(0, totalWidth - dividerWidth)
+        guard availableWidth > 0 else { return 0.5 }
+        let currentWidth = leadingWidth(totalWidth: totalWidth, fraction: currentFraction)
+        return clampedFraction(
+            (currentWidth + delta) / availableWidth,
+            availableWidth: availableWidth
+        )
+    }
+
+    private static func clampedFraction(_ fraction: CGFloat, availableWidth: CGFloat) -> CGFloat {
+        let minimumWidth = min(minimumPaneWidth, availableWidth / 2)
+        let minimumFraction = minimumWidth / availableWidth
+        return min(max(fraction, minimumFraction), 1 - minimumFraction)
+    }
+}
+
+private struct StableHorizontalPDFSplitView<Leading: View, Trailing: View>: View {
+    @State private var leadingFraction: CGFloat = 0.5
+    private let leading: Leading
+    private let trailing: Trailing
+
+    init(
+        @ViewBuilder leading: () -> Leading,
+        @ViewBuilder trailing: () -> Trailing
+    ) {
+        self.leading = leading()
+        self.trailing = trailing()
+    }
+
+    var body: some View {
+        GeometryReader { proxy in
+            let totalWidth = proxy.size.width
+            let leadingWidth = DualPDFSplitLayout.leadingWidth(
+                totalWidth: totalWidth,
+                fraction: leadingFraction
+            )
+
+            HStack(spacing: 0) {
+                leading
+                    .frame(width: leadingWidth)
+
+                StablePDFSplitDivider { delta in
+                    leadingFraction = DualPDFSplitLayout.fraction(
+                        afterDraggingBy: delta,
+                        totalWidth: totalWidth,
+                        currentFraction: leadingFraction
+                    )
+                }
+                .frame(width: DualPDFSplitLayout.dividerWidth)
+
+                trailing
+                    .frame(maxWidth: .infinity)
+            }
+        }
+    }
+}
+
+private struct StablePDFSplitDivider: NSViewRepresentable {
+    var onDrag: (CGFloat) -> Void
+
+    func makeNSView(context: Context) -> DividerView {
+        let view = DividerView()
+        view.onDrag = onDrag
+        return view
+    }
+
+    func updateNSView(_ nsView: DividerView, context: Context) {
+        nsView.onDrag = onDrag
+    }
+
+    final class DividerView: NSView {
+        var onDrag: ((CGFloat) -> Void)?
+        private var lastDragLocationX: CGFloat?
+
+        override var acceptsFirstResponder: Bool { true }
+
+        override func draw(_ dirtyRect: NSRect) {
+            super.draw(dirtyRect)
+            NSColor.separatorColor.setFill()
+            NSRect(x: bounds.midX - 0.5, y: bounds.minY, width: 1, height: bounds.height).fill()
+        }
+
+        override func resetCursorRects() {
+            super.resetCursorRects()
+            addCursorRect(bounds, cursor: .resizeLeftRight)
+        }
+
+        override func cursorUpdate(with event: NSEvent) {
+            NSCursor.resizeLeftRight.set()
+        }
+
+        override func mouseEntered(with event: NSEvent) {
+            NSCursor.resizeLeftRight.set()
+        }
+
+        override func mouseDown(with event: NSEvent) {
+            lastDragLocationX = event.locationInWindow.x
+            NSCursor.resizeLeftRight.set()
+        }
+
+        override func mouseDragged(with event: NSEvent) {
+            let locationX = event.locationInWindow.x
+            if let lastDragLocationX {
+                onDrag?(locationX - lastDragLocationX)
+            }
+            self.lastDragLocationX = locationX
+            NSCursor.resizeLeftRight.set()
+        }
+
+        override func mouseUp(with event: NSEvent) {
+            lastDragLocationX = nil
+            NSCursor.resizeLeftRight.set()
+        }
+
+        override func updateTrackingAreas() {
+            super.updateTrackingAreas()
+            trackingAreas.forEach(removeTrackingArea)
+            addTrackingArea(
+                NSTrackingArea(
+                    rect: bounds,
+                    options: [.activeInKeyWindow, .cursorUpdate, .mouseEnteredAndExited, .inVisibleRect],
+                    owner: self
+                )
+            )
+        }
     }
 }
 

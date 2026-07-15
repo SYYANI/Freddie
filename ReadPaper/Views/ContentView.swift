@@ -62,6 +62,11 @@ struct ContentView: View {
                 onDeletePaper: requestDeletion(of:)
             )
             .navigationSplitViewColumnWidth(min: 240, ideal: 260, max: 340)
+            .overlay(alignment: .trailing) {
+                StableNavigationSplitDividerHandle()
+                    .frame(width: 8)
+                    .accessibilityHidden(true)
+            }
         } content: {
             ReaderPaneView(
                 paper: selectedPaper,

@@ -275,4 +275,37 @@ final class PDFMergerTests: XCTestCase {
         )
         XCTAssertEqual(userDrivenOriginalPage, 8)
     }
+
+    func testDualPDFSplitLayoutKeepsBothPanesUsable() {
+        let totalWidth: CGFloat = 1_000
+
+        XCTAssertEqual(
+            DualPDFSplitLayout.leadingWidth(totalWidth: totalWidth, fraction: 0.5),
+            (totalWidth - DualPDFSplitLayout.dividerWidth) / 2,
+            accuracy: 0.001
+        )
+
+        let draggedAllTheWayLeft = DualPDFSplitLayout.fraction(
+            afterDraggingBy: -2_000,
+            totalWidth: totalWidth,
+            currentFraction: 0.5
+        )
+        let draggedAllTheWayRight = DualPDFSplitLayout.fraction(
+            afterDraggingBy: 2_000,
+            totalWidth: totalWidth,
+            currentFraction: 0.5
+        )
+
+        XCTAssertEqual(
+            DualPDFSplitLayout.leadingWidth(totalWidth: totalWidth, fraction: draggedAllTheWayLeft),
+            DualPDFSplitLayout.minimumPaneWidth,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            totalWidth - DualPDFSplitLayout.dividerWidth
+                - DualPDFSplitLayout.leadingWidth(totalWidth: totalWidth, fraction: draggedAllTheWayRight),
+            DualPDFSplitLayout.minimumPaneWidth,
+            accuracy: 0.001
+        )
+    }
 }
