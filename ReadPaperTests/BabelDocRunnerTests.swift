@@ -1,4 +1,5 @@
 import XCTest
+import BabelDocKit
 @testable import ReadPaper
 
 final class BabelDocRunnerTests: XCTestCase {
@@ -6,15 +7,28 @@ final class BabelDocRunnerTests: XCTestCase {
         let fm = FileManager.default
         let tempRoot = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? fm.removeItem(at: tempRoot) }
+        let fileStore = PaperFileStore(applicationSupportDirectory: tempRoot)
+        let root = try fileStore.toolDirectory.appendingPathComponent("BabelDOCNative", isDirectory: true)
         let manager = BabelDocToolManager(
-            fileStore: PaperFileStore(applicationSupportDirectory: tempRoot)
+            fileStore: fileStore,
+            nativeHelperURL: root.appendingPathComponent("helper"),
+            nativeRuntimeResolver: { runtimeRoot, _ in
+                BabelDocRuntimeAssets(
+                    root: runtimeRoot,
+                    manifestVersion: "1.0.0",
+                    mupdfLibrary: runtimeRoot.appendingPathComponent("lib/libmupdf.dylib"),
+                    zstdLibrary: runtimeRoot.appendingPathComponent("lib/libzstd.dylib"),
+                    layoutModel: runtimeRoot.appendingPathComponent("models/layout.onnx"),
+                    fontDirectory: runtimeRoot.appendingPathComponent("fonts", isDirectory: true)
+                )
+            },
+            nativeHelperVerifier: { _, _ in }
         )
-        let root = try manager.nativeToolRoot
         let files = [
-            root.appendingPathComponent("bin/babeldoc-native"),
+            root.appendingPathComponent("helper"),
             root.appendingPathComponent("lib/libmupdf.dylib"),
             root.appendingPathComponent("lib/libzstd.dylib"),
-            root.appendingPathComponent("models/doclayout_yolo_docstructbench_imgsz1024.onnx"),
+            root.appendingPathComponent("models/layout.onnx"),
         ]
         for file in files {
             try fm.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -27,7 +41,8 @@ final class BabelDocRunnerTests: XCTestCase {
         let environment = try manager.nativeEnvironment(apiKey: "sk-secret")
         XCTAssertEqual(paths.executable, files[0])
         XCTAssertEqual(environment["READPAPER_LLM_API_KEY"], "sk-secret")
-        XCTAssertEqual(environment["BABELDOC_ZSTD_LIBRARY"], files[2].path)
+        XCTAssertNil(environment["BABELDOC_ZSTD_LIBRARY"])
+        XCTAssertEqual(paths.runtimeVersion, "1.0.0")
     }
 
     func testToolManagerFindsSiblingPythonForShellWrappedLauncher() throws {
@@ -175,6 +190,9 @@ final class BabelDocRunnerTests: XCTestCase {
     func testNativeArgumentsUseLocalAssetsAndNeverContainAPIKey() {
         let tool = NativeBabelDocToolPaths(
             executable: URL(fileURLWithPath: "/native/bin/babeldoc-native"),
+            runtimeRoot: URL(fileURLWithPath: "/native", isDirectory: true),
+            runtimeManifest: URL(fileURLWithPath: "/app/runtime-manifest.json"),
+            runtimeVersion: "1.0.0",
             mupdfLibrary: URL(fileURLWithPath: "/native/lib/libmupdf.dylib"),
             zstdLibrary: URL(fileURLWithPath: "/native/lib/libzstd.dylib"),
             layoutModel: URL(fileURLWithPath: "/native/models/layout.onnx"),
@@ -191,9 +209,10 @@ final class BabelDocRunnerTests: XCTestCase {
         )
 
         XCTAssertEqual(arguments[arguments.firstIndex(of: "--output")! + 1], output.path)
-        XCTAssertTrue(arguments.contains(tool.layoutModel.path))
-        XCTAssertTrue(arguments.contains(tool.mupdfLibrary.path))
-        XCTAssertTrue(arguments.contains(tool.fontDirectory.path))
+        XCTAssertEqual(arguments[arguments.firstIndex(of: "--runtime-root")! + 1], tool.runtimeRoot.path)
+        XCTAssertEqual(arguments[arguments.firstIndex(of: "--runtime-manifest")! + 1], tool.runtimeManifest.path)
+        XCTAssertFalse(arguments.contains(tool.layoutModel.path))
+        XCTAssertFalse(arguments.contains(tool.mupdfLibrary.path))
         XCTAssertTrue(arguments.contains("--only-include-translated-pages"))
         XCTAssertEqual(arguments[arguments.firstIndex(of: "--pages")! + 1], "11-20")
         XCTAssertFalse(arguments.contains("sk-secret"))

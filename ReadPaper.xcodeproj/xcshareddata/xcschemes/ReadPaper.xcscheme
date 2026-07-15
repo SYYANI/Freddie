@@ -14,6 +14,20 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
+               BlueprintIdentifier = "D6781FABC8FE8B0D1A78CD46"
+               BuildableName = "babeldoc-readpaper-helper"
+               BlueprintName = "BabelDocHelper"
+               ReferencedContainer = "container:ReadPaper.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "YES"
+            buildForProfiling = "YES"
+            buildForArchiving = "YES"
+            buildForAnalyzing = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
                BlueprintIdentifier = "9FAF4C99F206E06D82BB4D49"
                BuildableName = "Freddie.app"
                BlueprintName = "ReadPaper"

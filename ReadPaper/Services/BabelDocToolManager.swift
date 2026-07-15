@@ -1,8 +1,12 @@
 import Foundation
 import OSLog
+import BabelDocKit
 
 struct NativeBabelDocToolPaths: Sendable, Equatable {
     let executable: URL
+    let runtimeRoot: URL
+    let runtimeManifest: URL
+    let runtimeVersion: String
     let mupdfLibrary: URL
     let zstdLibrary: URL
     let layoutModel: URL
@@ -71,18 +75,38 @@ struct BabelDocToolManager {
     let runner: ProcessRunner
     let session: URLSession
     let installSource: BabelDocInstallSource
+    let nativeHelperURL: URL?
+    let nativeRuntimeResolver: @Sendable (URL, URL) throws -> BabelDocRuntimeAssets
+    let nativeHelperVerifier: @Sendable (URL, String?) throws -> Void
     let logger = Logger(subsystem: "com.yiyan.ReadPaper", category: "BabelDocToolManager")
 
     init(
         fileStore: PaperFileStore = PaperFileStore(),
         runner: ProcessRunner = ProcessRunner(),
         session: URLSession = .shared,
-        installSource: BabelDocInstallSource = .stored()
+        installSource: BabelDocInstallSource = .stored(),
+        nativeHelperURL: URL? = nil,
+        nativeRuntimeResolver: @escaping @Sendable (URL, URL) throws -> BabelDocRuntimeAssets = { root, manifest in
+            try BabelDocRuntimeVerifier.verifyRuntime(
+                at: root,
+                trustedManifestURL: manifest
+            )
+        },
+        nativeHelperVerifier: @escaping @Sendable (URL, String?) throws -> Void = { helper, teamIdentifier in
+            _ = try BabelDocRuntimeVerifier.verifyCode(
+                at: helper,
+                expectedIdentifier: nil,
+                expectedTeamIdentifier: teamIdentifier
+            )
+        }
     ) {
         self.fileStore = fileStore
         self.runner = runner
         self.session = session
         self.installSource = installSource
+        self.nativeHelperURL = nativeHelperURL
+        self.nativeRuntimeResolver = nativeRuntimeResolver
+        self.nativeHelperVerifier = nativeHelperVerifier
     }
 
     var toolRoot: URL {
@@ -99,46 +123,39 @@ struct BabelDocToolManager {
 
     func nativeToolPaths() throws -> NativeBabelDocToolPaths {
         let root = try nativeToolRoot
-        let paths = NativeBabelDocToolPaths(
-            executable: root.appendingPathComponent("bin/babeldoc-native"),
-            mupdfLibrary: root.appendingPathComponent("lib/libmupdf.dylib"),
-            zstdLibrary: root.appendingPathComponent("lib/libzstd.dylib"),
-            layoutModel: root.appendingPathComponent("models/doclayout_yolo_docstructbench_imgsz1024.onnx"),
-            fontDirectory: root.appendingPathComponent("fonts", isDirectory: true)
-        )
         let fm = fileStore.fileManager
-        guard fm.isExecutableFile(atPath: paths.executable.path),
-              fm.fileExists(atPath: paths.mupdfLibrary.path),
-              fm.fileExists(atPath: paths.zstdLibrary.path),
-              fm.fileExists(atPath: paths.layoutModel.path),
-              fm.fileExists(atPath: paths.fontDirectory.path) else {
+        let helper = nativeHelperURL ?? Bundle.main.bundleURL
+            .appendingPathComponent("Contents/Helpers/babeldoc-readpaper-helper")
+        guard fm.isExecutableFile(atPath: helper.path),
+              let trustedManifest = BabelDocRuntimeVerifier.bundledManifestURL else {
             throw NativeBabelDocToolError.missingRuntime(root.path)
         }
-        return paths
+        let currentSignature = try? BabelDocRuntimeVerifier.currentProcessCodeSignature()
+        try nativeHelperVerifier(helper, currentSignature?.teamIdentifier)
+        let assets = try nativeRuntimeResolver(root, trustedManifest)
+        return NativeBabelDocToolPaths(
+            executable: helper,
+            runtimeRoot: root,
+            runtimeManifest: trustedManifest,
+            runtimeVersion: assets.manifestVersion,
+            mupdfLibrary: assets.mupdfLibrary,
+            zstdLibrary: assets.zstdLibrary,
+            layoutModel: assets.layoutModel,
+            fontDirectory: assets.fontDirectory
+        )
     }
 
     func nativeEnvironment(apiKey: String) throws -> [String: String] {
-        let paths = try nativeToolPaths()
+        _ = try nativeToolPaths()
         return [
             "READPAPER_LLM_API_KEY": apiKey,
-            "BABELDOC_ZSTD_LIBRARY": paths.zstdLibrary.path,
             "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
         ]
     }
 
     func nativeInstalledVersion() async throws -> String? {
         let paths = try nativeToolPaths()
-        let result = try await runner.run(
-            executableURL: paths.executable,
-            arguments: ["--version"],
-            environment: ["BABELDOC_ZSTD_LIBRARY": paths.zstdLibrary.path],
-            currentDirectoryURL: try nativeToolRoot
-        )
-        guard result.exitCode == 0 else { return nil }
-        return result.combinedOutput
-            .split(whereSeparator: \.isWhitespace)
-            .last
-            .map(String.init)
+        return paths.runtimeVersion
     }
 
     var toolBinDirectory: URL {

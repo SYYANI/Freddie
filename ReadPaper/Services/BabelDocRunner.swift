@@ -194,7 +194,7 @@ struct BabelDocRunner {
                 inputPDF: inputPDF,
                 outputDirectory: outputDirectory,
                 babelDocPythonExecutable: tool.executable,
-                bridgeScript: tool.layoutModel,
+                bridgeScript: tool.runtimeManifest,
                 arguments: arguments,
                 apiKey: apiKey,
                 startedAt: startedAt
@@ -219,9 +219,8 @@ struct BabelDocRunner {
         var arguments = [
             "--input", inputPDF.path,
             "--output", outputPDF.path,
-            "--layout-model", tool.layoutModel.path,
-            "--mupdf-library", tool.mupdfLibrary.path,
-            "--font-directory", tool.fontDirectory.path,
+            "--runtime-root", tool.runtimeRoot.path,
+            "--runtime-manifest", tool.runtimeManifest.path,
             "--openai-model", route.modelName,
             "--openai-base-url", route.baseURL,
             "--target-language", preferences.targetLanguage,

@@ -12,7 +12,25 @@ packages:
     from: 4.3.3
   Readability:
     path: swift-readability
+  BabelDocSwift:
+    path: ../reWriteBabelDoc
 targets:
+  BabelDocHelper:
+    type: tool
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - path: ReadPaperBabelDocHelper
+    dependencies:
+      - package: BabelDocSwift
+        product: BabelDocKit
+    settings:
+      base:
+        PRODUCT_NAME: babeldoc-readpaper-helper
+        PRODUCT_BUNDLE_IDENTIFIER: com.yiyan.ReadPaper.BabelDocHelper
+        SWIFT_VERSION: 6.0
+        OTHER_SWIFT_FLAGS: -parse-as-library
+        CODE_SIGN_STYLE: Automatic
   ReadPaper:
     type: application
     platform: macOS
@@ -23,6 +41,25 @@ targets:
       - package: SwiftSoup
       - package: SwiftOpenAI
       - package: Readability
+      - package: BabelDocSwift
+        product: BabelDocKit
+      - target: BabelDocHelper
+        link: false
+        embed: false
+    postBuildScripts:
+      - name: Embed BabelDOC Helper
+        script: |
+          set -euo pipefail
+          source_path="${BUILT_PRODUCTS_DIR}/babeldoc-readpaper-helper"
+          destination_directory="${TARGET_BUILD_DIR}/${CONTENTS_FOLDER_PATH}/Helpers"
+          destination_path="${destination_directory}/babeldoc-readpaper-helper"
+          mkdir -p "${destination_directory}"
+          ditto "${source_path}" "${destination_path}"
+          codesign --verify --strict --verbose=2 "${destination_path}"
+        inputFiles:
+          - $(BUILT_PRODUCTS_DIR)/babeldoc-readpaper-helper
+        outputFiles:
+          - $(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/Helpers/babeldoc-readpaper-helper
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.yiyan.ReadPaper
@@ -60,7 +97,14 @@ schemes:
     build:
       targets:
         ReadPaper: all
+        BabelDocHelper: all
         ReadPaperTests: [test]
+    run:
+      config: Debug
+      executable: ReadPaper
     test:
       targets:
         - ReadPaperTests
+    profile:
+      config: Release
+      executable: ReadPaper
