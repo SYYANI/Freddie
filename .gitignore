@@ -9,4 +9,6 @@ err.log
 *.xcuserstate
 xcuserdata/
 paper.html
-ReadPaper.xcodeproj/project.xcworkspace/xcuserdata/yiyan.xcuserdatad/UserInterfaceState.xcuserstate
+# Xcode per-user data
+*.xcodeproj/xcuserdata/
+*.xcworkspace/xcuserdata/
