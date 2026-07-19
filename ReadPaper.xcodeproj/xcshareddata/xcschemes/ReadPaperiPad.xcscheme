@@ -20,6 +20,20 @@
                ReferencedContainer = "container:ReadPaper.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "NO"
+            buildForProfiling = "NO"
+            buildForArchiving = "NO"
+            buildForAnalyzing = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "2B27B8A72BECA6E3E06B80CC"
+               BuildableName = "ReadPaperiPadTests.xctest"
+               BlueprintName = "ReadPaperiPadTests"
+               ReferencedContainer = "container:ReadPaper.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
       </BuildActionEntries>
    </BuildAction>
    <TestAction
@@ -37,6 +51,17 @@
          </BuildableReference>
       </MacroExpansion>
       <Testables>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "2B27B8A72BECA6E3E06B80CC"
+               BuildableName = "ReadPaperiPadTests.xctest"
+               BlueprintName = "ReadPaperiPadTests"
+               ReferencedContainer = "container:ReadPaper.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
       </Testables>
    </TestAction>
    <LaunchAction

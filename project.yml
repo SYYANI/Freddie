@@ -109,8 +109,21 @@ targets:
       - package: SwiftSoup
       - package: SwiftOpenAI
       - package: Readability
-      # Phase 1 intentionally omits BabelDocKit. The iPad PDF translation path
-      # should link the local package in-process once it provides an iOS/static runtime.
+      - package: BabelDocSwift
+        product: BabelDocKit
+    postBuildScripts:
+      - name: Embed BabelDOC In-Process Runtime
+        script: |
+          set -euo pipefail
+          python3 "${SRCROOT}/../reWriteBabelDoc/tools/stage_embedded_runtime.py" \
+            --destination "${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/BabelDOCEmbedded"
+        inputFiles:
+          - $(SRCROOT)/../reWriteBabelDoc/Sources/BabelDocKit/Resources/runtime-manifest.json
+          - $(SRCROOT)/../reWriteBabelDoc/Vendor/Models/doclayout_yolo_docstructbench_imgsz1024.onnx
+          - $(SRCROOT)/../reWriteBabelDoc/Vendor/Fonts/manifest.json
+        outputFiles:
+          - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/BabelDOCEmbedded/runtime-manifest.json
+        basedOnDependencyAnalysis: false
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.yiyan.ReadPaper.iPad
@@ -143,6 +156,24 @@ targets:
         SWIFT_VERSION: 6.0
         TEST_HOST: $(BUILT_PRODUCTS_DIR)/Freddie.app/Contents/MacOS/Freddie
         BUNDLE_LOADER: $(TEST_HOST)
+  ReadPaperiPadTests:
+    type: bundle.unit-test
+    platform: iOS
+    hostApplication: ReadPaperiPad
+    deploymentTarget: "17.0"
+    sources:
+      - path: ReadPaperiPadTests
+    dependencies:
+      - target: ReadPaperiPad
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.yiyan.ReadPaperiPadTests
+        PRODUCT_NAME: ReadPaperiPadTests
+        DEVELOPMENT_LANGUAGE: en
+        INFOPLIST_FILE: ReadPaperiPadTests/Info.plist
+        SWIFT_VERSION: 6.0
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/Freddie.app/Freddie
+        BUNDLE_LOADER: $(TEST_HOST)
 schemes:
   ReadPaper:
     build:
@@ -163,9 +194,13 @@ schemes:
     build:
       targets:
         ReadPaperiPad: all
+        ReadPaperiPadTests: [test]
     run:
       config: Debug
       executable: ReadPaperiPad
+    test:
+      targets:
+        - ReadPaperiPadTests
     profile:
       config: Release
       executable: ReadPaperiPad

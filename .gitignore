@@ -14,3 +14,4 @@ paper.html
 *.xcworkspace/xcuserdata/
 .DerivedData-iPad/
 .DerivedData-Mac/
+.DerivedData-final-ios/

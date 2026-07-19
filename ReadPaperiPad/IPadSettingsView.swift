@@ -8,6 +8,8 @@ struct IPadSettingsView: View {
     @Query private var settingsRows: [AppSettings]
     @Query(sort: \LLMProviderProfile.modifiedAt, order: .reverse) private var providers: [LLMProviderProfile]
     @Query(sort: \LLMModelProfile.modifiedAt, order: .reverse) private var models: [LLMModelProfile]
+    @AppStorage(PDFTranslationBatchPreference.userDefaultsKey)
+    private var pdfTranslationBatchSize = PDFTranslationBatchPreference.defaultValue
 
     @State private var selectedProviderID: UUID?
     @State private var providerName = "OpenAI"
@@ -123,6 +125,12 @@ struct IPadSettingsView: View {
                         Text(model.name).tag(Optional(model.id))
                     }
                 }
+                Picker(String(localized: "PDF/BabelDOC Model", bundle: bundle), selection: pdfModelBinding(settings)) {
+                    Text("Choose Model", bundle: bundle).tag(UUID?.none)
+                    ForEach(models.filter(\.isEnabled)) { model in
+                        Text(model.name).tag(Optional(model.id))
+                    }
+                }
                 TextField(String(localized: "Target Language", bundle: bundle), text: targetLanguageBinding(settings))
                     .textInputAutocapitalization(.never)
                 Stepper(
@@ -130,6 +138,19 @@ struct IPadSettingsView: View {
                     in: 1...12
                 ) {
                     Text("HTML concurrency: \(settings.htmlTranslationConcurrency)")
+                }
+                Stepper(
+                    value: Binding(
+                        get: { PDFTranslationBatchPreference.normalized(pdfTranslationBatchSize) },
+                        set: { pdfTranslationBatchSize = PDFTranslationBatchPreference.normalized($0) }
+                    ),
+                    in: PDFTranslationBatchPreference.allowedRange
+                ) {
+                    Text(AppLocalization.format(
+                        "PDF pages per batch: %d",
+                        bundle: bundle,
+                        PDFTranslationBatchPreference.normalized(pdfTranslationBatchSize)
+                    ))
                 }
             }
         }
@@ -147,6 +168,17 @@ struct IPadSettingsView: View {
             get: { settings.selectedHTMLModelProfileID },
             set: {
                 settings.selectedHTMLModelProfileID = $0
+                settings.modifiedAt = Date()
+                try? modelContext.save()
+            }
+        )
+    }
+
+    private func pdfModelBinding(_ settings: AppSettings) -> Binding<UUID?> {
+        Binding(
+            get: { settings.selectedPDFModelProfileID },
+            set: {
+                settings.selectedPDFModelProfileID = $0
                 settings.modifiedAt = Date()
                 try? modelContext.save()
             }
@@ -256,6 +288,9 @@ struct IPadSettingsView: View {
             selectedModelID = model.id
             if let settings, settings.selectedHTMLModelProfileID == nil {
                 settings.selectedHTMLModelProfileID = model.id
+                if settings.selectedPDFModelProfileID == nil {
+                    settings.selectedPDFModelProfileID = model.id
+                }
                 settings.modifiedAt = Date()
                 try modelContext.save()
             }

@@ -48,6 +48,16 @@
         }
       }
     },
+    "%@/%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@/%2$@"
+          }
+        }
+      }
+    },
     "%@%%" : {
 
     },
@@ -142,6 +152,16 @@
         }
       }
     },
+    "2303.08774 or https://arxiv.org/abs/2303.08774" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "2303.08774 或 https://arxiv.org/abs/2303.08774"
+          }
+        }
+      }
+    },
     "A model profile points to one provider and stores the exact chat model name plus optional sampling parameters. You can create separate profiles for fast HTML translation and heavier PDF work." : {
       "localizations" : {
         "zh-Hans" : {
@@ -212,6 +232,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "添加 arXiv ID、arXiv URL，或本地 PDF。使用翻译前，请先打开 Settings，至少保存一个 LLM provider API key 和模型配置。"
+          }
+        }
+      }
+    },
+    "Add an arXiv ID, arXiv URL, web page URL, or a local PDF." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "添加 arXiv ID、arXiv URL、网页 URL 或本地 PDF。"
           }
         }
       }
@@ -312,6 +342,17 @@
         }
       }
     },
+    "API Key" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "API 密钥"
+          }
+        }
+      }
+    },
     "API key cannot be empty." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -324,6 +365,17 @@
       }
     },
     "App language" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "应用语言"
+          }
+        }
+      }
+    },
+    "Application Language" : {
       "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
@@ -770,6 +822,16 @@
         }
       }
     },
+    "Choose Model" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选择模型"
+          }
+        }
+      }
+    },
     "Choose PDF..." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -777,6 +839,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "选择 PDF..."
+          }
+        }
+      }
+    },
+    "Choose Provider" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选择服务商"
           }
         }
       }
@@ -958,6 +1030,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "复制链接"
+          }
+        }
+      }
+    },
+    "Create a note from the current PDF or HTML selection, or start a blank note." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "可基于当前 PDF 或 HTML 选区创建笔记，也可新建空白笔记。"
           }
         }
       }
@@ -1487,6 +1569,16 @@
         }
       }
     },
+    "First Paper" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "添加第一篇论文"
+          }
+        }
+      }
+    },
     "Follow System" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1514,6 +1606,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "常见配置方式是：填写服务 base URL，粘贴 API key，设置一个轻量测试模型，然后点击 Save 和 Test。"
+          }
+        }
+      }
+    },
+    "Freddie" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Freddie"
           }
         }
       }
@@ -1629,6 +1731,9 @@
         }
       }
     },
+    "HTML concurrency: %@" : {
+
+    },
     "HTML concurrency: %d" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1668,6 +1773,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "HTML 字号：%1$d"
+          }
+        }
+      }
+    },
+    "HTML is not available for this paper." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这篇论文没有可用的 HTML。"
           }
         }
       }
@@ -1874,6 +1990,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "插入占位符"
+          }
+        }
+      }
+    },
+    "Inspector" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "检查器"
           }
         }
       }
@@ -2170,6 +2297,17 @@
         }
       }
     },
+    "Model Name" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "模型名称"
+          }
+        }
+      }
+    },
     "Model name cannot be empty." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2177,6 +2315,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "模型名称不能为空。"
+          }
+        }
+      }
+    },
+    "Model Profile" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "模型配置"
           }
         }
       }
@@ -2248,7 +2397,6 @@
       }
     },
     "New Model" : {
-      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -2258,8 +2406,18 @@
         }
       }
     },
-    "New Provider" : {
+    "New Note" : {
       "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "新建笔记"
+          }
+        }
+      }
+    },
+    "New Provider" : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -2308,6 +2466,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "还没有笔记。"
+          }
+        }
+      }
+    },
+    "No paper selected" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未选择论文"
           }
         }
       }
@@ -2474,6 +2642,17 @@
         }
       }
     },
+    "Open Anchor" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打开锚点"
+          }
+        }
+      }
+    },
     "Open Models" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2616,6 +2795,17 @@
         }
       }
     },
+    "PDF is not available for this paper." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这篇论文没有可用的 PDF。"
+          }
+        }
+      }
+    },
     "PDF pages per batch: %d" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2667,6 +2857,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在准备 HTML 翻译..."
+          }
+        }
+      }
+    },
+    "Preparing import..." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在准备导入..."
           }
         }
       }
@@ -2737,6 +2938,17 @@
         }
       }
     },
+    "Profile Name" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "配置名称"
+          }
+        }
+      }
+    },
     "Profile name is only for display inside ReadPaper. Model name must match the real model identifier accepted by your provider." : {
       "localizations" : {
         "zh-Hans" : {
@@ -2776,6 +2988,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Provider 指南"
+          }
+        }
+      }
+    },
+    "Provider Name" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "服务商名称"
           }
         }
       }
@@ -3041,6 +3264,28 @@
         }
       }
     },
+    "Save Model" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "保存模型"
+          }
+        }
+      }
+    },
+    "Save Provider" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "保存服务商"
+          }
+        }
+      }
+    },
     "Saving the paper and localized HTML to your library." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -3081,6 +3326,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在将 %1$@ 的源 PDF 保存到你的本地资料库。"
+          }
+        }
+      }
+    },
+    "Select a paper from the library." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请从资料库中选择一篇论文。"
           }
         }
       }
@@ -3354,6 +3609,17 @@
         }
       }
     },
+    "Target Language" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "目标语言"
+          }
+        }
+      }
+    },
     "Target version" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -3449,6 +3715,36 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "已配置的导出目录不可用。"
+          }
+        }
+      }
+    },
+    "The embedded BabelDOC fonts are missing." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "缺少内嵌的 BabelDOC 字体。"
+          }
+        }
+      }
+    },
+    "The embedded BabelDOC layout model is missing." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "缺少内嵌的 BabelDOC 版面模型。"
+          }
+        }
+      }
+    },
+    "The embedded BabelDOC runtime is missing." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "缺少内嵌的 BabelDOC 运行时。"
           }
         }
       }
@@ -3946,6 +4242,17 @@
         }
       }
     },
+    "Untitled Note" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未命名笔记"
+          }
+        }
+      }
+    },
     "Untitled PDF" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -3995,256 +4302,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "网页 URL"
-          }
-        }
-      }
-    },
-    "2303.08774 or https://arxiv.org/abs/2303.08774" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "2303.08774 或 https://arxiv.org/abs/2303.08774"
-          }
-        }
-      }
-    },
-    "API Key" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "API 密钥"
-          }
-        }
-      }
-    },
-    "Add an arXiv ID, arXiv URL, web page URL, or a local PDF." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "添加 arXiv ID、arXiv URL、网页 URL 或本地 PDF。"
-          }
-        }
-      }
-    },
-    "Application Language" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "应用语言"
-          }
-        }
-      }
-    },
-    "Choose Model" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "选择模型"
-          }
-        }
-      }
-    },
-    "Choose Provider" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "选择服务商"
-          }
-        }
-      }
-    },
-    "Create a note from the current PDF or HTML selection, or start a blank note." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "可基于当前 PDF 或 HTML 选区创建笔记，也可新建空白笔记。"
-          }
-        }
-      }
-    },
-    "First Paper" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "添加第一篇论文"
-          }
-        }
-      }
-    },
-    "Freddie" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Freddie"
-          }
-        }
-      }
-    },
-    "HTML is not available for this paper." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "这篇论文没有可用的 HTML。"
-          }
-        }
-      }
-    },
-    "Inspector" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "检查器"
-          }
-        }
-      }
-    },
-    "Model Name" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "模型名称"
-          }
-        }
-      }
-    },
-    "Model Profile" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "模型配置"
-          }
-        }
-      }
-    },
-    "New Note" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "新建笔记"
-          }
-        }
-      }
-    },
-    "No paper selected" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "未选择论文"
-          }
-        }
-      }
-    },
-    "Open Anchor" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "打开锚点"
-          }
-        }
-      }
-    },
-    "PDF is not available for this paper." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "这篇论文没有可用的 PDF。"
-          }
-        }
-      }
-    },
-    "Preparing import..." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "正在准备导入..."
-          }
-        }
-      }
-    },
-    "Profile Name" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "配置名称"
-          }
-        }
-      }
-    },
-    "Provider Name" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "服务商名称"
-          }
-        }
-      }
-    },
-    "Save Model" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "保存模型"
-          }
-        }
-      }
-    },
-    "Save Provider" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "保存服务商"
-          }
-        }
-      }
-    },
-    "Select a paper from the library." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "请从资料库中选择一篇论文。"
-          }
-        }
-      }
-    },
-    "Target Language" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "目标语言"
-          }
-        }
-      }
-    },
-    "Untitled Note" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "未命名笔记"
           }
         }
       }
