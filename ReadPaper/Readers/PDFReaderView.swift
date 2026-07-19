@@ -1,6 +1,16 @@
 import PDFKit
 import SwiftUI
 
+#if os(macOS)
+import AppKit
+private typealias PlatformPDFColor = NSColor
+private typealias PlatformPDFViewRepresentable = NSViewRepresentable
+#else
+import UIKit
+private typealias PlatformPDFColor = UIColor
+private typealias PlatformPDFViewRepresentable = UIViewRepresentable
+#endif
+
 enum PDFDisplayAppearance: String, CaseIterable, Identifiable {
     case defaultMode = "default"
     case dark
@@ -17,21 +27,37 @@ enum PDFDisplayAppearance: String, CaseIterable, Identifiable {
 }
 
 extension PDFDisplayAppearance {
-    var pdfBackgroundColor: NSColor {
+    fileprivate var pdfBackgroundColor: PlatformPDFColor {
         switch self {
         case .defaultMode:
+            #if os(macOS)
             return .textBackgroundColor
+            #else
+            return .systemBackground
+            #endif
         case .dark:
             // Keep the PDFView background light so the difference blend can invert
             // both the page and the surrounding canvas into a dark reading surface.
+            #if os(macOS)
             return NSColor(calibratedWhite: 0.96, alpha: 1)
+            #else
+            return UIColor(white: 0.96, alpha: 1)
+            #endif
         case .paper:
+            #if os(macOS)
             return NSColor(calibratedRed: 0.96, green: 0.93, blue: 0.86, alpha: 1)
+            #else
+            return UIColor(red: 0.96, green: 0.93, blue: 0.86, alpha: 1)
+            #endif
         }
     }
 
     var surfaceColor: Color {
+        #if os(macOS)
         Color(nsColor: pdfBackgroundColor)
+        #else
+        Color(uiColor: pdfBackgroundColor)
+        #endif
     }
 }
 
@@ -90,7 +116,7 @@ struct PDFReadingPosition: Equatable {
     }
 }
 
-struct PDFReaderView: NSViewRepresentable {
+struct PDFReaderView: PlatformPDFViewRepresentable {
     var fileURL: URL?
     var attachmentID: UUID? = nil
     var displayAppearance: PDFDisplayAppearance = .defaultMode
@@ -98,7 +124,25 @@ struct PDFReaderView: NSViewRepresentable {
     var reloadToken: Int = 0
     var onNoteSelectionChanged: ((NoteSelectionContext?) -> Void)? = nil
 
+    #if os(macOS)
     func makeNSView(context: Context) -> PDFView {
+        makeView(context: context)
+    }
+
+    func updateNSView(_ view: PDFView, context: Context) {
+        updateView(view, context: context)
+    }
+    #else
+    func makeUIView(context: Context) -> PDFView {
+        makeView(context: context)
+    }
+
+    func updateUIView(_ view: PDFView, context: Context) {
+        updateView(view, context: context)
+    }
+    #endif
+
+    private func makeView(context: Context) -> PDFView {
         let view = PDFView()
         view.autoScales = true
         view.displayMode = .singlePageContinuous
@@ -109,7 +153,7 @@ struct PDFReaderView: NSViewRepresentable {
         return view
     }
 
-    func updateNSView(_ view: PDFView, context: Context) {
+    private func updateView(_ view: PDFView, context: Context) {
         applyDisplayAppearance(displayAppearance, to: view)
         context.coordinator.attachmentID = attachmentID
         context.coordinator.onNoteSelectionChanged = onNoteSelectionChanged

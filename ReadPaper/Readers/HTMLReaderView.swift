@@ -1,6 +1,15 @@
-import AppKit
 import SwiftUI
 import WebKit
+
+#if os(macOS)
+import AppKit
+private typealias PlatformHTMLColor = NSColor
+private typealias PlatformHTMLViewRepresentable = NSViewRepresentable
+#else
+import UIKit
+private typealias PlatformHTMLColor = UIColor
+private typealias PlatformHTMLViewRepresentable = UIViewRepresentable
+#endif
 
 enum HTMLReaderTypography {
     static let fontSizeUserDefaultsKey = "ReadPaper.Reader.HTMLFontSize"
@@ -13,14 +22,26 @@ enum HTMLReaderTypography {
 }
 
 private extension PDFDisplayAppearance {
-    var htmlReaderBackgroundColor: NSColor {
+    var htmlReaderBackgroundColor: PlatformHTMLColor {
         switch self {
         case .defaultMode:
+            #if os(macOS)
             return .textBackgroundColor
+            #else
+            return .systemBackground
+            #endif
         case .dark:
+            #if os(macOS)
             return NSColor(calibratedWhite: 0.09, alpha: 1)
+            #else
+            return UIColor(white: 0.09, alpha: 1)
+            #endif
         case .paper:
+            #if os(macOS)
             return NSColor(calibratedRed: 0.95, green: 0.90, blue: 0.80, alpha: 1)
+            #else
+            return UIColor(red: 0.95, green: 0.90, blue: 0.80, alpha: 1)
+            #endif
         }
     }
 
@@ -182,7 +203,7 @@ private extension PDFDisplayAppearance {
     }
 }
 
-struct HTMLReaderView: NSViewRepresentable {
+struct HTMLReaderView: PlatformHTMLViewRepresentable {
     var fileURL: URL
     var attachmentID: UUID? = nil
     var displayMode: TranslationDisplayMode
@@ -195,7 +216,25 @@ struct HTMLReaderView: NSViewRepresentable {
     var noteNavigationRequest: NoteNavigationRequest? = nil
     var onNoteSelectionChanged: ((NoteSelectionContext?) -> Void)? = nil
 
+    #if os(macOS)
     func makeNSView(context: Context) -> WKWebView {
+        makeView(context: context)
+    }
+
+    func updateNSView(_ view: WKWebView, context: Context) {
+        updateView(view, context: context)
+    }
+    #else
+    func makeUIView(context: Context) -> WKWebView {
+        makeView(context: context)
+    }
+
+    func updateUIView(_ view: WKWebView, context: Context) {
+        updateView(view, context: context)
+    }
+    #endif
+
+    private func makeView(context: Context) -> WKWebView {
         let configuration = WKWebViewConfiguration()
         configuration.preferences.javaScriptCanOpenWindowsAutomatically = false
         configuration.userContentController.add(context.coordinator, name: Coordinator.scrollMessageHandlerName)
@@ -220,7 +259,7 @@ struct HTMLReaderView: NSViewRepresentable {
         return view
     }
 
-    func updateNSView(_ view: WKWebView, context: Context) {
+    private func updateView(_ view: WKWebView, context: Context) {
         context.coordinator.attachmentID = attachmentID
         context.coordinator.displayMode = displayMode
         context.coordinator.displayAppearance = displayAppearance
@@ -269,8 +308,14 @@ struct HTMLReaderView: NSViewRepresentable {
     }
 
     private func applyHostDisplayAppearance(_ appearance: PDFDisplayAppearance, to webView: WKWebView) {
+        #if os(macOS)
         webView.wantsLayer = true
         webView.layer?.backgroundColor = appearance.htmlReaderBackgroundColor.cgColor
+        #else
+        webView.isOpaque = true
+        webView.backgroundColor = appearance.htmlReaderBackgroundColor
+        webView.scrollView.backgroundColor = appearance.htmlReaderBackgroundColor
+        #endif
     }
 
     final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
@@ -844,7 +889,11 @@ struct HTMLReaderView: NSViewRepresentable {
                 decisionHandler(.allow)
                 return
             }
+            #if os(macOS)
             NSWorkspace.shared.open(url)
+            #else
+            UIApplication.shared.open(url)
+            #endif
             decisionHandler(.cancel)
         }
 

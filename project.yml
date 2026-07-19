@@ -89,6 +89,42 @@ targets:
         CODE_SIGN_STYLE: Automatic
         CURRENT_PROJECT_VERSION: 28
         MARKETING_VERSION: 0.3.8
+  ReadPaperiPad:
+    type: application
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: ReadPaper
+        excludes:
+          - ReadPaperApp.swift
+          - Info.plist
+          - Readers/DualPDFReaderView.swift
+          - Services/BabelDocRunner.swift
+          - Services/BabelDocToolManager.swift
+          - Services/PaperDigestExportPolicy.swift
+          - Services/ProcessRunner.swift
+          - Views
+      - path: ReadPaperiPad
+    dependencies:
+      - package: SwiftSoup
+      - package: SwiftOpenAI
+      - package: Readability
+      # Phase 1 intentionally omits BabelDocKit. The iPad PDF translation path
+      # should link the local package in-process once it provides an iOS/static runtime.
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.yiyan.ReadPaper.iPad
+        PRODUCT_NAME: Freddie
+        PRODUCT_MODULE_NAME: ReadPaperiPad
+        DEVELOPMENT_LANGUAGE: en
+        INFOPLIST_FILE: ReadPaperiPad/Info.plist
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        SWIFT_VERSION: 6.0
+        ENABLE_TESTABILITY: YES
+        CODE_SIGN_STYLE: Automatic
+        CURRENT_PROJECT_VERSION: 28
+        MARKETING_VERSION: 0.3.8
+        TARGETED_DEVICE_FAMILY: 2
   ReadPaperTests:
     type: bundle.unit-test
     platform: macOS
@@ -123,3 +159,13 @@ schemes:
     profile:
       config: Release
       executable: ReadPaper
+  ReadPaperiPad:
+    build:
+      targets:
+        ReadPaperiPad: all
+    run:
+      config: Debug
+      executable: ReadPaperiPad
+    profile:
+      config: Release
+      executable: ReadPaperiPad

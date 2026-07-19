@@ -12,3 +12,5 @@ paper.html
 # Xcode per-user data
 *.xcodeproj/xcuserdata/
 *.xcworkspace/xcuserdata/
+.DerivedData-iPad/
+.DerivedData-Mac/

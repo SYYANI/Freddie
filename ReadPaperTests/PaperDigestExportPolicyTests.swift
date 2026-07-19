@@ -3,8 +3,12 @@ import XCTest
 
 final class PaperDigestExportPolicyTests: XCTestCase {
     private var tempDirectory: URL!
+    private let englishBundle = AppLocalization.resolveBundle(for: "en")
+    private var originalLanguageOverride: String?
 
     override func setUpWithError() throws {
+        originalLanguageOverride = AppLocalization.currentLanguageOverride()
+        AppLocalization.setLanguageOverride("en")
         tempDirectory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: tempDirectory, withIntermediateDirectories: true)
@@ -15,6 +19,8 @@ final class PaperDigestExportPolicyTests: XCTestCase {
             try? FileManager.default.removeItem(at: tempDirectory)
         }
         tempDirectory = nil
+        AppLocalization.setLanguageOverride(originalLanguageOverride)
+        originalLanguageOverride = nil
     }
 
     func testMarkdownIncludesPaperMetadataAbstractAndNotes() throws {
@@ -49,7 +55,7 @@ final class PaperDigestExportPolicyTests: XCTestCase {
 
         let markdown = PaperDigestExportPolicy.makeMarkdown(
             content: try XCTUnwrap(content),
-            bundle: Bundle(for: Self.self)
+            bundle: englishBundle
         )
 
         XCTAssertTrue(markdown.contains("# A Test Paper"))
@@ -84,7 +90,7 @@ final class PaperDigestExportPolicyTests: XCTestCase {
 
         let markdown = PaperDigestExportPolicy.makeMarkdown(
             content: content,
-            bundle: Bundle(for: Self.self),
+            bundle: englishBundle,
             template: """
             title={{title}}
             slug={{slug}}
@@ -161,11 +167,11 @@ final class PaperDigestExportPolicyTests: XCTestCase {
 
         let defaultMarkdown = PaperDigestExportPolicy.makeMarkdown(
             content: content,
-            bundle: Bundle(for: Self.self)
+            bundle: englishBundle
         )
         let fallbackMarkdown = PaperDigestExportPolicy.makeMarkdown(
             content: content,
-            bundle: Bundle(for: Self.self),
+            bundle: englishBundle,
             template: " \n\t "
         )
 

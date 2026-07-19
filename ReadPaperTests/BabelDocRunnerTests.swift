@@ -3,6 +3,20 @@ import BabelDocKit
 @testable import ReadPaper
 
 final class BabelDocRunnerTests: XCTestCase {
+    private var originalLanguageOverride: String?
+
+    override func setUp() {
+        super.setUp()
+        originalLanguageOverride = AppLocalization.currentLanguageOverride()
+        AppLocalization.setLanguageOverride("en")
+    }
+
+    override func tearDown() {
+        AppLocalization.setLanguageOverride(originalLanguageOverride)
+        originalLanguageOverride = nil
+        super.tearDown()
+    }
+
     func testNativeToolManagerValidatesRuntimeAndKeepsAPIKeyInEnvironment() throws {
         let fm = FileManager.default
         let tempRoot = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
