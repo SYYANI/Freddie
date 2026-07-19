@@ -43,6 +43,13 @@ final class PaperAttachment {
     }
 
     var fileURL: URL {
-        URL(fileURLWithPath: filePath)
+        resolvedFileURL()
+    }
+
+    func resolvedFileURL(fileStore: PaperFileStore = PaperFileStore()) -> URL {
+        fileStore.resolvedManagedURL(
+            forPersistedPath: filePath,
+            paperID: paperID
+        )
     }
 }

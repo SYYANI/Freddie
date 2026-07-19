@@ -82,6 +82,45 @@ struct PaperFileStore {
         try fileManager.removeItem(at: target)
     }
 
+    /// Resolves a path saved inside a previous app container against the current
+    /// Application Support directory. iOS may change the app container UUID when
+    /// Xcode installs a new build, so absolute sandbox paths must not be treated as
+    /// stable identifiers.
+    func resolvedManagedURL(
+        forPersistedPath path: String,
+        paperID: UUID,
+        isDirectory: Bool = false
+    ) -> URL {
+        let persistedURL = URL(fileURLWithPath: path, isDirectory: isDirectory)
+        guard let relativeComponents = managedRelativeComponents(
+            in: persistedURL,
+            paperID: paperID
+        ), let currentLibraryDirectory = try? libraryDirectory else {
+            return persistedURL
+        }
+
+        let resolvedURL = relativeComponents.reduce(currentLibraryDirectory) { partialURL, component in
+            partialURL.appendingPathComponent(component)
+        }
+        return URL(fileURLWithPath: resolvedURL.path, isDirectory: isDirectory)
+    }
+
+    private func managedRelativeComponents(in url: URL, paperID: UUID) -> ArraySlice<String>? {
+        let components = url.standardizedFileURL.pathComponents
+        let paperIDComponent = paperID.uuidString.lowercased()
+
+        guard let paperIndex = components.indices.last(where: { index in
+            components[index].lowercased() == paperIDComponent &&
+                index >= 2 &&
+                components[index - 1] == "Library" &&
+                components[index - 2] == "ReadPaper"
+        }) else {
+            return nil
+        }
+
+        return components[paperIndex...]
+    }
+
     func ensureDirectory(_ url: URL) throws {
         if !fileManager.fileExists(atPath: url.path) {
             try fileManager.createDirectory(at: url, withIntermediateDirectories: true)

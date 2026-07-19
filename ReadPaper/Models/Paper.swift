@@ -75,8 +75,16 @@ final class Paper {
     }
 
     var localDirectoryURL: URL? {
+        resolvedLocalDirectoryURL()
+    }
+
+    func resolvedLocalDirectoryURL(fileStore: PaperFileStore = PaperFileStore()) -> URL? {
         guard !localDirectoryPath.isEmpty else { return nil }
-        return URL(fileURLWithPath: localDirectoryPath, isDirectory: true)
+        return fileStore.resolvedManagedURL(
+            forPersistedPath: localDirectoryPath,
+            paperID: id,
+            isDirectory: true
+        )
     }
 
     var displayAuthors: String {
