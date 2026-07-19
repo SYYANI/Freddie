@@ -43,7 +43,7 @@ struct IPadInspectorPaneView: View {
                 }
             }
         }
-        .background(Color(uiColor: .secondarySystemBackground))
+        .background(Color(uiColor: .systemBackground))
         .confirmationDialog(
             String(localized: "Delete Note?", bundle: bundle),
             isPresented: Binding(

@@ -4,6 +4,13 @@ import SwiftUI
 import UIKit
 
 struct IPadReaderPaneView: View {
+    private enum PrimaryReaderMode: String, Identifiable {
+        case html
+        case pdf
+
+        var id: String { rawValue }
+    }
+
     private enum PDFTranslationScope {
         case firstPages(Int)
         case allPages
@@ -28,9 +35,10 @@ struct IPadReaderPaneView: View {
     let settings: AppSettings?
     @Binding var noteSelectionContext: NoteSelectionContext?
     @Binding var noteNavigationRequest: NoteNavigationRequest?
-    let onShowInspector: () -> Void
+    let onToggleInspector: () -> Void
 
     @State private var readerMode: ReaderMode = .pdf
+    @State private var lastPDFReaderMode: ReaderMode = .pdf
     @State private var displayMode: TranslationDisplayMode = .bilingual
     @State private var pdfPageIndex = 0
     @State private var translatedPageIndex = 0
@@ -82,6 +90,13 @@ struct IPadReaderPaneView: View {
         return lastPage >= total
     }
 
+    private var isNearTranslationEdge: Bool {
+        guard readerMode != .html,
+              isPartialPDFTranslation,
+              let lastPage = translatedPDFAttachment?.translatedLastPage else { return false }
+        return pdfPageIndex >= max(0, lastPage - 2)
+    }
+
     private var pdfTranslationBatchSize: Int {
         PDFTranslationBatchPreference.normalized(pdfTranslationBatchSizeRawValue)
     }
@@ -90,12 +105,50 @@ struct IPadReaderPaneView: View {
         PDFDisplayAppearance.resolve(rawValue: appearanceRawValue)
     }
 
+    private var primaryReaderMode: Binding<PrimaryReaderMode> {
+        Binding(
+            get: { readerMode == .html ? .html : .pdf },
+            set: { newValue in
+                switch newValue {
+                case .html:
+                    if readerMode != .html {
+                        lastPDFReaderMode = normalizedPDFReaderMode(readerMode)
+                    }
+                    readerMode = .html
+                case .pdf:
+                    readerMode = normalizedPDFReaderMode(lastPDFReaderMode)
+                }
+            }
+        )
+    }
+
+    private var pdfReaderModeSelection: Binding<ReaderMode> {
+        Binding(
+            get: { normalizedPDFReaderMode(readerMode == .html ? lastPDFReaderMode : readerMode) },
+            set: { newValue in
+                let normalizedMode = normalizedPDFReaderMode(newValue)
+                lastPDFReaderMode = normalizedMode
+                readerMode = normalizedMode
+            }
+        )
+    }
+
+    private var shouldShowReaderHeader: Bool {
+        isTranslating || translationStatus != nil || translationProgress != nil || pdfTranslationProgress != nil
+    }
+
     var body: some View {
         VStack(spacing: 0) {
-            if let paper {
-                readerHeader(paper)
-                Divider()
+            if paper != nil {
+                if shouldShowReaderHeader {
+                    readerHeader
+                    Divider()
+                }
                 readerSurface
+                if isNearTranslationEdge && !isTranslating {
+                    Divider()
+                    translateMoreBanner
+                }
             } else {
                 ContentUnavailableView {
                     Label {
@@ -112,16 +165,7 @@ struct IPadReaderPaneView: View {
         .navigationTitle(paper?.title ?? String(localized: "Reader", bundle: bundle))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItemGroup(placement: .primaryAction) {
-                Button(action: copySourceLink) {
-                    Label(String(localized: "Copy Link", bundle: bundle), systemImage: "link")
-                }
-                .disabled(sourceURL == nil)
-
-                Button(action: onShowInspector) {
-                    Label(String(localized: "Inspector", bundle: bundle), systemImage: "sidebar.right")
-                }
-            }
+            readerToolbar
         }
         .onAppear { restoreReadingState() }
         .onChange(of: paper?.id) { _, _ in
@@ -134,7 +178,12 @@ struct IPadReaderPaneView: View {
             normalizeReaderMode()
             syncTranslatedPageFromOriginal(pdfPageIndex)
         }
-        .onChange(of: readerMode) { _, _ in persistReadingState() }
+        .onChange(of: readerMode) { _, newValue in
+            if newValue != .html {
+                lastPDFReaderMode = normalizedPDFReaderMode(newValue)
+            }
+            persistReadingState()
+        }
         .onChange(of: pdfPageIndex) { _, newValue in
             syncTranslatedPageFromOriginal(newValue)
             persistReadingState()
@@ -167,78 +216,74 @@ struct IPadReaderPaneView: View {
         }
     }
 
-    private func readerHeader(_ paper: Paper) -> some View {
+    @ToolbarContentBuilder
+    private var readerToolbar: some ToolbarContent {
+        if #available(iOS 26.0, *) {
+            ToolbarItem(placement: .primaryAction) {
+                primaryReaderModePicker
+            }
+            .sharedBackgroundVisibility(.hidden)
+
+            ToolbarItem(placement: .primaryAction) {
+                if readerMode == .html {
+                    htmlDisplayPicker
+                } else {
+                    pdfDisplayPicker
+                }
+            }
+            .sharedBackgroundVisibility(.hidden)
+        } else {
+            ToolbarItem(placement: .primaryAction) {
+                primaryReaderModePicker
+            }
+
+            ToolbarItem(placement: .primaryAction) {
+                if readerMode == .html {
+                    htmlDisplayPicker
+                } else {
+                    pdfDisplayPicker
+                }
+            }
+        }
+
+        ToolbarItemGroup(placement: .primaryAction) {
+            translationMenu
+
+            Button(action: copySourceLink) {
+                Label(String(localized: "Copy Link", bundle: bundle), systemImage: "link")
+            }
+            .disabled(sourceURL == nil)
+
+            if isTranslating {
+                Button {
+                    translationTask?.cancel()
+                } label: {
+                    Label(String(localized: "Cancel", bundle: bundle), systemImage: "xmark.circle")
+                }
+            }
+        }
+
+        if #available(iOS 26.0, *) {
+            ToolbarSpacer(.fixed, placement: .primaryAction)
+        }
+
+        ToolbarItem(placement: .primaryAction) {
+            Button(action: onToggleInspector) {
+                Label(String(localized: "Inspector", bundle: bundle), systemImage: "sidebar.right")
+            }
+        }
+    }
+
+    private var readerHeader: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .firstTextBaseline) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(paper.title)
-                        .font(.headline)
-                        .lineLimit(2)
-                    Text(paper.displayAuthors)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-                Spacer(minLength: 12)
-                modePicker
-            }
-
-            if readerMode == .html {
-                HStack(spacing: 12) {
-                    Picker(String(localized: "Display", bundle: bundle), selection: $displayMode) {
-                        Text("Original", bundle: bundle).tag(TranslationDisplayMode.original)
-                        Text("Bilingual", bundle: bundle).tag(TranslationDisplayMode.bilingual)
-                        Text("Translated", bundle: bundle).tag(TranslationDisplayMode.translated)
-                    }
-                    .pickerStyle(.segmented)
-                    .frame(maxWidth: 360)
-
-                    Spacer()
-
-                    if isTranslating {
-                        Button(String(localized: "Cancel", bundle: bundle), role: .cancel) {
-                            translationTask?.cancel()
-                        }
-                    } else {
-                        Button {
-                            translateHTML()
-                        } label: {
-                            Label(String(localized: "Translate HTML", bundle: bundle), systemImage: "character.book.closed")
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .disabled(htmlAttachment == nil || settings == nil)
-                    }
-                }
-            } else if pdfAttachment != nil {
-                HStack(spacing: 12) {
-                    Spacer()
-                    if isTranslating {
-                        Button(String(localized: "Cancel", bundle: bundle), role: .cancel) {
-                            translationTask?.cancel()
-                        }
-                    } else {
-                        Button {
-                            translatePDF()
-                        } label: {
-                            Label(
-                                isPartialPDFTranslation
-                                    ? String(localized: "Translate More PDF Pages", bundle: bundle)
-                                    : String(localized: "Translate PDF", bundle: bundle),
-                                systemImage: "character.book.closed"
-                            )
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .disabled(settings == nil || isFullPDFTranslationComplete)
-                    }
-                }
-            }
-
             if let progress = pdfTranslationProgress, progress.total > 0 {
                 VStack(alignment: .leading, spacing: 4) {
                     ProgressView(value: progress.completed, total: progress.total)
-                    Text(progress.summary)
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(.secondary)
+                    if progress.summary != translationStatus {
+                        Text(progress.summary)
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                    }
                 }
             } else if let progress = translationProgress, progress.total > 0 {
                 VStack(alignment: .leading, spacing: 4) {
@@ -250,32 +295,96 @@ struct IPadReaderPaneView: View {
             }
 
             if let translationStatus {
-                Text(translationStatus)
-                    .font(.caption)
-                    .foregroundStyle(AppLocalization.isErrorMessage(translationStatus, bundle: bundle) ? .red : .secondary)
+                HStack(spacing: 8) {
+                    Text(translationStatus)
+                        .font(.caption)
+                        .foregroundStyle(AppLocalization.isErrorMessage(translationStatus, bundle: bundle) ? .red : .secondary)
+
+                    Spacer(minLength: 0)
+
+                    if !isTranslating {
+                        Button {
+                            dismissTranslationStatus()
+                        } label: {
+                            Image(systemName: "xmark")
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(.secondary)
+                        .accessibilityLabel(Text("Close", bundle: bundle))
+                    }
+                }
             }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
     }
 
-    private var modePicker: some View {
-        Picker(String(localized: "Reader", bundle: bundle), selection: $readerMode) {
-            if htmlAttachment != nil {
-                Text("HTML", bundle: bundle).tag(ReaderMode.html)
-            }
-            if pdfAttachment != nil {
-                Text("Original", bundle: bundle).tag(ReaderMode.pdf)
-            }
-            if pdfAttachment != nil, translatedPDFAttachment != nil {
-                Text("Bilingual", bundle: bundle).tag(ReaderMode.bilingualPDF)
-            }
-            if translatedPDFAttachment != nil {
-                Text("Translated", bundle: bundle).tag(ReaderMode.translatedPDF)
-            }
+    private var primaryReaderModePicker: some View {
+        Picker(String(localized: "Reader", bundle: bundle), selection: primaryReaderMode) {
+            Text("HTML", bundle: bundle)
+                .tag(PrimaryReaderMode.html)
+            Text("PDF", bundle: bundle)
+                .tag(PrimaryReaderMode.pdf)
         }
         .pickerStyle(.segmented)
-        .fixedSize()
+        .frame(width: 140)
+        .labelsHidden()
+    }
+
+    private var htmlDisplayPicker: some View {
+        Picker(String(localized: "Display", bundle: bundle), selection: $displayMode) {
+            Text("Original", bundle: bundle)
+                .tag(TranslationDisplayMode.original)
+            Text("Bilingual", bundle: bundle)
+                .tag(TranslationDisplayMode.bilingual)
+            Text("Translated", bundle: bundle)
+                .tag(TranslationDisplayMode.translated)
+        }
+        .pickerStyle(.segmented)
+        .frame(width: 270)
+        .labelsHidden()
+    }
+
+    private var pdfDisplayPicker: some View {
+        Picker(String(localized: "PDF Display", bundle: bundle), selection: pdfReaderModeSelection) {
+            Text("Original", bundle: bundle)
+                .tag(ReaderMode.pdf)
+            Text("Bilingual", bundle: bundle)
+                .tag(ReaderMode.bilingualPDF)
+            Text("Translated", bundle: bundle)
+                .tag(ReaderMode.translatedPDF)
+        }
+        .pickerStyle(.segmented)
+        .frame(width: 270)
+        .labelsHidden()
+    }
+
+    private var translationMenu: some View {
+        Menu {
+            Button {
+                translateHTML()
+            } label: {
+                Label(String(localized: "Translate HTML", bundle: bundle), systemImage: "globe")
+            }
+            .disabled(htmlAttachment == nil || settings == nil)
+
+            Button {
+                translatePDF()
+            } label: {
+                Label(
+                    isPartialPDFTranslation
+                        ? String(localized: "Translate More PDF Pages", bundle: bundle)
+                        : String(localized: "Translate PDF", bundle: bundle),
+                    systemImage: "doc"
+                )
+            }
+            .disabled(pdfAttachment == nil || settings == nil || isFullPDFTranslationComplete)
+        } label: {
+            Label(String(localized: "Translate", bundle: bundle), systemImage: "translate")
+                .labelStyle(.iconOnly)
+        }
+        .menuIndicator(.hidden)
+        .disabled(isTranslating || (htmlAttachment == nil && pdfAttachment == nil))
     }
 
     @ViewBuilder
@@ -537,14 +646,15 @@ struct IPadReaderPaneView: View {
         }
     }
 
-    private func extendPDFTranslation() {
+    private func extendPDFTranslation(to requestedLastPage: Int? = nil) {
         guard let paper, let pdfAttachment, let settings,
               let existingAttachment = translatedPDFAttachment,
               let currentLastPage = existingAttachment.translatedLastPage,
               let totalPages = originalPDFPageCount,
               currentLastPage < totalPages else { return }
 
-        let nextLastPage = min(currentLastPage + pdfTranslationBatchSize, totalPages)
+        let nextLastPage = min(requestedLastPage ?? currentLastPage + pdfTranslationBatchSize, totalPages)
+        guard nextLastPage > currentLastPage else { return }
         let pageRange = (currentLastPage + 1)...nextLastPage
         beginPDFTranslation()
         translationTask = Task { @MainActor in
@@ -611,6 +721,74 @@ struct IPadReaderPaneView: View {
         translationTask = nil
     }
 
+    private func dismissTranslationStatus() {
+        guard !isTranslating else { return }
+        translationStatus = nil
+        translationProgress = nil
+        pdfTranslationProgress = nil
+    }
+
+    private var nextPDFTranslationBatchLabel: String {
+        guard let lastPage = translatedPDFAttachment?.translatedLastPage,
+              let totalPages = originalPDFPageCount else {
+            return String(localized: "Translate More PDF Pages", bundle: bundle)
+        }
+        let nextLastPage = min(lastPage + pdfTranslationBatchSize, totalPages)
+        return AppLocalization.format(
+            "Translate pages %@–%@",
+            bundle: bundle,
+            "\(lastPage + 1)",
+            "\(nextLastPage)"
+        )
+    }
+
+    private var shouldOfferTranslateAllPDFPages: Bool {
+        guard let lastPage = translatedPDFAttachment?.translatedLastPage,
+              let totalPages = originalPDFPageCount else { return false }
+        return lastPage + pdfTranslationBatchSize < totalPages
+    }
+
+    private var translateMoreBanner: some View {
+        let lastPage = translatedPDFAttachment?.translatedLastPage ?? 0
+        let totalPages = originalPDFPageCount ?? 0
+
+        return HStack(spacing: 8) {
+            Text(AppLocalization.format(
+                "Translated pages 1–%@ of %@.",
+                bundle: bundle,
+                "\(lastPage)",
+                "\(totalPages)"
+            ))
+            .font(.caption)
+            .foregroundStyle(.secondary)
+
+            Spacer(minLength: 0)
+
+            Button {
+                extendPDFTranslation()
+            } label: {
+                Text(nextPDFTranslationBatchLabel)
+                    .font(.caption)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+
+            if shouldOfferTranslateAllPDFPages {
+                Button {
+                    extendPDFTranslation(to: totalPages)
+                } label: {
+                    Text("Translate All", bundle: bundle)
+                        .font(.caption)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(Color(uiColor: .systemBackground))
+    }
+
     private func restoreReadingState() {
         guard let paper else { return }
         let state = try? ReadingStateStore().state(for: paper.id, in: modelContext)
@@ -624,6 +802,18 @@ struct IPadReaderPaneView: View {
         )
         syncTranslatedPageFromOriginal(pdfPageIndex)
         normalizeReaderMode()
+        if readerMode != .html {
+            lastPDFReaderMode = normalizedPDFReaderMode(readerMode)
+        }
+    }
+
+    private func normalizedPDFReaderMode(_ mode: ReaderMode) -> ReaderMode {
+        switch mode {
+        case .html:
+            return .pdf
+        case .pdf, .bilingualPDF, .translatedPDF:
+            return mode
+        }
     }
 
     private func normalizeReaderMode() {

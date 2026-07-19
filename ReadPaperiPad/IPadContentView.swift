@@ -38,16 +38,16 @@ struct IPadContentView: View {
     private var settings: AppSettings? { settingsRows.first }
 
     var body: some View {
-        GeometryReader { proxy in
-            let usesThreeColumns = proxy.size.width >= 1_000 && proxy.size.width > proxy.size.height
-
-            Group {
-                if usesThreeColumns {
-                    regularNavigation
-                } else {
-                    compactNavigation
-                }
-            }
+        NavigationSplitView(preferredCompactColumn: $preferredCompactColumn) {
+            sidebar
+                .navigationSplitViewColumnWidth(min: 220, ideal: 270, max: 340)
+        } detail: {
+            reader
+        }
+        .navigationSplitViewStyle(.balanced)
+        .inspector(isPresented: $isShowingInspector) {
+            inspector
+                .inspectorColumnWidth(min: 280, ideal: 340, max: 440)
         }
         .sheet(isPresented: $isAddingPaper) {
             IPadAddPaperView(
@@ -58,19 +58,6 @@ struct IPadContentView: View {
         .sheet(isPresented: $isShowingSettings) {
             NavigationStack {
                 IPadSettingsView()
-            }
-        }
-        .sheet(isPresented: $isShowingInspector) {
-            NavigationStack {
-                inspector
-                    .navigationTitle(String(localized: "Inspector", bundle: bundle))
-                    .toolbar {
-                        ToolbarItem(placement: .confirmationAction) {
-                            Button(String(localized: "Close", bundle: bundle)) {
-                                isShowingInspector = false
-                            }
-                        }
-                    }
             }
         }
         .confirmationDialog(
@@ -112,29 +99,6 @@ struct IPadContentView: View {
         }
     }
 
-    private var regularNavigation: some View {
-        NavigationSplitView {
-            sidebar
-                .navigationSplitViewColumnWidth(min: 220, ideal: 270, max: 340)
-        } content: {
-            reader
-                .navigationSplitViewColumnWidth(min: 480, ideal: 720)
-        } detail: {
-            inspector
-                .navigationSplitViewColumnWidth(min: 280, ideal: 340, max: 440)
-        }
-        .navigationSplitViewStyle(.balanced)
-    }
-
-    private var compactNavigation: some View {
-        NavigationSplitView(preferredCompactColumn: $preferredCompactColumn) {
-            sidebar
-        } detail: {
-            reader
-        }
-        .navigationSplitViewStyle(.balanced)
-    }
-
     private var sidebar: some View {
         IPadLibrarySidebar(
             papers: papers,
@@ -152,7 +116,7 @@ struct IPadContentView: View {
             settings: settings,
             noteSelectionContext: $noteSelectionContext,
             noteNavigationRequest: $noteNavigationRequest,
-            onShowInspector: { isShowingInspector = true }
+            onToggleInspector: { isShowingInspector.toggle() }
         )
     }
 
@@ -238,6 +202,8 @@ private struct IPadLibrarySidebar: View {
                                 .foregroundStyle(.secondary)
                         }
                     }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 6)
                     .tag(paper.id)
                     .contextMenu {
                         Button(role: .destructive) { onDelete(paper) } label: {
@@ -247,7 +213,6 @@ private struct IPadLibrarySidebar: View {
                 }
             }
         }
-        .navigationTitle(String(localized: "Freddie", bundle: bundle))
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
                 Button(action: onSettings) {
