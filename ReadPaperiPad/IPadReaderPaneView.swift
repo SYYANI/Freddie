@@ -449,7 +449,14 @@ struct IPadReaderPaneView: View {
                     }
                 }
             } else {
-                unavailable(String(localized: "Translated PDF is not available for this paper.", bundle: bundle))
+                unavailable(
+                    String(localized: "No translated PDF", bundle: bundle),
+                    systemImage: "character.book.closed",
+                    description: Text(
+                        "Run PDF translation first to compare the original and translated versions side by side.",
+                        bundle: bundle
+                    )
+                )
             }
         case .translatedPDF:
             if let translatedPDFAttachment {
@@ -464,7 +471,14 @@ struct IPadReaderPaneView: View {
                     )
                 }
             } else {
-                unavailable(String(localized: "Translated PDF is not available for this paper.", bundle: bundle))
+                unavailable(
+                    String(localized: "No translated PDF", bundle: bundle),
+                    systemImage: "doc.richtext",
+                    description: Text(
+                        "Run PDF translation first to read the translated PDF on its own.",
+                        bundle: bundle
+                    )
+                )
             }
         }
     }
@@ -509,6 +523,23 @@ struct IPadReaderPaneView: View {
         ContentUnavailableView {
             Label(message, systemImage: "doc.questionmark")
         }
+    }
+
+    private func unavailable(
+        _ title: String,
+        systemImage: String,
+        description: Text
+    ) -> some View {
+        ContentUnavailableView {
+            Label {
+                Text(verbatim: title)
+            } icon: {
+                Image(systemName: systemImage)
+            }
+        } description: {
+            description
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
     }
 
     private var sourceURL: URL? {
@@ -680,7 +711,11 @@ struct IPadReaderPaneView: View {
                 let mergedURL = outputDirectory.appendingPathComponent(
                     "merged-\(nextLastPage)-\(UUID().uuidString.prefix(8)).pdf"
                 )
-                _ = try PDFMerger.merge(existing: oldURL, increment: increment, output: mergedURL)
+                _ = try await PDFMerger.mergeInBackground(
+                    existing: oldURL,
+                    increment: increment,
+                    output: mergedURL
+                )
                 try? FileManager.default.removeItem(at: increment)
                 existingAttachment.filePath = mergedURL.path
                 existingAttachment.filename = mergedURL.lastPathComponent

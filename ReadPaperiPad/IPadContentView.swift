@@ -211,6 +211,7 @@ private struct IPadLibrarySidebar: View {
                         }
                     }
                 }
+                .listStyle(.sidebar)
             }
         }
         .toolbar {

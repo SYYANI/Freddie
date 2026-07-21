@@ -94,6 +94,26 @@ final class PDFMergerTests: XCTestCase {
         XCTAssertEqual(mergedDoc?.pageCount, 7)
     }
 
+    func testMergeInBackgroundWithURLParameters() async throws {
+        let existingDoc = createPDFDocument(withPageCount: 4)
+        let existingURL = tempDirectory.appendingPathComponent("existing-background.pdf")
+        try savePDFDocument(existingDoc, to: existingURL)
+
+        let incrementDoc = createPDFDocument(withPageCount: 3)
+        let incrementURL = tempDirectory.appendingPathComponent("increment-background.pdf")
+        try savePDFDocument(incrementDoc, to: incrementURL)
+
+        let outputURL = tempDirectory.appendingPathComponent("merged-background.pdf")
+        let resultURL = try await PDFMerger.mergeInBackground(
+            existing: existingURL,
+            increment: incrementURL,
+            output: outputURL
+        )
+
+        XCTAssertEqual(resultURL, outputURL)
+        XCTAssertEqual(PDFDocument(url: resultURL)?.pageCount, 7)
+    }
+
     func testMergeWithEmptyExistingDocument() throws {
         // Create empty existing PDF
         let existingDoc = PDFDocument()

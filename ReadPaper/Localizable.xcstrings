@@ -3231,7 +3231,6 @@
       }
     },
     "Run PDF translation first to read the translated PDF on its own." : {
-      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {

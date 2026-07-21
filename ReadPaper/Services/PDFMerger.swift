@@ -31,6 +31,20 @@ struct PDFMerger {
         }
         return try merge(existing: existingDoc, increment: increment, output: output)
     }
+
+    static func mergeInBackground(existing: URL, increment: URL, output: URL) async throws -> URL {
+        let worker = Task.detached(priority: .userInitiated) {
+            try Task.checkCancellation()
+            let result = try merge(existing: existing, increment: increment, output: output)
+            try Task.checkCancellation()
+            return result
+        }
+        return try await withTaskCancellationHandler {
+            try await worker.value
+        } onCancel: {
+            worker.cancel()
+        }
+    }
 }
 
 enum PDFMergerError: Error, LocalizedError {

@@ -52,27 +52,41 @@ struct InProcessBabelDocRunner {
             requestsPerSecond: Double(max(preferences.babelDocQPS, 1))
         )
 
-        do {
-            _ = try await BabelDoc.translate(
-                request: request,
-                runtime: runtime,
-                openAI: configuration,
-                onProgress: { progress in
-                    onProgressUpdate?(Self.progressUpdate(progress))
+        let worker = Task.detached(priority: .userInitiated) {
+            do {
+                _ = try await BabelDoc.translate(
+                    request: request,
+                    runtime: runtime,
+                    openAI: configuration,
+                    onProgress: { progress in
+                        onProgressUpdate?(Self.progressUpdate(progress))
+                    }
+                )
+                try Task.checkCancellation()
+                guard FileManager.default.fileExists(atPath: outputPDF.path) else {
+                    throw InProcessBabelDocError.noTranslatedPDFProduced
                 }
-            )
-            try Task.checkCancellation()
-            guard fileManager.fileExists(atPath: outputPDF.path) else {
-                throw InProcessBabelDocError.noTranslatedPDFProduced
+                return outputPDF
+            } catch {
+                try? FileManager.default.removeItem(at: outputPDF)
+                throw error
             }
-            return outputPDF
-        } catch {
-            try? fileManager.removeItem(at: outputPDF)
-            throw error
+        }
+        return try await withTaskCancellationHandler {
+            try await worker.value
+        } onCancel: {
+            worker.cancel()
         }
     }
 
     func embeddedRuntimeAssets() throws -> BabelDocEmbeddedRuntimeAssets {
+        try Self.embeddedRuntimeAssets(bundle: bundle, fileManager: fileManager)
+    }
+
+    private static func embeddedRuntimeAssets(
+        bundle: Bundle,
+        fileManager: FileManager
+    ) throws -> BabelDocEmbeddedRuntimeAssets {
         guard let root = bundle.resourceURL?.appendingPathComponent(
             "BabelDOCEmbedded",
             isDirectory: true
