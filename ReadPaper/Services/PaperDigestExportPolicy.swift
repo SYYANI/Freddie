@@ -456,8 +456,13 @@ struct PaperDigestExportConfiguration {
     }
 
     func saveExportDirectory(_ url: URL) throws {
+        #if os(macOS)
+        let options: URL.BookmarkCreationOptions = [.withSecurityScope]
+        #else
+        let options: URL.BookmarkCreationOptions = []
+        #endif
         let bookmark = try url.bookmarkData(
-            options: [.withSecurityScope],
+            options: options,
             includingResourceValuesForKeys: nil,
             relativeTo: nil
         )
@@ -477,9 +482,14 @@ struct PaperDigestExportConfiguration {
 
         do {
             var isStale = false
+            #if os(macOS)
+            let options: URL.BookmarkResolutionOptions = [.withSecurityScope]
+            #else
+            let options: URL.BookmarkResolutionOptions = []
+            #endif
             let url = try URL(
                 resolvingBookmarkData: bookmarkData,
-                options: [.withSecurityScope],
+                options: options,
                 relativeTo: nil,
                 bookmarkDataIsStale: &isStale
             )

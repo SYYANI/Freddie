@@ -24,6 +24,7 @@
 		1B085EB2387524F1B928C749 /* TranslationJob.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86C925A200F45FCD09BF39B6 /* TranslationJob.swift */; };
 		1C6669C83135E5D444D3EC7E /* AbstractTranslationServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B03A755D2C413016DD2B35E /* AbstractTranslationServiceTests.swift */; };
 		1D3433BBA65CCCA7CF6A8EE0 /* LLMModelProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78A4FD40176F3BF293CF2AD5 /* LLMModelProfile.swift */; };
+		1F3276F87C78EA20E8A80AE2 /* PaperDigestExportPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A5CE9583FC6BBC3FBA18158 /* PaperDigestExportPolicy.swift */; };
 		1F7C10DF37D34AA5B9FFD984 /* TranslationTargetLanguage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02AE9D431AB98BDB3F60C322 /* TranslationTargetLanguage.swift */; };
 		1F9F012E10BDE79A284CF00F /* BabelDocKit in Frameworks */ = {isa = PBXBuildFile; productRef = AA84932078FE9D985EA8F323 /* BabelDocKit */; };
 		1FF14251FBD20C1F8E9BD9BC /* TranslationSegment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8039BE637474B04E1F1BC128 /* TranslationSegment.swift */; };
@@ -66,6 +67,7 @@
 		5FE67D2EE54084754C8AE230 /* InfoPlist.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 3CE3EE5D0C12AA18DC15558F /* InfoPlist.xcstrings */; };
 		60130CE02ABCB946ABAC9A8A /* ArxivClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5AE04037B749D64F46B8231B /* ArxivClient.swift */; };
 		6135D013080EDC0F27D1E4EF /* PaperDeletionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4C1F7CE766D2FF7D0EAD146 /* PaperDeletionService.swift */; };
+		6316A2A477A15A19E2CDE704 /* IPadDigestExportConfigurationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A381E5ED86BBA07CA7AA5144 /* IPadDigestExportConfigurationTests.swift */; };
 		63B66291FC21F07AAEDD7B8C /* ArxivClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5AE04037B749D64F46B8231B /* ArxivClient.swift */; };
 		68276F37DC0F83B2129BFBB5 /* ReadingStateStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31F4A5AE575B4BE0C4DE3E4A /* ReadingStateStoreTests.swift */; };
 		6990BD9AF719BD703BC7C2A1 /* HTMLReaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 901230971C8E7AE7E22E6181 /* HTMLReaderView.swift */; };
@@ -250,6 +252,7 @@
 		9BA518377FB5E2D92733C70E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		9E035274FD9E699D832B4D4E /* BabelDocRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BabelDocRunner.swift; sourceTree = "<group>"; };
 		A0C19FADE59E03E4D12B83D5 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
+		A381E5ED86BBA07CA7AA5144 /* IPadDigestExportConfigurationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IPadDigestExportConfigurationTests.swift; sourceTree = "<group>"; };
 		A6284FF10C8EE25EEC8F01C2 /* LocalizationBehaviorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalizationBehaviorTests.swift; sourceTree = "<group>"; };
 		AC93E8D9F0A4BAC6F2F383D3 /* SettingsGeneralStatusTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsGeneralStatusTests.swift; sourceTree = "<group>"; };
 		B4C1F7CE766D2FF7D0EAD146 /* PaperDeletionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaperDeletionService.swift; sourceTree = "<group>"; };
@@ -390,6 +393,7 @@
 			children = (
 				828C0B603F44CECCA3F7B1A1 /* Info.plist */,
 				C3537DF7D3E85FA48AA48CF1 /* InProcessBabelDocSmokeTests.swift */,
+				A381E5ED86BBA07CA7AA5144 /* IPadDigestExportConfigurationTests.swift */,
 			);
 			path = ReadPaperiPadTests;
 			sourceTree = "<group>";
@@ -834,6 +838,7 @@
 				2367E362EE3A41EE156C034B /* Paper.swift in Sources */,
 				89EE4246A0ECD38ACEE1D74F /* PaperAttachment.swift in Sources */,
 				7062FA21B6C6D9C4E278D8FF /* PaperDeletionService.swift in Sources */,
+				1F3276F87C78EA20E8A80AE2 /* PaperDigestExportPolicy.swift in Sources */,
 				7BFEEDB4D4068F54674D021E /* PaperFileStore.swift in Sources */,
 				EBD68891314DD0B0035E0C16 /* PaperImporter.swift in Sources */,
 				E625C3726999AFBFC0CEF145 /* PaperSelectionStore.swift in Sources */,
@@ -924,6 +929,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				6316A2A477A15A19E2CDE704 /* IPadDigestExportConfigurationTests.swift in Sources */,
 				56B46CFABC0C292C04634756 /* InProcessBabelDocSmokeTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

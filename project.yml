@@ -101,7 +101,6 @@ targets:
           - Readers/DualPDFReaderView.swift
           - Services/BabelDocRunner.swift
           - Services/BabelDocToolManager.swift
-          - Services/PaperDigestExportPolicy.swift
           - Services/ProcessRunner.swift
           - Views
       - path: ReadPaperiPad

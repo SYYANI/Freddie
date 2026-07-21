@@ -406,7 +406,14 @@ struct IPadReaderPaneView: View {
                     onNoteSelectionChanged: { noteSelectionContext = $0 }
                 )
             } else {
-                unavailable(String(localized: "HTML is not available for this paper.", bundle: bundle))
+                unavailable(
+                    String(localized: "No HTML available", bundle: bundle),
+                    systemImage: "doc.text",
+                    description: Text(
+                        "Import an arXiv paper or web page with HTML content to read it here.",
+                        bundle: bundle
+                    )
+                )
             }
         case .pdf:
             if let pdfAttachment {

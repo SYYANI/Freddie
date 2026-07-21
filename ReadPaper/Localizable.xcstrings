@@ -484,7 +484,6 @@
       }
     },
     "BabelDOC" : {
-      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -823,6 +822,7 @@
       }
     },
     "Choose Model" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -844,6 +844,7 @@
       }
     },
     "Choose Provider" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -1140,7 +1141,6 @@
       }
     },
     "Delete" : {
-      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -1729,9 +1729,6 @@
           }
         }
       }
-    },
-    "HTML concurrency: %@" : {
-
     },
     "HTML concurrency: %d" : {
       "extractionState" : "stale",
@@ -3166,7 +3163,6 @@
       }
     },
     "Reset" : {
-      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {

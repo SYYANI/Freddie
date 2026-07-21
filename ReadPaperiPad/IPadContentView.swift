@@ -55,7 +55,7 @@ struct IPadContentView: View {
                 selectedPaperID: $selectedPaperID
             )
         }
-        .sheet(isPresented: $isShowingSettings) {
+        .fullScreenCover(isPresented: $isShowingSettings) {
             NavigationStack {
                 IPadSettingsView()
             }
