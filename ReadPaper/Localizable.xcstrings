@@ -1260,6 +1260,17 @@
         }
       }
     },
+    "Disabled" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "关闭"
+          }
+        }
+      }
+    },
     "Display" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1610,6 +1621,7 @@
       }
     },
     "Freddie" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -1701,6 +1713,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "隐藏检查器"
+          }
+        }
+      }
+    },
+    "High" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "高"
           }
         }
       }
@@ -2077,6 +2100,16 @@
         }
       }
     },
+    "Invalid provider chat endpoint for base URL: %@" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法为 Base URL 构建有效的聊天端点：%1$@"
+          }
+        }
+      }
+    },
     "Invalid provider configuration: %@" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2197,6 +2230,17 @@
         }
       }
     },
+    "Low" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "低"
+          }
+        }
+      }
+    },
     "Markdown export requires a configured folder. Copy Digest can still use the template without an export folder." : {
       "localizations" : {
         "zh-Hans" : {
@@ -2225,6 +2269,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在匹配字体"
+          }
+        }
+      }
+    },
+    "Max" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "最大"
           }
         }
       }
@@ -3129,6 +3184,17 @@
         }
       }
     },
+    "Reasoning Effort" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "思考强度"
+          }
+        }
+      }
+    },
     "Remove BabelDOC" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -3860,6 +3926,27 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "网页服务器返回了错误（状态码 %d）。"
+          }
+        }
+      }
+    },
+    "Thinking Mode" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "思考模式"
+          }
+        }
+      }
+    },
+    "Thinking mode controls whether the model outputs a chain of thought before answering (for example DeepSeek V4). Reasoning effort is omitted while thinking is disabled." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "思考模式控制模型在回答前是否先输出思维链（例如 DeepSeek V4）。思考模式关闭时不会发送思考强度参数。"
           }
         }
       }

@@ -117,6 +117,8 @@ private struct SettingsForm: View {
     @State private var modelTemperature = ""
     @State private var modelTopP = ""
     @State private var modelMaxTokens = ""
+    @State private var modelThinkingMode: LLMThinkingMode?
+    @State private var modelReasoningEffort: LLMReasoningEffort?
     @State private var modelEnabled = true
     @State private var modelStatusMessage: String?
     @State private var modelOutputPreview: String?
@@ -759,6 +761,32 @@ private struct SettingsForm: View {
 
                 DisclosureGroup(isExpanded: $showsModelAdvancedOptions) {
                     VStack(alignment: .leading, spacing: 12) {
+                        SettingsFieldRow(String(localized: "Thinking Mode", bundle: bundle)) {
+                            Picker(String(localized: "Thinking Mode", bundle: bundle), selection: $modelThinkingMode) {
+                                Text(String(localized: "Default", bundle: bundle))
+                                    .tag(Optional<LLMThinkingMode>.none)
+                                ForEach(LLMThinkingMode.allCases, id: \.self) { mode in
+                                    Text(thinkingModeLabel(mode))
+                                        .tag(Optional(mode))
+                                }
+                            }
+                            .labelsHidden()
+                        }
+                        SettingsFieldRow(String(localized: "Reasoning Effort", bundle: bundle)) {
+                            Picker(String(localized: "Reasoning Effort", bundle: bundle), selection: $modelReasoningEffort) {
+                                Text(String(localized: "Default", bundle: bundle))
+                                    .tag(Optional<LLMReasoningEffort>.none)
+                                ForEach(LLMReasoningEffort.allCases, id: \.self) { effort in
+                                    Text(reasoningEffortLabel(effort))
+                                        .tag(Optional(effort))
+                                }
+                            }
+                            .labelsHidden()
+                            .disabled(modelThinkingMode == .disabled)
+                        }
+                        Text("Thinking mode controls whether the model outputs a chain of thought before answering (for example DeepSeek V4). Reasoning effort is omitted while thinking is disabled.", bundle: bundle)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
                         SettingsFieldRow(String(localized: "Temperature", bundle: bundle)) {
                             SettingsPlainTextField(text: $modelTemperature)
                         }
@@ -1158,8 +1186,14 @@ private struct SettingsForm: View {
         modelTemperature = model.temperature.map { String($0) } ?? ""
         modelTopP = model.topP.map { String($0) } ?? ""
         modelMaxTokens = model.maxTokens.map { String($0) } ?? ""
+        modelThinkingMode = model.thinkingModeValue
+        modelReasoningEffort = model.reasoningEffortValue
         modelEnabled = model.isEnabled
-        showsModelAdvancedOptions = model.temperature != nil || model.topP != nil || model.maxTokens != nil
+        showsModelAdvancedOptions = model.temperature != nil
+            || model.topP != nil
+            || model.maxTokens != nil
+            || model.thinkingModeValue != nil
+            || model.reasoningEffortValue != nil
         modelStatusMessage = nil
         modelOutputPreview = nil
     }
@@ -1184,6 +1218,8 @@ private struct SettingsForm: View {
         modelTemperature = ""
         modelTopP = ""
         modelMaxTokens = ""
+        modelThinkingMode = nil
+        modelReasoningEffort = nil
         modelEnabled = true
         showsModelAdvancedOptions = false
         modelStatusMessage = nil
@@ -1326,6 +1362,8 @@ private struct SettingsForm: View {
             let temperature = try parseOptionalDouble(modelTemperature, label: String(localized: "Temperature", bundle: bundle))
             let topP = try parseOptionalDouble(modelTopP, label: String(localized: "Top-P", bundle: bundle))
             let maxTokens = try parseOptionalInt(modelMaxTokens, label: String(localized: "Max tokens", bundle: bundle))
+            let thinkingMode = modelThinkingMode
+            let reasoningEffort = modelReasoningEffort
             let now = Date()
 
             let model: LLMModelProfile
@@ -1339,6 +1377,8 @@ private struct SettingsForm: View {
                     temperature: temperature,
                     topP: topP,
                     maxTokens: maxTokens,
+                    thinkingMode: thinkingMode,
+                    reasoningEffort: reasoningEffort,
                     isEnabled: modelEnabled,
                     createdAt: now,
                     modifiedAt: now
@@ -1352,6 +1392,8 @@ private struct SettingsForm: View {
             model.temperature = temperature
             model.topP = topP
             model.maxTokens = maxTokens
+            model.thinkingModeValue = thinkingMode
+            model.reasoningEffortValue = reasoningEffort
             model.isEnabled = modelEnabled
             model.modifiedAt = now
 
@@ -1410,7 +1452,9 @@ private struct SettingsForm: View {
                     model: modelIdentifier,
                     temperature: try parseOptionalDouble(modelTemperature, label: String(localized: "Temperature", bundle: bundle)),
                     topP: try parseOptionalDouble(modelTopP, label: String(localized: "Top-P", bundle: bundle)),
-                    maxTokens: try parseOptionalInt(modelMaxTokens, label: String(localized: "Max tokens", bundle: bundle))
+                    maxTokens: try parseOptionalInt(modelMaxTokens, label: String(localized: "Max tokens", bundle: bundle)),
+                    thinkingMode: modelThinkingMode,
+                    reasoningEffort: modelReasoningEffort
                 )
 
                 if let selectedModel {
@@ -1563,6 +1607,26 @@ private struct SettingsForm: View {
         let providerName = providers.first(where: { $0.id == model.providerID })?.name
             ?? String(localized: "Unknown Provider", bundle: bundle)
         return "\(providerName) / \(model.name)"
+    }
+
+    private func thinkingModeLabel(_ mode: LLMThinkingMode) -> String {
+        switch mode {
+        case .enabled:
+            return String(localized: "Enabled", bundle: bundle)
+        case .disabled:
+            return String(localized: "Disabled", bundle: bundle)
+        }
+    }
+
+    private func reasoningEffortLabel(_ effort: LLMReasoningEffort) -> String {
+        switch effort {
+        case .low:
+            return String(localized: "Low", bundle: bundle)
+        case .high:
+            return String(localized: "High", bundle: bundle)
+        case .max:
+            return String(localized: "Max", bundle: bundle)
+        }
     }
 
     private func parseOptionalDouble(_ value: String, label: String) throws -> Double? {

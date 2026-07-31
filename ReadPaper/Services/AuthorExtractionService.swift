@@ -118,6 +118,8 @@ struct AuthorExtractionService {
                 temperature: 0.1,
                 topP: nil,
                 maxTokens: 200,
+                thinkingMode: route.snapshot.thinkingMode,
+                reasoningEffort: route.snapshot.reasoningEffort,
                 timeoutProfile: .translationDefault
             ))
 

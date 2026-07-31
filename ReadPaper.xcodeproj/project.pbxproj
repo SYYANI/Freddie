@@ -34,6 +34,7 @@
 		28386D513CAD6AB7B5B48A8D /* NoteMarkdownRendererTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F553C0540A01F3D40CD9E3DA /* NoteMarkdownRendererTests.swift */; };
 		29FD8ED057281CD8A2576299 /* BabelDocToolManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E56EC341627319DA8CE698A6 /* BabelDocToolManagerTests.swift */; };
 		2A67FBACD9DFF394CBAE579C /* NoteAnchorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BF28DC82B3404FEF1D9A022 /* NoteAnchorTests.swift */; };
+		2B6F373640A65D8C298DAEAF /* LLMReasoningConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45BD3A614317AAD562260E0C /* LLMReasoningConfiguration.swift */; };
 		2BB02EE3F30D1B784E18E76D /* LLMConfigurationBootstrapperTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F53583985C4F77116460318 /* LLMConfigurationBootstrapperTests.swift */; };
 		2C8D91C15F399A50A83A3932 /* LocalizationBehaviorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6284FF10C8EE25EEC8F01C2 /* LocalizationBehaviorTests.swift */; };
 		3381238537D395BC60B00E4B /* AuthorExtractionServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D67BD823B796DB962CD1DFC /* AuthorExtractionServiceTests.swift */; };
@@ -145,6 +146,7 @@
 		EDC74DFF3F1F12EFED1038D1 /* PaperDigestExportPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A5CE9583FC6BBC3FBA18158 /* PaperDigestExportPolicy.swift */; };
 		F27D9396893317BF40E0BD22 /* ReaderPaneView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15605D44878CFDBFBF883E0F /* ReaderPaneView.swift */; };
 		F4EDC902333FAE0E8269D73D /* ArxivImportProgress.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3B8354421E9159F37194453 /* ArxivImportProgress.swift */; };
+		F543B39A79226036B5C355A4 /* LLMReasoningConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45BD3A614317AAD562260E0C /* LLMReasoningConfiguration.swift */; };
 		F58BF1CACEBE2065B792874B /* TranslationLLMClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B99DBBAB3B54CC7AB7DEF2F /* TranslationLLMClient.swift */; };
 		F72717940014D21DF24FC04D /* HTMLTranslationPipelineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40C65F7E1559275AA3A5AA9F /* HTMLTranslationPipelineTests.swift */; };
 		FA4B946715F0FB50611825BD /* TranslationPreferencesSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90F28004ABD616B1A38ED52A /* TranslationPreferencesSnapshot.swift */; };
@@ -207,6 +209,7 @@
 		3E5B1B3F81B9307F629924D1 /* InspectorPaneView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InspectorPaneView.swift; sourceTree = "<group>"; };
 		3F4C9C7E8DBB2B1F9EC96AEC /* LLMProviderValidationUseCaseTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLMProviderValidationUseCaseTests.swift; sourceTree = "<group>"; };
 		40C65F7E1559275AA3A5AA9F /* HTMLTranslationPipelineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HTMLTranslationPipelineTests.swift; sourceTree = "<group>"; };
+		45BD3A614317AAD562260E0C /* LLMReasoningConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLMReasoningConfiguration.swift; sourceTree = "<group>"; };
 		46FC6C17BDF1F5821997810A /* LLMProviderValidationUseCase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLMProviderValidationUseCase.swift; sourceTree = "<group>"; };
 		47E6A94B8E0829E8FD015D53 /* ArxivClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArxivClientTests.swift; sourceTree = "<group>"; };
 		4AD0F3DCACE64FFE539D2434 /* ReadPaper.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; name = ReadPaper.app; path = Freddie.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -462,6 +465,7 @@
 				373A9197249BAD6010BCBDC2 /* Enums.swift */,
 				78A4FD40176F3BF293CF2AD5 /* LLMModelProfile.swift */,
 				2A71EA857F167326A20E22DC /* LLMProviderProfile.swift */,
+				45BD3A614317AAD562260E0C /* LLMReasoningConfiguration.swift */,
 				81666A1EE76A077C9CDB5FE7 /* Note.swift */,
 				873608C4E855A8AC35CB5ABB /* NoteAnchor.swift */,
 				8817F3ED2BCD0D7DD32CE2FB /* Paper.swift */,
@@ -828,6 +832,7 @@
 				80E4B7A6B6C744167A4348FF /* LLMModelRouteSnapshot.swift in Sources */,
 				4A06F4F2A9E49DBA3E8DBEB4 /* LLMProviderProfile.swift in Sources */,
 				12520418BD10D7646C62E9DC /* LLMProviderValidationUseCase.swift in Sources */,
+				F543B39A79226036B5C355A4 /* LLMReasoningConfiguration.swift in Sources */,
 				28267E9BCF17207D77452C81 /* LLMRouteResolver.swift in Sources */,
 				E348C9C13F3909E45D70E8B7 /* LanguageManager.swift in Sources */,
 				08266A40E5E94F7FE0E805A1 /* Note.swift in Sources */,
@@ -892,6 +897,7 @@
 				84EEB909E9A6513C8B1F1AE5 /* LLMModelRouteSnapshot.swift in Sources */,
 				CE6EA74BB0E98DA02686F87A /* LLMProviderProfile.swift in Sources */,
 				AC53825B2170A562B9F9678C /* LLMProviderValidationUseCase.swift in Sources */,
+				2B6F373640A65D8C298DAEAF /* LLMReasoningConfiguration.swift in Sources */,
 				1838D6C76E6701332D344D50 /* LLMRouteResolver.swift in Sources */,
 				156629ACBCAA0DFDC06D4F5C /* LanguageManager.swift in Sources */,
 				A88C29934E8FE196990CAD61 /* LibrarySidebarView.swift in Sources */,

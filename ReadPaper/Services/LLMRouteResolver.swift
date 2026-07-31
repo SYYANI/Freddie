@@ -107,7 +107,9 @@ struct LLMRouteResolver {
                 modelName: model.modelName,
                 temperature: model.temperature,
                 topP: model.topP,
-                maxTokens: model.maxTokens
+                maxTokens: model.maxTokens,
+                thinkingMode: model.thinkingModeValue,
+                reasoningEffort: model.reasoningEffortValue
             ),
             apiKey: apiKey
         )

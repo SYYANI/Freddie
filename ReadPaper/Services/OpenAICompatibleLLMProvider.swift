@@ -46,7 +46,33 @@ struct LLMCompletionRequest: Sendable {
     let temperature: Double?
     let topP: Double?
     let maxTokens: Int?
+    let thinkingMode: LLMThinkingMode?
+    let reasoningEffort: LLMReasoningEffort?
     let timeoutProfile: LLMNetworkTimeoutProfile?
+
+    init(
+        baseURL: URL,
+        apiKey: String,
+        model: String,
+        messages: [LLMCompletionMessage],
+        temperature: Double? = nil,
+        topP: Double? = nil,
+        maxTokens: Int? = nil,
+        thinkingMode: LLMThinkingMode? = nil,
+        reasoningEffort: LLMReasoningEffort? = nil,
+        timeoutProfile: LLMNetworkTimeoutProfile? = nil
+    ) {
+        self.baseURL = baseURL
+        self.apiKey = apiKey
+        self.model = model
+        self.messages = messages
+        self.temperature = temperature
+        self.topP = topP
+        self.maxTokens = maxTokens
+        self.thinkingMode = thinkingMode
+        self.reasoningEffort = reasoningEffort
+        self.timeoutProfile = timeoutProfile
+    }
 }
 
 struct LLMCompletionResponse: Equatable, Sendable {
@@ -200,31 +226,61 @@ nonisolated struct OpenAICompatibleLLMProvider: Sendable {
         request: LLMCompletionRequest,
         routePlan: ServiceRoutePlan
     ) async throws -> LLMCompletionResponse {
-        let service = makeService(
-            routePlan: routePlan,
-            apiKey: request.apiKey,
-            timeoutProfile: request.timeoutProfile
-        )
+        guard let endpoint = URL(string: inferredChatEndpoint(from: routePlan)) else {
+            throw LLMProviderError.invalidConfiguration(
+                AppLocalization.format(
+                    "Invalid provider chat endpoint for base URL: %@",
+                    request.baseURL.absoluteString
+                )
+            )
+        }
 
-        let parameters = ChatCompletionParameters(
-            messages: request.messages.map(makeMessage),
-            model: .custom(request.model),
-            maxTokens: request.maxTokens,
-            temperature: request.temperature,
-            topProbability: request.topP
-        )
+        var urlRequestBuilder = URLRequest(url: endpoint)
+        urlRequestBuilder.httpMethod = "POST"
+        urlRequestBuilder.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        urlRequestBuilder.setValue("Bearer \(request.apiKey)", forHTTPHeaderField: "Authorization")
+        urlRequestBuilder.httpBody = try JSONEncoder().encode(LLMChatCompletionBody(request: request))
+        let urlRequest = urlRequestBuilder
+
+        let session = makeURLSession(timeoutProfile: request.timeoutProfile)
 
         return try await withResourceTimeout(
             seconds: request.timeoutProfile?.resourceTimeoutSeconds,
             timeoutKind: .resource
         ) {
-            let response = try await service.startChat(parameters: parameters)
-            let text = response.choices?.first?.message?.content ?? ""
+            let (data, response) = try await session.data(for: urlRequest)
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw URLError(.badServerResponse)
+            }
+            guard httpResponse.statusCode == 200 else {
+                throw Self.apiError(data: data, statusCode: httpResponse.statusCode)
+            }
+
+            let decoded = try JSONDecoder().decode(LLMChatCompletionResponseBody.self, from: data)
+            let text = decoded.choices?.first?.message?.content ?? ""
             return LLMCompletionResponse(
                 text: text,
                 resolvedEndpoint: makeResolvedEndpointSnapshot(from: routePlan)
             )
         }
+    }
+
+    private func makeURLSession(timeoutProfile: LLMNetworkTimeoutProfile?) -> URLSession {
+        if let configuration = sessionConfigurationOverride
+            ?? Self.makeURLSessionConfiguration(timeoutProfile: timeoutProfile) {
+            return URLSession(configuration: configuration)
+        }
+        return URLSession.shared
+    }
+
+    private static func apiError(data: Data, statusCode: Int) -> APIError {
+        var message = "status code \(statusCode)"
+        if let body = try? JSONDecoder().decode(LLMAPIErrorResponseBody.self, from: data),
+           let serverMessage = body.error?.message,
+           serverMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
+            message = serverMessage
+        }
+        return APIError.responseUnsuccessful(description: message, statusCode: statusCode)
     }
 
     private func makeResolvedEndpointSnapshot(from routePlan: ServiceRoutePlan) -> LLMResolvedEndpoint? {
@@ -238,46 +294,6 @@ nonisolated struct OpenAICompatibleLLMProvider: Sendable {
             host: host?.isEmpty == false ? host : nil,
             path: path.isEmpty == false ? path : nil
         )
-    }
-
-    private func makeService(
-        routePlan: ServiceRoutePlan,
-        apiKey: String,
-        timeoutProfile: LLMNetworkTimeoutProfile?
-    ) -> OpenAIService {
-        let httpClient: HTTPClient?
-        if let configuration = sessionConfigurationOverride ?? Self.makeURLSessionConfiguration(timeoutProfile: timeoutProfile) {
-            let session = URLSession(configuration: configuration)
-            httpClient = URLSessionHTTPClientAdapter(urlSession: session)
-        } else {
-            httpClient = nil
-        }
-        return OpenAIServiceFactory.service(
-            apiKey: apiKey,
-            overrideBaseURL: routePlan.overrideBaseURL,
-            proxyPath: routePlan.proxyPath,
-            overrideVersion: routePlan.version,
-            httpClient: httpClient,
-            debugEnabled: false
-        )
-    }
-
-    private func makeMessage(_ message: LLMCompletionMessage) -> ChatCompletionParameters.Message {
-        ChatCompletionParameters.Message(
-            role: mapRole(message.role),
-            content: .text(message.content)
-        )
-    }
-
-    private func mapRole(_ role: String) -> ChatCompletionParameters.Message.Role {
-        switch role {
-        case "system":
-            return .system
-        case "assistant":
-            return .assistant
-        default:
-            return .user
-        }
     }
 
     private func withResourceTimeout<T: Sendable>(
@@ -431,4 +447,73 @@ nonisolated struct OpenAICompatibleLLMProvider: Sendable {
         let message = nsError.localizedDescription.lowercased()
         return message.contains("timed out") || message.contains("timeout")
     }
+}
+
+private struct LLMChatCompletionBody: Encodable {
+    struct Message: Encodable {
+        let role: String
+        let content: String
+    }
+
+    struct Thinking: Encodable {
+        let type: String
+    }
+
+    let model: String
+    let messages: [Message]
+    let temperature: Double?
+    let topP: Double?
+    let maxTokens: Int?
+    let reasoningEffort: String?
+    let thinking: Thinking?
+
+    init(request: LLMCompletionRequest) {
+        model = request.model
+        messages = request.messages.map { Message(role: $0.role, content: $0.content) }
+        temperature = request.temperature
+        topP = request.topP
+        maxTokens = request.maxTokens
+
+        switch request.thinkingMode {
+        case .disabled:
+            thinking = Thinking(type: "disabled")
+            reasoningEffort = nil
+        case .enabled:
+            thinking = Thinking(type: "enabled")
+            reasoningEffort = request.reasoningEffort?.rawValue
+        case nil:
+            thinking = nil
+            reasoningEffort = request.reasoningEffort?.rawValue
+        }
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case model
+        case messages
+        case temperature
+        case topP = "top_p"
+        case maxTokens = "max_tokens"
+        case reasoningEffort = "reasoning_effort"
+        case thinking
+    }
+}
+
+private struct LLMChatCompletionResponseBody: Decodable {
+    struct Choice: Decodable {
+        struct Message: Decodable {
+            let content: String?
+        }
+
+        let message: Message?
+    }
+
+    let choices: [Choice]?
+}
+
+private struct LLMAPIErrorResponseBody: Decodable {
+    struct Error: Decodable {
+        let message: String?
+    }
+
+    let error: Error?
 }

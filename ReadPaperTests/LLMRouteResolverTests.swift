@@ -41,6 +41,43 @@ final class LLMRouteResolverTests: XCTestCase {
     }
 
     @MainActor
+    func testResolverPassesThinkingModeAndReasoningEffortThroughSnapshot() throws {
+        let keychainStore = KeychainStore(service: "LLMRouteResolverTests.\(UUID().uuidString)")
+        let container = try makeContainer()
+        let modelContext = ModelContext(container)
+
+        let provider = LLMProviderProfile(
+            name: "Provider",
+            baseURL: "https://api.example.com/v1",
+            apiKeyRef: "provider-ref",
+            testModel: "gpt-test"
+        )
+        let model = LLMModelProfile(
+            providerID: provider.id,
+            name: "HTML",
+            modelName: "deepseek-v4-pro",
+            thinkingMode: .enabled,
+            reasoningEffort: .max
+        )
+        let settings = AppSettings(
+            selectedHTMLModelProfileID: model.id,
+            selectedPDFModelProfileID: nil
+        )
+
+        modelContext.insert(provider)
+        modelContext.insert(model)
+        modelContext.insert(settings)
+        try modelContext.save()
+        try keychainStore.save("sk-test", account: provider.apiKeyRef)
+
+        let resolver = LLMRouteResolver(keychainStore: keychainStore)
+        let route = try resolver.resolveHTMLRoute(settings: settings, modelContext: modelContext)
+
+        XCTAssertEqual(route.snapshot.thinkingMode, .enabled)
+        XCTAssertEqual(route.snapshot.reasoningEffort, .max)
+    }
+
+    @MainActor
     func testResolverRejectsDisabledProviderAndMissingSelection() throws {
         let keychainStore = KeychainStore(service: "LLMRouteResolverTests.\(UUID().uuidString)")
         let container = try makeContainer()

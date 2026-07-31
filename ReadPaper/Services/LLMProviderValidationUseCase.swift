@@ -53,6 +53,8 @@ struct LLMProviderValidationUseCase {
         temperature: Double? = nil,
         topP: Double? = nil,
         maxTokens: Int? = nil,
+        thinkingMode: LLMThinkingMode? = nil,
+        reasoningEffort: LLMReasoningEffort? = nil,
         timeoutSeconds: TimeInterval = 30,
         systemMessage: String = "You are a concise assistant.",
         userMessage: String = "Reply with exactly: ok"
@@ -72,6 +74,8 @@ struct LLMProviderValidationUseCase {
             temperature: temperature,
             topP: topP,
             maxTokens: maxTokens,
+            thinkingMode: thinkingMode,
+            reasoningEffort: reasoningEffort,
             timeoutProfile: .validation(timeoutSeconds: timeoutSeconds)
         )
 

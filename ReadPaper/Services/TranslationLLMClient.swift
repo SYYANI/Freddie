@@ -40,6 +40,8 @@ struct TranslationLLMClient: TranslationLLMClientProtocol {
                 temperature: route.temperature ?? 0.2,
                 topP: route.topP,
                 maxTokens: route.maxTokens,
+                thinkingMode: route.thinkingMode,
+                reasoningEffort: route.reasoningEffort,
                 timeoutProfile: .translationDefault
             )
         )
