@@ -11,10 +11,12 @@ private struct Options {
     var model: String?
     var apiKeyEnvironment = "READPAPER_LLM_API_KEY"
     var pages: [Int]?
-    var qps = 4.0
+    var qps = 50.0
     var temperature = 0.2
     var topP: Double?
     var maxTokens: Int?
+    var thinkingMode: BabelDocThinkingMode?
+    var reasoningEffort: BabelDocReasoningEffort?
     var preferCoreML = true
     var onlySelectedPages = false
     var verifyRuntime = false
@@ -92,7 +94,8 @@ private func usage() {
       --api-key-environment <name>       Default: READPAPER_LLM_API_KEY
       --pages <first-last>               Translate a 1-based inclusive range
       --only-include-translated-pages    Output only selected pages for incremental merge
-      --qps <number> --temperature <n> --top-p <n> --max-tokens <n> --cpu
+      --qps <number> --temperature <n> --top-p <n> --max-tokens <n>
+      --thinking-mode <enabled|disabled> --reasoning-effort <low|high|max> --cpu
       --verify-runtime                   Verify runtime assets and exit
     """.utf8))
 }
@@ -140,6 +143,18 @@ private func parse(_ arguments: [String]) throws -> Options {
             options.temperature = parsed
         case "--top-p": options.topP = Double(try value(arguments, &index, for: "--top-p"))
         case "--max-tokens": options.maxTokens = Int(try value(arguments, &index, for: "--max-tokens"))
+        case "--thinking-mode":
+            let raw = try value(arguments, &index, for: "--thinking-mode")
+            guard let mode = BabelDocThinkingMode(rawValue: raw) else {
+                throw HelperError.argument("--thinking-mode must be enabled or disabled.")
+            }
+            options.thinkingMode = mode
+        case "--reasoning-effort":
+            let raw = try value(arguments, &index, for: "--reasoning-effort")
+            guard let effort = BabelDocReasoningEffort(rawValue: raw) else {
+                throw HelperError.argument("--reasoning-effort must be low, high, or max.")
+            }
+            options.reasoningEffort = effort
         case "--only-include-translated-pages": options.onlySelectedPages = true
         case "--cpu": options.preferCoreML = false
         case "--verify-runtime": options.verifyRuntime = true
@@ -214,6 +229,8 @@ private enum ReadPaperBabelDocHelperMain {
                     temperature: options.temperature,
                     topP: options.topP,
                     maxTokens: options.maxTokens,
+                    thinkingMode: options.thinkingMode,
+                    reasoningEffort: options.reasoningEffort,
                     requestsPerSecond: options.qps
                 ),
                 onProgress: { emitter.progress($0) }

@@ -225,6 +225,12 @@ struct BabelDocRunner {
         }
         if let topP = route.topP { arguments += ["--top-p", "\(topP)"] }
         if let maxTokens = route.maxTokens { arguments += ["--max-tokens", "\(maxTokens)"] }
+        if let thinkingMode = route.thinkingMode {
+            arguments += ["--thinking-mode", thinkingMode.rawValue]
+        }
+        if let reasoningEffort = route.reasoningEffort {
+            arguments += ["--reasoning-effort", reasoningEffort.rawValue]
+        }
         if let pageRange {
             arguments += ["--pages", "\(pageRange.lowerBound)-\(pageRange.upperBound)"]
             arguments.append("--only-include-translated-pages")

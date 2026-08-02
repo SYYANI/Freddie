@@ -49,6 +49,8 @@ struct InProcessBabelDocRunner {
             temperature: route.temperature ?? 0.2,
             topP: route.topP,
             maxTokens: route.maxTokens,
+            thinkingMode: route.thinkingMode.map(Self.babelDocThinkingMode),
+            reasoningEffort: route.reasoningEffort.map(Self.babelDocReasoningEffort),
             requestsPerSecond: Double(max(preferences.babelDocQPS, 1))
         )
 
@@ -124,6 +126,21 @@ struct InProcessBabelDocRunner {
             summary: summary,
             statusMessage: summary
         )
+    }
+
+    private static func babelDocThinkingMode(_ mode: LLMThinkingMode) -> BabelDocThinkingMode {
+        switch mode {
+        case .enabled: .enabled
+        case .disabled: .disabled
+        }
+    }
+
+    private static func babelDocReasoningEffort(_ effort: LLMReasoningEffort) -> BabelDocReasoningEffort {
+        switch effort {
+        case .low: .low
+        case .high: .high
+        case .max: .max
+        }
     }
 
     static func statusMessage(for stage: BabelDocStage) -> String {

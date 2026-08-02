@@ -379,7 +379,7 @@ private struct SettingsForm: View {
                             settings.babelDocQPS
                         ),
                         value: $settings.babelDocQPS,
-                        in: 1...20
+                        in: 1...50
                     )
                     Stepper(
                         String(

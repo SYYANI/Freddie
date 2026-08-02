@@ -22,7 +22,7 @@ final class AppSettings {
         selectedPDFModelProfileID: UUID? = nil,
         targetLanguage: String = "zh-CN",
         htmlTranslationConcurrency: Int = 4,
-        babelDocQPS: Int = 4,
+        babelDocQPS: Int = 50,
         babelDocVersion: String = "latest",
         inspectorCollapsed: Bool? = nil,
         createdAt: Date = Date(),

@@ -250,6 +250,61 @@ final class BabelDocRunnerTests: XCTestCase {
         XCTAssertFalse(arguments.contains("--openai-api-key"))
     }
 
+    func testNativeArgumentsIncludeThinkingModeAndReasoningEffort() {
+        let tool = NativeBabelDocToolPaths(
+            executable: URL(fileURLWithPath: "/native/bin/babeldoc-native"),
+            runtimeRoot: URL(fileURLWithPath: "/native", isDirectory: true),
+            runtimeManifest: URL(fileURLWithPath: "/app/runtime-manifest.json"),
+            runtimeVersion: "1.0.0",
+            mupdfLibrary: URL(fileURLWithPath: "/native/lib/libmupdf.dylib"),
+            zstdLibrary: URL(fileURLWithPath: "/native/lib/libzstd.dylib"),
+            layoutModel: URL(fileURLWithPath: "/native/models/layout.onnx"),
+            fontDirectory: URL(fileURLWithPath: "/native/fonts", isDirectory: true)
+        )
+        var route = Self.route
+        route.thinkingMode = .enabled
+        route.reasoningEffort = .max
+
+        let arguments = BabelDocRunner.nativeArguments(
+            inputPDF: URL(fileURLWithPath: "/tmp/source.pdf"),
+            outputPDF: URL(fileURLWithPath: "/tmp/translated.pdf"),
+            preferences: Self.preferences,
+            route: route,
+            tool: tool
+        )
+
+        XCTAssertEqual(arguments[arguments.firstIndex(of: "--thinking-mode")! + 1], "enabled")
+        XCTAssertEqual(arguments[arguments.firstIndex(of: "--reasoning-effort")! + 1], "max")
+    }
+
+    func testAppSettingsDefaultBabelDocQPSIsFifty() {
+        XCTAssertEqual(AppSettings().babelDocQPS, 50)
+    }
+
+    func testNativeArgumentsOmitThinkingFlagsByDefault() {
+        let tool = NativeBabelDocToolPaths(
+            executable: URL(fileURLWithPath: "/native/bin/babeldoc-native"),
+            runtimeRoot: URL(fileURLWithPath: "/native", isDirectory: true),
+            runtimeManifest: URL(fileURLWithPath: "/app/runtime-manifest.json"),
+            runtimeVersion: "1.0.0",
+            mupdfLibrary: URL(fileURLWithPath: "/native/lib/libmupdf.dylib"),
+            zstdLibrary: URL(fileURLWithPath: "/native/lib/libzstd.dylib"),
+            layoutModel: URL(fileURLWithPath: "/native/models/layout.onnx"),
+            fontDirectory: URL(fileURLWithPath: "/native/fonts", isDirectory: true)
+        )
+
+        let arguments = BabelDocRunner.nativeArguments(
+            inputPDF: URL(fileURLWithPath: "/tmp/source.pdf"),
+            outputPDF: URL(fileURLWithPath: "/tmp/translated.pdf"),
+            preferences: Self.preferences,
+            route: Self.route,
+            tool: tool
+        )
+
+        XCTAssertFalse(arguments.contains("--thinking-mode"))
+        XCTAssertFalse(arguments.contains("--reasoning-effort"))
+    }
+
     func testOutputParserDecodesStructuredBridgeEventsAcrossChunks() {
         let parser = BabelDocOutputParser(apiKey: "sk-secret")
 
