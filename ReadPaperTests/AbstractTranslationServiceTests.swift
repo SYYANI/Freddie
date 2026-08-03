@@ -168,6 +168,61 @@ final class AbstractTranslationServiceTests: XCTestCase {
         let languageDefault = service.getCurrentTargetLanguage(settings: settingsDefault)
         XCTAssertEqual(languageDefault.code, "zh-CN") // 默认回退到简体中文
     }
+
+    func testCachedTranslationIsScopedToReasoningConfiguration() throws {
+        let paper = Paper(
+            title: "Test Paper",
+            abstractText: "This is a test abstract.",
+            localDirectoryPath: ""
+        )
+        modelContext.insert(paper)
+
+        let providerID = UUID()
+        let modelID = UUID()
+        let defaultSnapshot = LLMModelRouteSnapshot(
+            providerProfileID: providerID,
+            providerName: "Provider",
+            modelProfileID: modelID,
+            modelProfileName: "Model",
+            baseURL: "https://example.test/v1",
+            apiKeyRef: "key-ref",
+            modelName: "deepseek-v4-pro"
+        )
+        var reasonedSnapshot = defaultSnapshot
+        reasonedSnapshot.thinkingMode = .enabled
+        reasonedSnapshot.reasoningEffort = .max
+
+        modelContext.insert(TranslationSegment(
+            paperID: paper.id,
+            sourceType: "abstract",
+            targetLanguage: "zh-CN",
+            sourceHash: Hashing.sha256Hex(paper.abstractText),
+            sourceText: paper.abstractText,
+            translatedText: "Cached translation",
+            providerProfileID: providerID,
+            modelProfileID: modelID,
+            modelName: defaultSnapshot.translationCacheIdentity
+        ))
+        try modelContext.save()
+
+        let defaultRoute = ResolvedLLMModelRoute(snapshot: defaultSnapshot, apiKey: "key")
+        let reasonedRoute = ResolvedLLMModelRoute(snapshot: reasonedSnapshot, apiKey: "key")
+        XCTAssertEqual(
+            try service.getCachedTranslation(
+                paper: paper,
+                targetLanguage: "zh-CN",
+                route: defaultRoute,
+                modelContext: modelContext
+            ),
+            "Cached translation"
+        )
+        XCTAssertNil(try service.getCachedTranslation(
+            paper: paper,
+            targetLanguage: "zh-CN",
+            route: reasonedRoute,
+            modelContext: modelContext
+        ))
+    }
     
     func testClearCache() throws {
         let paper = Paper(

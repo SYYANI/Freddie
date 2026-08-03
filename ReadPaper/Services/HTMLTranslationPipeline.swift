@@ -126,7 +126,7 @@ final class HTMLTranslationPipeline {
                             translatedText: translated,
                             providerProfileID: route.providerProfileID,
                             modelProfileID: route.modelProfileID,
-                            modelName: route.modelName
+                            modelName: route.translationCacheIdentity
                         ))
                         try applyTranslatedSegment(candidate, translated: translated)
                     }
@@ -168,7 +168,8 @@ final class HTMLTranslationPipeline {
                 $0.targetLanguage == targetLanguage &&
                 $0.sourceHash == sourceHash &&
                 $0.providerProfileID == route.providerProfileID &&
-                $0.modelProfileID == route.modelProfileID
+                $0.modelProfileID == route.modelProfileID &&
+                $0.modelName == route.translationCacheIdentity
         }
     }
 

@@ -70,6 +70,13 @@ targets:
           destination_path="${destination_directory}/babeldoc-readpaper-helper"
           mkdir -p "${destination_directory}"
           ditto "${source_path}" "${destination_path}"
+          if [ "${CODE_SIGNING_ALLOWED:-YES}" = "NO" ]; then
+            codesign \
+              --force \
+              --sign - \
+              --identifier com.yiyan.ReadPaper.BabelDocHelper \
+              "${destination_path}"
+          fi
           codesign --verify --strict --verbose=2 "${destination_path}"
         inputFiles:
           - $(BUILT_PRODUCTS_DIR)/babeldoc-readpaper-helper

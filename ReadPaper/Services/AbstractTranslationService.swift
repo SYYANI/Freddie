@@ -74,7 +74,7 @@ final class AbstractTranslationService {
             translatedText: translatedText,
             providerProfileID: route.snapshot.providerProfileID,
             modelProfileID: route.snapshot.modelProfileID,
-            modelName: route.snapshot.modelName
+            modelName: route.snapshot.translationCacheIdentity
         )
         
         modelContext.insert(segment)
@@ -105,7 +105,7 @@ final class AbstractTranslationService {
             segment.targetLanguage == targetLanguage &&
             segment.providerProfileID == route.snapshot.providerProfileID &&
             segment.modelProfileID == route.snapshot.modelProfileID &&
-            segment.modelName == route.snapshot.modelName
+            segment.modelName == route.snapshot.translationCacheIdentity
         }?.translatedText
     }
     

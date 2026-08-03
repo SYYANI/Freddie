@@ -41,6 +41,23 @@ struct LLMModelRouteSnapshot: Equatable, Sendable {
         self.thinkingMode = thinkingMode
         self.reasoningEffort = reasoningEffort
     }
+
+    /// Stable identity for translation output. Keep this separate from the
+    /// persisted model profile ID because editing advanced parameters changes
+    /// the generated translation without creating a new profile.
+    var translationCacheIdentity: String {
+        let temperatureIdentity = temperature.map { String($0) } ?? "default"
+        let topPIdentity = topP.map { String($0) } ?? "default"
+        let maxTokensIdentity = maxTokens.map { String($0) } ?? "default"
+        return [
+            "model=\(modelName)",
+            "temperature=\(temperatureIdentity)",
+            "topP=\(topPIdentity)",
+            "maxTokens=\(maxTokensIdentity)",
+            "thinking=\(thinkingMode?.rawValue ?? "default")",
+            "reasoning=\(reasoningEffort?.rawValue ?? "default")",
+        ].joined(separator: "|")
+    }
 }
 
 struct ResolvedLLMModelRoute: Sendable {

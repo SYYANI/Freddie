@@ -150,7 +150,7 @@ final class HTMLTranslationPipelineTests: XCTestCase {
             translatedText: "Cached translation.",
             providerProfileID: route.providerProfileID,
             modelProfileID: route.modelProfileID,
-            modelName: route.modelName
+            modelName: route.translationCacheIdentity
         ))
         try environment.modelContext.save()
 
@@ -197,7 +197,7 @@ final class HTMLTranslationPipelineTests: XCTestCase {
             translatedText: "Old translation.",
             providerProfileID: cachedRoute.providerProfileID,
             modelProfileID: cachedRoute.modelProfileID,
-            modelName: cachedRoute.modelName
+            modelName: cachedRoute.translationCacheIdentity
         ))
         try environment.modelContext.save()
 
@@ -224,6 +224,60 @@ final class HTMLTranslationPipelineTests: XCTestCase {
         let storedSegments = try environment.modelContext.fetch(FetchDescriptor<TranslationSegment>())
         XCTAssertEqual(storedSegments.count, 2)
         XCTAssertTrue(storedSegments.contains(where: { $0.modelProfileID == activeRoute.modelProfileID }))
+    }
+
+    @MainActor
+    func testTranslateHTMLSkipsCacheWhenReasoningConfigurationChanges() async throws {
+        let environment = try makeEnvironment()
+        defer { try? FileManager.default.removeItem(at: environment.rootURL) }
+
+        let sourceHTML = "<html><body><p>This is a long enough paragraph for translation.</p></body></html>"
+        try sourceHTML.write(to: environment.attachment.fileURL, atomically: true, encoding: .utf8)
+
+        let candidate = try XCTUnwrap(HTMLTranslationPipeline.prepareDocument(sourceHTML).candidates.first)
+        let modelID = UUID()
+        let providerID = UUID()
+        let cachedRoute = makeRoute(
+            modelID: modelID,
+            providerID: providerID,
+            modelName: "deepseek-v4-pro"
+        )
+        var activeRoute = cachedRoute
+        activeRoute.thinkingMode = .enabled
+        activeRoute.reasoningEffort = .max
+
+        environment.modelContext.insert(TranslationSegment(
+            paperID: environment.paper.id,
+            sourceType: "html",
+            targetLanguage: "zh-CN",
+            sourceHash: candidate.sourceHash,
+            sourceText: candidate.sourceText,
+            translatedText: "Old translation.",
+            providerProfileID: cachedRoute.providerProfileID,
+            modelProfileID: cachedRoute.modelProfileID,
+            modelName: cachedRoute.translationCacheIdentity
+        ))
+        try environment.modelContext.save()
+
+        let client = MockTranslationLLMClient(translatedText: "Reasoned translation.")
+        try await HTMLTranslationPipeline(client: client).translateHTML(
+            attachment: environment.attachment,
+            paper: environment.paper,
+            preferences: TranslationPreferencesSnapshot(
+                targetLanguage: "zh-CN",
+                htmlTranslationConcurrency: 2,
+                babelDocQPS: 4,
+                babelDocVersion: "0.5.24"
+            ),
+            route: activeRoute,
+            apiKey: "sk-test",
+            modelContext: environment.modelContext
+        )
+
+        let translatedHTML = try String(contentsOf: environment.attachment.fileURL, encoding: .utf8)
+        XCTAssertTrue(translatedHTML.contains("Reasoned translation."))
+        let callCount = await client.currentCallCount()
+        XCTAssertEqual(callCount, 1)
     }
 
     @MainActor

@@ -769,7 +769,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "set -euo pipefail\nsource_path=\"${BUILT_PRODUCTS_DIR}/babeldoc-readpaper-helper\"\ndestination_directory=\"${TARGET_BUILD_DIR}/${CONTENTS_FOLDER_PATH}/Helpers\"\ndestination_path=\"${destination_directory}/babeldoc-readpaper-helper\"\nmkdir -p \"${destination_directory}\"\nditto \"${source_path}\" \"${destination_path}\"\ncodesign --verify --strict --verbose=2 \"${destination_path}\"\n";
+			shellScript = "set -euo pipefail\nsource_path=\"${BUILT_PRODUCTS_DIR}/babeldoc-readpaper-helper\"\ndestination_directory=\"${TARGET_BUILD_DIR}/${CONTENTS_FOLDER_PATH}/Helpers\"\ndestination_path=\"${destination_directory}/babeldoc-readpaper-helper\"\nmkdir -p \"${destination_directory}\"\nditto \"${source_path}\" \"${destination_path}\"\nif [ \"${CODE_SIGNING_ALLOWED:-YES}\" = \"NO\" ]; then\n  codesign \\\n    --force \\\n    --sign - \\\n    --identifier com.yiyan.ReadPaper.BabelDocHelper \\\n    \"${destination_path}\"\nfi\ncodesign --verify --strict --verbose=2 \"${destination_path}\"\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 

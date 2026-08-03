@@ -117,7 +117,17 @@ Other system locations affected by the app:
 
 ## Release
 
-The repository includes a GitHub Actions workflow that can generate an unsigned macOS DMG on tag push or manual dispatch.
+The repository includes a GitHub Actions workflow that can generate an unsigned
+macOS DMG artifact on tag push or manual dispatch. The workflow restores
+`swift-readability` and an immutable, full-commit `reWriteBabelDoc` sibling,
+then downloads/builds and verifies the native runtime before Xcode runs.
+
+Manual runs accept `babeldoc_ref`; tag runs read the same full commit from the
+`BABELDOC_REF` repository variable. Unsigned artifacts are intentionally not
+published as GitHub Releases. Each artifact also includes
+`build-provenance.txt` with the exact source commits and runtime manifest hash.
+Public distribution remains gated on signing, notarization, Corresponding
+Source, and complete third-party notices.
 
 ## License
 

@@ -277,8 +277,8 @@ final class BabelDocRunnerTests: XCTestCase {
         XCTAssertEqual(arguments[arguments.firstIndex(of: "--reasoning-effort")! + 1], "max")
     }
 
-    func testAppSettingsDefaultBabelDocQPSIsFifty() {
-        XCTAssertEqual(AppSettings().babelDocQPS, 50)
+    func testAppSettingsDefaultBabelDocQPSIsConservative() {
+        XCTAssertEqual(AppSettings().babelDocQPS, 4)
     }
 
     func testNativeArgumentsOmitThinkingFlagsByDefault() {

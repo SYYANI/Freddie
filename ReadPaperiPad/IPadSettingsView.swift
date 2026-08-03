@@ -50,6 +50,8 @@ struct IPadSettingsView: View {
     @State private var modelTemperature = ""
     @State private var modelTopP = ""
     @State private var modelMaxTokens = ""
+    @State private var modelThinkingMode: LLMThinkingMode?
+    @State private var modelReasoningEffort: LLMReasoningEffort?
     @State private var modelEnabled = true
     @State private var modelStatusMessage: String?
     @State private var modelOutputPreview: String?
@@ -551,6 +553,22 @@ struct IPadSettingsView: View {
                 Toggle(String(localized: "Enabled", bundle: bundle), isOn: $modelEnabled)
 
                 DisclosureGroup(isExpanded: $showsModelAdvancedOptions) {
+                    Picker(String(localized: "Thinking Mode", bundle: bundle), selection: $modelThinkingMode) {
+                        Text("Default", bundle: bundle).tag(Optional<LLMThinkingMode>.none)
+                        ForEach(LLMThinkingMode.allCases, id: \.self) { mode in
+                            Text(thinkingModeLabel(mode)).tag(Optional(mode))
+                        }
+                    }
+                    Picker(String(localized: "Reasoning Effort", bundle: bundle), selection: $modelReasoningEffort) {
+                        Text("Default", bundle: bundle).tag(Optional<LLMReasoningEffort>.none)
+                        ForEach(LLMReasoningEffort.allCases, id: \.self) { effort in
+                            Text(reasoningEffortLabel(effort)).tag(Optional(effort))
+                        }
+                    }
+                    .disabled(modelThinkingMode == .disabled)
+                    Text("Thinking mode controls whether the model outputs a chain of thought before answering (for example DeepSeek V4). Reasoning effort is omitted while thinking is disabled.", bundle: bundle)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                     TextField(String(localized: "Temperature", bundle: bundle), text: $modelTemperature)
                         .keyboardType(.decimalPad)
                     TextField(String(localized: "Top-P", bundle: bundle), text: $modelTopP)
@@ -822,6 +840,33 @@ struct IPadSettingsView: View {
 
                     DisclosureGroup(isExpanded: $showsModelAdvancedOptions) {
                         VStack(alignment: .leading, spacing: 14) {
+                            settingsDetailField(String(localized: "Thinking Mode", bundle: bundle)) {
+                                Picker(String(localized: "Thinking Mode", bundle: bundle), selection: $modelThinkingMode) {
+                                    Text("Default", bundle: bundle).tag(Optional<LLMThinkingMode>.none)
+                                    ForEach(LLMThinkingMode.allCases, id: \.self) { mode in
+                                        Text(thinkingModeLabel(mode)).tag(Optional(mode))
+                                    }
+                                }
+                                .labelsHidden()
+                                .pickerStyle(.menu)
+                            }
+
+                            settingsDetailField(String(localized: "Reasoning Effort", bundle: bundle)) {
+                                Picker(String(localized: "Reasoning Effort", bundle: bundle), selection: $modelReasoningEffort) {
+                                    Text("Default", bundle: bundle).tag(Optional<LLMReasoningEffort>.none)
+                                    ForEach(LLMReasoningEffort.allCases, id: \.self) { effort in
+                                        Text(reasoningEffortLabel(effort)).tag(Optional(effort))
+                                    }
+                                }
+                                .labelsHidden()
+                                .pickerStyle(.menu)
+                                .disabled(modelThinkingMode == .disabled)
+                            }
+
+                            Text("Thinking mode controls whether the model outputs a chain of thought before answering (for example DeepSeek V4). Reasoning effort is omitted while thinking is disabled.", bundle: bundle)
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+
                             settingsDetailField(String(localized: "Temperature", bundle: bundle)) {
                                 TextField("", text: $modelTemperature)
                                     .textFieldStyle(.roundedBorder)
@@ -1244,8 +1289,14 @@ struct IPadSettingsView: View {
         modelTemperature = model.temperature.map { String($0) } ?? ""
         modelTopP = model.topP.map { String($0) } ?? ""
         modelMaxTokens = model.maxTokens.map { String($0) } ?? ""
+        modelThinkingMode = model.thinkingModeValue
+        modelReasoningEffort = model.reasoningEffortValue
         modelEnabled = model.isEnabled
-        showsModelAdvancedOptions = model.temperature != nil || model.topP != nil || model.maxTokens != nil
+        showsModelAdvancedOptions = model.temperature != nil
+            || model.topP != nil
+            || model.maxTokens != nil
+            || model.thinkingModeValue != nil
+            || model.reasoningEffortValue != nil
         modelStatusMessage = nil
         modelOutputPreview = nil
     }
@@ -1270,6 +1321,8 @@ struct IPadSettingsView: View {
         modelTemperature = ""
         modelTopP = ""
         modelMaxTokens = ""
+        modelThinkingMode = nil
+        modelReasoningEffort = nil
         modelEnabled = true
         showsModelAdvancedOptions = false
         modelStatusMessage = nil
@@ -1414,6 +1467,8 @@ struct IPadSettingsView: View {
                     temperature: temperature,
                     topP: topP,
                     maxTokens: maxTokens,
+                    thinkingMode: modelThinkingMode,
+                    reasoningEffort: modelReasoningEffort,
                     isEnabled: modelEnabled,
                     createdAt: now,
                     modifiedAt: now
@@ -1427,6 +1482,8 @@ struct IPadSettingsView: View {
             model.temperature = temperature
             model.topP = topP
             model.maxTokens = maxTokens
+            model.thinkingModeValue = modelThinkingMode
+            model.reasoningEffortValue = modelReasoningEffort
             model.isEnabled = modelEnabled
             model.modifiedAt = now
             settings.modifiedAt = now
@@ -1475,7 +1532,9 @@ struct IPadSettingsView: View {
                     model: modelIdentifier,
                     temperature: try parseOptionalDouble(modelTemperature, label: String(localized: "Temperature", bundle: bundle)),
                     topP: try parseOptionalDouble(modelTopP, label: String(localized: "Top-P", bundle: bundle)),
-                    maxTokens: try parseOptionalInt(modelMaxTokens, label: String(localized: "Max tokens", bundle: bundle))
+                    maxTokens: try parseOptionalInt(modelMaxTokens, label: String(localized: "Max tokens", bundle: bundle)),
+                    thinkingMode: modelThinkingMode,
+                    reasoningEffort: modelReasoningEffort
                 )
                 if let selectedModel {
                     selectedModel.lastTestedAt = Date()
@@ -1510,6 +1569,21 @@ struct IPadSettingsView: View {
         let providerName = providers.first(where: { $0.id == model.providerID })?.name
             ?? String(localized: "Unknown Provider", bundle: bundle)
         return "\(providerName) / \(model.name)"
+    }
+
+    private func thinkingModeLabel(_ mode: LLMThinkingMode) -> String {
+        switch mode {
+        case .enabled: String(localized: "Enabled", bundle: bundle)
+        case .disabled: String(localized: "Disabled", bundle: bundle)
+        }
+    }
+
+    private func reasoningEffortLabel(_ effort: LLMReasoningEffort) -> String {
+        switch effort {
+        case .low: String(localized: "Low", bundle: bundle)
+        case .high: String(localized: "High", bundle: bundle)
+        case .max: String(localized: "Max", bundle: bundle)
+        }
     }
 
     private func parseOptionalDouble(_ value: String, label: String) throws -> Double? {

@@ -10,6 +10,9 @@ final class LLMModelProfile {
     var temperature: Double?
     var topP: Double?
     var maxTokens: Int?
+    // Compatibility fields are optional so existing stores can adopt them via
+    // lightweight migration. Do not remove or rename them without a versioned
+    // SwiftData migration plan.
     var thinkingMode: String?
     var reasoningEffort: String?
     var isEnabled: Bool

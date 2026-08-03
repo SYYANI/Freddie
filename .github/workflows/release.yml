@@ -1,7 +1,12 @@
-name: Publish DMG
+name: Build Unsigned DMG
 
 on:
   workflow_dispatch:
+    inputs:
+      babeldoc_ref:
+        description: Full 40-character reWriteBabelDoc commit (falls back to BABELDOC_REF repository variable)
+        required: false
+        type: string
   push:
     tags:
       - "v*"
@@ -9,8 +14,9 @@ on:
 jobs:
   build-dmg:
     runs-on: macos-26
+    timeout-minutes: 90
     permissions:
-      contents: write
+      contents: read
     env:
       APP_NAME: Freddie
       PROJECT_PATH: ReadPaper.xcodeproj
@@ -20,6 +26,8 @@ jobs:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
       LOCAL_READABILITY_REPO: https://github.com/SYYANI/swift-readability.git
       LOCAL_READABILITY_REF: 5fabfd7dbb75c3a26cf459d6bc5a3b6897a319f4
+      LOCAL_BABELDOC_REPO: https://github.com/SYYANI/BabelDOC.git
+      LOCAL_BABELDOC_REF: ${{ inputs.babeldoc_ref || vars.BABELDOC_REF }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -32,13 +40,56 @@ jobs:
           xcodebuild -version
           xcrun --show-sdk-version
 
-      - name: Restore local package dependency
+      - name: Validate dependency pins
         run: |
-          if [ ! -d swift-readability ]; then
-            git clone "$LOCAL_READABILITY_REPO" swift-readability
+          if [[ ! "$LOCAL_READABILITY_REF" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "LOCAL_READABILITY_REF must be a full Git commit." >&2
+            exit 2
           fi
+          if [[ ! "$LOCAL_BABELDOC_REF" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "Provide a full reWriteBabelDoc commit through workflow input babeldoc_ref or repository variable BABELDOC_REF." >&2
+            exit 2
+          fi
+
+      - name: Restore local package dependencies
+        run: |
+          if [ -e swift-readability ]; then
+            echo "Unexpected pre-existing local path: swift-readability" >&2
+            exit 2
+          fi
+          git init swift-readability
+          git -C swift-readability remote add origin "$LOCAL_READABILITY_REPO"
           git -C swift-readability fetch --depth 1 origin "$LOCAL_READABILITY_REF"
-          git -C swift-readability checkout --detach "$LOCAL_READABILITY_REF"
+          git -C swift-readability checkout --detach FETCH_HEAD
+          actual_readability_ref="$(git -C swift-readability rev-parse HEAD)"
+          if [ "$actual_readability_ref" != "$LOCAL_READABILITY_REF" ]; then
+            echo "swift-readability checkout mismatch: expected $LOCAL_READABILITY_REF, got $actual_readability_ref" >&2
+            exit 1
+          fi
+
+          if [ -e ../reWriteBabelDoc ]; then
+            echo "Unexpected pre-existing sibling path: ../reWriteBabelDoc" >&2
+            exit 2
+          fi
+          git init ../reWriteBabelDoc
+          git -C ../reWriteBabelDoc remote add origin "$LOCAL_BABELDOC_REPO"
+          git -C ../reWriteBabelDoc fetch --depth 1 origin "$LOCAL_BABELDOC_REF"
+          git -C ../reWriteBabelDoc checkout --detach FETCH_HEAD
+          actual_babeldoc_ref="$(git -C ../reWriteBabelDoc rev-parse HEAD)"
+          if [ "$actual_babeldoc_ref" != "$LOCAL_BABELDOC_REF" ]; then
+            echo "reWriteBabelDoc checkout mismatch: expected $LOCAL_BABELDOC_REF, got $actual_babeldoc_ref" >&2
+            exit 1
+          fi
+
+      - name: Prepare and verify native runtime assets
+        run: |
+          ../reWriteBabelDoc/tools/download_native_assets.sh models
+          python3 ../reWriteBabelDoc/tools/download_runtime_fonts.py
+          ../reWriteBabelDoc/tools/build_native_libraries.sh zstd
+          python3 ../reWriteBabelDoc/tools/verify_mupdf_vendor.py
+          python3 ../reWriteBabelDoc/tools/verify_model_vendor.py
+          python3 ../reWriteBabelDoc/tools/verify_local_runtime_assets.py
+          python3 ../reWriteBabelDoc/tools/generate_native_runtime_manifest.py --check
 
       - name: Install build tools
         run: |
@@ -63,7 +114,11 @@ jobs:
       - name: Verify app bundle
         run: |
           test -d "$APP_PATH"
-          ls -la "$APP_PATH"
+          python3 ../reWriteBabelDoc/tools/verify_native_runtime.py \
+            --root "$APP_PATH/Contents/Resources/BabelDOCNative" \
+            --manifest ../reWriteBabelDoc/Sources/BabelDocKit/Resources/runtime-manifest.json
+          codesign --verify --strict --verbose=2 \
+            "$APP_PATH/Contents/Helpers/babeldoc-readpaper-helper"
 
       - name: Resolve artifact names
         id: artifact_meta
@@ -89,6 +144,19 @@ jobs:
           echo "dmg_path=$dmg_path" >> "$GITHUB_OUTPUT"
           echo "artifact_name=$artifact_name" >> "$GITHUB_OUTPUT"
 
+      - name: Record build provenance
+        run: |
+          runtime_manifest=../reWriteBabelDoc/Sources/BabelDocKit/Resources/runtime-manifest.json
+          {
+            echo "read-paper=$GITHUB_SHA"
+            echo "swift-readability=$LOCAL_READABILITY_REF"
+            echo "reWriteBabelDoc=$LOCAL_BABELDOC_REF"
+            echo "runtime-manifest-sha256=$(shasum -a 256 "$runtime_manifest" | awk '{print $1}')"
+            echo "app-version=$APP_VERSION"
+            echo "app-build=$APP_BUILD"
+            xcodebuild -version
+          } > build/build-provenance.txt
+
       - name: Create DMG
         run: |
           rm -f "$DMG_PATH"
@@ -107,44 +175,7 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: ${{ steps.artifact_meta.outputs.artifact_name }}
-          path: ${{ steps.artifact_meta.outputs.dmg_path }}
-
-      - name: Generate release notes
-        if: startsWith(github.ref, 'refs/tags/v')
-        run: |
-          mkdir -p build
-
-          current_tag="$GITHUB_REF_NAME"
-          previous_tag="$(
-            git tag --merged HEAD --sort=-creatordate \
-              | grep -Fxv "$current_tag" \
-              | head -n 1
-          )"
-
-          {
-            echo "## What's Changed"
-            echo
-
-            if [ -n "$previous_tag" ]; then
-              git log --no-merges --reverse --pretty=format:'- %s (%h)' "${previous_tag}..${current_tag}"
-            else
-              echo "- Initial release"
-            fi
-
-            echo
-            echo
-
-            if [ -n "$previous_tag" ]; then
-              echo "**Full Changelog**: https://github.com/${GITHUB_REPOSITORY}/compare/${previous_tag}...${current_tag}"
-            else
-              echo "First public release for \`${current_tag}\`."
-            fi
-          } > build/release-notes.md
-
-      - name: Create GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2.5.0
-        with:
-          files: ${{ steps.artifact_meta.outputs.dmg_path }}
-          name: ${{ github.ref_name }}
-          body_path: build/release-notes.md
+          if-no-files-found: error
+          path: |
+            ${{ steps.artifact_meta.outputs.dmg_path }}
+            build/build-provenance.txt
