@@ -96,7 +96,7 @@ struct InProcessBabelDocRunner {
             throw InProcessBabelDocError.missingRuntimeDirectory
         }
         let model = root.appendingPathComponent(
-            "models/doclayout_yolo_docstructbench_imgsz1024.onnx"
+            "models/doclayout_yolo_docstructbench_imgsz1024.mlmodel"
         )
         let fonts = root.appendingPathComponent("fonts", isDirectory: true)
         guard fileManager.fileExists(atPath: model.path) else {

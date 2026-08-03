@@ -715,7 +715,7 @@
 				"$(SRCROOT)/../reWriteBabelDoc/Sources/BabelDocKit/Resources/runtime-manifest.json",
 				"$(SRCROOT)/../reWriteBabelDoc/Vendor/MuPDF/lib/libmupdf.dylib",
 				"$(SRCROOT)/../reWriteBabelDoc/Vendor/Zstd/lib/libzstd.dylib",
-				"$(SRCROOT)/../reWriteBabelDoc/Vendor/Models/doclayout_yolo_docstructbench_imgsz1024.onnx",
+				"$(SRCROOT)/../reWriteBabelDoc/Vendor/Models/doclayout_yolo_docstructbench_imgsz1024.mlmodel",
 				"$(SRCROOT)/../reWriteBabelDoc/Vendor/Fonts/manifest.json",
 			);
 			name = "Embed BabelDOC Runtime";
@@ -738,7 +738,7 @@
 			);
 			inputPaths = (
 				"$(SRCROOT)/../reWriteBabelDoc/Sources/BabelDocKit/Resources/runtime-manifest.json",
-				"$(SRCROOT)/../reWriteBabelDoc/Vendor/Models/doclayout_yolo_docstructbench_imgsz1024.onnx",
+				"$(SRCROOT)/../reWriteBabelDoc/Vendor/Models/doclayout_yolo_docstructbench_imgsz1024.mlmodel",
 				"$(SRCROOT)/../reWriteBabelDoc/Vendor/Fonts/manifest.json",
 			);
 			name = "Embed BabelDOC In-Process Runtime";

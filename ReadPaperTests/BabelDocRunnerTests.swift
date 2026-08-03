@@ -33,7 +33,7 @@ final class BabelDocRunnerTests: XCTestCase {
                     manifestVersion: "1.0.0",
                     mupdfLibrary: runtimeRoot.appendingPathComponent("lib/libmupdf.dylib"),
                     zstdLibrary: runtimeRoot.appendingPathComponent("lib/libzstd.dylib"),
-                    layoutModel: runtimeRoot.appendingPathComponent("models/layout.onnx"),
+                    layoutModel: runtimeRoot.appendingPathComponent("models/layout.mlmodel"),
                     fontDirectory: runtimeRoot.appendingPathComponent("fonts", isDirectory: true)
                 )
             },
@@ -43,7 +43,7 @@ final class BabelDocRunnerTests: XCTestCase {
             root.appendingPathComponent("helper"),
             root.appendingPathComponent("lib/libmupdf.dylib"),
             root.appendingPathComponent("lib/libzstd.dylib"),
-            root.appendingPathComponent("models/layout.onnx"),
+            root.appendingPathComponent("models/layout.mlmodel"),
         ]
         for file in files {
             try fm.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -226,7 +226,7 @@ final class BabelDocRunnerTests: XCTestCase {
             runtimeVersion: "1.0.0",
             mupdfLibrary: URL(fileURLWithPath: "/native/lib/libmupdf.dylib"),
             zstdLibrary: URL(fileURLWithPath: "/native/lib/libzstd.dylib"),
-            layoutModel: URL(fileURLWithPath: "/native/models/layout.onnx"),
+            layoutModel: URL(fileURLWithPath: "/native/models/layout.mlmodel"),
             fontDirectory: URL(fileURLWithPath: "/native/fonts", isDirectory: true)
         )
         let output = URL(fileURLWithPath: "/tmp/translated.pdf")
@@ -258,7 +258,7 @@ final class BabelDocRunnerTests: XCTestCase {
             runtimeVersion: "1.0.0",
             mupdfLibrary: URL(fileURLWithPath: "/native/lib/libmupdf.dylib"),
             zstdLibrary: URL(fileURLWithPath: "/native/lib/libzstd.dylib"),
-            layoutModel: URL(fileURLWithPath: "/native/models/layout.onnx"),
+            layoutModel: URL(fileURLWithPath: "/native/models/layout.mlmodel"),
             fontDirectory: URL(fileURLWithPath: "/native/fonts", isDirectory: true)
         )
         var route = Self.route
@@ -289,7 +289,7 @@ final class BabelDocRunnerTests: XCTestCase {
             runtimeVersion: "1.0.0",
             mupdfLibrary: URL(fileURLWithPath: "/native/lib/libmupdf.dylib"),
             zstdLibrary: URL(fileURLWithPath: "/native/lib/libzstd.dylib"),
-            layoutModel: URL(fileURLWithPath: "/native/models/layout.onnx"),
+            layoutModel: URL(fileURLWithPath: "/native/models/layout.mlmodel"),
             fontDirectory: URL(fileURLWithPath: "/native/fonts", isDirectory: true)
         )
 
