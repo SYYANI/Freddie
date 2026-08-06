@@ -56,6 +56,7 @@ struct LLMModelRouteSnapshot: Equatable, Sendable {
             "maxTokens=\(maxTokensIdentity)",
             "thinking=\(thinkingMode?.rawValue ?? "default")",
             "reasoning=\(reasoningEffort?.rawValue ?? "default")",
+            "prompt=\(AcademicTranslationPrompt.version)",
         ].joined(separator: "|")
     }
 }

@@ -17,6 +17,9 @@ private struct Options {
     var maxTokens: Int?
     var thinkingMode: BabelDocThinkingMode?
     var reasoningEffort: BabelDocReasoningEffort?
+    var systemPrompt: String?
+    var documentTitle: String?
+    var glossary: String?
     var preferCoreML = true
     var onlySelectedPages = false
     var verifyRuntime = false
@@ -96,6 +99,7 @@ private func usage() {
       --only-include-translated-pages    Output only selected pages for incremental merge
       --qps <number> --temperature <n> --top-p <n> --max-tokens <n>
       --thinking-mode <enabled|disabled> --reasoning-effort <low|high|max> --cpu
+      --system-prompt <text> --document-title <text> --glossary <text>
       --verify-runtime                   Verify runtime assets and exit
     """.utf8))
 }
@@ -155,6 +159,9 @@ private func parse(_ arguments: [String]) throws -> Options {
                 throw HelperError.argument("--reasoning-effort must be low, high, or max.")
             }
             options.reasoningEffort = effort
+        case "--system-prompt": options.systemPrompt = try value(arguments, &index, for: "--system-prompt")
+        case "--document-title": options.documentTitle = try value(arguments, &index, for: "--document-title")
+        case "--glossary": options.glossary = try value(arguments, &index, for: "--glossary")
         case "--only-include-translated-pages": options.onlySelectedPages = true
         case "--cpu": options.preferCoreML = false
         case "--verify-runtime": options.verifyRuntime = true
@@ -219,7 +226,9 @@ private enum ReadPaperBabelDocHelperMain {
                     pages: options.pages,
                     targetLanguage: options.targetLanguage,
                     preferCoreML: options.preferCoreML,
-                    onlyIncludeTranslatedPages: options.onlySelectedPages
+                    onlyIncludeTranslatedPages: options.onlySelectedPages,
+                    documentTitle: options.documentTitle,
+                    glossary: options.glossary
                 ),
                 runtime: runtime,
                 openAI: .init(
@@ -231,7 +240,8 @@ private enum ReadPaperBabelDocHelperMain {
                     maxTokens: options.maxTokens,
                     thinkingMode: options.thinkingMode,
                     reasoningEffort: options.reasoningEffort,
-                    requestsPerSecond: options.qps
+                    requestsPerSecond: options.qps,
+                    systemPrompt: options.systemPrompt
                 ),
                 onProgress: { emitter.progress($0) }
             )

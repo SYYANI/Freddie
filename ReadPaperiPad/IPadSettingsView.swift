@@ -26,6 +26,8 @@ struct IPadSettingsView: View {
     private var pdfTranslationBatchSize = PDFTranslationBatchPreference.defaultValue
     @AppStorage(HTMLReaderTypography.fontSizeUserDefaultsKey)
     private var htmlReaderFontSize = HTMLReaderTypography.defaultFontSize
+    @AppStorage(TranslationGlossaryPreference.userDefaultsKey)
+    private var translationGlossary = ""
     @AppStorage(PaperDigestExportConfiguration.templateKey)
     private var digestExportTemplate = PaperDigestExportPolicy.defaultMarkdownTemplate
     @AppStorage(PaperDigestExportConfiguration.directoryDisplayPathKey)
@@ -230,6 +232,23 @@ struct IPadSettingsView: View {
 
                 Text(
                     "Controls the default translation target, HTML concurrency, BabelDOC request rate, and incremental PDF page batch size. Supported languages: English and Simplified Chinese.",
+                    bundle: bundle
+                )
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+
+                Text("Optional glossary", bundle: bundle)
+
+                TextEditor(text: $translationGlossary)
+                    .frame(minHeight: 110)
+
+                Button(String(localized: "Clear glossary", bundle: bundle), role: .destructive) {
+                    translationGlossary = ""
+                }
+                .disabled(translationGlossary.isEmpty)
+
+                Text(
+                    "Enter one preferred term mapping per line, for example “large language model = 大语言模型”. The glossary is optional and is used as reference context by both HTML and PDF translation.",
                     bundle: bundle
                 )
                 .font(.footnote)

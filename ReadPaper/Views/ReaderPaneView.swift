@@ -892,6 +892,7 @@ struct ReaderPaneView: View {
                     route: resolvedRoute.snapshot,
                     apiKey: resolvedRoute.apiKey,
                     tool: nativeTool,
+                    documentTitle: paper.title,
                     pageRange: pageRange,
                     environment: toolEnvironment,
                     onStatusUpdate: { message in
@@ -995,6 +996,7 @@ struct ReaderPaneView: View {
                     route: resolvedRoute.snapshot,
                     apiKey: resolvedRoute.apiKey,
                     tool: nativeTool,
+                    documentTitle: paper.title,
                     pageRange: pageRange,
                     environment: toolEnvironment,
                     onStatusUpdate: { message in

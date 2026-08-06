@@ -236,6 +236,7 @@ final class BabelDocRunnerTests: XCTestCase {
             preferences: Self.preferences,
             route: Self.route,
             tool: tool,
+            documentTitle: "Context Paper",
             pageRange: 11...20
         )
 
@@ -248,6 +249,36 @@ final class BabelDocRunnerTests: XCTestCase {
         XCTAssertEqual(arguments[arguments.firstIndex(of: "--pages")! + 1], "11-20")
         XCTAssertFalse(arguments.contains("sk-secret"))
         XCTAssertFalse(arguments.contains("--openai-api-key"))
+        XCTAssertEqual(
+            arguments[arguments.firstIndex(of: "--system-prompt")! + 1],
+            AcademicTranslationPrompt.systemPrompt(targetLanguage: "zh-CN")
+        )
+        XCTAssertEqual(arguments[arguments.firstIndex(of: "--document-title")! + 1], "Context Paper")
+    }
+
+    func testNativeArgumentsIncludeOptionalGlossary() {
+        let tool = NativeBabelDocToolPaths(
+            executable: URL(fileURLWithPath: "/native/bin/babeldoc-native"),
+            runtimeRoot: URL(fileURLWithPath: "/native", isDirectory: true),
+            runtimeManifest: URL(fileURLWithPath: "/app/runtime-manifest.json"),
+            runtimeVersion: "1.0.0",
+            mupdfLibrary: URL(fileURLWithPath: "/native/lib/libmupdf.dylib"),
+            zstdLibrary: URL(fileURLWithPath: "/native/lib/libzstd.dylib"),
+            layoutModel: URL(fileURLWithPath: "/native/models/layout.mlmodel"),
+            fontDirectory: URL(fileURLWithPath: "/native/fonts", isDirectory: true)
+        )
+        var preferences = Self.preferences
+        preferences.translationGlossary = "attention = 注意力"
+
+        let arguments = BabelDocRunner.nativeArguments(
+            inputPDF: URL(fileURLWithPath: "/tmp/source.pdf"),
+            outputPDF: URL(fileURLWithPath: "/tmp/translated.pdf"),
+            preferences: preferences,
+            route: Self.route,
+            tool: tool
+        )
+
+        XCTAssertEqual(arguments[arguments.firstIndex(of: "--glossary")! + 1], "attention = 注意力")
     }
 
     func testNativeArgumentsIncludeThinkingModeAndReasoningEffort() {

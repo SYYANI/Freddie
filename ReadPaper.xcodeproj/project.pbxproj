@@ -117,6 +117,7 @@
 		BC3E9654D7969BCA1EB3674C /* LanguageManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20565DE8852B9CB834E7BCDC /* LanguageManagerTests.swift */; };
 		BC6FBEC8FEB0CC15B6D7000D /* PaperFileStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6E92728C43A017D4F19D275 /* PaperFileStoreTests.swift */; };
 		BCA436B4169A300D72CEF0E7 /* StableNavigationSplitDividerHandle.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1066FFD97CD0FAFC6EBB7A6 /* StableNavigationSplitDividerHandle.swift */; };
+		BD3E03EA17ACD84102672A0C /* AcademicTranslationPrompt.swift in Sources */ = {isa = PBXBuildFile; fileRef = 090DCC03975706C4B2B4CB9F /* AcademicTranslationPrompt.swift */; };
 		BEBF197F4257357F15F0BCF7 /* NoteMarkdownPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72E527A1CB9BF6F7422C42BA /* NoteMarkdownPreview.swift */; };
 		C2E48FDCC25C42B611792023 /* HTMLTranslationPipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30444FC979F813B5B76B4726 /* HTMLTranslationPipeline.swift */; };
 		C30A50E23BD5205861D15950 /* AuthorExtractionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 302B63A40C9C12372F265892 /* AuthorExtractionService.swift */; };
@@ -144,6 +145,7 @@
 		E84EF6C6B757E7331F99BCB9 /* LLMModelProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78A4FD40176F3BF293CF2AD5 /* LLMModelProfile.swift */; };
 		EBD68891314DD0B0035E0C16 /* PaperImporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61B39EE919BF400C2E3155C6 /* PaperImporter.swift */; };
 		EDC74DFF3F1F12EFED1038D1 /* PaperDigestExportPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A5CE9583FC6BBC3FBA18158 /* PaperDigestExportPolicy.swift */; };
+		EFBF8D2475031747FA7B19ED /* AcademicTranslationPrompt.swift in Sources */ = {isa = PBXBuildFile; fileRef = 090DCC03975706C4B2B4CB9F /* AcademicTranslationPrompt.swift */; };
 		F27D9396893317BF40E0BD22 /* ReaderPaneView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15605D44878CFDBFBF883E0F /* ReaderPaneView.swift */; };
 		F4EDC902333FAE0E8269D73D /* ArxivImportProgress.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3B8354421E9159F37194453 /* ArxivImportProgress.swift */; };
 		F543B39A79226036B5C355A4 /* LLMReasoningConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45BD3A614317AAD562260E0C /* LLMReasoningConfiguration.swift */; };
@@ -181,6 +183,7 @@
 
 /* Begin PBXFileReference section */
 		02AE9D431AB98BDB3F60C322 /* TranslationTargetLanguage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslationTargetLanguage.swift; sourceTree = "<group>"; };
+		090DCC03975706C4B2B4CB9F /* AcademicTranslationPrompt.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AcademicTranslationPrompt.swift; sourceTree = "<group>"; };
 		09EEDB01E3CF283B319A20C9 /* PaperSelectionStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaperSelectionStoreTests.swift; sourceTree = "<group>"; };
 		0A5CE9583FC6BBC3FBA18158 /* PaperDigestExportPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaperDigestExportPolicy.swift; sourceTree = "<group>"; };
 		0C3FB8A712616D4FD4D20FDC /* ReadPaperModelStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadPaperModelStore.swift; sourceTree = "<group>"; };
@@ -322,6 +325,7 @@
 			isa = PBXGroup;
 			children = (
 				3CA9993DFAA34B89EBCF9A67 /* AbstractTranslationService.swift */,
+				090DCC03975706C4B2B4CB9F /* AcademicTranslationPrompt.swift */,
 				5AE04037B749D64F46B8231B /* ArxivClient.swift */,
 				E3B8354421E9159F37194453 /* ArxivImportProgress.swift */,
 				302B63A40C9C12372F265892 /* AuthorExtractionService.swift */,
@@ -809,6 +813,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				A383B735CE3A5EC4629194D5 /* AbstractTranslationService.swift in Sources */,
+				BD3E03EA17ACD84102672A0C /* AcademicTranslationPrompt.swift in Sources */,
 				FAF78845B72289DB46617CF8 /* AppSettings.swift in Sources */,
 				63B66291FC21F07AAEDD7B8C /* ArxivClient.swift in Sources */,
 				4000094C0338B27FBA6D5A41 /* ArxivImportProgress.swift in Sources */,
@@ -873,6 +878,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				46F3B4A063FD01E572CDF924 /* AbstractTranslationService.swift in Sources */,
+				EFBF8D2475031747FA7B19ED /* AcademicTranslationPrompt.swift in Sources */,
 				4071082F08025D60C62849D7 /* AddPaperSheet.swift in Sources */,
 				71CF6A923EFED0917CF9F58C /* AppSettings.swift in Sources */,
 				60130CE02ABCB946ABAC9A8A /* ArxivClient.swift in Sources */,

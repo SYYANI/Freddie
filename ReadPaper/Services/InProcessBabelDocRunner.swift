@@ -17,6 +17,7 @@ struct InProcessBabelDocRunner {
         preferences: TranslationPreferencesSnapshot,
         route: LLMModelRouteSnapshot,
         apiKey: String,
+        documentTitle: String? = nil,
         pageRange: ClosedRange<Int>? = nil,
         onProgressUpdate: (@Sendable (BabelDocProgressUpdate) -> Void)? = nil
     ) async throws -> URL {
@@ -40,7 +41,9 @@ struct InProcessBabelDocRunner {
             pages: pageRange.map(Array.init),
             targetLanguage: preferences.targetLanguage,
             preferCoreML: true,
-            onlyIncludeTranslatedPages: pageRange != nil
+            onlyIncludeTranslatedPages: pageRange != nil,
+            documentTitle: documentTitle,
+            glossary: preferences.translationGlossary
         )
         let configuration = BabelDocOpenAIConfiguration(
             baseURL: baseURL,
@@ -51,7 +54,10 @@ struct InProcessBabelDocRunner {
             maxTokens: route.maxTokens,
             thinkingMode: route.thinkingMode.map(Self.babelDocThinkingMode),
             reasoningEffort: route.reasoningEffort.map(Self.babelDocReasoningEffort),
-            requestsPerSecond: Double(max(preferences.babelDocQPS, 1))
+            requestsPerSecond: Double(max(preferences.babelDocQPS, 1)),
+            systemPrompt: AcademicTranslationPrompt.systemPrompt(
+                targetLanguage: preferences.targetLanguage
+            )
         )
 
         let worker = Task.detached(priority: .userInitiated) {

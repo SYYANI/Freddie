@@ -141,6 +141,7 @@ struct BabelDocRunner {
         route: LLMModelRouteSnapshot,
         apiKey: String,
         tool: NativeBabelDocToolPaths,
+        documentTitle: String? = nil,
         pageRange: ClosedRange<Int>? = nil,
         environment: [String: String] = [:],
         onStatusUpdate: (@Sendable (String) -> Void)? = nil,
@@ -159,6 +160,7 @@ struct BabelDocRunner {
             preferences: preferences,
             route: route,
             tool: tool,
+            documentTitle: documentTitle,
             pageRange: pageRange
         )
         let outputParser = BabelDocOutputParser(apiKey: apiKey)
@@ -207,6 +209,7 @@ struct BabelDocRunner {
         preferences: TranslationPreferencesSnapshot,
         route: LLMModelRouteSnapshot,
         tool: NativeBabelDocToolPaths,
+        documentTitle: String? = nil,
         pageRange: ClosedRange<Int>? = nil
     ) -> [String] {
         var arguments = [
@@ -219,7 +222,17 @@ struct BabelDocRunner {
             "--target-language", preferences.targetLanguage,
             "--qps", "\(preferences.babelDocQPS)",
             "--api-key-environment", "READPAPER_LLM_API_KEY",
+            "--system-prompt", AcademicTranslationPrompt.systemPrompt(
+                targetLanguage: preferences.targetLanguage
+            ),
         ]
+        if let documentTitle = documentTitle?.trimmingCharacters(in: .whitespacesAndNewlines),
+           documentTitle.isEmpty == false {
+            arguments += ["--document-title", documentTitle]
+        }
+        if preferences.translationGlossary.isEmpty == false {
+            arguments += ["--glossary", preferences.translationGlossary]
+        }
         if let temperature = route.temperature {
             arguments += ["--temperature", "\(temperature)"]
         }

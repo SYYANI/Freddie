@@ -24,7 +24,7 @@ final class AbstractTranslationServiceTests: XCTestCase {
         
         // 创建模拟的翻译客户端
         let mockClient = MockTranslationClient()
-        service = AbstractTranslationService(translationClient: mockClient)
+        service = AbstractTranslationService(translationClient: mockClient, glossaryProvider: { "" })
     }
     
     override func tearDown() async throws {
@@ -350,7 +350,8 @@ private final class MockTranslationClient: TranslationLLMClientProtocol {
         _ text: String,
         targetLanguage: String,
         route: LLMModelRouteSnapshot,
-        apiKey: String
+        apiKey: String,
+        context: AcademicTranslationContext
     ) async throws -> String {
         // 模拟翻译：简单地在文本前添加"Translated to [language]: "
         return "Translated to \(targetLanguage): \(text)"

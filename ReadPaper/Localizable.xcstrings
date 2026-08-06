@@ -939,6 +939,16 @@
         }
       }
     },
+    "Clear glossary" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "清空术语表"
+          }
+        }
+      }
+    },
     "Click to edit note" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1366,6 +1376,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "启用"
+          }
+        }
+      }
+    },
+    "Enter one preferred term mapping per line, for example “large language model = 大语言模型”. The glossary is optional and is used as reference context by both HTML and PDF translation." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "每行输入一条首选术语映射，例如“large language model = 大语言模型”。术语表可留空，HTML 和 PDF 翻译都会将其作为参考上下文。"
           }
         }
       }
@@ -2754,6 +2774,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "原文"
+          }
+        }
+      }
+    },
+    "Optional glossary" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "可选术语表"
           }
         }
       }

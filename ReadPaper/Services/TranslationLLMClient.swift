@@ -5,7 +5,8 @@ protocol TranslationLLMClientProtocol: Sendable {
         _ text: String,
         targetLanguage: String,
         route: LLMModelRouteSnapshot,
-        apiKey: String
+        apiKey: String,
+        context: AcademicTranslationContext
     ) async throws -> String
 }
 
@@ -20,7 +21,8 @@ struct TranslationLLMClient: TranslationLLMClientProtocol {
         _ text: String,
         targetLanguage: String,
         route: LLMModelRouteSnapshot,
-        apiKey: String
+        apiKey: String,
+        context: AcademicTranslationContext = AcademicTranslationContext()
     ) async throws -> String {
         guard let baseURL = URL(string: route.baseURL) else {
             throw LLMProviderError.invalidConfiguration(
@@ -34,8 +36,14 @@ struct TranslationLLMClient: TranslationLLMClientProtocol {
                 apiKey: apiKey,
                 model: route.modelName,
                 messages: [
-                    LLMCompletionMessage(role: "system", content: systemPrompt(targetLanguage: targetLanguage)),
-                    LLMCompletionMessage(role: "user", content: text)
+                    LLMCompletionMessage(
+                        role: "system",
+                        content: AcademicTranslationPrompt.systemPrompt(targetLanguage: targetLanguage)
+                    ),
+                    LLMCompletionMessage(
+                        role: "user",
+                        content: AcademicTranslationPrompt.userPrompt(sourceText: text, context: context)
+                    )
                 ],
                 temperature: route.temperature ?? 0.2,
                 topP: route.topP,
@@ -53,13 +61,4 @@ struct TranslationLLMClient: TranslationLLMClientProtocol {
         return content
     }
 
-    private func systemPrompt(targetLanguage: String) -> String {
-        """
-        You are a professional academic translator. Translate into \(targetLanguage).
-        Preserve academic tone and terminology.
-        Do not change placeholders such as [PROTECTED_0].
-        Preserve Markdown emphasis markers if present.
-        Output only the translation.
-        """
-    }
 }

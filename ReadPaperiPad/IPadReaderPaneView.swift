@@ -657,6 +657,7 @@ struct IPadReaderPaneView: View {
                     preferences: TranslationPreferencesSnapshot(settings),
                     route: resolvedRoute.snapshot,
                     apiKey: resolvedRoute.apiKey,
+                    documentTitle: paper.title,
                     pageRange: pageRange,
                     onProgressUpdate: { progress in
                         Task { @MainActor in handlePDFProgress(progress) }
@@ -708,6 +709,7 @@ struct IPadReaderPaneView: View {
                     preferences: TranslationPreferencesSnapshot(settings),
                     route: resolvedRoute.snapshot,
                     apiKey: resolvedRoute.apiKey,
+                    documentTitle: paper.title,
                     pageRange: pageRange,
                     onProgressUpdate: { progress in
                         Task { @MainActor in handlePDFProgress(progress) }

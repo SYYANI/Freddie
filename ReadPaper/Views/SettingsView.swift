@@ -96,6 +96,8 @@ private struct SettingsForm: View {
     private var pdfTranslationBatchSizeRawValue = PDFTranslationBatchPreference.defaultValue
     @AppStorage(HTMLReaderTypography.fontSizeUserDefaultsKey)
     private var htmlReaderFontSize = HTMLReaderTypography.defaultFontSize
+    @AppStorage(TranslationGlossaryPreference.userDefaultsKey)
+    private var translationGlossary = ""
     @AppStorage(PaperDigestExportConfiguration.templateKey) private var digestExportTemplate = PaperDigestExportPolicy.defaultMarkdownTemplate
     @AppStorage(PaperDigestExportConfiguration.directoryDisplayPathKey) private var digestExportDirectoryPath = ""
 
@@ -136,6 +138,7 @@ private struct SettingsForm: View {
     @State private var isLoadingLatestBabelDocVersion = false
     @State private var digestTemplateInsertion: String?
     @State private var digestStatusMessage: String?
+    @State private var glossaryInsertion: String?
 
     private let keychainStore = KeychainStore()
     private let validator = LLMProviderValidationUseCase()
@@ -392,6 +395,27 @@ private struct SettingsForm: View {
 
                     Text(
                         "Controls the default translation target, HTML concurrency, BabelDOC request rate, and incremental PDF page batch size. Supported languages: English and Simplified Chinese.",
+                        bundle: bundle
+                    )
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Optional glossary", bundle: bundle)
+                        SettingsTemplateTextEditor(
+                            text: $translationGlossary,
+                            pendingInsertion: $glossaryInsertion
+                        )
+                        .frame(minHeight: 110)
+                    }
+
+                    Button(String(localized: "Clear glossary", bundle: bundle), role: .destructive) {
+                        translationGlossary = ""
+                    }
+                    .disabled(translationGlossary.isEmpty)
+
+                    Text(
+                        "Enter one preferred term mapping per line, for example “large language model = 大语言模型”. The glossary is optional and is used as reference context by both HTML and PDF translation.",
                         bundle: bundle
                     )
                         .font(.footnote)

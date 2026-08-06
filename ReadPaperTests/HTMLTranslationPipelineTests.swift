@@ -26,6 +26,58 @@ final class HTMLTranslationPipelineTests: XCTestCase {
     }
 
     @MainActor
+    func testCandidatesCarrySectionAndNeighborContext() throws {
+        let html = """
+        <html><body>
+        <h2>Methods</h2>
+        <p>The previous paragraph is long enough to be translated.</p>
+        <p>The current paragraph is also long enough to be translated.</p>
+        <p>The next paragraph is long enough to be translated.</p>
+        </body></html>
+        """
+
+        let candidates = try HTMLTranslationPipeline.extractCandidates(from: html)
+
+        XCTAssertEqual(candidates.count, 4)
+        XCTAssertNil(candidates[0].sectionTitle)
+        XCTAssertEqual(candidates[1].sectionTitle, "Methods")
+        XCTAssertEqual(candidates[2].sectionTitle, "Methods")
+        XCTAssertEqual(candidates[2].previousSourceText, candidates[1].sourceText)
+        XCTAssertEqual(candidates[2].nextSourceText, candidates[3].sourceText)
+    }
+
+    func testAcademicPromptEnforcesFaithfulTranslationAndCarriesContext() {
+        let systemPrompt = AcademicTranslationPrompt.systemPrompt(targetLanguage: "zh-CN")
+        XCTAssertTrue(systemPrompt.contains("into zh-CN"))
+        XCTAssertTrue(systemPrompt.contains("faithful"))
+        XCTAssertTrue(systemPrompt.contains("Do not omit, summarize, simplify, expand"))
+        XCTAssertTrue(systemPrompt.contains("keep terms, abbreviations, symbols, and named concepts consistent"))
+        XCTAssertTrue(systemPrompt.contains("Output only the translation"))
+
+        let userPrompt = AcademicTranslationPrompt.userPrompt(
+            sourceText: "Current source",
+            context: AcademicTranslationContext(
+                documentTitle: "Context Paper",
+                sectionTitle: "Methods",
+                previousSegment: "Previous source",
+                nextSegment: "Next source",
+                glossary: "attention = 注意力"
+            )
+        )
+        XCTAssertTrue(userPrompt.contains("<<<DOCUMENT_TITLE>>>\nContext Paper"))
+        XCTAssertTrue(userPrompt.contains("<<<SECTION_TITLE>>>\nMethods"))
+        XCTAssertTrue(userPrompt.contains("<<<PREVIOUS_SEGMENT>>>\nPrevious source"))
+        XCTAssertTrue(userPrompt.contains("<<<NEXT_SEGMENT>>>\nNext source"))
+        XCTAssertTrue(userPrompt.contains("<<<OPTIONAL_GLOSSARY>>>\nattention = 注意力"))
+        XCTAssertTrue(userPrompt.contains("<<<SOURCE_SEGMENT_TO_TRANSLATE>>>\nCurrent source"))
+    }
+
+    func testPromptVersionIsPartOfRouteCacheIdentity() {
+        let route = makeRoute(modelID: UUID(), providerID: UUID(), modelName: "paper-model")
+        XCTAssertTrue(route.translationCacheIdentity.contains("prompt=\(AcademicTranslationPrompt.version)"))
+    }
+
+    @MainActor
     func testAppliesTranslationBlocks() throws {
         let html = "<html><body><p>This is a long enough paragraph for translation.</p></body></html>"
         let prepared = try HTMLTranslationPipeline.prepareDocument(html)
@@ -281,6 +333,142 @@ final class HTMLTranslationPipelineTests: XCTestCase {
     }
 
     @MainActor
+    func testTranslateHTMLPassesDocumentSectionNeighborsAndGlossary() async throws {
+        let environment = try makeEnvironment()
+        defer { try? FileManager.default.removeItem(at: environment.rootURL) }
+        let sourceHTML = """
+        <html><body>
+        <h2>Methods</h2>
+        <p>The previous paragraph is long enough to be translated.</p>
+        <p>The current paragraph is long enough to be translated.</p>
+        <p>The next paragraph is long enough to be translated.</p>
+        </body></html>
+        """
+        try sourceHTML.write(to: environment.attachment.fileURL, atomically: true, encoding: .utf8)
+        let client = MockTranslationLLMClient(translatedText: "译文")
+
+        try await HTMLTranslationPipeline(client: client).translateHTML(
+            attachment: environment.attachment,
+            paper: environment.paper,
+            preferences: TranslationPreferencesSnapshot(
+                targetLanguage: "zh-CN",
+                htmlTranslationConcurrency: 1,
+                babelDocQPS: 4,
+                babelDocVersion: "0.5.24",
+                translationGlossary: "attention = 注意力"
+            ),
+            route: makeRoute(modelID: UUID(), providerID: UUID(), modelName: "paper-model"),
+            apiKey: "sk-test",
+            modelContext: environment.modelContext
+        )
+
+        let requests = await client.currentRequests()
+        let current = try XCTUnwrap(requests.first(where: {
+            $0.text.contains("current paragraph")
+        }))
+        XCTAssertEqual(current.context.documentTitle, "Pipeline Test")
+        XCTAssertEqual(current.context.sectionTitle, "Methods")
+        XCTAssertEqual(
+            current.context.previousSegment,
+            "The previous paragraph is long enough to be translated."
+        )
+        XCTAssertEqual(
+            current.context.nextSegment,
+            "The next paragraph is long enough to be translated."
+        )
+        XCTAssertEqual(current.context.glossary, "attention = 注意力")
+    }
+
+    @MainActor
+    func testGlossaryChangeInvalidatesHTMLTranslationCache() async throws {
+        let environment = try makeEnvironment()
+        defer { try? FileManager.default.removeItem(at: environment.rootURL) }
+        let sourceHTML = "<html><body><p>This is a long enough paragraph for translation.</p></body></html>"
+        try sourceHTML.write(to: environment.attachment.fileURL, atomically: true, encoding: .utf8)
+        let candidate = try XCTUnwrap(HTMLTranslationPipeline.prepareDocument(sourceHTML).candidates.first)
+        let route = makeRoute(modelID: UUID(), providerID: UUID(), modelName: "paper-model")
+        environment.modelContext.insert(TranslationSegment(
+            paperID: environment.paper.id,
+            sourceType: "html",
+            targetLanguage: "zh-CN",
+            sourceHash: candidate.sourceHash,
+            sourceText: candidate.sourceText,
+            translatedText: "Old glossary translation.",
+            providerProfileID: route.providerProfileID,
+            modelProfileID: route.modelProfileID,
+            modelName: route.translationCacheIdentity
+        ))
+        try environment.modelContext.save()
+        let client = MockTranslationLLMClient(translatedText: "New glossary translation.")
+
+        try await HTMLTranslationPipeline(client: client).translateHTML(
+            attachment: environment.attachment,
+            paper: environment.paper,
+            preferences: TranslationPreferencesSnapshot(
+                targetLanguage: "zh-CN",
+                htmlTranslationConcurrency: 1,
+                babelDocQPS: 4,
+                babelDocVersion: "0.5.24",
+                translationGlossary: "model = 模型"
+            ),
+            route: route,
+            apiKey: "sk-test",
+            modelContext: environment.modelContext
+        )
+
+        let callCount = await client.currentCallCount()
+        XCTAssertEqual(callCount, 1)
+        let translatedHTML = try String(contentsOf: environment.attachment.fileURL, encoding: .utf8)
+        XCTAssertTrue(translatedHTML.contains("New glossary translation."))
+    }
+
+    @MainActor
+    func testPromptVersionChangeInvalidatesLegacyHTMLTranslationCache() async throws {
+        let environment = try makeEnvironment()
+        defer { try? FileManager.default.removeItem(at: environment.rootURL) }
+        let sourceHTML = "<html><body><p>This is a long enough paragraph for translation.</p></body></html>"
+        try sourceHTML.write(to: environment.attachment.fileURL, atomically: true, encoding: .utf8)
+        let candidate = try XCTUnwrap(HTMLTranslationPipeline.prepareDocument(sourceHTML).candidates.first)
+        let route = makeRoute(modelID: UUID(), providerID: UUID(), modelName: "paper-model")
+        let legacyCacheIdentity = route.translationCacheIdentity.replacingOccurrences(
+            of: "|prompt=\(AcademicTranslationPrompt.version)",
+            with: ""
+        )
+        environment.modelContext.insert(TranslationSegment(
+            paperID: environment.paper.id,
+            sourceType: "html",
+            targetLanguage: "zh-CN",
+            sourceHash: candidate.sourceHash,
+            sourceText: candidate.sourceText,
+            translatedText: "Legacy prompt translation.",
+            providerProfileID: route.providerProfileID,
+            modelProfileID: route.modelProfileID,
+            modelName: legacyCacheIdentity
+        ))
+        try environment.modelContext.save()
+        let client = MockTranslationLLMClient(translatedText: "Versioned prompt translation.")
+
+        try await HTMLTranslationPipeline(client: client).translateHTML(
+            attachment: environment.attachment,
+            paper: environment.paper,
+            preferences: TranslationPreferencesSnapshot(
+                targetLanguage: "zh-CN",
+                htmlTranslationConcurrency: 1,
+                babelDocQPS: 4,
+                babelDocVersion: "0.5.24"
+            ),
+            route: route,
+            apiKey: "sk-test",
+            modelContext: environment.modelContext
+        )
+
+        let callCount = await client.currentCallCount()
+        XCTAssertEqual(callCount, 1)
+        let translatedHTML = try String(contentsOf: environment.attachment.fileURL, encoding: .utf8)
+        XCTAssertTrue(translatedHTML.contains("Versioned prompt translation."))
+    }
+
+    @MainActor
     private func makeEnvironment() throws -> HTMLPipelineTestEnvironment {
         let schema = Schema([
             Paper.self,
@@ -340,24 +528,36 @@ private struct HTMLPipelineTestEnvironment {
 }
 
 private actor MockTranslationLLMClient: TranslationLLMClientProtocol {
+    struct Request: Sendable {
+        let text: String
+        let context: AcademicTranslationContext
+    }
+
     let translatedText: String
     private(set) var callCount = 0
+    private(set) var requests: [Request] = []
 
     init(translatedText: String) {
         self.translatedText = translatedText
     }
 
     func translate(
-        _: String,
+        _ text: String,
         targetLanguage _: String,
         route _: LLMModelRouteSnapshot,
-        apiKey _: String
+        apiKey _: String,
+        context: AcademicTranslationContext
     ) async throws -> String {
         callCount += 1
+        requests.append(.init(text: text, context: context))
         return translatedText
     }
 
     func currentCallCount() -> Int {
         callCount
+    }
+
+    func currentRequests() -> [Request] {
+        requests
     }
 }
