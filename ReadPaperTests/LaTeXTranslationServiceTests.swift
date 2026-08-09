@@ -199,6 +199,80 @@ final class LaTeXTranslationServiceTests: XCTestCase {
         ))
     }
 
+    func testToolchainDetectionFindsLatexmkOnProvidedPath() throws {
+        let temporary = try TemporaryTestDirectory()
+        defer { temporary.remove() }
+        let bin = temporary.url.appendingPathComponent("bin", isDirectory: true)
+        try FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)
+        let latexmk = bin.appendingPathComponent("latexmk")
+        try Data("#!/bin/sh\n".utf8).write(to: latexmk)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: latexmk.path)
+
+        let toolchain = ReadPaperLaTeXToolchain.detect(environment: ["PATH": bin.path])
+
+        XCTAssertEqual(toolchain?.latexmkURL, latexmk.standardizedFileURL)
+    }
+
+    func testResolvedProcessRunnerInvokesDetectedLatexmkDirectly() async throws {
+        let temporary = try TemporaryTestDirectory()
+        defer { temporary.remove() }
+        let latexmk = temporary.url.appendingPathComponent("texbin/latexmk")
+        let baseRunner = RecordingLaTeXProcessRunner()
+        let runner = ReadPaperResolvedLaTeXProcessRunner(
+            toolchain: ReadPaperLaTeXToolchain(latexmkURL: latexmk),
+            runner: baseRunner
+        )
+        let stdout = temporary.url.appendingPathComponent("stdout.log")
+        let stderr = temporary.url.appendingPathComponent("stderr.log")
+
+        _ = try await runner.run(LaTeXProcessRequest(
+            executableURL: URL(fileURLWithPath: "/usr/bin/env"),
+            arguments: ["latexmk", "-xelatex", "main.tex"],
+            workingDirectory: temporary.url,
+            environment: ["PATH": "/usr/bin:/bin"],
+            standardOutputURL: stdout,
+            standardErrorURL: stderr
+        ))
+        let recordedRequest = await baseRunner.lastRequest()
+        let request = try XCTUnwrap(recordedRequest)
+
+        XCTAssertEqual(request.executableURL, latexmk)
+        XCTAssertEqual(request.arguments, ["-xelatex", "main.tex"])
+        XCTAssertEqual(
+            request.environment?["PATH"],
+            latexmk.deletingLastPathComponent().path + ":/usr/bin:/bin"
+        )
+    }
+
+    func testCompilationDiagnosticsPreferNonemptyStderrAndExplainMissingToolchain() throws {
+        let temporary = try TemporaryTestDirectory()
+        defer { temporary.remove() }
+        let stdout = temporary.url.appendingPathComponent("stdout.log")
+        let stderr = temporary.url.appendingPathComponent("stderr.log")
+        try Data().write(to: stdout)
+        try Data("env: latexmk: No such file or directory\n".utf8).write(to: stderr)
+        let attempt = CompilationAttempt(
+            engine: .xeLaTeX,
+            exitCode: 127,
+            succeeded: false,
+            durationMilliseconds: 4,
+            logURLs: [stdout, stderr]
+        )
+
+        XCTAssertEqual(
+            ReadPaperLaTeXCompilationDiagnostics.preferredLogURL(from: [attempt]),
+            stderr
+        )
+        XCTAssertTrue(ReadPaperLaTeXCompilationDiagnostics.indicatesMissingLatexmk([attempt]))
+        XCTAssertEqual(
+            ReadPaperLaTeXCompilationDiagnostics.failureStatusMessage(
+                for: [attempt],
+                bundle: AppLocalization.resolveBundle(for: "en")
+            ),
+            "LaTeX source translation completed, but PDF compilation requires a TeX distribution that includes latexmk."
+        )
+    }
+
     func testTerminologyParserAcceptsHostGlossarySyntaxAndIgnoresNotes() {
         let entries = ReadPaperLaTeXTerminology.entries(from: """
         model => 模型
@@ -244,6 +318,13 @@ final class LaTeXTranslationServiceTests: XCTestCase {
                 bundle: bundle
             ),
             "Error: The LaTeX translation failed structural validation."
+        )
+        XCTAssertEqual(
+            ReadPaperLaTeXErrorPresentation.message(
+                for: ReadPaperLaTeXToolchainError.latexmkNotFound,
+                bundle: bundle
+            ),
+            "Error: PDF compilation requires a TeX distribution that includes latexmk."
         )
         XCTAssertEqual(
             ReadPaperLaTeXErrorPresentation.message(
@@ -361,6 +442,19 @@ private actor ProgressRecorder {
 
     func values() -> [ReadPaperLaTeXProgressUpdate] {
         updates
+    }
+}
+
+private actor RecordingLaTeXProcessRunner: LaTeXProcessRunning {
+    private var request: LaTeXProcessRequest?
+
+    func run(_ request: LaTeXProcessRequest) -> LaTeXProcessResult {
+        self.request = request
+        return LaTeXProcessResult(exitCode: 0)
+    }
+
+    func lastRequest() -> LaTeXProcessRequest? {
+        request
     }
 }
 

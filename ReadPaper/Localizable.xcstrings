@@ -2246,6 +2246,16 @@
         }
       }
     },
+    "LaTeX source translation completed, but PDF compilation requires a TeX distribution that includes latexmk." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LaTeX 源码翻译已完成，但 PDF 编译需要安装包含 latexmk 的 TeX 发行版。"
+          }
+        }
+      }
+    },
     "LaTeX translation completed." : {
       "localizations" : {
         "zh-Hans" : {
@@ -2923,6 +2933,16 @@
     },
     "PDF" : {
 
+    },
+    "PDF compilation requires a TeX distribution that includes latexmk." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PDF 编译需要安装包含 latexmk 的 TeX 发行版。"
+          }
+        }
+      }
     },
     "PDF Appearance" : {
       "extractionState" : "stale",

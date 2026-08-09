@@ -890,6 +890,17 @@ struct ReaderPaneView: View {
               !arxivID.isEmpty else {
             return
         }
+        #if os(macOS)
+        guard ReadPaperLaTeXToolchain.detect() != nil else {
+            translationProgress = nil
+            latexTranslationErrorLogURL = nil
+            statusMessage = ReadPaperLaTeXErrorPresentation.message(
+                for: ReadPaperLaTeXToolchainError.latexmkNotFound,
+                bundle: bundle
+            )
+            return
+        }
+        #endif
         let preferences = TranslationPreferencesSnapshot(settings)
         let arxivIdentifier = ReadPaperArXivIdentifier.resolving(
             id: arxivID,
@@ -964,30 +975,31 @@ struct ReaderPaneView: View {
                     translatedAttachment = attachment
                 }
 
+                let compilationFailureMessage = output.pdfCompilationFailed
+                    ? ReadPaperLaTeXCompilationDiagnostics.failureStatusMessage(
+                        for: output.failedCompilationAttempts,
+                        bundle: bundle
+                    )
+                    : nil
                 if let storedJob = translationJob(id: jobID) {
                     storedJob.attachmentID = translatedAttachment?.id ?? sourceAttachment.id
                     storedJob.progress = output.pdfCompilationFailed ? 0.92 : 1
                     storedJob.state = output.pdfCompilationFailed ? .failed : .completed
-                    storedJob.lastError = output.pdfCompilationFailed
-                        ? String(localized: "LaTeX source translation completed, but PDF compilation failed.", bundle: bundle)
-                        : nil
+                    storedJob.lastError = compilationFailureMessage
                     storedJob.modifiedAt = Date()
                 }
                 try modelContext.save()
 
-                latexTranslationErrorLogURL = output.failedCompilationAttempts
-                    .reversed()
-                    .lazy
-                    .flatMap(\.logURLs)
-                    .first
+                latexTranslationErrorLogURL = ReadPaperLaTeXCompilationDiagnostics.preferredLogURL(
+                    from: output.failedCompilationAttempts
+                )
                 translationProgress = nil
                 if translatedAttachment != nil {
                     readerMode = pdfAttachment == nil ? .translatedPDF : .bilingualPDF
                     pdfReloadToken += 1
                 }
-                statusMessage = output.pdfCompilationFailed
-                    ? String(localized: "LaTeX source translation completed, but PDF compilation failed.", bundle: bundle)
-                    : String(localized: "LaTeX translation completed.", bundle: bundle)
+                statusMessage = compilationFailureMessage
+                    ?? String(localized: "LaTeX translation completed.", bundle: bundle)
             } catch is CancellationError {
                 translationProgress = nil
                 finishLaTeXJob(

@@ -89,6 +89,129 @@ struct ReadPaperLaTeXTranslationOutput: Sendable {
     var failedCompilationAttempts: [CompilationAttempt]
 }
 
+enum ReadPaperLaTeXToolchainError: Error {
+    case latexmkNotFound
+}
+
+struct ReadPaperLaTeXToolchain: Equatable, Sendable {
+    let latexmkURL: URL
+
+    static func detect(
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        additionalSearchDirectories: [URL] = [],
+        fileManager: FileManager = .default
+    ) -> ReadPaperLaTeXToolchain? {
+        let pathDirectories = (environment["PATH"] ?? "")
+            .split(separator: ":")
+            .map { URL(fileURLWithPath: String($0), isDirectory: true) }
+        let conventionalDirectories = [
+            URL(fileURLWithPath: "/Library/TeX/texbin", isDirectory: true),
+            URL(fileURLWithPath: "/opt/homebrew/bin", isDirectory: true),
+            URL(fileURLWithPath: "/usr/local/bin", isDirectory: true),
+        ]
+        var visited: Set<String> = []
+        for directory in additionalSearchDirectories + pathDirectories + conventionalDirectories {
+            let candidate = directory
+                .appendingPathComponent("latexmk", isDirectory: false)
+                .standardizedFileURL
+            guard visited.insert(candidate.path).inserted else { continue }
+            if fileManager.isExecutableFile(atPath: candidate.path) {
+                return ReadPaperLaTeXToolchain(latexmkURL: candidate)
+            }
+        }
+        return nil
+    }
+}
+
+struct ReadPaperResolvedLaTeXProcessRunner: LaTeXProcessRunning {
+    private let toolchain: ReadPaperLaTeXToolchain
+    private let runner: any LaTeXProcessRunning
+
+    init(
+        toolchain: ReadPaperLaTeXToolchain,
+        runner: any LaTeXProcessRunning = FoundationLaTeXProcessRunner()
+    ) {
+        self.toolchain = toolchain
+        self.runner = runner
+    }
+
+    func run(_ request: LaTeXProcessRequest) async throws -> LaTeXProcessResult {
+        let arguments = request.arguments.first == "latexmk"
+            ? Array(request.arguments.dropFirst())
+            : request.arguments
+        var environment = request.environment ?? ProcessInfo.processInfo.environment
+        let executableDirectory = toolchain.latexmkURL.deletingLastPathComponent().path
+        let existingPath = environment["PATH"] ?? ""
+        environment["PATH"] = existingPath.isEmpty
+            ? executableDirectory
+            : executableDirectory + ":" + existingPath
+        return try await runner.run(LaTeXProcessRequest(
+            executableURL: toolchain.latexmkURL,
+            arguments: arguments,
+            workingDirectory: request.workingDirectory,
+            environment: environment,
+            standardOutputURL: request.standardOutputURL,
+            standardErrorURL: request.standardErrorURL
+        ))
+    }
+}
+
+enum ReadPaperLaTeXCompilationDiagnostics {
+    static func preferredLogURL(
+        from attempts: [CompilationAttempt],
+        fileManager: FileManager = .default
+    ) -> URL? {
+        let candidates = attempts.reversed().flatMap { attempt in
+            attempt.logURLs.sorted { logPriority($0) < logPriority($1) }
+        }
+        return candidates.first {
+            guard fileManager.fileExists(atPath: $0.path),
+                  let attributes = try? fileManager.attributesOfItem(atPath: $0.path),
+                  let size = attributes[.size] as? NSNumber else {
+                return false
+            }
+            return size.int64Value > 0
+        } ?? candidates.first { fileManager.fileExists(atPath: $0.path) }
+    }
+
+    static func indicatesMissingLatexmk(_ attempts: [CompilationAttempt]) -> Bool {
+        attempts
+            .flatMap(\.logURLs)
+            .contains { url in
+                guard let data = try? Data(contentsOf: url), data.count <= 64 * 1_024,
+                      let contents = String(data: data, encoding: .utf8) else {
+                    return false
+                }
+                return contents.localizedCaseInsensitiveContains("latexmk: No such file or directory")
+                    || contents.localizedCaseInsensitiveContains("latexmk: command not found")
+            }
+    }
+
+    static func failureStatusMessage(for attempts: [CompilationAttempt], bundle: Bundle) -> String {
+        if indicatesMissingLatexmk(attempts) {
+            return AppLocalization.localized(
+                "LaTeX source translation completed, but PDF compilation requires a TeX distribution that includes latexmk.",
+                bundle: bundle
+            )
+        }
+        return AppLocalization.localized(
+            "LaTeX source translation completed, but PDF compilation failed.",
+            bundle: bundle
+        )
+    }
+
+    private static func logPriority(_ url: URL) -> Int {
+        switch url.lastPathComponent.lowercased() {
+        case "stderr.log":
+            return 0
+        case "stdout.log":
+            return 2
+        default:
+            return url.pathExtension.lowercased() == "log" ? 1 : 3
+        }
+    }
+}
+
 enum ReadPaperArXivIdentifier {
     static func resolving(id: String, version: String?) -> String {
         let identifier = id.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -131,6 +254,11 @@ enum ReadPaperLaTeXErrorPresentation {
         case is ReconstructionError:
             description = AppLocalization.localized(
                 "Could not reconstruct the translated LaTeX source.",
+                bundle: bundle
+            )
+        case is ReadPaperLaTeXToolchainError:
+            description = AppLocalization.localized(
+                "PDF compilation requires a TeX distribution that includes latexmk.",
                 bundle: bundle
             )
         case let pipelineError as TranslationPipelineError:
@@ -472,7 +600,11 @@ actor ReadPaperLaTeXTranslationService {
 
     private static var defaultCompiler: (any LaTeXProjectCompiling)? {
         #if os(macOS)
-        MacOSLaTeXCompiler(engines: [.xeLaTeX, .pdfLaTeX, .luaLaTeX])
+        guard let toolchain = ReadPaperLaTeXToolchain.detect() else { return nil }
+        return MacOSLaTeXCompiler(
+            runner: ReadPaperResolvedLaTeXProcessRunner(toolchain: toolchain),
+            engines: [.xeLaTeX, .pdfLaTeX, .luaLaTeX]
+        )
         #else
         nil
         #endif
