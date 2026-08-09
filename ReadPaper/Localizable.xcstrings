@@ -4887,6 +4887,16 @@
         }
       }
     },
+    "Use arXiv LaTeX structure for PDF translation" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "使用 arXiv LaTeX 结构改进 PDF 翻译"
+          }
+        }
+      }
+    },
     "Use the + button in the library to create the first paper record." : {
       "localizations" : {
         "zh-Hans" : {
@@ -4924,6 +4934,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "网页 URL"
+          }
+        }
+      }
+    },
+    "When enabled, ReadPaper uses available arXiv source to improve BabelDOC structure and translation context. No TeX installation is required, and failures fall back to PDF-only analysis." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "启用后，ReadPaper 会使用可用的 arXiv 源码改进 BabelDOC 的结构识别和翻译上下文。无需安装 TeX；若处理失败，将回退到仅使用 PDF 的版面分析。"
           }
         }
       }

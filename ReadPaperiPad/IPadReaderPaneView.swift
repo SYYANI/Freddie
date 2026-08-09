@@ -29,6 +29,8 @@ struct IPadReaderPaneView: View {
     private var htmlFontSize = HTMLReaderTypography.defaultFontSize
     @AppStorage(PDFTranslationBatchPreference.userDefaultsKey)
     private var pdfTranslationBatchSizeRawValue = PDFTranslationBatchPreference.defaultValue
+    @AppStorage(BabelDocSemanticHintPreference.userDefaultsKey)
+    private var babelDocSemanticHintsEnabled = BabelDocSemanticHintPreference.defaultValue
 
     let paper: Paper?
     let attachments: [PaperAttachment]
@@ -655,6 +657,7 @@ struct IPadReaderPaneView: View {
                     ReadPaperArXivIdentifier.resolving(id: $0, version: paper.arxivVersion)
                 }
                 let semanticHints = try await BabelDocSemanticHintService().prepareIfAvailable(
+                    isEnabled: babelDocSemanticHintsEnabled,
                     paperID: paper.id,
                     arxivIdentifier: arxivIdentifier
                 ) { update in
@@ -717,6 +720,7 @@ struct IPadReaderPaneView: View {
                     ReadPaperArXivIdentifier.resolving(id: $0, version: paper.arxivVersion)
                 }
                 let semanticHints = try await BabelDocSemanticHintService().prepareIfAvailable(
+                    isEnabled: babelDocSemanticHintsEnabled,
                     paperID: paper.id,
                     arxivIdentifier: arxivIdentifier
                 ) { update in

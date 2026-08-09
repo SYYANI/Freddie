@@ -180,7 +180,7 @@ HTML 翻译的核心不是“翻译整个 HTML 字符串”，而是按语义块
 
 完整 PDF 翻译建议作为可选能力，不要和 HTML 段落翻译混为一体。
 
-当前 Swift 实现还会对具有精确 arXiv 版本的论文尝试下载 LaTeX 源码，但只做安全、确定性的结构提取，不编译或执行源码，因此 macOS 和 iPad 都不需要用户安装 TeX。版本化的 semantic sidecar 会在 BabelDOC 样式/公式分析后与翻译前以置信度门控的方式使用：
+当前 Swift 实现在用户开启“使用 arXiv LaTeX 结构改进 PDF 翻译”后，会对具有精确 arXiv 版本的论文尝试下载 LaTeX 源码，但只做安全、确定性的结构提取，不编译或执行源码，因此 macOS 和 iPad 都不需要用户安装 TeX。该开关使用 UserDefaults 持久化且默认开启；关闭时会在缓存检查和网络请求之前跳过整条源码辅助路径。版本化的 semantic sidecar 会在 BabelDOC 样式/公式分析后与翻译前以置信度门控的方式使用：
 
 - 校正文档标题、分节标题和 figure/table caption 标签。
 - 向翻译 prompt 补全 section path、前后源码段落、语义环境和未断词的完整源文。

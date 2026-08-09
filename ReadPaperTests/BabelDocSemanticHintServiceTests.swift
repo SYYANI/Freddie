@@ -5,6 +5,30 @@ import XCTest
 @testable import ReadPaper
 
 final class BabelDocSemanticHintServiceTests: XCTestCase {
+    func testDisabledPreferenceSkipsSourceAcquisition() async throws {
+        XCTAssertTrue(BabelDocSemanticHintPreference.defaultValue)
+        let temporary = try SemanticTemporaryDirectory()
+        defer { temporary.remove() }
+        let source = try makeProject(in: temporary.url)
+        let acquirer = CountingSemanticAcquirer(source: .localDirectory(source))
+        let service = BabelDocSemanticHintService(
+            fileStore: PaperFileStore(
+                applicationSupportDirectory: temporary.url.appendingPathComponent("support")
+            ),
+            acquirer: acquirer
+        )
+
+        let artifact = try await service.prepareIfAvailable(
+            isEnabled: false,
+            paperID: UUID(),
+            arxivIdentifier: "2401.00001v2"
+        )
+        let acquisitionCount = await acquirer.acquisitionCount()
+
+        XCTAssertNil(artifact)
+        XCTAssertEqual(acquisitionCount, 0)
+    }
+
     func testBuildsCompilerFreeSidecarAndReusesExactVersionCache() async throws {
         let temporary = try SemanticTemporaryDirectory()
         defer { temporary.remove() }

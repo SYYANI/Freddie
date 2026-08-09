@@ -28,6 +28,8 @@ struct IPadSettingsView: View {
     private var htmlReaderFontSize = HTMLReaderTypography.defaultFontSize
     @AppStorage(TranslationGlossaryPreference.userDefaultsKey)
     private var translationGlossary = ""
+    @AppStorage(BabelDocSemanticHintPreference.userDefaultsKey)
+    private var babelDocSemanticHintsEnabled = BabelDocSemanticHintPreference.defaultValue
     @AppStorage(PaperDigestExportConfiguration.templateKey)
     private var digestExportTemplate = PaperDigestExportPolicy.defaultMarkdownTemplate
     @AppStorage(PaperDigestExportConfiguration.directoryDisplayPathKey)
@@ -205,6 +207,18 @@ struct IPadSettingsView: View {
                         Text(language.nativeName).tag(language.code)
                     }
                 }
+
+                Toggle(
+                    String(localized: "Use arXiv LaTeX structure for PDF translation", bundle: bundle),
+                    isOn: $babelDocSemanticHintsEnabled
+                )
+
+                Text(
+                    "When enabled, ReadPaper uses available arXiv source to improve BabelDOC structure and translation context. No TeX installation is required, and failures fall back to PDF-only analysis.",
+                    bundle: bundle
+                )
+                .font(.footnote)
+                .foregroundStyle(.secondary)
 
                 Stepper(value: htmlConcurrencyBinding(settings), in: 1...12) {
                     Text(AppLocalization.format(

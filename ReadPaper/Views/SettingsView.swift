@@ -99,6 +99,8 @@ private struct SettingsForm: View {
     private var htmlReaderFontSize = HTMLReaderTypography.defaultFontSize
     @AppStorage(TranslationGlossaryPreference.userDefaultsKey)
     private var translationGlossary = ""
+    @AppStorage(BabelDocSemanticHintPreference.userDefaultsKey)
+    private var babelDocSemanticHintsEnabled = BabelDocSemanticHintPreference.defaultValue
     @AppStorage(LaTeXIntegrationPreferences.translationEnabledKey)
     private var latexTranslationEnabled = false
     @AppStorage(LaTeXIntegrationPreferences.toolchainDirectoryKey)
@@ -402,6 +404,18 @@ private struct SettingsForm: View {
                         }
                     }
                     .pickerStyle(.menu)
+
+                    Toggle(
+                        String(localized: "Use arXiv LaTeX structure for PDF translation", bundle: bundle),
+                        isOn: $babelDocSemanticHintsEnabled
+                    )
+
+                    Text(
+                        "When enabled, ReadPaper uses available arXiv source to improve BabelDOC structure and translation context. No TeX installation is required, and failures fall back to PDF-only analysis.",
+                        bundle: bundle
+                    )
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
 
                     Stepper(
                         String(

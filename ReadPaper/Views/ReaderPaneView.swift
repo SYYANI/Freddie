@@ -38,6 +38,8 @@ struct ReaderPaneView: View {
     private var pdfTranslationBatchSizeRawValue = PDFTranslationBatchPreference.defaultValue
     @AppStorage(HTMLReaderTypography.fontSizeUserDefaultsKey)
     private var htmlReaderFontSize = HTMLReaderTypography.defaultFontSize
+    @AppStorage(BabelDocSemanticHintPreference.userDefaultsKey)
+    private var babelDocSemanticHintsEnabled = BabelDocSemanticHintPreference.defaultValue
     @AppStorage(LaTeXIntegrationPreferences.translationEnabledKey)
     private var latexTranslationEnabled = false
 
@@ -1124,6 +1126,7 @@ struct ReaderPaneView: View {
                     ReadPaperArXivIdentifier.resolving(id: $0, version: paper.arxivVersion)
                 }
                 let semanticHints = try await BabelDocSemanticHintService().prepareIfAvailable(
+                    isEnabled: babelDocSemanticHintsEnabled,
                     paperID: paper.id,
                     arxivIdentifier: arxivIdentifier
                 ) { update in
@@ -1228,6 +1231,7 @@ struct ReaderPaneView: View {
                     ReadPaperArXivIdentifier.resolving(id: $0, version: paper.arxivVersion)
                 }
                 let semanticHints = try await BabelDocSemanticHintService().prepareIfAvailable(
+                    isEnabled: babelDocSemanticHintsEnabled,
                     paperID: paper.id,
                     arxivIdentifier: arxivIdentifier
                 ) { update in

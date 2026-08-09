@@ -8,6 +8,11 @@ struct BabelDocSemanticHintArtifact: Sendable {
     let wasCached: Bool
 }
 
+enum BabelDocSemanticHintPreference {
+    static let userDefaultsKey = "ReadPaper.Settings.BabelDocSemanticHintsEnabled"
+    static let defaultValue = true
+}
+
 enum BabelDocSemanticHintStatus: Sendable, Equatable {
     case checkingCache
     case downloadingSource
@@ -56,10 +61,12 @@ actor BabelDocSemanticHintService {
     }
 
     func prepareIfAvailable(
+        isEnabled: Bool = BabelDocSemanticHintPreference.defaultValue,
         paperID: UUID,
         arxivIdentifier: String?,
         onStatus: @escaping StatusHandler = { _ in }
     ) async throws -> BabelDocSemanticHintArtifact? {
+        guard isEnabled else { return nil }
         guard let identifier = arxivIdentifier?
             .trimmingCharacters(in: .whitespacesAndNewlines),
               !identifier.isEmpty else { return nil }
