@@ -281,6 +281,34 @@ final class BabelDocRunnerTests: XCTestCase {
         XCTAssertEqual(arguments[arguments.firstIndex(of: "--glossary")! + 1], "attention = 注意力")
     }
 
+    func testNativeArgumentsIncludeSemanticHintSidecarWithoutEmbeddingContents() {
+        let tool = NativeBabelDocToolPaths(
+            executable: URL(fileURLWithPath: "/native/bin/babeldoc-native"),
+            runtimeRoot: URL(fileURLWithPath: "/native", isDirectory: true),
+            runtimeManifest: URL(fileURLWithPath: "/app/runtime-manifest.json"),
+            runtimeVersion: "1.0.0",
+            mupdfLibrary: URL(fileURLWithPath: "/native/lib/libmupdf.dylib"),
+            zstdLibrary: URL(fileURLWithPath: "/native/lib/libzstd.dylib"),
+            layoutModel: URL(fileURLWithPath: "/native/models/layout.mlmodel"),
+            fontDirectory: URL(fileURLWithPath: "/native/fonts", isDirectory: true)
+        )
+        let sidecar = URL(fileURLWithPath: "/paper/Resources/LaTeXSemantic/semantic.json")
+
+        let arguments = BabelDocRunner.nativeArguments(
+            inputPDF: URL(fileURLWithPath: "/tmp/source.pdf"),
+            outputPDF: URL(fileURLWithPath: "/tmp/translated.pdf"),
+            preferences: Self.preferences,
+            route: Self.route,
+            tool: tool,
+            semanticHintsURL: sidecar
+        )
+
+        XCTAssertEqual(
+            arguments[arguments.firstIndex(of: "--semantic-hints")! + 1],
+            sidecar.path
+        )
+    }
+
     func testNativeArgumentsIncludeThinkingModeAndReasoningEffort() {
         let tool = NativeBabelDocToolPaths(
             executable: URL(fileURLWithPath: "/native/bin/babeldoc-native"),

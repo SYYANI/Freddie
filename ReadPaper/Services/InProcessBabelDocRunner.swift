@@ -18,6 +18,7 @@ struct InProcessBabelDocRunner {
         route: LLMModelRouteSnapshot,
         apiKey: String,
         documentTitle: String? = nil,
+        semanticHints: BabelDocSemanticDocument? = nil,
         pageRange: ClosedRange<Int>? = nil,
         onProgressUpdate: (@Sendable (BabelDocProgressUpdate) -> Void)? = nil
     ) async throws -> URL {
@@ -43,7 +44,8 @@ struct InProcessBabelDocRunner {
             preferCoreML: true,
             onlyIncludeTranslatedPages: pageRange != nil,
             documentTitle: documentTitle,
-            glossary: preferences.translationGlossary
+            glossary: preferences.translationGlossary,
+            semanticHints: semanticHints
         )
         let configuration = BabelDocOpenAIConfiguration(
             baseURL: baseURL,
@@ -159,6 +161,8 @@ struct InProcessBabelDocRunner {
             AppLocalization.localized("Grouping paragraphs")
         case .styles:
             AppLocalization.localized("Preserving styles and formulas")
+        case .semantic:
+            AppLocalization.localized("Applying LaTeX structure")
         case .translation:
             AppLocalization.localized("Translating text blocks")
         case .typesetting:

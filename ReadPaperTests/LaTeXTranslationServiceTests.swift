@@ -121,7 +121,7 @@ final class LaTeXTranslationServiceTests: XCTestCase {
             route: makeRoute(),
             apiKey: "sk-must-not-be-persisted"
         )) { update in
-            Task { await progress.append(update) }
+            progress.append(update)
         }
 
         let managedRoot = support
@@ -134,15 +134,16 @@ final class LaTeXTranslationServiceTests: XCTestCase {
         XCTAssertFalse(output.pdfCompilationFailed)
         let translatedMain = output.artifact.projectDirectory.appendingPathComponent("main.tex")
         XCTAssertTrue(FileManager.default.fileExists(atPath: translatedMain.path))
-        XCTAssertTrue(try String(contentsOf: translatedMain, encoding: .utf8).contains("\\usepackage[UTF8]{ctex}"))
+        XCTAssertTrue(try String(contentsOf: translatedMain, encoding: .utf8).contains(
+            "\\usepackage[UTF8,fontset=fandol]{ctex}"
+        ))
         let managedFiles = try XCTUnwrap(FileManager.default.enumerator(
             at: URL(fileURLWithPath: managedRoot, isDirectory: true),
             includingPropertiesForKeys: nil
         )?.allObjects as? [URL])
         XCTAssertTrue(managedFiles.contains { $0.lastPathComponent == "checkpoints.json" })
         XCTAssertFalse(try allFileContents(under: managedRoot).contains("sk-must-not-be-persisted"))
-        await Task.yield()
-        let progressValues = await progress.values()
+        let progressValues = progress.values()
         XCTAssertEqual(progressValues.last?.stage, .finished)
     }
 
@@ -502,15 +503,16 @@ private struct FailingLaTeXCompiler: LaTeXProjectCompiling {
     }
 }
 
-private actor ProgressRecorder {
+private final class ProgressRecorder: @unchecked Sendable {
+    private let lock = NSLock()
     private var updates: [ReadPaperLaTeXProgressUpdate] = []
 
     func append(_ update: ReadPaperLaTeXProgressUpdate) {
-        updates.append(update)
+        lock.withLock { updates.append(update) }
     }
 
     func values() -> [ReadPaperLaTeXProgressUpdate] {
-        updates
+        lock.withLock { updates }
     }
 }
 

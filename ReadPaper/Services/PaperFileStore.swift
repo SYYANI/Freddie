@@ -62,6 +62,14 @@ struct PaperFileStore {
         try directory(for: paperID).appendingPathComponent("translations", isDirectory: true)
     }
 
+    func latexSemanticDirectory(for paperID: UUID) throws -> URL {
+        let directory = try self.directory(for: paperID)
+            .appendingPathComponent("Resources", isDirectory: true)
+            .appendingPathComponent("LaTeXSemantic", isDirectory: true)
+        try ensureDirectory(directory)
+        return directory
+    }
+
     func latexTranslationDirectory(
         for paperID: UUID,
         targetLanguage: String,

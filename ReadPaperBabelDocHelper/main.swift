@@ -20,6 +20,7 @@ private struct Options {
     var systemPrompt: String?
     var documentTitle: String?
     var glossary: String?
+    var semanticHints: String?
     var preferCoreML = true
     var onlySelectedPages = false
     var verifyRuntime = false
@@ -80,6 +81,7 @@ private final class EventEmitter: @unchecked Sendable {
         case .layout: "LayoutParser"
         case .paragraph: "ParagraphFinder"
         case .styles: "StylesAndFormulas"
+        case .semantic: "SemanticHintEnricher"
         case .translation: "ILTranslator"
         case .typesetting: "Typesetting"
         case .backend: "PDFCreater"
@@ -100,6 +102,7 @@ private func usage() {
       --qps <number> --temperature <n> --top-p <n> --max-tokens <n>
       --thinking-mode <enabled|disabled> --reasoning-effort <low|high|max> --cpu
       --system-prompt <text> --document-title <text> --glossary <text>
+      --semantic-hints <json>           Optional LaTeX semantic hint document
       --verify-runtime                   Verify runtime assets and exit
     """.utf8))
 }
@@ -162,6 +165,8 @@ private func parse(_ arguments: [String]) throws -> Options {
         case "--system-prompt": options.systemPrompt = try value(arguments, &index, for: "--system-prompt")
         case "--document-title": options.documentTitle = try value(arguments, &index, for: "--document-title")
         case "--glossary": options.glossary = try value(arguments, &index, for: "--glossary")
+        case "--semantic-hints":
+            options.semanticHints = try value(arguments, &index, for: "--semantic-hints")
         case "--only-include-translated-pages": options.onlySelectedPages = true
         case "--cpu": options.preferCoreML = false
         case "--verify-runtime": options.verifyRuntime = true
@@ -214,6 +219,18 @@ private enum ReadPaperBabelDocHelperMain {
             }
             let inputURL = URL(fileURLWithPath: (input as NSString).expandingTildeInPath)
             let outputURL = URL(fileURLWithPath: (output as NSString).expandingTildeInPath)
+            let semanticHints: BabelDocSemanticDocument?
+            if let semanticHintsPath = options.semanticHints {
+                semanticHints = try JSONDecoder().decode(
+                    BabelDocSemanticDocument.self,
+                    from: Data(contentsOf: URL(
+                        fileURLWithPath: (semanticHintsPath as NSString).expandingTildeInPath
+                    ))
+                )
+                try semanticHints?.validate()
+            } else {
+                semanticHints = nil
+            }
             try FileManager.default.createDirectory(
                 at: outputURL.deletingLastPathComponent(),
                 withIntermediateDirectories: true
@@ -228,7 +245,8 @@ private enum ReadPaperBabelDocHelperMain {
                     preferCoreML: options.preferCoreML,
                     onlyIncludeTranslatedPages: options.onlySelectedPages,
                     documentTitle: options.documentTitle,
-                    glossary: options.glossary
+                    glossary: options.glossary,
+                    semanticHints: semanticHints
                 ),
                 runtime: runtime,
                 openAI: .init(

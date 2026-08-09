@@ -397,6 +397,76 @@
         }
       }
     },
+    "Applying LaTeX structure" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在应用 LaTeX 结构"
+          }
+        }
+      }
+    },
+    "Checking cached arXiv structure..." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在检查缓存的 arXiv 结构..."
+          }
+        }
+      }
+    },
+    "Downloading arXiv LaTeX source..." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在下载 arXiv LaTeX 源码..."
+          }
+        }
+      }
+    },
+    "Extracting LaTeX structure for PDF translation..." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在提取用于 PDF 翻译的 LaTeX 结构..."
+          }
+        }
+      }
+    },
+    "LaTeX source is unavailable; continuing with PDF layout analysis." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LaTeX 源码不可用；将继续使用 PDF 版面分析。"
+          }
+        }
+      }
+    },
+    "LaTeX structure is ready for PDF translation." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LaTeX 结构已可用于 PDF 翻译。"
+          }
+        }
+      }
+    },
+    "Using cached LaTeX structure to improve PDF translation." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在使用缓存的 LaTeX 结构改进 PDF 翻译。"
+          }
+        }
+      }
+    },
     "arXiv %@" : {
       "extractionState" : "stale",
       "localizations" : {

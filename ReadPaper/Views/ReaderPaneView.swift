@@ -1120,6 +1120,18 @@ struct ReaderPaneView: View {
                 statusMessage = String(localized: "Translating PDF with BabelDOC...", bundle: bundle)
                 let outputDirectory = try PaperFileStore().translationsDirectory(for: paper)
                 let toolEnvironment = try toolManager.nativeEnvironment(apiKey: resolvedRoute.apiKey)
+                let arxivIdentifier = paper.arxivID.map {
+                    ReadPaperArXivIdentifier.resolving(id: $0, version: paper.arxivVersion)
+                }
+                let semanticHints = try await BabelDocSemanticHintService().prepareIfAvailable(
+                    paperID: paper.id,
+                    arxivIdentifier: arxivIdentifier
+                ) { update in
+                    Task { @MainActor in
+                        guard isWorking, !isCancelling else { return }
+                        statusMessage = update.localizedMessage
+                    }
+                }
                 let translated = try await BabelDocRunner().translatePDFNative(
                     inputPDF: pdfAttachment.fileURL,
                     outputDirectory: outputDirectory,
@@ -1128,6 +1140,7 @@ struct ReaderPaneView: View {
                     apiKey: resolvedRoute.apiKey,
                     tool: nativeTool,
                     documentTitle: paper.title,
+                    semanticHintsURL: semanticHints?.fileURL,
                     pageRange: pageRange,
                     environment: toolEnvironment,
                     onStatusUpdate: { message in
@@ -1211,6 +1224,18 @@ struct ReaderPaneView: View {
                 statusMessage = String(localized: "Translating PDF with BabelDOC...", bundle: bundle)
                 let outputDirectory = try PaperFileStore().translationsDirectory(for: paper)
                 let toolEnvironment = try toolManager.nativeEnvironment(apiKey: resolvedRoute.apiKey)
+                let arxivIdentifier = paper.arxivID.map {
+                    ReadPaperArXivIdentifier.resolving(id: $0, version: paper.arxivVersion)
+                }
+                let semanticHints = try await BabelDocSemanticHintService().prepareIfAvailable(
+                    paperID: paper.id,
+                    arxivIdentifier: arxivIdentifier
+                ) { update in
+                    Task { @MainActor in
+                        guard isWorking, !isCancelling else { return }
+                        statusMessage = update.localizedMessage
+                    }
+                }
 
                 guard let existingDoc = PDFDocument(url: existingAttachment.fileURL) else {
                     throw PDFMergerError.failedToOpenFile(existingAttachment.fileURL.path)
@@ -1233,6 +1258,7 @@ struct ReaderPaneView: View {
                     apiKey: resolvedRoute.apiKey,
                     tool: nativeTool,
                     documentTitle: paper.title,
+                    semanticHintsURL: semanticHints?.fileURL,
                     pageRange: pageRange,
                     environment: toolEnvironment,
                     onStatusUpdate: { message in

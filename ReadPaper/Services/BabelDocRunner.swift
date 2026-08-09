@@ -142,6 +142,7 @@ struct BabelDocRunner {
         apiKey: String,
         tool: NativeBabelDocToolPaths,
         documentTitle: String? = nil,
+        semanticHintsURL: URL? = nil,
         pageRange: ClosedRange<Int>? = nil,
         environment: [String: String] = [:],
         onStatusUpdate: (@Sendable (String) -> Void)? = nil,
@@ -161,6 +162,7 @@ struct BabelDocRunner {
             route: route,
             tool: tool,
             documentTitle: documentTitle,
+            semanticHintsURL: semanticHintsURL,
             pageRange: pageRange
         )
         let outputParser = BabelDocOutputParser(apiKey: apiKey)
@@ -210,6 +212,7 @@ struct BabelDocRunner {
         route: LLMModelRouteSnapshot,
         tool: NativeBabelDocToolPaths,
         documentTitle: String? = nil,
+        semanticHintsURL: URL? = nil,
         pageRange: ClosedRange<Int>? = nil
     ) -> [String] {
         var arguments = [
@@ -232,6 +235,9 @@ struct BabelDocRunner {
         }
         if preferences.translationGlossary.isEmpty == false {
             arguments += ["--glossary", preferences.translationGlossary]
+        }
+        if let semanticHintsURL {
+            arguments += ["--semantic-hints", semanticHintsURL.path]
         }
         if let temperature = route.temperature {
             arguments += ["--temperature", "\(temperature)"]
@@ -482,6 +488,8 @@ struct BabelDocRunner {
             return AppLocalization.localized("Grouping paragraphs")
         case "StylesAndFormulas":
             return AppLocalization.localized("Preserving styles and formulas")
+        case "SemanticHintEnricher":
+            return AppLocalization.localized("Applying LaTeX structure")
         case "ILTranslator":
             return AppLocalization.localized("Translating text blocks")
         case "Typesetting":

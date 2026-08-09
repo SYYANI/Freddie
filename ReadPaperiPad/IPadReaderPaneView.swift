@@ -651,6 +651,15 @@ struct IPadReaderPaneView: View {
                     modelContext: modelContext
                 )
                 let outputDirectory = try PaperFileStore().translationsDirectory(for: paper)
+                let arxivIdentifier = paper.arxivID.map {
+                    ReadPaperArXivIdentifier.resolving(id: $0, version: paper.arxivVersion)
+                }
+                let semanticHints = try await BabelDocSemanticHintService().prepareIfAvailable(
+                    paperID: paper.id,
+                    arxivIdentifier: arxivIdentifier
+                ) { update in
+                    Task { @MainActor in translationStatus = update.localizedMessage }
+                }
                 let translated = try await InProcessBabelDocRunner().translatePDF(
                     inputPDF: pdfAttachment.fileURL,
                     outputDirectory: outputDirectory,
@@ -658,6 +667,7 @@ struct IPadReaderPaneView: View {
                     route: resolvedRoute.snapshot,
                     apiKey: resolvedRoute.apiKey,
                     documentTitle: paper.title,
+                    semanticHints: semanticHints?.document,
                     pageRange: pageRange,
                     onProgressUpdate: { progress in
                         Task { @MainActor in handlePDFProgress(progress) }
@@ -703,6 +713,15 @@ struct IPadReaderPaneView: View {
                     modelContext: modelContext
                 )
                 let outputDirectory = try PaperFileStore().translationsDirectory(for: paper)
+                let arxivIdentifier = paper.arxivID.map {
+                    ReadPaperArXivIdentifier.resolving(id: $0, version: paper.arxivVersion)
+                }
+                let semanticHints = try await BabelDocSemanticHintService().prepareIfAvailable(
+                    paperID: paper.id,
+                    arxivIdentifier: arxivIdentifier
+                ) { update in
+                    Task { @MainActor in translationStatus = update.localizedMessage }
+                }
                 let increment = try await InProcessBabelDocRunner().translatePDF(
                     inputPDF: pdfAttachment.fileURL,
                     outputDirectory: outputDirectory,
@@ -710,6 +729,7 @@ struct IPadReaderPaneView: View {
                     route: resolvedRoute.snapshot,
                     apiKey: resolvedRoute.apiKey,
                     documentTitle: paper.title,
+                    semanticHints: semanticHints?.document,
                     pageRange: pageRange,
                     onProgressUpdate: { progress in
                         Task { @MainActor in handlePDFProgress(progress) }
