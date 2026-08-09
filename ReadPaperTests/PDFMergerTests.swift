@@ -296,6 +296,21 @@ final class PDFMergerTests: XCTestCase {
         XCTAssertEqual(userDrivenOriginalPage, 8)
     }
 
+    func testPDFTranslationCoverageRequiresExplicitPartialPageMetadata() {
+        XCTAssertFalse(PDFTranslationCoverage.isPartial(
+            translatedLastPage: nil,
+            originalPageCount: 12
+        ))
+        XCTAssertTrue(PDFTranslationCoverage.isPartial(
+            translatedLastPage: 8,
+            originalPageCount: 12
+        ))
+        XCTAssertFalse(PDFTranslationCoverage.isPartial(
+            translatedLastPage: 12,
+            originalPageCount: 12
+        ))
+    }
+
     func testDualPDFSplitLayoutKeepsBothPanesUsable() {
         let totalWidth: CGFloat = 1_000
 

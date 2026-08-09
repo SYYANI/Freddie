@@ -8,6 +8,7 @@ struct DualPDFReaderView: View {
     var originalAttachmentID: UUID? = nil
     var translatedURL: URL?
     var translatedAttachmentID: UUID? = nil
+    var translatedLastPage: Int? = nil
     var displayAppearance: PDFDisplayAppearance = .defaultMode
     @Binding var pageIndex: Int
     var reloadToken: Int = 0
@@ -24,8 +25,10 @@ struct DualPDFReaderView: View {
     }
 
     private var isPartialTranslation: Bool {
-        guard translatedPageCount > 0, originalPageCount > 0 else { return false }
-        return translatedPageCount < originalPageCount
+        PDFTranslationCoverage.isPartial(
+            translatedLastPage: translatedLastPage,
+            originalPageCount: originalPageCount
+        )
     }
 
     var body: some View {

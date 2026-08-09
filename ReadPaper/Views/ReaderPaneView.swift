@@ -101,10 +101,12 @@ struct ReaderPaneView: View {
 
     private var isPartialPDFTranslation: Bool {
         guard let attachment = translatedPDFAttachment,
-              let lastPage = attachment.translatedLastPage,
               let total = originalPDFPageCount
         else { return false }
-        return lastPage < total
+        return PDFTranslationCoverage.isPartial(
+            translatedLastPage: attachment.translatedLastPage,
+            originalPageCount: total
+        )
     }
 
     private var isNearTranslationEdge: Bool {
@@ -719,6 +721,7 @@ struct ReaderPaneView: View {
                         originalAttachmentID: pdfAttachment?.id,
                         translatedURL: translatedPDFAttachment?.fileURL,
                         translatedAttachmentID: translatedPDFAttachment?.id,
+                        translatedLastPage: translatedPDFAttachment?.translatedLastPage,
                         displayAppearance: pdfDisplayAppearance,
                         pageIndex: $pdfPageIndex,
                         reloadToken: pdfReloadToken,

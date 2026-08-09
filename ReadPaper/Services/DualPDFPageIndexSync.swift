@@ -1,5 +1,15 @@
 import Foundation
 
+struct PDFTranslationCoverage {
+    static func isPartial(
+        translatedLastPage: Int?,
+        originalPageCount: Int
+    ) -> Bool {
+        guard let translatedLastPage, originalPageCount > 0 else { return false }
+        return translatedLastPage < originalPageCount
+    }
+}
+
 struct DualPDFPageIndexSync {
     static func translatedPageIndex(
         forOriginalPageIndex originalPageIndex: Int,
