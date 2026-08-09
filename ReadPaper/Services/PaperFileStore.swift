@@ -55,7 +55,26 @@ struct PaperFileStore {
     }
 
     func translationsDirectory(for paper: Paper) throws -> URL {
-        try directory(for: paper.id).appendingPathComponent("translations", isDirectory: true)
+        try translationsDirectory(for: paper.id)
+    }
+
+    func translationsDirectory(for paperID: UUID) throws -> URL {
+        try directory(for: paperID).appendingPathComponent("translations", isDirectory: true)
+    }
+
+    func latexTranslationDirectory(
+        for paperID: UUID,
+        targetLanguage: String,
+        cacheIdentity: String
+    ) throws -> URL {
+        let language = safePathComponent(targetLanguage, fallback: "target")
+        let identity = String(Hashing.sha256Hex(cacheIdentity).prefix(16))
+        let directory = try translationsDirectory(for: paperID)
+            .appendingPathComponent("latex", isDirectory: true)
+            .appendingPathComponent(language, isDirectory: true)
+            .appendingPathComponent(identity, isDirectory: true)
+        try ensureDirectory(directory)
+        return directory
     }
 
     func write(_ data: Data, named filename: String, for paperID: UUID) throws -> URL {
@@ -125,5 +144,14 @@ struct PaperFileStore {
         if !fileManager.fileExists(atPath: url.path) {
             try fileManager.createDirectory(at: url, withIntermediateDirectories: true)
         }
+    }
+
+    private func safePathComponent(_ value: String, fallback: String) -> String {
+        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_"))
+        let characters = value.unicodeScalars.map { scalar in
+            allowed.contains(scalar) ? Character(String(scalar)) : "_"
+        }
+        let result = String(characters)
+        return result.isEmpty ? fallback : result
     }
 }

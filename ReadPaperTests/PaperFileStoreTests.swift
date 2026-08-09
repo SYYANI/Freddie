@@ -16,6 +16,31 @@ final class PaperFileStoreTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: directory.appendingPathComponent("notes").path))
     }
 
+    func testCreatesStableManagedLaTeXTranslationDirectory() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = PaperFileStore(applicationSupportDirectory: root)
+        let paperID = UUID()
+
+        let first = try store.latexTranslationDirectory(
+            for: paperID,
+            targetLanguage: "zh-CN/../../unsafe",
+            cacheIdentity: "route-without-api-key"
+        )
+        let second = try store.latexTranslationDirectory(
+            for: paperID,
+            targetLanguage: "zh-CN/../../unsafe",
+            cacheIdentity: "route-without-api-key"
+        )
+
+        XCTAssertEqual(first, second)
+        XCTAssertTrue(first.path.hasPrefix(
+            root.appendingPathComponent("Library/\(paperID.uuidString)/translations/latex").path + "/"
+        ))
+        XCTAssertFalse(first.path.contains(".."))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: first.path))
+    }
+
     func testRemoveDirectoryDeletesPaperFolder() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: root) }

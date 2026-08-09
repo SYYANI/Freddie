@@ -15,6 +15,7 @@ enum AttachmentSource: String, Codable, CaseIterable, Identifiable {
     case localImport
     case webPage
     case babeldoc
+    case latexTrans
     case generated
 
     var id: String { rawValue }

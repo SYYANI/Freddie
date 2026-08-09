@@ -969,6 +969,16 @@
         }
       }
     },
+    "Compiling translated LaTeX..." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在编译 LaTeX 译稿..."
+          }
+        }
+      }
+    },
     "Configuration" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1040,6 +1050,46 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "复制链接"
+          }
+        }
+      }
+    },
+    "Could not compile the translated LaTeX source." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法编译 LaTeX 译稿。"
+          }
+        }
+      }
+    },
+    "Could not parse the LaTeX source." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法解析 LaTeX 源码。"
+          }
+        }
+      }
+    },
+    "Could not prepare the arXiv LaTeX source." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法准备 arXiv LaTeX 源码。"
+          }
+        }
+      }
+    },
+    "Could not reconstruct the translated LaTeX source." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法重建 LaTeX 译稿源码。"
           }
         }
       }
@@ -2185,6 +2235,27 @@
         }
       }
     },
+    "LaTeX source translation completed, but PDF compilation failed." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LaTeX 源码翻译已完成，但 PDF 编译失败。"
+          }
+        }
+      }
+    },
+    "LaTeX translation completed." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LaTeX 翻译已完成。"
+          }
+        }
+      }
+    },
     "Less" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2768,22 +2839,22 @@
         }
       }
     },
-    "Original" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "原文"
-          }
-        }
-      }
-    },
     "Optional glossary" : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "可选术语表"
+          }
+        }
+      }
+    },
+    "Original" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "原文"
           }
         }
       }
@@ -2836,6 +2907,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "纸质"
+          }
+        }
+      }
+    },
+    "Parsing LaTeX source..." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在解析 LaTeX 源码..."
           }
         }
       }
@@ -2927,6 +3008,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "请输入有效的网页 URL。"
+          }
+        }
+      }
+    },
+    "Preparing arXiv LaTeX source..." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在准备 arXiv LaTeX 源码..."
           }
         }
       }
@@ -3225,6 +3316,16 @@
         }
       }
     },
+    "Reconstructing translated LaTeX..." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在重建 LaTeX 译稿..."
+          }
+        }
+      }
+    },
     "Remove BabelDOC" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -3308,6 +3409,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "返回主窗口，添加 arXiv 论文或本地 PDF，然后使用阅读器工具栏中的 Translate。"
+          }
+        }
+      }
+    },
+    "Reveal Translated LaTeX Source" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在访达中显示 LaTeX 译稿源码"
           }
         }
       }
@@ -3623,6 +3735,17 @@
         }
       }
     },
+    "Show LaTeX Compilation Log" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "显示 LaTeX 编译日志"
+          }
+        }
+      }
+    },
     "Skip" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -3846,6 +3969,36 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "无法解析最新 BabelDOC 版本：%1$@"
+          }
+        }
+      }
+    },
+    "The LaTeX translation failed structural validation." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LaTeX 译稿未通过结构校验。"
+          }
+        }
+      }
+    },
+    "The LaTeX translation failed structural validation: %@" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LaTeX 译稿未通过结构校验：%1$@"
+          }
+        }
+      }
+    },
+    "The model returned an invalid LaTeX translation." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "模型返回了无效的 LaTeX 译文。"
           }
         }
       }
@@ -4079,6 +4232,17 @@
         }
       }
     },
+    "Translate arXiv LaTeX" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "翻译 arXiv LaTeX 源码"
+          }
+        }
+      }
+    },
     "Translate HTML" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -4097,6 +4261,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "翻译 HTML 或 PDF"
+          }
+        }
+      }
+    },
+    "Translate HTML, PDF, or arXiv LaTeX" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "翻译 HTML、PDF 或 arXiv LaTeX"
           }
         }
       }
@@ -4162,6 +4337,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在翻译 HTML..."
+          }
+        }
+      }
+    },
+    "Translating LaTeX source..." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在翻译 LaTeX 源码..."
           }
         }
       }
@@ -4403,6 +4588,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "uv 安装失败：%1$@"
+          }
+        }
+      }
+    },
+    "Validating LaTeX translation..." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在校验 LaTeX 译稿..."
           }
         }
       }

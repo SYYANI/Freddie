@@ -61,6 +61,7 @@ struct ReaderPaneView: View {
     @State private var translationProgress: TranslationProgressStatus?
     @State private var translationTask: Task<Void, Never>?
     @State private var pdfTranslationErrorLogURL: URL?
+    @State private var latexTranslationErrorLogURL: URL?
     @State private var lastPDFReaderMode: ReaderMode = .pdf
     @State private var suspendReadingStatePersistence = false
     @State private var showPDFTranslationScopeDialog = false
@@ -78,7 +79,15 @@ struct ReaderPaneView: View {
     }
 
     private var translatedPDFAttachment: PaperAttachment? {
-        attachments.first { $0.kind == .translatedPDF }
+        attachments
+            .filter { $0.kind == .translatedPDF }
+            .max { $0.createdAt < $1.createdAt }
+    }
+
+    private var translatedLaTeXSourceAttachment: PaperAttachment? {
+        attachments
+            .filter { $0.kind == .resource && $0.source == .latexTrans }
+            .max { $0.createdAt < $1.createdAt }
     }
 
     private var originalPDFPageCount: Int? {
@@ -109,6 +118,10 @@ struct ReaderPaneView: View {
         pdfAttachment != nil && settings != nil && !isFullPDFTranslationComplete
     }
 
+    private var canTranslateLaTeX: Bool {
+        paper?.arxivID?.isEmpty == false && settings != nil
+    }
+
     private var isFullPDFTranslationComplete: Bool {
         guard let attachment = translatedPDFAttachment else { return false }
         guard let lastPage = attachment.translatedLastPage else { return true }
@@ -117,7 +130,7 @@ struct ReaderPaneView: View {
     }
 
     private var translationControlsDisabled: Bool {
-        isWorking || (!canTranslateHTML && !canTranslatePDF)
+        isWorking || (!canTranslateHTML && !canTranslatePDF && !canTranslateLaTeX)
     }
 
     private var readerAvailability: ReaderAvailability {
@@ -527,6 +540,14 @@ struct ReaderPaneView: View {
                 }
             }
             .disabled(canTranslatePDF == false)
+
+            Button {
+                translateLaTeX()
+            } label: {
+                Label(String(localized: "Translate arXiv LaTeX", bundle: bundle), systemImage: "text.document")
+                    .labelStyle(.titleAndIcon)
+            }
+            .disabled(canTranslateLaTeX == false)
         } label: {
             Label(String(localized: "Translate", bundle: bundle), systemImage: "translate")
                 .labelStyle(.iconOnly)
@@ -633,6 +654,9 @@ struct ReaderPaneView: View {
     private var translationMenuHelpText: String {
         if isWorking {
             return String(localized: "Translation in Progress", bundle: bundle)
+        }
+        if canTranslateLaTeX {
+            return String(localized: "Translate HTML, PDF, or arXiv LaTeX", bundle: bundle)
         }
         if canTranslateHTML && canTranslatePDF {
             return String(localized: "Translate HTML or PDF", bundle: bundle)
@@ -754,6 +778,28 @@ struct ReaderPaneView: View {
                     .help(String(localized: "Copy BabelDOC Log Path", bundle: bundle))
                 }
 
+                if latexTranslationErrorLogURL != nil {
+                    Button {
+                        revealLaTeXTranslationErrorLog()
+                    } label: {
+                        Label(String(localized: "Show LaTeX Compilation Log", bundle: bundle), systemImage: "doc.text.magnifyingglass")
+                    }
+                    .labelStyle(.iconOnly)
+                    .buttonStyle(.borderless)
+                    .help(String(localized: "Show LaTeX Compilation Log", bundle: bundle))
+                }
+
+                if translatedLaTeXSourceAttachment != nil {
+                    Button {
+                        revealTranslatedLaTeXSource()
+                    } label: {
+                        Label(String(localized: "Reveal Translated LaTeX Source", bundle: bundle), systemImage: "folder")
+                    }
+                    .labelStyle(.iconOnly)
+                    .buttonStyle(.borderless)
+                    .help(String(localized: "Reveal Translated LaTeX Source", bundle: bundle))
+                }
+
                 if statusMessage != nil, !isWorking {
                     Button {
                         dismissStatusMessage()
@@ -784,6 +830,7 @@ struct ReaderPaneView: View {
         htmlSegmentUpdate = nil
         translationProgress = nil
         pdfTranslationErrorLogURL = nil
+        latexTranslationErrorLogURL = nil
         isWorking = true
         isCancelling = false
         statusMessage = String(localized: "Translating HTML...", bundle: bundle)
@@ -836,6 +883,176 @@ struct ReaderPaneView: View {
         }
     }
 
+    private func translateLaTeX() {
+        guard let paper,
+              let settings,
+              let arxivID = paper.arxivID,
+              !arxivID.isEmpty else {
+            return
+        }
+        let preferences = TranslationPreferencesSnapshot(settings)
+        let arxivIdentifier = ReadPaperArXivIdentifier.resolving(
+            id: arxivID,
+            version: paper.arxivVersion
+        )
+        let job = TranslationJob(
+            paperID: paper.id,
+            kind: "latex",
+            targetLanguage: preferences.targetLanguage,
+            state: .running
+        )
+        modelContext.insert(job)
+        do {
+            try modelContext.save()
+        } catch {
+            handleTranslationError(error)
+            return
+        }
+
+        let jobID = job.id
+        translationProgress = nil
+        pdfTranslationErrorLogURL = nil
+        latexTranslationErrorLogURL = nil
+        isWorking = true
+        isCancelling = false
+        statusMessage = String(localized: "Preparing arXiv LaTeX source...", bundle: bundle)
+        translationTask = Task {
+            do {
+                try Task.checkCancellation()
+                let resolvedRoute = try LLMRouteResolver().resolvePDFRoute(
+                    settings: settings,
+                    modelContext: modelContext
+                )
+                let output = try await ReadPaperLaTeXTranslationService().translate(
+                    ReadPaperLaTeXTranslationRequest(
+                        paperID: paper.id,
+                        arxivIdentifier: arxivIdentifier,
+                        targetLanguage: preferences.targetLanguage,
+                        maximumConcurrency: preferences.htmlTranslationConcurrency,
+                        glossary: preferences.translationGlossary,
+                        documentSummary: paper.abstractText,
+                        route: resolvedRoute.snapshot,
+                        apiKey: resolvedRoute.apiKey
+                    )
+                ) { update in
+                    Task { @MainActor in
+                        guard isWorking, !isCancelling else { return }
+                        applyLaTeXProgress(update, jobID: jobID)
+                    }
+                }
+                try Task.checkCancellation()
+
+                let sourceAttachment = PaperAttachment(
+                    paperID: paper.id,
+                    kind: .resource,
+                    source: .latexTrans,
+                    filename: output.artifact.projectDirectory.lastPathComponent,
+                    filePath: output.artifact.projectDirectory.path
+                )
+                modelContext.insert(sourceAttachment)
+
+                var translatedAttachment: PaperAttachment?
+                if let pdfURL = output.artifact.pdfURL {
+                    let attachment = PaperAttachment(
+                        paperID: paper.id,
+                        kind: .translatedPDF,
+                        source: .latexTrans,
+                        filename: pdfURL.lastPathComponent,
+                        filePath: pdfURL.path
+                    )
+                    modelContext.insert(attachment)
+                    translatedAttachment = attachment
+                }
+
+                if let storedJob = translationJob(id: jobID) {
+                    storedJob.attachmentID = translatedAttachment?.id ?? sourceAttachment.id
+                    storedJob.progress = output.pdfCompilationFailed ? 0.92 : 1
+                    storedJob.state = output.pdfCompilationFailed ? .failed : .completed
+                    storedJob.lastError = output.pdfCompilationFailed
+                        ? String(localized: "LaTeX source translation completed, but PDF compilation failed.", bundle: bundle)
+                        : nil
+                    storedJob.modifiedAt = Date()
+                }
+                try modelContext.save()
+
+                latexTranslationErrorLogURL = output.failedCompilationAttempts
+                    .reversed()
+                    .lazy
+                    .flatMap(\.logURLs)
+                    .first
+                translationProgress = nil
+                if translatedAttachment != nil {
+                    readerMode = pdfAttachment == nil ? .translatedPDF : .bilingualPDF
+                    pdfReloadToken += 1
+                }
+                statusMessage = output.pdfCompilationFailed
+                    ? String(localized: "LaTeX source translation completed, but PDF compilation failed.", bundle: bundle)
+                    : String(localized: "LaTeX translation completed.", bundle: bundle)
+            } catch is CancellationError {
+                translationProgress = nil
+                finishLaTeXJob(
+                    id: jobID,
+                    state: .failed,
+                    error: String(localized: "Translation cancelled.", bundle: bundle)
+                )
+                statusMessage = String(localized: "Translation cancelled.", bundle: bundle)
+            } catch {
+                let message = ReadPaperLaTeXErrorPresentation.message(for: error, bundle: bundle)
+                finishLaTeXJob(id: jobID, state: .failed, error: message)
+                translationProgress = nil
+                pdfTranslationErrorLogURL = nil
+                statusMessage = message
+            }
+            isWorking = false
+            isCancelling = false
+            translationTask = nil
+        }
+    }
+
+    private func applyLaTeXProgress(_ update: ReadPaperLaTeXProgressUpdate, jobID: UUID) {
+        let percentage = Int((update.fractionCompleted * 100).rounded())
+        let summary: String
+        if let completed = update.completedUnits,
+           let total = update.totalUnits,
+           total > 0 {
+            summary = "\(completed)/\(total)"
+        } else {
+            summary = "\(percentage)%"
+        }
+        translationProgress = TranslationProgressStatus(
+            completed: update.fractionCompleted,
+            total: 1,
+            summary: summary
+        )
+        statusMessage = update.statusMessage(bundle: bundle)
+
+        guard let job = translationJob(id: jobID) else { return }
+        job.progress = update.fractionCompleted
+        if let completed = update.completedUnits {
+            job.processedSegments = completed
+        }
+        if let total = update.totalUnits {
+            job.totalSegments = total
+        }
+        job.modifiedAt = Date()
+        try? modelContext.save()
+    }
+
+    private func finishLaTeXJob(id: UUID, state: TranslationJobState, error: String?) {
+        guard let job = translationJob(id: id) else { return }
+        job.state = state
+        job.lastError = error
+        job.modifiedAt = Date()
+        try? modelContext.save()
+    }
+
+    private func translationJob(id: UUID) -> TranslationJob? {
+        guard let jobs = try? modelContext.fetch(FetchDescriptor<TranslationJob>()) else {
+            return nil
+        }
+        return jobs.first { $0.id == id }
+    }
+
     private func translatePDF() {
         guard let pdfAttachment else { return }
 
@@ -870,6 +1087,7 @@ struct ReaderPaneView: View {
 
         translationProgress = nil
         pdfTranslationErrorLogURL = nil
+        latexTranslationErrorLogURL = nil
         isWorking = true
         isCancelling = false
         statusMessage = String(localized: "Running BabelDOC...", bundle: bundle)
@@ -960,6 +1178,7 @@ struct ReaderPaneView: View {
 
         translationProgress = nil
         pdfTranslationErrorLogURL = nil
+        latexTranslationErrorLogURL = nil
         isWorking = true
         isCancelling = false
         statusMessage = String(localized: "Running BabelDOC...", bundle: bundle)
@@ -1078,6 +1297,16 @@ struct ReaderPaneView: View {
         guard let pdfTranslationErrorLogURL else { return }
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(pdfTranslationErrorLogURL.path, forType: .string)
+    }
+
+    private func revealLaTeXTranslationErrorLog() {
+        guard let latexTranslationErrorLogURL else { return }
+        NSWorkspace.shared.activateFileViewerSelecting([latexTranslationErrorLogURL])
+    }
+
+    private func revealTranslatedLaTeXSource() {
+        guard let translatedLaTeXSourceAttachment else { return }
+        NSWorkspace.shared.activateFileViewerSelecting([translatedLaTeXSourceAttachment.fileURL])
     }
 
     private func dismissStatusMessage() {
