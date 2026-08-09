@@ -38,6 +38,8 @@ struct ReaderPaneView: View {
     private var pdfTranslationBatchSizeRawValue = PDFTranslationBatchPreference.defaultValue
     @AppStorage(HTMLReaderTypography.fontSizeUserDefaultsKey)
     private var htmlReaderFontSize = HTMLReaderTypography.defaultFontSize
+    @AppStorage(LaTeXIntegrationPreferences.translationEnabledKey)
+    private var latexTranslationEnabled = false
 
     var paper: Paper?
     var attachments: [PaperAttachment]
@@ -119,7 +121,7 @@ struct ReaderPaneView: View {
     }
 
     private var canTranslateLaTeX: Bool {
-        paper?.arxivID?.isEmpty == false && settings != nil
+        latexTranslationEnabled && paper?.arxivID?.isEmpty == false && settings != nil
     }
 
     private var isFullPDFTranslationComplete: Bool {
@@ -541,13 +543,15 @@ struct ReaderPaneView: View {
             }
             .disabled(canTranslatePDF == false)
 
-            Button {
-                translateLaTeX()
-            } label: {
-                Label(String(localized: "Translate arXiv LaTeX", bundle: bundle), systemImage: "text.document")
-                    .labelStyle(.titleAndIcon)
+            if latexTranslationEnabled {
+                Button {
+                    translateLaTeX()
+                } label: {
+                    Label(String(localized: "Translate arXiv LaTeX", bundle: bundle), systemImage: "text.document")
+                        .labelStyle(.titleAndIcon)
+                }
+                .disabled(canTranslateLaTeX == false)
             }
-            .disabled(canTranslateLaTeX == false)
         } label: {
             Label(String(localized: "Translate", bundle: bundle), systemImage: "translate")
                 .labelStyle(.iconOnly)
@@ -884,14 +888,15 @@ struct ReaderPaneView: View {
     }
 
     private func translateLaTeX() {
-        guard let paper,
+        guard latexTranslationEnabled,
+              let paper,
               let settings,
               let arxivID = paper.arxivID,
               !arxivID.isEmpty else {
             return
         }
         #if os(macOS)
-        guard ReadPaperLaTeXToolchain.detect() != nil else {
+        guard ReadPaperLaTeXToolchain.detectConfigured() != nil else {
             translationProgress = nil
             latexTranslationErrorLogURL = nil
             statusMessage = ReadPaperLaTeXErrorPresentation.message(

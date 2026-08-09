@@ -93,8 +93,63 @@ enum ReadPaperLaTeXToolchainError: Error {
     case latexmkNotFound
 }
 
+enum LaTeXIntegrationPreferences {
+    static let translationEnabledKey = "ReadPaper.LaTeX.TranslationEnabled"
+    static let toolchainDirectoryKey = "ReadPaper.LaTeX.ToolchainDirectory"
+
+    static func selectedToolchainDirectory(
+        userDefaults: UserDefaults = .standard
+    ) -> URL? {
+        guard let path = userDefaults.string(forKey: toolchainDirectoryKey)?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+              !path.isEmpty else {
+            return nil
+        }
+        return URL(fileURLWithPath: path, isDirectory: true).standardizedFileURL
+    }
+}
+
+struct ReadPaperLaTeXInstallation: Equatable, Identifiable, Sendable {
+    struct Executable: Equatable, Identifiable, Sendable {
+        let name: String
+        let isAvailable: Bool
+
+        var id: String { name }
+    }
+
+    let directoryURL: URL
+    let executables: [Executable]
+
+    var id: String { directoryURL.path }
+
+    var hasLatexmk: Bool {
+        executables.first(where: { $0.name == "latexmk" })?.isAvailable == true
+    }
+
+    var hasPDFEngine: Bool {
+        ["xelatex", "pdflatex", "lualatex"].contains { name in
+            executables.first(where: { $0.name == name })?.isAvailable == true
+        }
+    }
+
+    var isHealthy: Bool {
+        hasLatexmk && hasPDFEngine
+    }
+}
+
 struct ReadPaperLaTeXToolchain: Equatable, Sendable {
     let latexmkURL: URL
+
+    static let inspectedExecutableNames = [
+        "latexmk",
+        "latex",
+        "pdflatex",
+        "xelatex",
+        "lualatex",
+        "bibtex",
+        "biber",
+        "makeindex",
+    ]
 
     static func detect(
         environment: [String: String] = ProcessInfo.processInfo.environment,
@@ -120,6 +175,69 @@ struct ReadPaperLaTeXToolchain: Equatable, Sendable {
             }
         }
         return nil
+    }
+
+    static func detectConfigured(
+        userDefaults: UserDefaults = .standard,
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        fileManager: FileManager = .default
+    ) -> ReadPaperLaTeXToolchain? {
+        if let directory = LaTeXIntegrationPreferences.selectedToolchainDirectory(
+            userDefaults: userDefaults
+        ) {
+            let latexmkURL = directory
+                .appendingPathComponent("latexmk", isDirectory: false)
+                .standardizedFileURL
+            guard fileManager.isExecutableFile(atPath: latexmkURL.path) else {
+                return nil
+            }
+            return ReadPaperLaTeXToolchain(latexmkURL: latexmkURL)
+        }
+        return detect(environment: environment, fileManager: fileManager)
+    }
+
+    static func installations(
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        additionalSearchDirectories: [URL] = [],
+        fileManager: FileManager = .default
+    ) -> [ReadPaperLaTeXInstallation] {
+        let pathDirectories = (environment["PATH"] ?? "")
+            .split(separator: ":")
+            .map { URL(fileURLWithPath: String($0), isDirectory: true) }
+        let conventionalDirectories = [
+            URL(fileURLWithPath: "/Library/TeX/texbin", isDirectory: true),
+            URL(fileURLWithPath: "/opt/homebrew/bin", isDirectory: true),
+            URL(fileURLWithPath: "/usr/local/bin", isDirectory: true),
+        ]
+        var visited: Set<String> = []
+        return (additionalSearchDirectories + pathDirectories + conventionalDirectories)
+            .compactMap { directory -> ReadPaperLaTeXInstallation? in
+                let normalized = directory.standardizedFileURL
+                guard visited.insert(normalized.path).inserted else { return nil }
+                let installation = installation(at: normalized, fileManager: fileManager)
+                guard installation.executables.contains(where: \.isAvailable) else {
+                    return nil
+                }
+                return installation
+            }
+            .sorted { $0.directoryURL.path.localizedStandardCompare($1.directoryURL.path) == .orderedAscending }
+    }
+
+    static func installation(
+        at directoryURL: URL,
+        fileManager: FileManager = .default
+    ) -> ReadPaperLaTeXInstallation {
+        let normalized = directoryURL.standardizedFileURL
+        return ReadPaperLaTeXInstallation(
+            directoryURL: normalized,
+            executables: inspectedExecutableNames.map { name in
+                let executableURL = normalized.appendingPathComponent(name, isDirectory: false)
+                return ReadPaperLaTeXInstallation.Executable(
+                    name: name,
+                    isAvailable: fileManager.isExecutableFile(atPath: executableURL.path)
+                )
+            }
+        )
     }
 }
 
@@ -600,7 +718,7 @@ actor ReadPaperLaTeXTranslationService {
 
     private static var defaultCompiler: (any LaTeXProjectCompiling)? {
         #if os(macOS)
-        guard let toolchain = ReadPaperLaTeXToolchain.detect() else { return nil }
+        guard let toolchain = ReadPaperLaTeXToolchain.detectConfigured() else { return nil }
         return MacOSLaTeXCompiler(
             runner: ReadPaperResolvedLaTeXProcessRunner(toolchain: toolchain),
             engines: [.xeLaTeX, .pdfLaTeX, .luaLaTeX]

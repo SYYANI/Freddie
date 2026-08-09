@@ -213,6 +213,64 @@ final class LaTeXTranslationServiceTests: XCTestCase {
         XCTAssertEqual(toolchain?.latexmkURL, latexmk.standardizedFileURL)
     }
 
+    func testConfiguredToolchainDirectoryTakesPrecedenceOverPATH() throws {
+        let temporary = try TemporaryTestDirectory()
+        defer { temporary.remove() }
+        let automaticBin = temporary.url.appendingPathComponent("automatic", isDirectory: true)
+        let configuredBin = temporary.url.appendingPathComponent("configured", isDirectory: true)
+        try FileManager.default.createDirectory(at: automaticBin, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: configuredBin, withIntermediateDirectories: true)
+        try makeExecutable(named: "latexmk", in: automaticBin)
+        let configuredLatexmk = try makeExecutable(named: "latexmk", in: configuredBin)
+
+        let suiteName = "LaTeXTranslationServiceTests.\(#function)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        defaults.set(configuredBin.path, forKey: LaTeXIntegrationPreferences.toolchainDirectoryKey)
+
+        let toolchain = ReadPaperLaTeXToolchain.detectConfigured(
+            userDefaults: defaults,
+            environment: ["PATH": automaticBin.path]
+        )
+
+        XCTAssertEqual(toolchain?.latexmkURL, configuredLatexmk.standardizedFileURL)
+    }
+
+    func testInvalidConfiguredToolchainDoesNotSilentlyFallBackToPATH() throws {
+        let temporary = try TemporaryTestDirectory()
+        defer { temporary.remove() }
+        let automaticBin = temporary.url.appendingPathComponent("automatic", isDirectory: true)
+        let configuredBin = temporary.url.appendingPathComponent("configured", isDirectory: true)
+        try FileManager.default.createDirectory(at: automaticBin, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: configuredBin, withIntermediateDirectories: true)
+        try makeExecutable(named: "latexmk", in: automaticBin)
+
+        let suiteName = "LaTeXTranslationServiceTests.\(#function)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        defaults.set(configuredBin.path, forKey: LaTeXIntegrationPreferences.toolchainDirectoryKey)
+
+        XCTAssertNil(ReadPaperLaTeXToolchain.detectConfigured(
+            userDefaults: defaults,
+            environment: ["PATH": automaticBin.path]
+        ))
+    }
+
+    func testInstallationHealthRequiresLatexmkAndPDFEngine() throws {
+        let temporary = try TemporaryTestDirectory()
+        defer { temporary.remove() }
+        try makeExecutable(named: "latexmk", in: temporary.url)
+
+        let incomplete = ReadPaperLaTeXToolchain.installation(at: temporary.url)
+        XCTAssertTrue(incomplete.hasLatexmk)
+        XCTAssertFalse(incomplete.hasPDFEngine)
+        XCTAssertFalse(incomplete.isHealthy)
+
+        try makeExecutable(named: "xelatex", in: temporary.url)
+        let healthy = ReadPaperLaTeXToolchain.installation(at: temporary.url)
+        XCTAssertTrue(healthy.isHealthy)
+    }
+
     func testResolvedProcessRunnerInvokesDetectedLatexmkDirectly() async throws {
         let temporary = try TemporaryTestDirectory()
         defer { temporary.remove() }
@@ -346,6 +404,17 @@ final class LaTeXTranslationServiceTests: XCTestCase {
             ),
             "Error: The LaTeX translation failed structural validation: section:6_2 [command-mismatch]; section:9 [placeholder-mismatch]"
         )
+    }
+
+    @discardableResult
+    private func makeExecutable(named name: String, in directory: URL) throws -> URL {
+        let url = directory.appendingPathComponent(name, isDirectory: false)
+        try Data("#!/bin/sh\n".utf8).write(to: url)
+        try FileManager.default.setAttributes(
+            [.posixPermissions: 0o755],
+            ofItemAtPath: url.path
+        )
+        return url
     }
 
     private func makeRoute(

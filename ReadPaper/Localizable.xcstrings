@@ -473,6 +473,37 @@
         }
       }
     },
+    "Automatic (%@)" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自动检测（%1$@）"
+          }
+        }
+      }
+    },
+    "Automatic (not found)" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自动检测（未找到）"
+          }
+        }
+      }
+    },
+    "Automatic detection checks the app's PATH and common MacTeX, Homebrew, and /usr/local locations. A manually selected directory takes precedence and must contain an executable latexmk." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自动检测会检查应用的 PATH，以及常见的 MacTeX、Homebrew 和 /usr/local 位置。手动选择的目录优先级更高，且必须包含可执行的 latexmk。"
+          }
+        }
+      }
+    },
     "Available placeholders: {{dateISO}}, {{title}}, {{slug}}, {{authors}}, {{identifier}}, {{sourceTitle}}, {{sourceURL}}, {{metadataBlock}}, {{abstractBlock}}, {{notesBlock}}, {{generatedBy}}." : {
       "localizations" : {
         "zh-Hans" : {
@@ -632,6 +663,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Base URL"
+          }
+        }
+      }
+    },
+    "Basic health check failed" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "基本健康检查未通过"
+          }
+        }
+      }
+    },
+    "Basic health check passed" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "基本健康检查已通过"
           }
         }
       }
@@ -871,6 +924,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "选择阅读器的默认外观。默认保留原始渲染，深色使用适合低光环境的阅读底色，纸质会为 PDF 和 HTML 内容加入温暖的纸张色调。"
+          }
+        }
+      }
+    },
+    "Choose the directory that contains latexmk and your TeX engines." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请选择包含 latexmk 和 TeX 引擎的目录。"
           }
         }
       }
@@ -1147,6 +1211,17 @@
         }
       }
     },
+    "Current LaTeX Toolchain" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "当前 LaTeX 工具链"
+          }
+        }
+      }
+    },
     "Dark" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1375,6 +1450,17 @@
         }
       }
     },
+    "Download MacTeX" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "下载 MacTeX"
+          }
+        }
+      }
+    },
     "Downloading %@, extracting the readable article body, and localizing linked resources." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1415,6 +1501,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "编辑笔记"
+          }
+        }
+      }
+    },
+    "Enable arXiv LaTeX translation" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "启用 arXiv LaTeX 翻译"
           }
         }
       }
@@ -1975,6 +2072,16 @@
         }
       }
     },
+    "If you do not have a TeX distribution installed, MacTeX is recommended. The distribution is installed and maintained separately from Freddie." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "如果尚未安装 TeX 发行版，推荐使用 MacTeX。该发行版独立于 Freddie 安装和维护。"
+          }
+        }
+      }
+    },
     "Import" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2235,6 +2342,28 @@
         }
       }
     },
+    "LaTeX" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LaTeX"
+          }
+        }
+      }
+    },
+    "LaTeX Installation" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LaTeX 安装"
+          }
+        }
+      }
+    },
     "LaTeX source translation completed, but PDF compilation failed." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2256,12 +2385,33 @@
         }
       }
     },
+    "LaTeX Translation" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LaTeX 翻译"
+          }
+        }
+      }
+    },
     "LaTeX translation completed." : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "LaTeX 翻译已完成。"
+          }
+        }
+      }
+    },
+    "LaTeX translation is enabled, but the selected toolchain is not ready. Install MacTeX or choose a directory that contains latexmk and a PDF engine." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LaTeX 翻译已启用，但所选工具链尚未就绪。请安装 MacTeX，或选择包含 latexmk 和 PDF 引擎的目录。"
           }
         }
       }
@@ -2331,6 +2481,17 @@
         }
       }
     },
+    "Location on Disk" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "磁盘位置"
+          }
+        }
+      }
+    },
     "Low" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2338,6 +2499,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "低"
+          }
+        }
+      }
+    },
+    "MacTeX" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MacTeX"
           }
         }
       }
@@ -2675,6 +2847,16 @@
         }
       }
     },
+    "No usable LaTeX installation was found. Install MacTeX, refresh detection, or choose the TeX binary directory manually." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未找到可用的 LaTeX 安装。请安装 MacTeX、刷新检测，或手动选择 TeX 二进制目录。"
+          }
+        }
+      }
+    },
     "Normalized to %@ and checking whether it already exists in your library." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2715,6 +2897,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "未配置"
+          }
+        }
+      }
+    },
+    "Not found" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未找到"
           }
         }
       }
@@ -2934,16 +3127,6 @@
     "PDF" : {
 
     },
-    "PDF compilation requires a TeX distribution that includes latexmk." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "PDF 编译需要安装包含 latexmk 的 TeX 发行版。"
-          }
-        }
-      }
-    },
     "PDF Appearance" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2951,6 +3134,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "PDF 外观"
+          }
+        }
+      }
+    },
+    "PDF compilation requires a TeX distribution that includes latexmk." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PDF 编译需要安装包含 latexmk 的 TeX 发行版。"
           }
         }
       }
@@ -3342,6 +3535,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在重建 LaTeX 译稿..."
+          }
+        }
+      }
+    },
+    "Refresh" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "刷新"
           }
         }
       }
@@ -3993,22 +4197,22 @@
         }
       }
     },
-    "The LaTeX translation failed structural validation." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "LaTeX 译稿未通过结构校验。"
-          }
-        }
-      }
-    },
     "The LaTeX translation failed structural validation: %@" : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "LaTeX 译稿未通过结构校验：%1$@"
+          }
+        }
+      }
+    },
+    "The LaTeX translation failed structural validation." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LaTeX 译稿未通过结构校验。"
           }
         }
       }
@@ -4216,6 +4420,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "标题、作者、arXiv ID 和摘要。"
+          }
+        }
+      }
+    },
+    "Toolchain directory" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "工具链目录"
           }
         }
       }
@@ -4591,6 +4806,17 @@
         }
       }
     },
+    "Use Automatic Detection" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "使用自动检测"
+          }
+        }
+      }
+    },
     "Use the + button in the library to create the first paper record." : {
       "localizations" : {
         "zh-Hans" : {
@@ -4628,6 +4854,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "网页 URL"
+          }
+        }
+      }
+    },
+    "When enabled, Translate arXiv LaTeX appears in the reader's Translate menu. It downloads the paper source, translates its semantic units, and uses the selected external TeX distribution to compile the translated PDF." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "启用后，阅读器的“翻译”菜单中会显示“翻译 arXiv LaTeX”。它会下载论文源文件、翻译其中的语义单元，并使用所选的外部 TeX 发行版编译译文 PDF。"
           }
         }
       }

@@ -5,6 +5,7 @@ import SwiftUI
 private enum SettingsTab: String, Hashable {
     case general
     case reader
+    case latex
     case digest
     case providers
     case models
@@ -98,6 +99,10 @@ private struct SettingsForm: View {
     private var htmlReaderFontSize = HTMLReaderTypography.defaultFontSize
     @AppStorage(TranslationGlossaryPreference.userDefaultsKey)
     private var translationGlossary = ""
+    @AppStorage(LaTeXIntegrationPreferences.translationEnabledKey)
+    private var latexTranslationEnabled = false
+    @AppStorage(LaTeXIntegrationPreferences.toolchainDirectoryKey)
+    private var latexToolchainDirectoryPath = ""
     @AppStorage(PaperDigestExportConfiguration.templateKey) private var digestExportTemplate = PaperDigestExportPolicy.defaultMarkdownTemplate
     @AppStorage(PaperDigestExportConfiguration.directoryDisplayPathKey) private var digestExportDirectoryPath = ""
 
@@ -139,6 +144,7 @@ private struct SettingsForm: View {
     @State private var digestTemplateInsertion: String?
     @State private var digestStatusMessage: String?
     @State private var glossaryInsertion: String?
+    @State private var detectedLaTeXInstallations: [ReadPaperLaTeXInstallation] = []
 
     private let keychainStore = KeychainStore()
     private let validator = LLMProviderValidationUseCase()
@@ -276,6 +282,25 @@ private struct SettingsForm: View {
         Int(HTMLReaderTypography.clampFontSize(htmlReaderFontSize).rounded())
     }
 
+    private var selectedLaTeXDirectoryURL: URL? {
+        guard !latexToolchainDirectoryPath.isEmpty else { return nil }
+        return URL(fileURLWithPath: latexToolchainDirectoryPath, isDirectory: true).standardizedFileURL
+    }
+
+    private var activeLaTeXInstallation: ReadPaperLaTeXInstallation? {
+        if let selectedLaTeXDirectoryURL {
+            return ReadPaperLaTeXToolchain.installation(at: selectedLaTeXDirectoryURL)
+        }
+        guard let toolchain = ReadPaperLaTeXToolchain.detect() else { return nil }
+        return ReadPaperLaTeXToolchain.installation(
+            at: toolchain.latexmkURL.deletingLastPathComponent()
+        )
+    }
+
+    private var automaticLaTeXLocation: String? {
+        ReadPaperLaTeXToolchain.detect()?.latexmkURL.deletingLastPathComponent().path
+    }
+
     var body: some View {
         TabView(selection: selectedTabBinding) {
             generalTab
@@ -288,6 +313,12 @@ private struct SettingsForm: View {
                 .tag(SettingsTab.reader)
                 .tabItem {
                     Label(String(localized: "Reader", bundle: bundle), systemImage: "book.closed")
+                }
+
+            latexTab
+                .tag(SettingsTab.latex)
+                .tabItem {
+                    Label(String(localized: "LaTeX", bundle: bundle), systemImage: "text.document")
                 }
 
             digestTab
@@ -312,6 +343,7 @@ private struct SettingsForm: View {
         .task {
             _ = try? LLMConfigurationBootstrapper().ensureBootstrap(modelContext: modelContext)
             loadInitialSelectionIfNeeded()
+            refreshLaTeXInstallations()
             await refreshInstalledBabelDOCVersion()
         }
         .onChange(of: selectedProviderID) { _, _ in
@@ -325,6 +357,9 @@ private struct SettingsForm: View {
         }
         .onChange(of: models.map(\.id)) { _, _ in
             normalizeSelections()
+        }
+        .onChange(of: latexToolchainDirectoryPath) { _, _ in
+            refreshLaTeXInstallations()
         }
     }
 
@@ -514,6 +549,155 @@ private struct SettingsForm: View {
                     Text("Choose which saved model profile powers HTML translation and the BabelDOC PDF route inside the reader.", bundle: bundle)
                         .font(.footnote)
                         .foregroundStyle(.secondary)
+                }
+            }
+            .formStyle(.grouped)
+
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .padding(20)
+    }
+
+    private var latexTab: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Form {
+                Section(String(localized: "LaTeX Translation", bundle: bundle)) {
+                    Toggle(
+                        String(localized: "Enable arXiv LaTeX translation", bundle: bundle),
+                        isOn: $latexTranslationEnabled
+                    )
+
+                    Text(
+                        "When enabled, Translate arXiv LaTeX appears in the reader's Translate menu. It downloads the paper source, translates its semantic units, and uses the selected external TeX distribution to compile the translated PDF.",
+                        bundle: bundle
+                    )
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                    if latexTranslationEnabled, activeLaTeXInstallation?.isHealthy != true {
+                        Label {
+                            Text(
+                                "LaTeX translation is enabled, but the selected toolchain is not ready. Install MacTeX or choose a directory that contains latexmk and a PDF engine.",
+                                bundle: bundle
+                            )
+                        } icon: {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                        }
+                        .foregroundStyle(.orange)
+                        .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+
+                Section(String(localized: "MacTeX", bundle: bundle)) {
+                    Text(
+                        "If you do not have a TeX distribution installed, MacTeX is recommended. The distribution is installed and maintained separately from Freddie.",
+                        bundle: bundle
+                    )
+                    .fixedSize(horizontal: false, vertical: true)
+
+                    Link(
+                        String(localized: "Download MacTeX", bundle: bundle),
+                        destination: URL(string: "https://tug.org/mactex/mactex-download.html")!
+                    )
+                }
+
+                Section(String(localized: "LaTeX Installation", bundle: bundle)) {
+                    Picker(
+                        String(localized: "Toolchain directory", bundle: bundle),
+                        selection: $latexToolchainDirectoryPath
+                    ) {
+                        if let automaticLaTeXLocation {
+                            Text(
+                                String(
+                                    format: String(localized: "Automatic (%@)", bundle: bundle),
+                                    automaticLaTeXLocation
+                                )
+                            )
+                            .tag("")
+                        } else {
+                            Text("Automatic (not found)", bundle: bundle)
+                                .tag("")
+                        }
+
+                        ForEach(detectedLaTeXInstallations) { installation in
+                            Text(verbatim: installation.directoryURL.path)
+                                .tag(installation.directoryURL.path)
+                        }
+                    }
+                    .pickerStyle(.menu)
+
+                    HStack(spacing: 10) {
+                        Button(String(localized: "Refresh", bundle: bundle)) {
+                            refreshLaTeXInstallations()
+                        }
+
+                        Button(String(localized: "Choose Folder", bundle: bundle)) {
+                            chooseLaTeXToolchainDirectory()
+                        }
+
+                        Button(String(localized: "Use Automatic Detection", bundle: bundle)) {
+                            latexToolchainDirectoryPath = ""
+                        }
+                        .disabled(latexToolchainDirectoryPath.isEmpty)
+                    }
+
+                    Text(
+                        "Automatic detection checks the app's PATH and common MacTeX, Homebrew, and /usr/local locations. A manually selected directory takes precedence and must contain an executable latexmk.",
+                        bundle: bundle
+                    )
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Section(String(localized: "Current LaTeX Toolchain", bundle: bundle)) {
+                    LabeledContent(String(localized: "Location on Disk", bundle: bundle)) {
+                        Text(
+                            activeLaTeXInstallation?.directoryURL.path
+                                ?? String(localized: "Not found", bundle: bundle)
+                        )
+                        .foregroundStyle(activeLaTeXInstallation == nil ? .secondary : .primary)
+                        .textSelection(.enabled)
+                    }
+
+                    if let installation = activeLaTeXInstallation {
+                        Label {
+                            Text(
+                                installation.isHealthy
+                                    ? String(localized: "Basic health check passed", bundle: bundle)
+                                    : String(localized: "Basic health check failed", bundle: bundle)
+                            )
+                        } icon: {
+                            Image(systemName: installation.isHealthy ? "checkmark.circle.fill" : "xmark.circle.fill")
+                        }
+                        .foregroundStyle(installation.isHealthy ? .green : .red)
+
+                        LazyVGrid(
+                            columns: [GridItem(.adaptive(minimum: 130), alignment: .leading)],
+                            alignment: .leading,
+                            spacing: 10
+                        ) {
+                            ForEach(installation.executables) { executable in
+                                Label(
+                                    executable.name,
+                                    systemImage: executable.isAvailable
+                                        ? "checkmark.circle.fill"
+                                        : "xmark.circle"
+                                )
+                                .foregroundStyle(executable.isAvailable ? .green : .secondary)
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    } else {
+                        Text(
+                            "No usable LaTeX installation was found. Install MacTeX, refresh detection, or choose the TeX binary directory manually.",
+                            bundle: bundle
+                        )
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
             }
             .formStyle(.grouped)
@@ -1584,6 +1768,42 @@ private struct SettingsForm: View {
         } catch {
             latestBabelDocVersion = nil
         }
+    }
+
+    private func refreshLaTeXInstallations() {
+        let selectedDirectories = selectedLaTeXDirectoryURL.map { [$0] } ?? []
+        var installations = ReadPaperLaTeXToolchain.installations(
+            additionalSearchDirectories: selectedDirectories
+        )
+        if let selectedLaTeXDirectoryURL,
+           !installations.contains(where: { $0.directoryURL == selectedLaTeXDirectoryURL }) {
+            installations.append(
+                ReadPaperLaTeXToolchain.installation(at: selectedLaTeXDirectoryURL)
+            )
+        }
+        detectedLaTeXInstallations = installations.sorted {
+            $0.directoryURL.path.localizedStandardCompare($1.directoryURL.path) == .orderedAscending
+        }
+    }
+
+    private func chooseLaTeXToolchainDirectory() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.canCreateDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.prompt = String(localized: "Choose", bundle: bundle)
+        panel.message = String(
+            localized: "Choose the directory that contains latexmk and your TeX engines.",
+            bundle: bundle
+        )
+        panel.directoryURL = selectedLaTeXDirectoryURL
+            ?? activeLaTeXInstallation?.directoryURL
+            ?? URL(fileURLWithPath: "/Library/TeX/texbin", isDirectory: true)
+
+        guard panel.runModal() == .OK, let directoryURL = panel.url else { return }
+        latexToolchainDirectoryPath = directoryURL.standardizedFileURL.path
+        refreshLaTeXInstallations()
     }
 
     private func chooseDigestExportDirectory() {
