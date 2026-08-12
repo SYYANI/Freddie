@@ -447,6 +447,26 @@
         }
       }
     },
+    "LaTeX structure could not be applied; translation continued with PDF layout." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法应用 LaTeX 结构；已回退到 PDF 版面继续翻译。"
+          }
+        }
+      }
+    },
+    "LaTeX structure matched %d/%d PDF paragraphs; translated %d/%d text blocks." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LaTeX 结构匹配了 %1$d/%2$d 个 PDF 段落；已翻译 %3$d/%4$d 个文本块。"
+          }
+        }
+      }
+    },
     "LaTeX structure is ready for PDF translation." : {
       "localizations" : {
         "zh-Hans" : {
@@ -463,6 +483,36 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在使用缓存的 LaTeX 结构改进 PDF 翻译。"
+          }
+        }
+      }
+    },
+    "The arXiv source archive exceeds the %lld-byte safety limit." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "arXiv 源码归档超过了 %1$lld 字节的安全限制。"
+          }
+        }
+      }
+    },
+    "The arXiv source response is not a valid archive." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "arXiv 源码响应不是有效归档。"
+          }
+        }
+      }
+    },
+    "Translated %d/%d text blocks." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已翻译 %1$d/%2$d 个文本块。"
           }
         }
       }

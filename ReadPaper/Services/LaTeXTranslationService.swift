@@ -486,6 +486,7 @@ enum ReadPaperLaTeXProgressMapper {
 }
 
 actor ReadPaperArXivProjectAcquirer: ArXivProjectAcquiring {
+    static let maximumArchiveByteCount: Int64 = 512 * 1_024 * 1_024
     private let session: URLSession
     private let fileManager: FileManager
 
@@ -504,7 +505,10 @@ actor ReadPaperArXivProjectAcquirer: ArXivProjectAcquiring {
         let filename = normalized.queryID.replacingOccurrences(of: "/", with: "_") + ".tar"
         let destination = downloads.appendingPathComponent(filename)
         if fileManager.fileExists(atPath: destination.path) {
-            return .localArchive(destination)
+            if try isPlausibleSourceArchive(destination) {
+                return .localArchive(destination)
+            }
+            try fileManager.removeItem(at: destination)
         }
 
         guard let sourceURL = URL(string: "https://export.arxiv.org/e-print/\(normalized.queryID)") else {
@@ -515,9 +519,63 @@ actor ReadPaperArXivProjectAcquirer: ArXivProjectAcquiring {
         if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
             throw PaperImportError.arxivHTTPError(statusCode: http.statusCode)
         }
+        if response.expectedContentLength > Self.maximumArchiveByteCount {
+            throw ReadPaperArXivSourceError.archiveTooLarge(
+                maximumBytes: Self.maximumArchiveByteCount
+            )
+        }
+        if let mimeType = response.mimeType?.lowercased(),
+           mimeType == "text/html" || mimeType == "application/xhtml+xml" {
+            throw ReadPaperArXivSourceError.invalidArchiveResponse
+        }
         try Task.checkCancellation()
-        try fileManager.moveItem(at: temporaryURL, to: destination)
+        guard try isPlausibleSourceArchive(temporaryURL) else {
+            throw ReadPaperArXivSourceError.invalidArchiveResponse
+        }
+        let partial = downloads.appendingPathComponent(
+            ".\(filename).\(UUID().uuidString).partial"
+        )
+        do {
+            try fileManager.copyItem(at: temporaryURL, to: partial)
+            try fileManager.moveItem(at: partial, to: destination)
+        } catch {
+            try? fileManager.removeItem(at: partial)
+            throw error
+        }
         return .localArchive(destination)
+    }
+
+    private func isPlausibleSourceArchive(_ url: URL) throws -> Bool {
+        let values = try url.resourceValues(forKeys: [.fileSizeKey, .isRegularFileKey])
+        guard values.isRegularFile == true,
+              let size = values.fileSize,
+              size > 0,
+              Int64(size) <= Self.maximumArchiveByteCount else { return false }
+        let handle = try FileHandle(forReadingFrom: url)
+        defer { try? handle.close() }
+        let prefix = try handle.read(upToCount: 512) ?? Data()
+        guard !prefix.isEmpty else { return false }
+        let text = String(decoding: prefix, as: UTF8.self)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        return !text.hasPrefix("<!doctype html") && !text.hasPrefix("<html")
+    }
+}
+
+enum ReadPaperArXivSourceError: Error, LocalizedError, Equatable {
+    case invalidArchiveResponse
+    case archiveTooLarge(maximumBytes: Int64)
+
+    var errorDescription: String? {
+        switch self {
+        case .invalidArchiveResponse:
+            AppLocalization.localized("The arXiv source response is not a valid archive.")
+        case let .archiveTooLarge(maximumBytes):
+            AppLocalization.format(
+                "The arXiv source archive exceeds the %lld-byte safety limit.",
+                maximumBytes
+            )
+        }
     }
 }
 

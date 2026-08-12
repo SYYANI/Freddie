@@ -1,6 +1,7 @@
 import BabelDocKit
 import Foundation
 import LaTeXTransKit
+import os
 
 struct BabelDocSemanticHintArtifact: Sendable {
     let document: BabelDocSemanticDocument
@@ -45,10 +46,16 @@ actor BabelDocSemanticHintService {
     typealias StatusHandler = @Sendable (BabelDocSemanticHintStatus) -> Void
 
     static let cacheSchemaVersion = 1
+    static let extractorAlgorithmVersion = 2
+    private static let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "ReadPaper",
+        category: "BabelDocSemanticHints"
+    )
 
     private let fileStore: PaperFileStore
     private let acquirer: any ArXivProjectAcquiring
     private let archiveReader: any TranslationArchiveReading
+    private var inFlightTasks: [String: Task<BabelDocSemanticHintArtifact, Error>] = [:]
 
     init(
         fileStore: PaperFileStore = PaperFileStore(),
@@ -79,6 +86,9 @@ actor BabelDocSemanticHintService {
         } catch is CancellationError {
             throw CancellationError()
         } catch {
+            Self.logger.error(
+                "LaTeX semantic preparation failed: \(String(describing: error), privacy: .public)"
+            )
             onStatus(.unavailable)
             return nil
         }
@@ -91,9 +101,41 @@ actor BabelDocSemanticHintService {
     ) async throws -> BabelDocSemanticHintArtifact {
         let normalized = try ArxivClient.normalizeIdentifier(arxivIdentifier)
         let exactIdentifier = normalized.queryID
+        let inFlightKey = "\(paperID.uuidString)|\(exactIdentifier)"
+        if let task = inFlightTasks[inFlightKey] {
+            onStatus(.checkingCache)
+            let artifact = try await task.value
+            try Task.checkCancellation()
+            onStatus(.ready(cached: artifact.wasCached))
+            return artifact
+        }
+        let task = Task {
+            try await prepareUncoalesced(
+                paperID: paperID,
+                exactIdentifier: exactIdentifier,
+                onStatus: onStatus
+            )
+        }
+        inFlightTasks[inFlightKey] = task
+        do {
+            let artifact = try await task.value
+            inFlightTasks[inFlightKey] = nil
+            try Task.checkCancellation()
+            return artifact
+        } catch {
+            inFlightTasks[inFlightKey] = nil
+            throw error
+        }
+    }
+
+    private func prepareUncoalesced(
+        paperID: UUID,
+        exactIdentifier: String,
+        onStatus: @escaping StatusHandler
+    ) async throws -> BabelDocSemanticHintArtifact {
         let root = try fileStore.latexSemanticDirectory(for: paperID)
         let cacheKey = String(Hashing.sha256Hex(
-            "schema=\(Self.cacheSchemaVersion)|source=\(exactIdentifier)"
+            "schema=\(Self.cacheSchemaVersion)|extractor=\(Self.extractorAlgorithmVersion)|source=\(exactIdentifier)"
         ).prefix(24))
         let semanticURL = root.appendingPathComponent("semantic-\(cacheKey).json")
         let metadataURL = root.appendingPathComponent("semantic-\(cacheKey).metadata.json")
@@ -112,7 +154,11 @@ actor BabelDocSemanticHintService {
         let workspace = root
             .appendingPathComponent("workspaces", isDirectory: true)
             .appendingPathComponent(cacheKey, isDirectory: true)
+        if FileManager.default.fileExists(atPath: workspace.path) {
+            try FileManager.default.removeItem(at: workspace)
+        }
         try fileStore.ensureDirectory(workspace)
+        defer { try? FileManager.default.removeItem(at: workspace) }
         let acquiredSource = try await acquirer.acquireProject(
             identifier: exactIdentifier,
             workspaceDirectory: workspace
@@ -145,6 +191,7 @@ actor BabelDocSemanticHintService {
         try data.write(to: semanticURL, options: .atomic)
         let metadata = CacheMetadata(
             cacheSchemaVersion: Self.cacheSchemaVersion,
+            extractorAlgorithmVersion: Self.extractorAlgorithmVersion,
             sourceIdentifier: exactIdentifier,
             semanticSHA256: Hashing.sha256Hex(data)
         )
@@ -165,6 +212,7 @@ actor BabelDocSemanticHintService {
         )
         let data = try Data(contentsOf: semanticURL)
         guard metadata.cacheSchemaVersion == Self.cacheSchemaVersion,
+              metadata.extractorAlgorithmVersion == Self.extractorAlgorithmVersion,
               metadata.sourceIdentifier == expectedIdentifier,
               metadata.semanticSHA256 == Hashing.sha256Hex(data) else { return nil }
         let document = try JSONDecoder().decode(BabelDocSemanticDocument.self, from: data)
@@ -176,6 +224,7 @@ actor BabelDocSemanticHintService {
 
     private struct CacheMetadata: Codable {
         let cacheSchemaVersion: Int
+        let extractorAlgorithmVersion: Int
         let sourceIdentifier: String
         let semanticSHA256: String
     }

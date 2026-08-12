@@ -417,6 +417,30 @@ final class BabelDocRunnerTests: XCTestCase {
         XCTAssertEqual(sanitized, "visible <redacted> output")
     }
 
+    func testOutputParserSurfacesSemanticAndTranslationDiagnostics() {
+        let parser = BabelDocOutputParser(apiKey: "sk-secret")
+        let parsed = parser.consume(ProcessOutputEvent(
+            channel: .standardOutput,
+            text: """
+            \(BabelDocRunner.bridgeEventPrefix){"type":"translation_diagnostics","semantic_status":"applied","semantic_pdf_paragraphs":12,"semantic_matched_pdf_paragraphs":9,"semantic_matched_pdf_coverage":0.75,"semantic_high_confidence":7,"translation_candidates":10,"translation_completed":9,"placeholder_validation_failures":1,"semantic_translation_fallbacks":1}\n
+            """
+        ))
+
+        XCTAssertEqual(
+            parsed.statusMessages,
+            ["LaTeX structure matched 9/12 PDF paragraphs; translated 9/10 text blocks."]
+        )
+
+        let fallbackEvent = try! XCTUnwrap(BabelDocRunner.bridgeEvent(
+            from: #"{"type":"translation_diagnostics","semantic_status":"pdfFallback"}"#
+        ))
+        let fallback = BabelDocRunner.structuredStatusMessage(from: fallbackEvent)
+        XCTAssertEqual(
+            fallback,
+            "LaTeX structure could not be applied; translation continued with PDF layout."
+        )
+    }
+
     func testTranslatePDFWritesRedactedFailureLogOnProcessFailure() async throws {
         let fm = FileManager.default
         let tempRoot = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)

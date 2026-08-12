@@ -64,6 +64,30 @@ private final class EventEmitter: @unchecked Sendable {
 
     func error(_ message: String) { emit(["type": "error", "error": message]) }
 
+    func diagnostics(_ result: BabelDocTranslationResult) {
+        var event: [String: Any] = [
+            "type": "translation_diagnostics",
+            "semantic_status": result.semanticHintStatus.rawValue,
+            "translation_candidates": result.translationDiagnostics.candidateCount,
+            "translation_completed": result.translationDiagnostics.translatedCount,
+            "placeholder_validation_failures": result.translationDiagnostics
+                .placeholderValidationFailureCount,
+            "semantic_translation_fallbacks": result.translationDiagnostics.semanticFallbackCount,
+            "continuation_groups": result.translationDiagnostics.continuationGroupCount,
+        ]
+        if let report = result.semanticEnrichmentReport {
+            event["semantic_pdf_paragraphs"] = report.pdfParagraphCount
+            event["semantic_matched_pdf_paragraphs"] = report.matchedPDFParagraphCount
+            event["semantic_matched_pdf_coverage"] = report.matchedPDFCoverage
+            event["semantic_high_confidence"] = report.highConfidenceMatchCount
+            event["semantic_medium_confidence"] = report.mediumConfidenceMatchCount
+            event["semantic_low_confidence"] = report.lowConfidenceMatchCount
+            event["semantic_structural_changes_enabled"] = report.structuralChangesEnabled
+            event["semantic_elapsed_ms"] = report.elapsedMilliseconds
+        }
+        emit(event)
+    }
+
     private func emit(_ object: [String: Any]) {
         guard let data = try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys]) else {
             return
@@ -236,7 +260,7 @@ private enum ReadPaperBabelDocHelperMain {
                 withIntermediateDirectories: true
             )
             emitter.summary()
-            _ = try await BabelDoc.translate(
+            let result = try await BabelDoc.translate(
                 request: .init(
                     inputPDF: inputURL,
                     outputPDF: outputURL,
@@ -263,6 +287,7 @@ private enum ReadPaperBabelDocHelperMain {
                 ),
                 onProgress: { emitter.progress($0) }
             )
+            emitter.diagnostics(result)
         } catch is CancellationError {
             emitter.error("Translation cancelled.")
             exit(130)

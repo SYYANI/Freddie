@@ -10,6 +10,20 @@ struct BabelDocBridgeEvent: Decodable, Sendable, Equatable {
     var partIndex: Int?
     var totalParts: Int?
     var error: String?
+    var semanticStatus: String?
+    var semanticPDFParagraphs: Int?
+    var semanticMatchedPDFParagraphs: Int?
+    var semanticMatchedPDFCoverage: Double?
+    var semanticHighConfidence: Int?
+    var semanticMediumConfidence: Int?
+    var semanticLowConfidence: Int?
+    var semanticStructuralChangesEnabled: Bool?
+    var semanticElapsedMilliseconds: Double?
+    var translationCandidates: Int?
+    var translationCompleted: Int?
+    var placeholderValidationFailures: Int?
+    var semanticTranslationFallbacks: Int?
+    var continuationGroups: Int?
 
     enum CodingKeys: String, CodingKey {
         case type
@@ -21,6 +35,20 @@ struct BabelDocBridgeEvent: Decodable, Sendable, Equatable {
         case partIndex = "part_index"
         case totalParts = "total_parts"
         case error
+        case semanticStatus = "semantic_status"
+        case semanticPDFParagraphs = "semantic_pdf_paragraphs"
+        case semanticMatchedPDFParagraphs = "semantic_matched_pdf_paragraphs"
+        case semanticMatchedPDFCoverage = "semantic_matched_pdf_coverage"
+        case semanticHighConfidence = "semantic_high_confidence"
+        case semanticMediumConfidence = "semantic_medium_confidence"
+        case semanticLowConfidence = "semantic_low_confidence"
+        case semanticStructuralChangesEnabled = "semantic_structural_changes_enabled"
+        case semanticElapsedMilliseconds = "semantic_elapsed_ms"
+        case translationCandidates = "translation_candidates"
+        case translationCompleted = "translation_completed"
+        case placeholderValidationFailures = "placeholder_validation_failures"
+        case semanticTranslationFallbacks = "semantic_translation_fallbacks"
+        case continuationGroups = "continuation_groups"
     }
 }
 
@@ -431,6 +459,25 @@ struct BabelDocRunner {
                 return AppLocalization.format("BabelDOC error: %@", message.truncatedForStatus)
             }
             return AppLocalization.localized("BabelDOC error.")
+        case "translation_diagnostics":
+            if event.semanticStatus == "pdfFallback" {
+                return AppLocalization.localized(
+                    "LaTeX structure could not be applied; translation continued with PDF layout."
+                )
+            }
+            if let matched = event.semanticMatchedPDFParagraphs,
+               let total = event.semanticPDFParagraphs,
+               let translated = event.translationCompleted,
+               let candidates = event.translationCandidates {
+                return AppLocalization.format(
+                    "LaTeX structure matched %d/%d PDF paragraphs; translated %d/%d text blocks.",
+                    matched,
+                    total,
+                    translated,
+                    candidates
+                )
+            }
+            return nil
         default:
             return nil
         }

@@ -64,7 +64,7 @@ struct InProcessBabelDocRunner {
 
         let worker = Task.detached(priority: .userInitiated) {
             do {
-                _ = try await BabelDoc.translate(
+                let result = try await BabelDoc.translate(
                     request: request,
                     runtime: runtime,
                     openAI: configuration,
@@ -72,6 +72,7 @@ struct InProcessBabelDocRunner {
                         onProgressUpdate?(Self.progressUpdate(progress))
                     }
                 )
+                onProgressUpdate?(Self.diagnosticProgressUpdate(result))
                 try Task.checkCancellation()
                 guard FileManager.default.fileExists(atPath: outputPDF.path) else {
                     throw InProcessBabelDocError.noTranslatedPDFProduced
@@ -134,6 +135,32 @@ struct InProcessBabelDocRunner {
             summary: summary,
             statusMessage: summary
         )
+    }
+
+    static func diagnosticProgressUpdate(
+        _ result: BabelDocTranslationResult
+    ) -> BabelDocProgressUpdate {
+        let message: String
+        if result.semanticHintStatus.rawValue == "pdfFallback" {
+            message = AppLocalization.localized(
+                "LaTeX structure could not be applied; translation continued with PDF layout."
+            )
+        } else if let report = result.semanticEnrichmentReport {
+            message = AppLocalization.format(
+                "LaTeX structure matched %d/%d PDF paragraphs; translated %d/%d text blocks.",
+                report.matchedPDFParagraphCount,
+                report.pdfParagraphCount,
+                result.translationDiagnostics.translatedCount,
+                result.translationDiagnostics.candidateCount
+            )
+        } else {
+            message = AppLocalization.format(
+                "Translated %d/%d text blocks.",
+                result.translationDiagnostics.translatedCount,
+                result.translationDiagnostics.candidateCount
+            )
+        }
+        return .init(completed: 100, total: 100, summary: message, statusMessage: message)
     }
 
     private static func babelDocThinkingMode(_ mode: LLMThinkingMode) -> BabelDocThinkingMode {
