@@ -230,6 +230,7 @@ struct BabelDocRunner {
         guard FileManager.default.fileExists(atPath: outputPDF.path) else {
             throw BabelDocRunError.noTranslatedPDFProduced(nil)
         }
+        try TranslatedPDFPageBoundsNormalizer.normalize(at: outputPDF)
         return outputPDF
     }
 

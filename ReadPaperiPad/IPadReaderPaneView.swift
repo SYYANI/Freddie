@@ -741,6 +741,7 @@ struct IPadReaderPaneView: View {
                 )
                 try Task.checkCancellation()
                 let oldURL = existingAttachment.fileURL
+                try TranslatedPDFPageBoundsNormalizer.normalize(at: oldURL)
                 let mergedURL = outputDirectory.appendingPathComponent(
                     "merged-\(nextLastPage)-\(UUID().uuidString.prefix(8)).pdf"
                 )

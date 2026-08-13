@@ -202,6 +202,47 @@ final class PDFMergerTests: XCTestCase {
         XCTAssertTrue(writeError.errorDescription?.contains("output.pdf") ?? false)
     }
 
+    func testTranslatedPDFPageBoundsNormalizerRemovesNonZeroCropOrigin() throws {
+        let document = createPDFDocument(withPageCount: 1)
+        let page = try XCTUnwrap(document.page(at: 0))
+        page.setBounds(CGRect(x: 0, y: 0, width: 200, height: 100), for: .mediaBox)
+        page.setBounds(CGRect(x: 20, y: 10, width: 160, height: 80), for: .cropBox)
+        page.setBounds(CGRect(x: 20, y: 10, width: 160, height: 80), for: .bleedBox)
+        page.setBounds(CGRect(x: 20, y: 10, width: 160, height: 80), for: .trimBox)
+        page.setBounds(CGRect(x: 20, y: 10, width: 160, height: 80), for: .artBox)
+        let url = tempDirectory.appendingPathComponent("translated-with-crop-offset.pdf")
+        try savePDFDocument(document, to: url)
+
+        XCTAssertTrue(try TranslatedPDFPageBoundsNormalizer.normalize(at: url))
+
+        let normalized = try XCTUnwrap(PDFDocument(url: url))
+        let normalizedPage = try XCTUnwrap(normalized.page(at: 0))
+        let expected = CGRect(x: 0, y: 0, width: 160, height: 80)
+        for displayBox in [
+            PDFDisplayBox.mediaBox,
+            .cropBox,
+            .bleedBox,
+            .trimBox,
+            .artBox,
+        ] {
+            XCTAssertEqual(normalizedPage.bounds(for: displayBox), expected)
+        }
+    }
+
+    func testTranslatedPDFPageBoundsNormalizerLeavesZeroOriginPageUntouched() throws {
+        let document = createPDFDocument(withPageCount: 1)
+        let page = try XCTUnwrap(document.page(at: 0))
+        let expected = CGRect(x: 0, y: 0, width: 160, height: 80)
+        page.setBounds(expected, for: .mediaBox)
+        page.setBounds(expected, for: .cropBox)
+        let url = tempDirectory.appendingPathComponent("translated-with-zero-origin.pdf")
+        try savePDFDocument(document, to: url)
+        let dataBeforeNormalization = try Data(contentsOf: url)
+
+        XCTAssertFalse(try TranslatedPDFPageBoundsNormalizer.normalize(at: url))
+        XCTAssertEqual(try Data(contentsOf: url), dataBeforeNormalization)
+    }
+
     @MainActor
     func testPDFReaderCoordinatorIgnoresTransientFirstPageDuringProgrammaticRestore() throws {
         let document = createPDFDocument(withPageCount: 20)

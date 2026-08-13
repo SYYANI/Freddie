@@ -77,6 +77,7 @@ struct InProcessBabelDocRunner {
                 guard FileManager.default.fileExists(atPath: outputPDF.path) else {
                     throw InProcessBabelDocError.noTranslatedPDFProduced
                 }
+                try TranslatedPDFPageBoundsNormalizer.normalize(at: outputPDF)
                 return outputPDF
             } catch {
                 try? FileManager.default.removeItem(at: outputPDF)

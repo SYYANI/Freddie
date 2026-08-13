@@ -1247,6 +1247,7 @@ struct ReaderPaneView: View {
                 guard let existingDoc = PDFDocument(url: existingAttachment.fileURL) else {
                     throw PDFMergerError.failedToOpenFile(existingAttachment.fileURL.path)
                 }
+                TranslatedPDFPageBoundsNormalizer.normalizeBounds(in: existingDoc)
                 let trimmedExisting: PDFDocument = {
                     let doc = PDFDocument()
                     let pageCount = min(currentLastPage, existingDoc.pageCount)
