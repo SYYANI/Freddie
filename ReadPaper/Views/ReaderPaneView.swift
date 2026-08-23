@@ -73,6 +73,9 @@ struct ReaderPaneView: View {
     @State private var digestNoticeMessage: String?
     @State private var digestNoticeTitle: String?
     @State private var digestErrorMessage: String?
+    @State private var pdfDebugModeEnabled = false
+    @State private var pdfDebugExportDirectoryURL: URL?
+    @State private var pdfDebugDirectoryHasSecurityScope = false
 
     private var pdfAttachment: PaperAttachment? {
         attachments.first { $0.kind == .pdf }
@@ -209,6 +212,7 @@ struct ReaderPaneView: View {
                 restorePDFTranslationDiagnostics()
             }
             .onChange(of: paper?.id) { _, _ in
+                deactivatePDFTranslationDebugMode()
                 noteSelectionContext = nil
                 restoreReadingStateForCurrentPaper()
             }
@@ -232,7 +236,10 @@ struct ReaderPaneView: View {
             .onChange(of: htmlScrollRatio) { _, _ in
                 persistReadingStateIfNeeded()
             }
-            .onDisappear(perform: persistReadingStateIfNeeded)
+            .onDisappear {
+                persistReadingStateIfNeeded()
+                deactivatePDFTranslationDebugMode()
+            }
             .confirmationDialog(
                 String(localized: "Choose Translation Scope", bundle: bundle),
                 isPresented: $showPDFTranslationScopeDialog,
@@ -359,6 +366,9 @@ struct ReaderPaneView: View {
             ToolbarItemGroup(placement: .primaryAction) {
                 noteSelectionButton
                 translationMenu
+                #if DEBUG
+                pdfTranslationDebugButton
+                #endif
                 exportMenu
 
                 if isWorking {
@@ -569,6 +579,110 @@ struct ReaderPaneView: View {
         .help(translationMenuHelpText)
     }
 
+    #if DEBUG
+    private var pdfTranslationDebugButton: some View {
+        Button {
+            togglePDFTranslationDebugMode()
+        } label: {
+            Label(
+                String(localized: "PDF Translation Debug Export", bundle: bundle),
+                systemImage: pdfDebugModeEnabled ? "ladybug.fill" : "ladybug"
+            )
+            .labelStyle(.iconOnly)
+            .foregroundStyle(pdfDebugModeEnabled ? Color.accentColor : Color.primary)
+        }
+        .disabled(translatedPDFAttachment == nil || isWorking)
+        .help(
+            pdfDebugModeEnabled
+                ? String(localized: "Disable PDF translation debug export", bundle: bundle)
+                : String(localized: "Enable PDF translation debug export", bundle: bundle)
+        )
+    }
+
+    private func togglePDFTranslationDebugMode() {
+        if pdfDebugModeEnabled {
+            deactivatePDFTranslationDebugMode()
+            statusMessage = String(localized: "PDF translation debug export disabled.", bundle: bundle)
+            return
+        }
+
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.canCreateDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.prompt = String(localized: "Choose", bundle: bundle)
+        panel.message = String(
+            localized: "Choose a folder, then drag a rectangle over an issue in the translated PDF. Each selection is exported automatically.",
+            bundle: bundle
+        )
+        panel.directoryURL = pdfDebugExportDirectoryURL
+
+        guard panel.runModal() == .OK, let directoryURL = panel.url else { return }
+
+        deactivatePDFTranslationDebugMode()
+        pdfDebugExportDirectoryURL = directoryURL
+        pdfDebugDirectoryHasSecurityScope = directoryURL.startAccessingSecurityScopedResource()
+        pdfDebugModeEnabled = true
+        if readerMode != .bilingualPDF && readerMode != .translatedPDF {
+            readerMode = .translatedPDF
+        }
+        statusMessage = String(
+            localized: "PDF debug export is active. Drag over an issue in the translated PDF.",
+            bundle: bundle
+        )
+    }
+    #endif
+
+    private func deactivatePDFTranslationDebugMode() {
+        if pdfDebugDirectoryHasSecurityScope {
+            pdfDebugExportDirectoryURL?.stopAccessingSecurityScopedResource()
+        }
+        pdfDebugDirectoryHasSecurityScope = false
+        pdfDebugModeEnabled = false
+        pdfDebugExportDirectoryURL = nil
+    }
+
+    private func handlePDFDebugRegionSelection(_ selection: PDFDebugRegionSelection) {
+        #if DEBUG
+        guard pdfDebugModeEnabled,
+              let directoryURL = pdfDebugExportDirectoryURL,
+              let paper,
+              let translatedAttachment = translatedPDFAttachment
+        else {
+            return
+        }
+
+        let translatedURL = translatedAttachment.fileURL
+        let request = PDFTranslationDebugExportRequest(
+            paperID: paper.id,
+            paperTitle: paper.title,
+            arxivID: paper.arxivID,
+            doi: paper.doi,
+            originalAttachmentID: pdfAttachment?.id,
+            translatedAttachmentID: translatedAttachment.id,
+            originalPDFURL: pdfAttachment?.fileURL,
+            translatedPDFURL: translatedURL,
+            diagnosticsURL: BabelDocRunner.diagnosticsURL(for: translatedURL),
+            translatedLastPage: translatedAttachment.translatedLastPage,
+            selection: selection
+        )
+
+        do {
+            let exportURL = try PDFTranslationDebugExporter().export(request, to: directoryURL)
+            statusMessage = AppLocalization.format(
+                "PDF debug bundle exported to %@.",
+                bundle: bundle,
+                exportURL.path
+            )
+        } catch {
+            statusMessage = AppLocalization.errorMessage(error, bundle: bundle)
+        }
+        #else
+        _ = selection
+        #endif
+    }
+
     private var exportMenu: some View {
         Menu {
             Button {
@@ -729,6 +843,8 @@ struct ReaderPaneView: View {
                         displayAppearance: pdfDisplayAppearance,
                         pageIndex: $pdfPageIndex,
                         reloadToken: pdfReloadToken,
+                        debugRegionSelectionEnabled: pdfDebugModeEnabled,
+                        onDebugRegionSelected: handlePDFDebugRegionSelection,
                         onNoteSelectionChanged: handleNoteSelectionChange
                     )
                 } else {
@@ -745,7 +861,9 @@ struct ReaderPaneView: View {
                     label: String(localized: "Translation", bundle: bundle),
                     emptyTitle: String(localized: "No translated PDF", bundle: bundle),
                     emptyDescription: String(localized: "Run PDF translation first to read the translated PDF on its own.", bundle: bundle),
-                    reloadToken: pdfReloadToken
+                    reloadToken: pdfReloadToken,
+                    debugRegionSelectionEnabled: pdfDebugModeEnabled,
+                    onDebugRegionSelected: handlePDFDebugRegionSelection
                 )
             }
         }
@@ -1489,7 +1607,9 @@ struct ReaderPaneView: View {
         label: String,
         emptyTitle: String,
         emptyDescription: String,
-        reloadToken: Int = 0
+        reloadToken: Int = 0,
+        debugRegionSelectionEnabled: Bool = false,
+        onDebugRegionSelected: ((PDFDebugRegionSelection) -> Void)? = nil
     ) -> some View {
         if fileURL != nil {
             PDFDisplaySurface(appearance: pdfDisplayAppearance) {
@@ -1499,7 +1619,9 @@ struct ReaderPaneView: View {
                     displayAppearance: pdfDisplayAppearance,
                     pageIndex: $pdfPageIndex,
                     reloadToken: reloadToken,
-                    onNoteSelectionChanged: handleNoteSelectionChange
+                    onNoteSelectionChanged: handleNoteSelectionChange,
+                    debugRegionSelectionEnabled: debugRegionSelectionEnabled,
+                    onDebugRegionSelected: onDebugRegionSelected
                 )
             }
                 .overlay(alignment: .topLeading) {

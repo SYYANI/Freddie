@@ -12,6 +12,8 @@ struct DualPDFReaderView: View {
     var displayAppearance: PDFDisplayAppearance = .defaultMode
     @Binding var pageIndex: Int
     var reloadToken: Int = 0
+    var debugRegionSelectionEnabled = false
+    var onDebugRegionSelected: ((PDFDebugRegionSelection) -> Void)? = nil
     var onNoteSelectionChanged: ((NoteSelectionContext?) -> Void)? = nil
     @State private var translatedPageIndex = 0
     @State private var translatedPageCount: Int = 0
@@ -76,7 +78,8 @@ struct DualPDFReaderView: View {
         themedPDFReader(
             fileURL: originalURL,
             attachmentID: originalAttachmentID,
-            pageIndex: $pageIndex
+            pageIndex: $pageIndex,
+            debugRegionSelectionEnabled: false
         ) { selection in
             handleSelectionChange(selection, source: .original)
         }
@@ -90,7 +93,8 @@ struct DualPDFReaderView: View {
             fileURL: translatedURL,
             attachmentID: translatedAttachmentID,
             pageIndex: $translatedPageIndex,
-            reloadToken: reloadToken
+            reloadToken: reloadToken,
+            debugRegionSelectionEnabled: debugRegionSelectionEnabled
         ) { selection in
             handleSelectionChange(selection, source: .translated)
         }
@@ -136,6 +140,7 @@ struct DualPDFReaderView: View {
         attachmentID: UUID?,
         pageIndex: Binding<Int>,
         reloadToken: Int = 0,
+        debugRegionSelectionEnabled: Bool,
         onSelectionChanged: @escaping (NoteSelectionContext?) -> Void
     ) -> some View {
         PDFDisplaySurface(appearance: displayAppearance) {
@@ -145,7 +150,9 @@ struct DualPDFReaderView: View {
                 displayAppearance: displayAppearance,
                 pageIndex: pageIndex,
                 reloadToken: reloadToken,
-                onNoteSelectionChanged: onSelectionChanged
+                onNoteSelectionChanged: onSelectionChanged,
+                debugRegionSelectionEnabled: debugRegionSelectionEnabled,
+                onDebugRegionSelected: onDebugRegionSelected
             )
         }
     }

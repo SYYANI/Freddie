@@ -116,6 +116,12 @@ struct PDFReadingPosition: Equatable {
     }
 }
 
+struct PDFDebugRegionSelection: Equatable, Sendable {
+    var pageIndex: Int
+    var pageBounds: CGRect
+    var selectedBounds: CGRect
+}
+
 struct PDFReaderView: PlatformPDFViewRepresentable {
     var fileURL: URL?
     var attachmentID: UUID? = nil
@@ -123,6 +129,8 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
     @Binding var pageIndex: Int
     var reloadToken: Int = 0
     var onNoteSelectionChanged: ((NoteSelectionContext?) -> Void)? = nil
+    var debugRegionSelectionEnabled = false
+    var onDebugRegionSelected: ((PDFDebugRegionSelection) -> Void)? = nil
 
     #if os(macOS)
     func makeNSView(context: Context) -> PDFView {
@@ -143,7 +151,11 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
     #endif
 
     private func makeView(context: Context) -> PDFView {
+        #if os(macOS)
+        let view = DebugRegionPDFView()
+        #else
         let view = PDFView()
+        #endif
         view.autoScales = true
         view.displayMode = .singlePageContinuous
         view.displayDirection = .vertical
@@ -157,6 +169,12 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
         applyDisplayAppearance(displayAppearance, to: view)
         context.coordinator.attachmentID = attachmentID
         context.coordinator.onNoteSelectionChanged = onNoteSelectionChanged
+        #if os(macOS)
+        if let debugView = view as? DebugRegionPDFView {
+            debugView.isDebugRegionSelectionEnabled = debugRegionSelectionEnabled
+            debugView.onDebugRegionSelected = onDebugRegionSelected
+        }
+        #endif
 
         guard let fileURL else {
             view.document = nil
@@ -405,3 +423,150 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
         }
     }
 }
+
+#if os(macOS)
+@MainActor
+private final class DebugRegionPDFView: PDFView {
+    var isDebugRegionSelectionEnabled = false {
+        didSet {
+            guard oldValue != isDebugRegionSelectionEnabled else { return }
+            if isDebugRegionSelectionEnabled == false {
+                cancelDebugSelection()
+            }
+            window?.invalidateCursorRects(for: self)
+        }
+    }
+    var onDebugRegionSelected: ((PDFDebugRegionSelection) -> Void)?
+
+    private let selectionOverlay = DebugRegionSelectionOverlayView()
+    private weak var selectionPage: PDFPage?
+    private var selectionStartPoint: CGPoint?
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        installSelectionOverlay()
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        installSelectionOverlay()
+    }
+
+    override func resetCursorRects() {
+        super.resetCursorRects()
+        guard isDebugRegionSelectionEnabled else { return }
+        addCursorRect(bounds, cursor: .crosshair)
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        guard isDebugRegionSelectionEnabled, event.type == .leftMouseDown else {
+            super.mouseDown(with: event)
+            return
+        }
+
+        let point = convert(event.locationInWindow, from: nil)
+        guard let page = page(for: point, nearest: false) else {
+            cancelDebugSelection()
+            return
+        }
+
+        selectionPage = page
+        selectionStartPoint = point
+        selectionOverlay.selectionRect = .zero
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        guard isDebugRegionSelectionEnabled,
+              let selectionStartPoint,
+              selectionPage != nil
+        else {
+            super.mouseDragged(with: event)
+            return
+        }
+
+        let currentPoint = convert(event.locationInWindow, from: nil)
+        selectionOverlay.selectionRect = viewRect(from: selectionStartPoint, to: currentPoint)
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        guard isDebugRegionSelectionEnabled,
+              let selectionStartPoint,
+              let selectionPage,
+              let document
+        else {
+            super.mouseUp(with: event)
+            return
+        }
+
+        let currentPoint = convert(event.locationInWindow, from: nil)
+        let start = convert(selectionStartPoint, to: selectionPage)
+        let end = convert(currentPoint, to: selectionPage)
+        let pageBounds = selectionPage.bounds(for: .cropBox).standardized
+        let selectedBounds = viewRect(from: start, to: end)
+            .intersection(pageBounds)
+            .standardized
+        let selectedPageIndex = document.index(for: selectionPage)
+
+        cancelDebugSelection()
+
+        guard selectedPageIndex != NSNotFound,
+              selectedBounds.width >= 4,
+              selectedBounds.height >= 4
+        else {
+            return
+        }
+
+        onDebugRegionSelected?(
+            PDFDebugRegionSelection(
+                pageIndex: selectedPageIndex,
+                pageBounds: pageBounds,
+                selectedBounds: selectedBounds
+            )
+        )
+    }
+
+    private func installSelectionOverlay() {
+        selectionOverlay.frame = bounds
+        selectionOverlay.autoresizingMask = [.width, .height]
+        addSubview(selectionOverlay, positioned: .above, relativeTo: nil)
+    }
+
+    private func cancelDebugSelection() {
+        selectionStartPoint = nil
+        selectionPage = nil
+        selectionOverlay.selectionRect = nil
+    }
+
+    private func viewRect(from start: CGPoint, to end: CGPoint) -> CGRect {
+        CGRect(
+            x: min(start.x, end.x),
+            y: min(start.y, end.y),
+            width: abs(end.x - start.x),
+            height: abs(end.y - start.y)
+        )
+    }
+}
+
+@MainActor
+private final class DebugRegionSelectionOverlayView: NSView {
+    var selectionRect: CGRect? {
+        didSet { needsDisplay = true }
+    }
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        nil
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+        guard let selectionRect, selectionRect.isEmpty == false else { return }
+
+        NSColor.controlAccentColor.withAlphaComponent(0.16).setFill()
+        selectionRect.fill()
+        NSColor.controlAccentColor.withAlphaComponent(0.95).setStroke()
+        let path = NSBezierPath(rect: selectionRect.insetBy(dx: 0.5, dy: 0.5))
+        path.lineWidth = 2
+        path.stroke()
+    }
+}
+#endif

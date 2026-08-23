@@ -5039,6 +5039,126 @@
         }
       }
     },
+    "Choose a folder, then drag a rectangle over an issue in the translated PDF. Each selection is exported automatically." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选择一个文件夹，然后在译文 PDF 的问题区域拖动框选。每次框选都会自动导出。"
+          }
+        }
+      }
+    },
+    "Disable PDF translation debug export" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "关闭 PDF 翻译调试导出"
+          }
+        }
+      }
+    },
+    "Enable PDF translation debug export" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "开启 PDF 翻译调试导出"
+          }
+        }
+      }
+    },
+    "PDF debug bundle exported to %@." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PDF 调试包已导出到 %1$@。"
+          }
+        }
+      }
+    },
+    "PDF debug export is active. Drag over an issue in the translated PDF." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PDF 调试导出已开启。请在译文 PDF 的问题区域拖动框选。"
+          }
+        }
+      }
+    },
+    "PDF page %d is unavailable for debug export." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法导出 PDF 第 %1$d 页的调试信息。"
+          }
+        }
+      }
+    },
+    "PDF Translation Debug Export" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PDF 翻译调试导出"
+          }
+        }
+      }
+    },
+    "PDF translation debug export disabled." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PDF 翻译调试导出已关闭。"
+          }
+        }
+      }
+    },
+    "The selected PDF debug export folder is unavailable." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "所选 PDF 调试导出文件夹不可用。"
+          }
+        }
+      }
+    },
+    "The selected PDF region could not be rendered." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法渲染所选 PDF 区域。"
+          }
+        }
+      }
+    },
+    "The selected PDF region is empty." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "所选 PDF 区域为空。"
+          }
+        }
+      }
+    },
+    "The translated PDF could not be opened for debug export." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法打开译文 PDF 以导出调试信息。"
+          }
+        }
+      }
+    },
     "Working..." : {
       "extractionState" : "stale",
       "localizations" : {

@@ -52,6 +52,8 @@ final class HTMLTranslationPipelineTests: XCTestCase {
         XCTAssertTrue(systemPrompt.contains("faithful"))
         XCTAssertTrue(systemPrompt.contains("Do not omit, summarize, simplify, expand"))
         XCTAssertTrue(systemPrompt.contains("keep terms, abbreviations, symbols, and named concepts consistent"))
+        XCTAssertTrue(systemPrompt.contains("[BABELDOC_FORMULA_1]"))
+        XCTAssertTrue(systemPrompt.contains("every placeholder token in the source appears exactly once"))
         XCTAssertTrue(systemPrompt.contains("Output only the translation"))
 
         let userPrompt = AcademicTranslationPrompt.userPrompt(
