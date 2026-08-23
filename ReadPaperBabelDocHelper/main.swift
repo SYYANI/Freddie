@@ -70,6 +70,8 @@ private final class EventEmitter: @unchecked Sendable {
             "semantic_status": result.semanticHintStatus.rawValue,
             "translation_candidates": result.translationDiagnostics.candidateCount,
             "translation_completed": result.translationDiagnostics.translatedCount,
+            "translation_failed": result.translationDiagnostics.failedCount,
+            "provider_failures": result.translationDiagnostics.providerFailureCount,
             "placeholder_validation_failures": result.translationDiagnostics
                 .placeholderValidationFailureCount,
             "semantic_translation_fallbacks": result.translationDiagnostics.semanticFallbackCount,

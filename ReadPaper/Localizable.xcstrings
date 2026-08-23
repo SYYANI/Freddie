@@ -386,17 +386,6 @@
         }
       }
     },
-    "Applying translated layout" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "正在应用翻译后的排版"
-          }
-        }
-      }
-    },
     "Applying LaTeX structure" : {
       "localizations" : {
         "zh-Hans" : {
@@ -407,112 +396,13 @@
         }
       }
     },
-    "Checking cached arXiv structure..." : {
+    "Applying translated layout" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "正在检查缓存的 arXiv 结构..."
-          }
-        }
-      }
-    },
-    "Downloading arXiv LaTeX source..." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "正在下载 arXiv LaTeX 源码..."
-          }
-        }
-      }
-    },
-    "Extracting LaTeX structure for PDF translation..." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "正在提取用于 PDF 翻译的 LaTeX 结构..."
-          }
-        }
-      }
-    },
-    "LaTeX source is unavailable; continuing with PDF layout analysis." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "LaTeX 源码不可用；将继续使用 PDF 版面分析。"
-          }
-        }
-      }
-    },
-    "LaTeX structure could not be applied; translation continued with PDF layout." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "无法应用 LaTeX 结构；已回退到 PDF 版面继续翻译。"
-          }
-        }
-      }
-    },
-    "LaTeX structure matched %d/%d PDF paragraphs; translated %d/%d text blocks." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "LaTeX 结构匹配了 %1$d/%2$d 个 PDF 段落；已翻译 %3$d/%4$d 个文本块。"
-          }
-        }
-      }
-    },
-    "LaTeX structure is ready for PDF translation." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "LaTeX 结构已可用于 PDF 翻译。"
-          }
-        }
-      }
-    },
-    "Using cached LaTeX structure to improve PDF translation." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "正在使用缓存的 LaTeX 结构改进 PDF 翻译。"
-          }
-        }
-      }
-    },
-    "The arXiv source archive exceeds the %lld-byte safety limit." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "arXiv 源码归档超过了 %1$lld 字节的安全限制。"
-          }
-        }
-      }
-    },
-    "The arXiv source response is not a valid archive." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "arXiv 源码响应不是有效归档。"
-          }
-        }
-      }
-    },
-    "Translated %d/%d text blocks." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "已翻译 %1$d/%2$d 个文本块。"
+            "value" : "正在应用翻译后的排版"
           }
         }
       }
@@ -913,6 +803,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在检查 arXiv 标识符"
+          }
+        }
+      }
+    },
+    "Checking cached arXiv structure..." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在检查缓存的 arXiv 结构..."
           }
         }
       }
@@ -1592,6 +1492,16 @@
         }
       }
     },
+    "Downloading arXiv LaTeX source..." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在下载 arXiv LaTeX 源码..."
+          }
+        }
+      }
+    },
     "Downloading PDF" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1752,6 +1662,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "将当前论文的元数据、摘要和笔记导出为 Markdown 文摘。"
+          }
+        }
+      }
+    },
+    "Extracting LaTeX structure for PDF translation..." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在提取用于 PDF 翻译的 LaTeX 结构..."
           }
         }
       }
@@ -2494,6 +2414,16 @@
         }
       }
     },
+    "LaTeX source is unavailable; continuing with PDF layout analysis." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LaTeX 源码不可用；将继续使用 PDF 版面分析。"
+          }
+        }
+      }
+    },
     "LaTeX source translation completed, but PDF compilation failed." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2511,6 +2441,36 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "LaTeX 源码翻译已完成，但 PDF 编译需要安装包含 latexmk 的 TeX 发行版。"
+          }
+        }
+      }
+    },
+    "LaTeX structure could not be applied; translation continued with PDF layout." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法应用 LaTeX 结构；已回退到 PDF 版面继续翻译。"
+          }
+        }
+      }
+    },
+    "LaTeX structure is ready for PDF translation." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LaTeX 结构已可用于 PDF 翻译。"
+          }
+        }
+      }
+    },
+    "LaTeX structure matched %d/%d PDF paragraphs; translated %d/%d text blocks." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LaTeX 结构匹配了 %1$d/%2$d 个 PDF 段落；已翻译 %3$d/%4$d 个文本块。"
           }
         }
       }
@@ -3318,6 +3278,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "PDF 每批页数：%1$d"
+          }
+        }
+      }
+    },
+    "PDF translation completed with warnings: translated %d/%d text blocks; %d failed and kept their original layout." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PDF 翻译已完成，但有警告：已翻译 %1$d/%2$d 个文本块；%3$d 个失败文本块保留了原始排版。"
           }
         }
       }
@@ -4264,6 +4235,26 @@
         }
       }
     },
+    "The arXiv source archive exceeds the %lld-byte safety limit." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "arXiv 源码归档超过了 %1$lld 字节的安全限制。"
+          }
+        }
+      }
+    },
+    "The arXiv source response is not a valid archive." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "arXiv 源码响应不是有效归档。"
+          }
+        }
+      }
+    },
     "The configured export directory is unavailable: %@" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -4684,6 +4675,26 @@
         }
       }
     },
+    "Translated %d/%d text blocks; %d failed and kept their original layout." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已翻译 %1$d/%2$d 个文本块；%3$d 个失败文本块保留了原始排版。"
+          }
+        }
+      }
+    },
+    "Translated %d/%d text blocks." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已翻译 %1$d/%2$d 个文本块。"
+          }
+        }
+      }
+    },
     "Translated pages 1–%@ of %@." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -4936,6 +4947,16 @@
         }
       }
     },
+    "Use arXiv LaTeX structure for PDF translation" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "使用 arXiv LaTeX 结构改进 PDF 翻译"
+          }
+        }
+      }
+    },
     "Use Automatic Detection" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -4947,22 +4968,22 @@
         }
       }
     },
-    "Use arXiv LaTeX structure for PDF translation" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "使用 arXiv LaTeX 结构改进 PDF 翻译"
-          }
-        }
-      }
-    },
     "Use the + button in the library to create the first paper record." : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "使用资料库中的 + 按钮创建第一篇论文记录。"
+          }
+        }
+      }
+    },
+    "Using cached LaTeX structure to improve PDF translation." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在使用缓存的 LaTeX 结构改进 PDF 翻译。"
           }
         }
       }

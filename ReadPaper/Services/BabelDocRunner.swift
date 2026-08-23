@@ -21,6 +21,8 @@ struct BabelDocBridgeEvent: Decodable, Sendable, Equatable {
     var semanticElapsedMilliseconds: Double?
     var translationCandidates: Int?
     var translationCompleted: Int?
+    var translationFailed: Int?
+    var providerFailures: Int?
     var placeholderValidationFailures: Int?
     var semanticTranslationFallbacks: Int?
     var continuationGroups: Int?
@@ -46,19 +48,59 @@ struct BabelDocBridgeEvent: Decodable, Sendable, Equatable {
         case semanticElapsedMilliseconds = "semantic_elapsed_ms"
         case translationCandidates = "translation_candidates"
         case translationCompleted = "translation_completed"
+        case translationFailed = "translation_failed"
+        case providerFailures = "provider_failures"
         case placeholderValidationFailures = "placeholder_validation_failures"
         case semanticTranslationFallbacks = "semantic_translation_fallbacks"
         case continuationGroups = "continuation_groups"
     }
 }
 
+struct BabelDocTranslationDiagnostics: Codable, Sendable, Equatable {
+    var semanticStatus: String?
+    var candidateCount: Int
+    var translatedCount: Int
+    var failedCount: Int
+    var providerFailureCount: Int
+    var placeholderValidationFailureCount: Int
+    var semanticFallbackCount: Int
+    var continuationGroupCount: Int
+
+    var isDegraded: Bool {
+        failedCount > 0 || translatedCount < candidateCount
+    }
+
+    func merging(_ other: BabelDocTranslationDiagnostics) -> BabelDocTranslationDiagnostics {
+        BabelDocTranslationDiagnostics(
+            semanticStatus: other.semanticStatus ?? semanticStatus,
+            candidateCount: candidateCount + other.candidateCount,
+            translatedCount: translatedCount + other.translatedCount,
+            failedCount: failedCount + other.failedCount,
+            providerFailureCount: providerFailureCount + other.providerFailureCount,
+            placeholderValidationFailureCount: placeholderValidationFailureCount + other.placeholderValidationFailureCount,
+            semanticFallbackCount: semanticFallbackCount + other.semanticFallbackCount,
+            continuationGroupCount: continuationGroupCount + other.continuationGroupCount
+        )
+    }
+}
+
+struct BabelDocNativeTranslationResult: Sendable, Equatable {
+    var outputPDF: URL
+    var diagnostics: BabelDocTranslationDiagnostics?
+    var diagnosticsLogURL: URL?
+}
+
 struct BabelDocOutputParseResult: Sendable {
     var progressUpdates: [BabelDocProgressUpdate] = []
     var statusMessages: [String] = []
+    var diagnostics: BabelDocTranslationDiagnostics?
 
     mutating func append(_ other: BabelDocOutputParseResult) {
         progressUpdates.append(contentsOf: other.progressUpdates)
         statusMessages.append(contentsOf: other.statusMessages)
+        if let diagnostics = other.diagnostics {
+            self.diagnostics = diagnostics
+        }
     }
 }
 
@@ -67,6 +109,7 @@ final class BabelDocOutputParser: @unchecked Sendable {
     private let apiKey: String
     private var stdoutBuffer = ""
     private var stderrBuffer = ""
+    private var lastDiagnostics: BabelDocTranslationDiagnostics?
 
     init(apiKey: String) {
         self.apiKey = apiKey
@@ -89,7 +132,13 @@ final class BabelDocOutputParser: @unchecked Sendable {
         }
         lock.unlock()
 
-        return Self.parseLines(lines, channel: event.channel)
+        let result = Self.parseLines(lines, channel: event.channel)
+        if let diagnostics = result.diagnostics {
+            lock.lock()
+            lastDiagnostics = diagnostics
+            lock.unlock()
+        }
+        return result
     }
 
     func finish() -> BabelDocOutputParseResult {
@@ -101,6 +150,8 @@ final class BabelDocOutputParser: @unchecked Sendable {
         stderrRemainder = stderrBuffer
         stdoutBuffer = ""
         stderrBuffer = ""
+        let retainedDiagnostics = lastDiagnostics
+        lastDiagnostics = nil
         lock.unlock()
 
         var result = BabelDocOutputParseResult()
@@ -109,6 +160,9 @@ final class BabelDocOutputParser: @unchecked Sendable {
         }
         if stderrRemainder.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
             result.append(Self.parseLines([stderrRemainder], channel: .standardError))
+        }
+        if result.diagnostics == nil {
+            result.diagnostics = retainedDiagnostics
         }
         return result
     }
@@ -140,6 +194,9 @@ final class BabelDocOutputParser: @unchecked Sendable {
                 }
                 if let status = BabelDocRunner.structuredStatusMessage(from: bridgeEvent) {
                     result.statusMessages.append(status)
+                }
+                if let diagnostics = BabelDocRunner.translationDiagnostics(from: bridgeEvent) {
+                    result.diagnostics = diagnostics
                 }
                 continue
             }
@@ -175,7 +232,7 @@ struct BabelDocRunner {
         environment: [String: String] = [:],
         onStatusUpdate: (@Sendable (String) -> Void)? = nil,
         onProgressUpdate: (@Sendable (BabelDocProgressUpdate) -> Void)? = nil
-    ) async throws -> URL {
+    ) async throws -> BabelDocNativeTranslationResult {
         if !FileManager.default.fileExists(atPath: outputDirectory.path) {
             try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
         }
@@ -231,7 +288,17 @@ struct BabelDocRunner {
             throw BabelDocRunError.noTranslatedPDFProduced(nil)
         }
         try TranslatedPDFPageBoundsNormalizer.normalize(at: outputPDF)
-        return outputPDF
+        let diagnosticsLogURL: URL?
+        if let diagnostics = finalParsed.diagnostics, diagnostics.isDegraded {
+            diagnosticsLogURL = try Self.writeDiagnostics(diagnostics, for: outputPDF)
+        } else {
+            diagnosticsLogURL = nil
+        }
+        return BabelDocNativeTranslationResult(
+            outputPDF: outputPDF,
+            diagnostics: finalParsed.diagnostics,
+            diagnosticsLogURL: diagnosticsLogURL
+        )
     }
 
     static func nativeArguments(
@@ -478,10 +545,64 @@ struct BabelDocRunner {
                     candidates
                 )
             }
+            if let translated = event.translationCompleted,
+               let candidates = event.translationCandidates {
+                if let failed = event.translationFailed, failed > 0 {
+                    return AppLocalization.format(
+                        "Translated %d/%d text blocks; %d failed and kept their original layout.",
+                        translated,
+                        candidates,
+                        failed
+                    )
+                }
+                return AppLocalization.format(
+                    "Translated %d/%d text blocks.",
+                    translated,
+                    candidates
+                )
+            }
             return nil
         default:
             return nil
         }
+    }
+
+    static func translationDiagnostics(from event: BabelDocBridgeEvent) -> BabelDocTranslationDiagnostics? {
+        guard event.type == "translation_diagnostics",
+              let candidates = event.translationCandidates,
+              let translated = event.translationCompleted else {
+            return nil
+        }
+        return BabelDocTranslationDiagnostics(
+            semanticStatus: event.semanticStatus,
+            candidateCount: candidates,
+            translatedCount: translated,
+            failedCount: event.translationFailed ?? max(candidates - translated, 0),
+            providerFailureCount: event.providerFailures ?? 0,
+            placeholderValidationFailureCount: event.placeholderValidationFailures ?? 0,
+            semanticFallbackCount: event.semanticTranslationFallbacks ?? 0,
+            continuationGroupCount: event.continuationGroups ?? 0
+        )
+    }
+
+    static func diagnosticsURL(for outputPDF: URL) -> URL {
+        outputPDF.appendingPathExtension("diagnostics.json")
+    }
+
+    static func writeDiagnostics(
+        _ diagnostics: BabelDocTranslationDiagnostics,
+        for outputPDF: URL
+    ) throws -> URL {
+        let url = diagnosticsURL(for: outputPDF)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        try encoder.encode(diagnostics).write(to: url, options: .atomic)
+        return url
+    }
+
+    static func readDiagnostics(for outputPDF: URL) throws -> BabelDocTranslationDiagnostics {
+        let data = try Data(contentsOf: diagnosticsURL(for: outputPDF))
+        return try JSONDecoder().decode(BabelDocTranslationDiagnostics.self, from: data)
     }
 
     static func statusMessage(from event: ProcessOutputEvent, apiKey: String) -> String? {

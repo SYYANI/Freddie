@@ -204,13 +204,17 @@ struct ReaderPaneView: View {
             .toolbar {
                 readerToolbar
             }
-            .onAppear(perform: restoreReadingStateForCurrentPaper)
+            .onAppear {
+                restoreReadingStateForCurrentPaper()
+                restorePDFTranslationDiagnostics()
+            }
             .onChange(of: paper?.id) { _, _ in
                 noteSelectionContext = nil
                 restoreReadingStateForCurrentPaper()
             }
             .onChange(of: readerAvailability) { _, _ in
                 syncReaderModeWithAvailableContent()
+                restorePDFTranslationDiagnostics()
             }
             .onChange(of: readerMode) { _, newValue in
                 noteSelectionContext = nil
@@ -1138,7 +1142,7 @@ struct ReaderPaneView: View {
                         statusMessage = update.localizedMessage
                     }
                 }
-                let translated = try await BabelDocRunner().translatePDFNative(
+                let translationResult = try await BabelDocRunner().translatePDFNative(
                     inputPDF: pdfAttachment.fileURL,
                     outputDirectory: outputDirectory,
                     preferences: preferences,
@@ -1169,6 +1173,7 @@ struct ReaderPaneView: View {
                         }
                     }
                 )
+                let translated = translationResult.outputPDF
                 try Task.checkCancellation()
                 let translatedLastPage: Int? = {
                     switch scope {
@@ -1189,7 +1194,8 @@ struct ReaderPaneView: View {
                 try modelContext.save()
                 readerMode = .bilingualPDF
                 translationProgress = nil
-                statusMessage = String(localized: "PDF translation completed.", bundle: bundle)
+                pdfTranslationErrorLogURL = translationResult.diagnosticsLogURL
+                statusMessage = pdfTranslationCompletionMessage(translationResult.diagnostics)
             } catch is CancellationError {
                 translationProgress = nil
                 pdfTranslationErrorLogURL = nil
@@ -1258,7 +1264,7 @@ struct ReaderPaneView: View {
                     return doc
                 }()
 
-                let incrementPDF = try await BabelDocRunner().translatePDFNative(
+                let incrementResult = try await BabelDocRunner().translatePDFNative(
                     inputPDF: pdfAttachment.fileURL,
                     outputDirectory: outputDirectory,
                     preferences: preferences,
@@ -1289,17 +1295,44 @@ struct ReaderPaneView: View {
                         }
                     }
                 )
+                let incrementPDF = incrementResult.outputPDF
                 try Task.checkCancellation()
 
                 let mergedFilename = "merged-\(nextBatch)-\(UUID().uuidString.prefix(8)).pdf"
                 let mergedURL = outputDirectory.appendingPathComponent(mergedFilename)
                 let _ = try PDFMerger.merge(existing: trimmedExisting, increment: incrementPDF, output: mergedURL)
 
+                let existingDiagnostics = try? BabelDocRunner.readDiagnostics(for: existingAttachment.fileURL)
+                let combinedDiagnostics: BabelDocTranslationDiagnostics? = {
+                    switch (existingDiagnostics, incrementResult.diagnostics) {
+                    case let (existing?, increment?):
+                        return existing.merging(increment)
+                    case let (existing?, nil):
+                        return existing
+                    case let (nil, increment?):
+                        return increment
+                    case (nil, nil):
+                        return nil
+                    }
+                }()
+                let mergedDiagnosticsURL: URL?
+                if let combinedDiagnostics, combinedDiagnostics.isDegraded {
+                    mergedDiagnosticsURL = try BabelDocRunner.writeDiagnostics(
+                        combinedDiagnostics,
+                        for: mergedURL
+                    )
+                } else {
+                    mergedDiagnosticsURL = nil
+                }
+
                 // Clean up old merged PDF file to prevent storage bloat
                 let oldFileURL = existingAttachment.fileURL
                 if oldFileURL != mergedURL {
                     try? FileManager.default.removeItem(at: oldFileURL)
+                    try? FileManager.default.removeItem(at: BabelDocRunner.diagnosticsURL(for: oldFileURL))
                 }
+                try? FileManager.default.removeItem(at: incrementPDF)
+                try? FileManager.default.removeItem(at: BabelDocRunner.diagnosticsURL(for: incrementPDF))
 
                 existingAttachment.filePath = mergedURL.path
                 existingAttachment.filename = mergedFilename
@@ -1308,7 +1341,8 @@ struct ReaderPaneView: View {
 
                 pdfReloadToken += 1
                 translationProgress = nil
-                statusMessage = String(localized: "PDF translation completed.", bundle: bundle)
+                pdfTranslationErrorLogURL = mergedDiagnosticsURL
+                statusMessage = pdfTranslationCompletionMessage(combinedDiagnostics)
             } catch is CancellationError {
                 translationProgress = nil
                 pdfTranslationErrorLogURL = nil
@@ -1327,6 +1361,34 @@ struct ReaderPaneView: View {
         isCancelling = true
         statusMessage = String(localized: "Cancelling translation...", bundle: bundle)
         translationTask?.cancel()
+    }
+
+    private func pdfTranslationCompletionMessage(
+        _ diagnostics: BabelDocTranslationDiagnostics?
+    ) -> String {
+        guard let diagnostics, diagnostics.isDegraded else {
+            return String(localized: "PDF translation completed.", bundle: bundle)
+        }
+        return AppLocalization.format(
+            "PDF translation completed with warnings: translated %d/%d text blocks; %d failed and kept their original layout.",
+            bundle: bundle,
+            diagnostics.translatedCount,
+            diagnostics.candidateCount,
+            diagnostics.failedCount
+        )
+    }
+
+    private func restorePDFTranslationDiagnostics() {
+        guard !isWorking, let translatedPDF = translatedPDFAttachment?.fileURL else { return }
+        let diagnosticsURL = BabelDocRunner.diagnosticsURL(for: translatedPDF)
+        guard FileManager.default.fileExists(atPath: diagnosticsURL.path),
+              let diagnostics = try? BabelDocRunner.readDiagnostics(for: translatedPDF),
+              diagnostics.isDegraded else {
+            pdfTranslationErrorLogURL = nil
+            return
+        }
+        pdfTranslationErrorLogURL = diagnosticsURL
+        statusMessage = pdfTranslationCompletionMessage(diagnostics)
     }
 
     private func handleTranslationError(_ error: Error) {

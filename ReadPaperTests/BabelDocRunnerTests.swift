@@ -334,6 +334,7 @@ final class BabelDocRunnerTests: XCTestCase {
 
         XCTAssertEqual(arguments[arguments.firstIndex(of: "--thinking-mode")! + 1], "enabled")
         XCTAssertEqual(arguments[arguments.firstIndex(of: "--reasoning-effort")! + 1], "max")
+        XCTAssertEqual(arguments.filter { $0 == "--reasoning-effort" }.count, 1)
     }
 
     func testAppSettingsDefaultBabelDocQPSIsConservative() {
@@ -422,7 +423,7 @@ final class BabelDocRunnerTests: XCTestCase {
         let parsed = parser.consume(ProcessOutputEvent(
             channel: .standardOutput,
             text: """
-            \(BabelDocRunner.bridgeEventPrefix){"type":"translation_diagnostics","semantic_status":"applied","semantic_pdf_paragraphs":12,"semantic_matched_pdf_paragraphs":9,"semantic_matched_pdf_coverage":0.75,"semantic_high_confidence":7,"translation_candidates":10,"translation_completed":9,"placeholder_validation_failures":1,"semantic_translation_fallbacks":1}\n
+            \(BabelDocRunner.bridgeEventPrefix){"type":"translation_diagnostics","semantic_status":"applied","semantic_pdf_paragraphs":12,"semantic_matched_pdf_paragraphs":9,"semantic_matched_pdf_coverage":0.75,"semantic_high_confidence":7,"translation_candidates":10,"translation_completed":9,"translation_failed":1,"provider_failures":2,"placeholder_validation_failures":1,"semantic_translation_fallbacks":1}\n
             """
         ))
 
@@ -430,6 +431,20 @@ final class BabelDocRunnerTests: XCTestCase {
             parsed.statusMessages,
             ["LaTeX structure matched 9/12 PDF paragraphs; translated 9/10 text blocks."]
         )
+        XCTAssertEqual(
+            parsed.diagnostics,
+            BabelDocTranslationDiagnostics(
+                semanticStatus: "applied",
+                candidateCount: 10,
+                translatedCount: 9,
+                failedCount: 1,
+                providerFailureCount: 2,
+                placeholderValidationFailureCount: 1,
+                semanticFallbackCount: 1,
+                continuationGroupCount: 0
+            )
+        )
+        XCTAssertEqual(parser.finish().diagnostics, parsed.diagnostics)
 
         let fallbackEvent = try! XCTUnwrap(BabelDocRunner.bridgeEvent(
             from: #"{"type":"translation_diagnostics","semantic_status":"pdfFallback"}"#
@@ -439,6 +454,32 @@ final class BabelDocRunnerTests: XCTestCase {
             fallback,
             "LaTeX structure could not be applied; translation continued with PDF layout."
         )
+    }
+
+    func testGenericTranslationDiagnosticsSurfaceDegradationAndPersistAsSidecar() throws {
+        let parser = BabelDocOutputParser(apiKey: "sk-secret")
+        let parsed = parser.consume(ProcessOutputEvent(
+            channel: .standardOutput,
+            text: """
+            \(BabelDocRunner.bridgeEventPrefix){"type":"translation_diagnostics","translation_candidates":8,"translation_completed":7,"translation_failed":1,"provider_failures":2,"placeholder_validation_failures":0}\n
+            """
+        ))
+        let diagnostics = try XCTUnwrap(parsed.diagnostics)
+        XCTAssertTrue(diagnostics.isDegraded)
+        XCTAssertEqual(
+            parsed.statusMessages,
+            ["Translated 7/8 text blocks; 1 failed and kept their original layout."]
+        )
+
+        let tempRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: tempRoot, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempRoot) }
+        let outputPDF = tempRoot.appendingPathComponent("translated.pdf")
+        let sidecar = try BabelDocRunner.writeDiagnostics(diagnostics, for: outputPDF)
+
+        XCTAssertEqual(sidecar, outputPDF.appendingPathExtension("diagnostics.json"))
+        XCTAssertEqual(try BabelDocRunner.readDiagnostics(for: outputPDF), diagnostics)
     }
 
     func testTranslatePDFWritesRedactedFailureLogOnProcessFailure() async throws {

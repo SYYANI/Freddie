@@ -142,7 +142,14 @@ struct InProcessBabelDocRunner {
         _ result: BabelDocTranslationResult
     ) -> BabelDocProgressUpdate {
         let message: String
-        if result.semanticHintStatus.rawValue == "pdfFallback" {
+        if result.translationDiagnostics.failedCount > 0 {
+            message = AppLocalization.format(
+                "Translated %d/%d text blocks; %d failed and kept their original layout.",
+                result.translationDiagnostics.translatedCount,
+                result.translationDiagnostics.candidateCount,
+                result.translationDiagnostics.failedCount
+            )
+        } else if result.semanticHintStatus.rawValue == "pdfFallback" {
             message = AppLocalization.localized(
                 "LaTeX structure could not be applied; translation continued with PDF layout."
             )

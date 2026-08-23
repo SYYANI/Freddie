@@ -4,7 +4,7 @@
 
 - 本地 PDF：做轻量元数据抽取、补全、下载与阅读展示。
 - arXiv 论文：优先拉取 arXiv/ar5iv HTML，将 HTML 作为结构化全文载体，按段落翻译并内嵌展示。
-- 完整 PDF 翻译：调用外部 BabelDOC 命令生成翻译后的 PDF，再用双栏 PDF 阅读器展示。
+- 完整 PDF 翻译：调用 App 内嵌并签名的原生 BabelDOC helper 生成翻译后的 PDF，再用双栏 PDF 阅读器展示。
 
 ## 1. 推荐总体架构
 
@@ -28,7 +28,7 @@
 4. 翻译层
    - 标题/摘要/划词翻译：调用 OpenAI-compatible Chat API，并缓存到数据库。
    - HTML 全文翻译：按 DOM 选择器抽取段落、标题、图注等元素，保护公式后并发调用 LLM，把译文块插回 HTML。
-   - PDF 全文翻译：交给 BabelDOC 等外部 PDF 翻译服务，输出翻译后的 PDF。
+   - PDF 全文翻译：交给独立的 PDF 翻译与重排管线；当前 Swift 项目使用内嵌原生 BabelDOC helper。
 
 5. 展示层
    - PDF：用 PDF.js 系生态渲染，支持批注、搜索、页码导航。
@@ -187,45 +187,18 @@ HTML 翻译的核心不是“翻译整个 HTML 字符串”，而是按语义块
 - 保护公式、引用、reference、URL 和代码，并在高置信度时修复段落合并/拆分、阅读顺序、caption/浮动体和表格单元格关联。
 - PDF 始终是页面几何和绘制操作的真源；源码不可用、版本不匹配、解析失败或对齐置信度不足时，保持原有纯 PDF 流程。
 
-当前项目的做法是调用 BabelDOC CLI：
+当前 Swift 项目调用 App 内嵌并签名的原生 BabelDOC helper；helper 使用受信 manifest
+验证 App Resources 中的 MuPDF、zstd、Core ML layout model 和字体，不依赖 PATH、Python、uv
+或 Application Support 中预安装的外部 BabelDOC。API key 只通过进程环境传入，命令参数和日志均需遮蔽。
 
-1. 用户在设置中启用 PDF 翻译。
-2. 配置：
-   - BabelDOC 命令路径，默认 `babeldoc`
-   - 是否复用主 AI 配置
-   - 自定义 base URL / API key / model
-   - QPS
-   - 额外参数，例如 `--no-dual`
-3. 找到要翻译的 PDF：
-   - 优先使用用户指定 filename。
-   - 否则使用 `paper.pdf`。
-   - 否则寻找第一个 PDF 附件。
-4. 输出文件名：
-   - `{source_stem}.{native_lang}.pdf`
-   - 例如 `paper.zh.pdf`
-5. 创建临时输出目录，例如 `_babeldoc_temp`。
-6. 启动 BabelDOC 子进程：
-   - `--openai`
-   - `--openai-model`
-   - `--openai-base-url`
-   - `--openai-api-key`
-   - `--files`
-   - `--output`
-   - `--lang-out`
-   - `--qps`
-   - `--watermark-output-mode no_watermark`
-7. 翻译完成后在临时目录寻找 PDF 输出。
-8. 移动或复制到论文目录。
-9. 登记为 PDF 附件，source 可设为 `pdf-translation`。
-10. 发出 `paper-updated` 或类似事件让前端刷新附件列表。
+翻译阶段按文本块并发执行并保护公式占位符。provider 请求或占位符校验会做有限次数重试；若某个
+文本块最终失败，其他文本块继续翻译，而失败块必须以原始 PDF 字符、公式、曲线和坐标直接透传，
+不得再由排版阶段重映射字体或重排。helper 会输出候选、成功、失败、provider 失败和占位符校验
+失败等结构化诊断。即使进程成功退出，只要存在未翻译文本块，ReadPaper 也要显示完成警告，并在
+译文 PDF 旁保存 `.pdf.diagnostics.json`；增量翻译合并时同步合并和迁移该诊断文件。
 
-注意事项：
-
-- 桌面应用在 macOS/Linux GUI 环境里可能拿不到用户 shell PATH，需要主动解析命令路径。
-- 建议支持绝对路径配置。
-- 日志里要遮蔽 API key。
-- 子进程失败时要清理临时目录。
-- 该路径依赖外部工具能力，不保证每篇 PDF 都有稳定输出。
+原生 backend 在保存前对子集化目标字体，避免单页译文因嵌入完整中文字体膨胀到数十 MB。增量
+翻译仍可只生成当前批次页面，`translatedLastPage` 和双栏阅读器继续表达 partial translation 语义。
 
 ## 8. PDF 展示与双语展示
 
