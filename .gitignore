@@ -16,3 +16,4 @@ paper.html
 .DerivedData-Mac/
 .DerivedData-final-ios/
 .DerivedData-glass/
+debug/*

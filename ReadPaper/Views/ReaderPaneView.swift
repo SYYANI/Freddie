@@ -128,7 +128,7 @@ struct ReaderPaneView: View {
     }
 
     private var canTranslatePDF: Bool {
-        pdfAttachment != nil && settings != nil && !isFullPDFTranslationComplete
+        pdfAttachment != nil && settings != nil
     }
 
     private var canTranslateLaTeX: Bool {
@@ -767,6 +767,9 @@ struct ReaderPaneView: View {
             } label: {
                 if isPartialPDFTranslation {
                     Label(String(localized: "Translate More PDF Pages", bundle: bundle), systemImage: "doc")
+                        .labelStyle(.titleAndIcon)
+                } else if isFullPDFTranslationComplete {
+                    Label(String(localized: "Retranslate PDF", bundle: bundle), systemImage: "arrow.clockwise")
                         .labelStyle(.titleAndIcon)
                 } else {
                     Label(String(localized: "Translate PDF", bundle: bundle), systemImage: "doc")
@@ -1505,6 +1508,9 @@ struct ReaderPaneView: View {
     private func startPDFTranslation(scope: PDFTranslationScope) {
         guard let paper, let pdfAttachment, let settings else { return }
         let preferences = TranslationPreferencesSnapshot(settings)
+        let attachmentToReplace = isFullPDFTranslationComplete
+            ? translatedPDFAttachment
+            : nil
         let pageRange: ClosedRange<Int>? = {
             switch scope {
             case .firstPages(let count):
@@ -1587,15 +1593,33 @@ struct ReaderPaneView: View {
                         return nil
                     }
                 }()
-                modelContext.insert(PaperAttachment(
-                    paperID: paper.id,
-                    kind: .translatedPDF,
-                    source: .babeldoc,
-                    filename: translated.lastPathComponent,
-                    filePath: translated.path,
-                    translatedLastPage: translatedLastPage
-                ))
+                let previousTranslationURL: URL?
+                if let attachmentToReplace {
+                    previousTranslationURL = attachmentToReplace.fileURL
+                    attachmentToReplace.source = .babeldoc
+                    attachmentToReplace.filename = translated.lastPathComponent
+                    attachmentToReplace.filePath = translated.path
+                    attachmentToReplace.translatedLastPage = translatedLastPage
+                } else {
+                    previousTranslationURL = nil
+                    modelContext.insert(PaperAttachment(
+                        paperID: paper.id,
+                        kind: .translatedPDF,
+                        source: .babeldoc,
+                        filename: translated.lastPathComponent,
+                        filePath: translated.path,
+                        translatedLastPage: translatedLastPage
+                    ))
+                }
                 try modelContext.save()
+                if let previousTranslationURL,
+                   previousTranslationURL.standardizedFileURL != translated.standardizedFileURL {
+                    try? FileManager.default.removeItem(at: previousTranslationURL)
+                    try? FileManager.default.removeItem(
+                        at: BabelDocRunner.diagnosticsURL(for: previousTranslationURL)
+                    )
+                }
+                pdfReloadToken += 1
                 readerMode = .bilingualPDF
                 translationProgress = nil
                 pdfTranslationErrorLogURL = translationResult.diagnosticsLogURL

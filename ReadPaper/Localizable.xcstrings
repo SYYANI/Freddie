@@ -4044,6 +4044,17 @@
         }
       }
     },
+    "Retranslate PDF" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重新翻译 PDF"
+          }
+        }
+      }
+    },
     "Retried with resolved endpoint %@." : {
       "extractionState" : "stale",
       "localizations" : {

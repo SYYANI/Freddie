@@ -15,6 +15,7 @@ final class LocalizationBehaviorTests: XCTestCase {
             "使用 arXiv LaTeX 结构改进 PDF 翻译"
         )
         XCTAssertEqual(AppLocalization.localized("PDF Annotations"), "PDF 标注")
+        XCTAssertEqual(AppLocalization.localized("Retranslate PDF"), "重新翻译 PDF")
         XCTAssertEqual(
             PDFAnnotationStoreError.sourceAndDestinationMatch.localizedDescription,
             "请选择其他位置，以保留原始 PDF。"
@@ -23,5 +24,6 @@ final class LocalizationBehaviorTests: XCTestCase {
         LanguageManager.shared.setLanguage("en")
         XCTAssertEqual(PaperImportError.missingPDF.localizedDescription, "No PDF attachment is available for this paper.")
         XCTAssertEqual(AppLocalization.localized("PDF Annotations"), "PDF Annotations")
+        XCTAssertEqual(AppLocalization.localized("Retranslate PDF"), "Retranslate PDF")
     }
 }
