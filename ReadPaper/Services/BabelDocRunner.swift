@@ -84,6 +84,47 @@ struct BabelDocTranslationDiagnostics: Codable, Sendable, Equatable {
     }
 }
 
+struct PDFTranslationDiagnosticsNoticeStore {
+    static let userDefaultsKey = "ReadPaper.PDFTranslationDiagnosticsDismissals"
+
+    private let userDefaults: UserDefaults
+
+    init(userDefaults: UserDefaults = .standard) {
+        self.userDefaults = userDefaults
+    }
+
+    func noticeID(
+        outputPDF: URL,
+        diagnostics: BabelDocTranslationDiagnostics
+    ) -> String {
+        [
+            outputPDF.standardizedFileURL.path,
+            diagnostics.semanticStatus ?? "",
+            String(diagnostics.candidateCount),
+            String(diagnostics.translatedCount),
+            String(diagnostics.failedCount),
+            String(diagnostics.providerFailureCount),
+            String(diagnostics.placeholderValidationFailureCount),
+            String(diagnostics.semanticFallbackCount),
+            String(diagnostics.continuationGroupCount)
+        ].joined(separator: "|")
+    }
+
+    func isDismissed(paperID: UUID, noticeID: String) -> Bool {
+        dismissedNoticeIDs()[paperID.uuidString] == noticeID
+    }
+
+    func dismiss(paperID: UUID, noticeID: String) {
+        var noticeIDs = dismissedNoticeIDs()
+        noticeIDs[paperID.uuidString] = noticeID
+        userDefaults.set(noticeIDs, forKey: Self.userDefaultsKey)
+    }
+
+    private func dismissedNoticeIDs() -> [String: String] {
+        userDefaults.dictionary(forKey: Self.userDefaultsKey) as? [String: String] ?? [:]
+    }
+}
+
 struct BabelDocNativeTranslationResult: Sendable, Equatable {
     var outputPDF: URL
     var diagnostics: BabelDocTranslationDiagnostics?

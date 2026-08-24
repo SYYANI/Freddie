@@ -66,6 +66,7 @@ struct ReaderPaneView: View {
     @State private var translationProgress: TranslationProgressStatus?
     @State private var translationTask: Task<Void, Never>?
     @State private var pdfTranslationErrorLogURL: URL?
+    @State private var pdfTranslationDiagnosticsNoticeID: String?
     @State private var latexTranslationErrorLogURL: URL?
     @State private var lastPDFReaderMode: ReaderMode = .pdf
     @State private var suspendReadingStatePersistence = false
@@ -1243,6 +1244,7 @@ struct ReaderPaneView: View {
         htmlSegmentUpdate = nil
         translationProgress = nil
         pdfTranslationErrorLogURL = nil
+        pdfTranslationDiagnosticsNoticeID = nil
         latexTranslationErrorLogURL = nil
         isWorking = true
         isCancelling = false
@@ -1337,6 +1339,7 @@ struct ReaderPaneView: View {
         let jobID = job.id
         translationProgress = nil
         pdfTranslationErrorLogURL = nil
+        pdfTranslationDiagnosticsNoticeID = nil
         latexTranslationErrorLogURL = nil
         isWorking = true
         isCancelling = false
@@ -1513,6 +1516,7 @@ struct ReaderPaneView: View {
 
         translationProgress = nil
         pdfTranslationErrorLogURL = nil
+        pdfTranslationDiagnosticsNoticeID = nil
         latexTranslationErrorLogURL = nil
         isWorking = true
         isCancelling = false
@@ -1595,6 +1599,10 @@ struct ReaderPaneView: View {
                 readerMode = .bilingualPDF
                 translationProgress = nil
                 pdfTranslationErrorLogURL = translationResult.diagnosticsLogURL
+                pdfTranslationDiagnosticsNoticeID = pdfTranslationNoticeID(
+                    outputPDF: translated,
+                    diagnostics: translationResult.diagnostics
+                )
                 statusMessage = pdfTranslationCompletionMessage(translationResult.diagnostics)
             } catch is CancellationError {
                 translationProgress = nil
@@ -1620,6 +1628,7 @@ struct ReaderPaneView: View {
 
         translationProgress = nil
         pdfTranslationErrorLogURL = nil
+        pdfTranslationDiagnosticsNoticeID = nil
         latexTranslationErrorLogURL = nil
         isWorking = true
         isCancelling = false
@@ -1742,6 +1751,10 @@ struct ReaderPaneView: View {
                 pdfReloadToken += 1
                 translationProgress = nil
                 pdfTranslationErrorLogURL = mergedDiagnosticsURL
+                pdfTranslationDiagnosticsNoticeID = pdfTranslationNoticeID(
+                    outputPDF: mergedURL,
+                    diagnostics: combinedDiagnostics
+                )
                 statusMessage = pdfTranslationCompletionMessage(combinedDiagnostics)
             } catch is CancellationError {
                 translationProgress = nil
@@ -1779,20 +1792,59 @@ struct ReaderPaneView: View {
     }
 
     private func restorePDFTranslationDiagnostics() {
-        guard !isWorking, let translatedPDF = translatedPDFAttachment?.fileURL else { return }
+        guard !isWorking else { return }
+        let wasShowingDiagnosticsNotice = pdfTranslationDiagnosticsNoticeID != nil
+        pdfTranslationDiagnosticsNoticeID = nil
+
+        guard let paperID = paper?.id,
+              let translatedPDF = translatedPDFAttachment?.fileURL else {
+            pdfTranslationErrorLogURL = nil
+            if wasShowingDiagnosticsNotice {
+                statusMessage = nil
+            }
+            return
+        }
         let diagnosticsURL = BabelDocRunner.diagnosticsURL(for: translatedPDF)
         guard FileManager.default.fileExists(atPath: diagnosticsURL.path),
               let diagnostics = try? BabelDocRunner.readDiagnostics(for: translatedPDF),
               diagnostics.isDegraded else {
             pdfTranslationErrorLogURL = nil
+            if wasShowingDiagnosticsNotice {
+                statusMessage = nil
+            }
             return
         }
+
+        let noticeStore = PDFTranslationDiagnosticsNoticeStore()
+        let noticeID = noticeStore.noticeID(
+            outputPDF: translatedPDF,
+            diagnostics: diagnostics
+        )
+        guard !noticeStore.isDismissed(paperID: paperID, noticeID: noticeID) else {
+            pdfTranslationErrorLogURL = nil
+            statusMessage = nil
+            return
+        }
+
         pdfTranslationErrorLogURL = diagnosticsURL
+        pdfTranslationDiagnosticsNoticeID = noticeID
         statusMessage = pdfTranslationCompletionMessage(diagnostics)
+    }
+
+    private func pdfTranslationNoticeID(
+        outputPDF: URL,
+        diagnostics: BabelDocTranslationDiagnostics?
+    ) -> String? {
+        guard let diagnostics, diagnostics.isDegraded else { return nil }
+        return PDFTranslationDiagnosticsNoticeStore().noticeID(
+            outputPDF: outputPDF,
+            diagnostics: diagnostics
+        )
     }
 
     private func handleTranslationError(_ error: Error) {
         translationProgress = nil
+        pdfTranslationDiagnosticsNoticeID = nil
         if let babelDocError = error as? BabelDocRunError {
             pdfTranslationErrorLogURL = babelDocError.logURL
         } else {
@@ -1824,9 +1876,17 @@ struct ReaderPaneView: View {
 
     private func dismissStatusMessage() {
         guard !isWorking else { return }
+        if let paperID = paper?.id,
+           let noticeID = pdfTranslationDiagnosticsNoticeID {
+            PDFTranslationDiagnosticsNoticeStore().dismiss(
+                paperID: paperID,
+                noticeID: noticeID
+            )
+        }
         statusMessage = nil
         translationProgress = nil
         pdfTranslationErrorLogURL = nil
+        pdfTranslationDiagnosticsNoticeID = nil
     }
 
     private var translateMoreBanner: some View {

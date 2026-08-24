@@ -482,6 +482,54 @@ final class BabelDocRunnerTests: XCTestCase {
         XCTAssertEqual(try BabelDocRunner.readDiagnostics(for: outputPDF), diagnostics)
     }
 
+    func testDismissedDiagnosticsNoticeOnlySuppressesTheSameTranslationResult() throws {
+        let suiteName = "PDFTranslationDiagnosticsNoticeStoreTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let store = PDFTranslationDiagnosticsNoticeStore(userDefaults: defaults)
+        let paperID = UUID()
+        let diagnostics = BabelDocTranslationDiagnostics(
+            semanticStatus: "applied",
+            candidateCount: 140,
+            translatedCount: 139,
+            failedCount: 1,
+            providerFailureCount: 1,
+            placeholderValidationFailureCount: 0,
+            semanticFallbackCount: 0,
+            continuationGroupCount: 0
+        )
+        let firstOutput = URL(fileURLWithPath: "/tmp/translated-first.pdf")
+        let firstNoticeID = store.noticeID(outputPDF: firstOutput, diagnostics: diagnostics)
+
+        XCTAssertFalse(store.isDismissed(paperID: paperID, noticeID: firstNoticeID))
+        store.dismiss(paperID: paperID, noticeID: firstNoticeID)
+        XCTAssertTrue(store.isDismissed(paperID: paperID, noticeID: firstNoticeID))
+
+        let updatedDiagnostics = BabelDocTranslationDiagnostics(
+            semanticStatus: "applied",
+            candidateCount: 150,
+            translatedCount: 148,
+            failedCount: 2,
+            providerFailureCount: 2,
+            placeholderValidationFailureCount: 0,
+            semanticFallbackCount: 0,
+            continuationGroupCount: 0
+        )
+        let updatedNoticeID = store.noticeID(
+            outputPDF: firstOutput,
+            diagnostics: updatedDiagnostics
+        )
+        let replacementNoticeID = store.noticeID(
+            outputPDF: URL(fileURLWithPath: "/tmp/translated-replacement.pdf"),
+            diagnostics: diagnostics
+        )
+
+        XCTAssertFalse(store.isDismissed(paperID: paperID, noticeID: updatedNoticeID))
+        XCTAssertFalse(store.isDismissed(paperID: paperID, noticeID: replacementNoticeID))
+        XCTAssertFalse(store.isDismissed(paperID: UUID(), noticeID: firstNoticeID))
+    }
+
     func testTranslatePDFWritesRedactedFailureLogOnProcessFailure() async throws {
         let fm = FileManager.default
         let tempRoot = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
