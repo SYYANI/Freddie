@@ -54,6 +54,10 @@ struct PaperFileStore {
         try directory(for: paper.id).appendingPathComponent("Resources", isDirectory: true)
     }
 
+    func notesDirectory(for paperID: UUID) throws -> URL {
+        try directory(for: paperID).appendingPathComponent("notes", isDirectory: true)
+    }
+
     func translationsDirectory(for paper: Paper) throws -> URL {
         try translationsDirectory(for: paper.id)
     }

@@ -4,6 +4,7 @@ import SwiftUI
 
 struct DualPDFReaderView: View {
     @Environment(\.localizationBundle) private var bundle
+    var paperID: UUID? = nil
     var originalURL: URL?
     var originalAttachmentID: UUID? = nil
     var translatedURL: URL?
@@ -12,6 +13,7 @@ struct DualPDFReaderView: View {
     var displayAppearance: PDFDisplayAppearance = .defaultMode
     @Binding var pageIndex: Int
     var reloadToken: Int = 0
+    var annotationSession: PDFAnnotationSession? = nil
     var debugRegionSelectionEnabled = false
     var onDebugRegionSelected: ((PDFDebugRegionSelection) -> Void)? = nil
     var onNoteSelectionChanged: ((NoteSelectionContext?) -> Void)? = nil
@@ -146,10 +148,12 @@ struct DualPDFReaderView: View {
         PDFDisplaySurface(appearance: displayAppearance) {
             PDFReaderView(
                 fileURL: fileURL,
+                paperID: paperID,
                 attachmentID: attachmentID,
                 displayAppearance: displayAppearance,
                 pageIndex: pageIndex,
                 reloadToken: reloadToken,
+                annotationSession: annotationSession,
                 onNoteSelectionChanged: onSelectionChanged,
                 debugRegionSelectionEnabled: debugRegionSelectionEnabled,
                 onDebugRegionSelected: onDebugRegionSelected

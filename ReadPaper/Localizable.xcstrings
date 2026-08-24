@@ -83,6 +83,17 @@
         }
       }
     },
+    "%d PDF annotations exported to %@." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已将 %1$d 个 PDF 标注导出到 %2$@。"
+          }
+        }
+      }
+    },
     "%d provider%@ ready." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -289,6 +300,17 @@
         }
       }
     },
+    "Add PDF Note" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "添加 PDF 批注"
+          }
+        }
+      }
+    },
     "Advanced Parameters" : {
       "localizations" : {
         "zh-Hans" : {
@@ -327,6 +349,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在分析版面"
+          }
+        }
+      }
+    },
+    "Annotation Color" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "标注颜色"
           }
         }
       }
@@ -709,6 +742,28 @@
         }
       }
     },
+    "Blue" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "蓝色"
+          }
+        }
+      }
+    },
+    "Browse" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "浏览"
+          }
+        }
+      }
+    },
     "Build your local paper desk" : {
       "localizations" : {
         "zh-Hans" : {
@@ -850,6 +905,16 @@
         }
       }
     },
+    "Choose a different location to preserve the original PDF." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请选择其他位置，以保留原始 PDF。"
+          }
+        }
+      }
+    },
     "Choose a folder for Markdown digest exports." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -857,6 +922,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "选择用于导出 Markdown 文摘的文件夹。"
+          }
+        }
+      }
+    },
+    "Choose a folder, then drag a rectangle over an issue in the translated PDF. Each selection is exported automatically." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选择一个文件夹，然后在译文 PDF 的问题区域拖动框选。每次框选都会自动导出。"
           }
         }
       }
@@ -1415,6 +1491,17 @@
         }
       }
     },
+    "Disable PDF translation debug export" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "关闭 PDF 翻译调试导出"
+          }
+        }
+      }
+    },
     "Disabled" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1513,6 +1600,17 @@
         }
       }
     },
+    "Drawing Width" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "画笔粗细"
+          }
+        }
+      }
+    },
     "Edit note" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1546,6 +1644,17 @@
         }
       }
     },
+    "Enable PDF translation debug export" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "开启 PDF 翻译调试导出"
+          }
+        }
+      }
+    },
     "Enabled" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1563,6 +1672,27 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "每行输入一条首选术语映射，例如“large language model = 大语言模型”。术语表可留空，HTML 和 PDF 翻译都会将其作为参考上下文。"
+          }
+        }
+      }
+    },
+    "Enter the note to attach at this PDF position." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "输入要附加到此 PDF 位置的批注。"
+          }
+        }
+      }
+    },
+    "Erase Annotation" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "擦除标注"
           }
         }
       }
@@ -1596,6 +1726,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "导出"
+          }
+        }
+      }
+    },
+    "Export Annotated PDF" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "导出带标注的 PDF"
           }
         }
       }
@@ -1848,6 +1989,17 @@
         }
       }
     },
+    "Freehand Draw" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自由画笔"
+          }
+        }
+      }
+    },
     "General" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1912,6 +2064,17 @@
         }
       }
     },
+    "Green" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "绿色"
+          }
+        }
+      }
+    },
     "Grouping paragraphs" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1941,6 +2104,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "高"
+          }
+        }
+      }
+    },
+    "Highlight Selection" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "高亮所选内容"
           }
         }
       }
@@ -2658,6 +2832,17 @@
         }
       }
     },
+    "Medium" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "中"
+          }
+        }
+      }
+    },
     "Metadata" : {
       "localizations" : {
         "zh-Hans" : {
@@ -3023,6 +3208,17 @@
         }
       }
     },
+    "Note" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "批注"
+          }
+        }
+      }
+    },
     "Notes" : {
       "localizations" : {
         "zh-Hans" : {
@@ -3217,6 +3413,28 @@
     "PDF" : {
 
     },
+    "PDF Annotation Error" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PDF 标注错误"
+          }
+        }
+      }
+    },
+    "PDF Annotations" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PDF 标注"
+          }
+        }
+      }
+    },
     "PDF Appearance" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -3234,6 +3452,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "PDF 编译需要安装包含 latexmk 的 TeX 发行版。"
+          }
+        }
+      }
+    },
+    "PDF debug bundle exported to %@." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PDF 调试包已导出到 %1$@。"
+          }
+        }
+      }
+    },
+    "PDF debug export is active. Drag over an issue in the translated PDF." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PDF 调试导出已开启。请在译文 PDF 的问题区域拖动框选。"
           }
         }
       }
@@ -3260,6 +3500,17 @@
         }
       }
     },
+    "PDF Exported" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PDF 已导出"
+          }
+        }
+      }
+    },
     "PDF is not available for this paper." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -3267,6 +3518,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "这篇论文没有可用的 PDF。"
+          }
+        }
+      }
+    },
+    "PDF page %d is unavailable for debug export." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法导出 PDF 第 %1$d 页的调试信息。"
           }
         }
       }
@@ -3293,6 +3555,28 @@
         }
       }
     },
+    "PDF Translation Debug Export" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PDF 翻译调试导出"
+          }
+        }
+      }
+    },
+    "PDF translation debug export disabled." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PDF 翻译调试导出已关闭。"
+          }
+        }
+      }
+    },
     "PDF/BabelDOC Model" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -3300,6 +3584,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "PDF/BabelDOC 模型"
+          }
+        }
+      }
+    },
+    "Place PDF Note" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "放置 PDF 批注"
           }
         }
       }
@@ -3555,6 +3850,17 @@
         }
       }
     },
+    "Purple" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "紫色"
+          }
+        }
+      }
+    },
     "Quick reading notes stay attached to the current paper." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -3636,6 +3942,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在重建 LaTeX 译稿..."
+          }
+        }
+      }
+    },
+    "Red" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "红色"
+          }
+        }
+      }
+    },
+    "Redo PDF Annotation" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重做 PDF 标注"
           }
         }
       }
@@ -4114,6 +4442,17 @@
         }
       }
     },
+    "Strike Through Selection" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "给所选内容添加删除线"
+          }
+        }
+      }
+    },
     "Switch between HTML and PDF reading" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -4235,6 +4574,16 @@
         }
       }
     },
+    "The annotated PDF could not be written." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法写入带标注的 PDF。"
+          }
+        }
+      }
+    },
     "The arXiv source archive exceeds the %lld-byte safety limit." : {
       "localizations" : {
         "zh-Hans" : {
@@ -4348,6 +4697,26 @@
         }
       }
     },
+    "The PDF annotation file does not match this attachment." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PDF 标注文件与此附件不匹配。"
+          }
+        }
+      }
+    },
+    "The PDF could not be opened for annotation export." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法打开 PDF 以导出标注。"
+          }
+        }
+      }
+    },
     "The PDF translation tool is managed separately from the reader. Updating it here keeps the BabelDOC route ready when a paper needs full-PDF translation." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -4414,6 +4783,39 @@
         }
       }
     },
+    "The selected PDF debug export folder is unavailable." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "所选 PDF 调试导出文件夹不可用。"
+          }
+        }
+      }
+    },
+    "The selected PDF region could not be rendered." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法渲染所选 PDF 区域。"
+          }
+        }
+      }
+    },
+    "The selected PDF region is empty." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "所选 PDF 区域为空。"
+          }
+        }
+      }
+    },
     "The selected provider “%@” is disabled." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -4447,6 +4849,17 @@
         }
       }
     },
+    "The translated PDF could not be opened for debug export." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法打开译文 PDF 以导出调试信息。"
+          }
+        }
+      }
+    },
     "The web server returned an error (status %d)." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -4454,6 +4867,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "网页服务器返回了错误（状态码 %d）。"
+          }
+        }
+      }
+    },
+    "Thick" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "粗"
+          }
+        }
+      }
+    },
+    "Thin" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "细"
           }
         }
       }
@@ -4508,6 +4943,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "这篇论文没有足够的元数据来生成文摘。"
+          }
+        }
+      }
+    },
+    "This PDF annotation file was created by a newer version of Freddie." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此 PDF 标注文件由较新版本的 Freddie 创建。"
           }
         }
       }
@@ -4881,6 +5326,28 @@
         }
       }
     },
+    "Underline Selection" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "给所选内容添加下划线"
+          }
+        }
+      }
+    },
+    "Undo PDF Annotation" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "撤销 PDF 标注"
+          }
+        }
+      }
+    },
     "Unknown authors" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -5039,126 +5506,6 @@
         }
       }
     },
-    "Choose a folder, then drag a rectangle over an issue in the translated PDF. Each selection is exported automatically." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "选择一个文件夹，然后在译文 PDF 的问题区域拖动框选。每次框选都会自动导出。"
-          }
-        }
-      }
-    },
-    "Disable PDF translation debug export" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "关闭 PDF 翻译调试导出"
-          }
-        }
-      }
-    },
-    "Enable PDF translation debug export" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "开启 PDF 翻译调试导出"
-          }
-        }
-      }
-    },
-    "PDF debug bundle exported to %@." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "PDF 调试包已导出到 %1$@。"
-          }
-        }
-      }
-    },
-    "PDF debug export is active. Drag over an issue in the translated PDF." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "PDF 调试导出已开启。请在译文 PDF 的问题区域拖动框选。"
-          }
-        }
-      }
-    },
-    "PDF page %d is unavailable for debug export." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "无法导出 PDF 第 %1$d 页的调试信息。"
-          }
-        }
-      }
-    },
-    "PDF Translation Debug Export" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "PDF 翻译调试导出"
-          }
-        }
-      }
-    },
-    "PDF translation debug export disabled." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "PDF 翻译调试导出已关闭。"
-          }
-        }
-      }
-    },
-    "The selected PDF debug export folder is unavailable." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "所选 PDF 调试导出文件夹不可用。"
-          }
-        }
-      }
-    },
-    "The selected PDF region could not be rendered." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "无法渲染所选 PDF 区域。"
-          }
-        }
-      }
-    },
-    "The selected PDF region is empty." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "所选 PDF 区域为空。"
-          }
-        }
-      }
-    },
-    "The translated PDF could not be opened for debug export." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "无法打开译文 PDF 以导出调试信息。"
-          }
-        }
-      }
-    },
     "Working..." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -5166,6 +5513,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "处理中..."
+          }
+        }
+      }
+    },
+    "Yellow" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "黄色"
           }
         }
       }

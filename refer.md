@@ -207,6 +207,22 @@ helper 会输出候选、成功、失败、provider 失败和占位符校验失�
 
 ## 8. PDF 展示与双语展示
 
+当前 SwiftUI 版本使用 `PDFKit.PDFView`，并在其上实现原生 PDF Annotation，而不是切换到
+Quick Look/Preview 或另一个渲染内核。支持高亮、下划线、删除线、文本批注、自由画笔、擦除、
+颜色与线宽、撤销/重做，并可导出包含标准 PDF Annotation 的新文件。
+
+用户标注不写回 `paper.pdf` 或 BabelDOC 增量生成的译文 PDF，而是按
+`paperID + attachmentID` 保存到论文目录的
+`notes/pdf-annotations-{attachment UUID}.json`。阅读器每次加载附件时把 sidecar 记录恢复为
+内存中的 `PDFAnnotation`；译文 PDF 续翻或被替换后仍可按页重新挂载。导出时再把 sidecar 合并到
+源 PDF 的副本中，因此原始附件保持不变，导出的文件也能在 Preview、Acrobat 等标准阅读器中显示。
+
+原文和译文各自拥有独立 sidecar。双栏阅读时，工具栏命令作用于最近交互或最近选择文本的一侧；
+partial 译文当前不存在的页面标注会保留在 sidecar，待后续页生成后恢复。PDF 翻译调试框选使用独占
+的 `.debugRegion` 交互模式，启用时标注工具强制回到浏览模式，避免框选和手绘同时处理鼠标事件。
+深色外观仍使用整体 difference blend，但用户标注颜色在送入 PDFKit 前会做 RGB 反补偿，避免黄色
+高亮被整体反相成蓝色。
+
 PDF 展示建议使用 PDF.js 生态：
 
 1. 后端只返回本地文件绝对路径。

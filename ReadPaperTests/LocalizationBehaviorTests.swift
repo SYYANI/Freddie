@@ -14,8 +14,14 @@ final class LocalizationBehaviorTests: XCTestCase {
             AppLocalization.localized("Use arXiv LaTeX structure for PDF translation"),
             "使用 arXiv LaTeX 结构改进 PDF 翻译"
         )
+        XCTAssertEqual(AppLocalization.localized("PDF Annotations"), "PDF 标注")
+        XCTAssertEqual(
+            PDFAnnotationStoreError.sourceAndDestinationMatch.localizedDescription,
+            "请选择其他位置，以保留原始 PDF。"
+        )
 
         LanguageManager.shared.setLanguage("en")
         XCTAssertEqual(PaperImportError.missingPDF.localizedDescription, "No PDF attachment is available for this paper.")
+        XCTAssertEqual(AppLocalization.localized("PDF Annotations"), "PDF Annotations")
     }
 }
