@@ -91,6 +91,9 @@ final class LaTeXTranslationServiceTests: XCTestCase {
         try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
         try """
         \\documentclass{article}
+        \\pdfoutput=1
+        \\pdfsuppresswarningpagegroup=1
+        \\usepackage[latin9]{inputenc}
         \\begin{document}
         \\section{Introduction}
         This deterministic fixture contains enough academic prose to become a translatable section. It describes a method, its experimental setting, its measured outcomes, and its limitations while preserving every LaTeX command exactly for the host integration test.
@@ -136,6 +139,14 @@ final class LaTeXTranslationServiceTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: translatedMain.path))
         XCTAssertTrue(try String(contentsOf: translatedMain, encoding: .utf8).contains(
             "\\usepackage[UTF8,fontset=fandol]{ctex}"
+        ))
+        let translatedSource = try String(contentsOf: translatedMain, encoding: .utf8)
+        XCTAssertTrue(translatedSource.contains("\\ifdefined\\pdfoutput\\pdfoutput=1\\fi"))
+        XCTAssertTrue(translatedSource.contains(
+            "\\ifdefined\\pdfsuppresswarningpagegroup\\pdfsuppresswarningpagegroup=1\\fi"
+        ))
+        XCTAssertTrue(translatedSource.contains(
+            "\\ifdefined\\pdftexversion\\usepackage[utf8]{inputenc}\\fi"
         ))
         let managedFiles = try XCTUnwrap(FileManager.default.enumerator(
             at: URL(fileURLWithPath: managedRoot, isDirectory: true),
@@ -345,6 +356,38 @@ final class LaTeXTranslationServiceTests: XCTestCase {
             TerminologyEntry(source: "loss", target: "损失"),
             TerminologyEntry(source: "optimizer", target: "优化器"),
         ])
+    }
+
+    func testLaTeXPreambleNormalizesPDFTeXPrimitivesAndLegacyInputEncoding() throws {
+        let source = #"""
+        \documentclass{article}
+        \pdfoutput=1
+        \pdfsuppresswarningpagegroup = 1 % source compatibility
+        \usepackage[latin9]{inputenc}
+        % \pdfoutput=0
+        \begin{document}Text\end{document}
+        """#
+        let policy = ReadPaperLaTeXEngineCompatibilityPreamblePolicy()
+
+        let transformed = try policy.transform(
+            source,
+            targetLanguage: .simplifiedChinese
+        )
+        let transformedTwice = try policy.transform(
+            transformed,
+            targetLanguage: .simplifiedChinese
+        )
+
+        XCTAssertTrue(transformed.contains(#"\ifdefined\pdfoutput\pdfoutput=1\fi"#))
+        XCTAssertTrue(transformed.contains(
+            #"\ifdefined\pdfsuppresswarningpagegroup\pdfsuppresswarningpagegroup=1\fi % source compatibility"#
+        ))
+        XCTAssertTrue(transformed.contains(
+            #"\ifdefined\pdftexversion\usepackage[utf8]{inputenc}\fi"#
+        ))
+        XCTAssertTrue(transformed.contains(#"% \pdfoutput=0"#))
+        XCTAssertFalse(transformed.contains(#"\usepackage[latin9]{inputenc}"#))
+        XCTAssertEqual(transformedTwice, transformed)
     }
 
     func testArXivIdentifierResolutionDoesNotDuplicateVersions() {

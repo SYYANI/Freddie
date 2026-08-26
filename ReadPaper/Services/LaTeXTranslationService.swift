@@ -634,6 +634,50 @@ enum ReadPaperLaTeXTerminology {
     }
 }
 
+struct ReadPaperLaTeXEngineCompatibilityPreamblePolicy: LaTeXPreambleTransforming {
+    private let base: any LaTeXPreambleTransforming
+
+    init(base: any LaTeXPreambleTransforming = ReferenceLanguagePreamblePolicy()) {
+        self.base = base
+    }
+
+    func transform(_ source: String, targetLanguage: TranslationLanguage) throws -> String {
+        let transformed = try base.transform(source, targetLanguage: targetLanguage)
+        return Self.normalizeEngineSpecificPreamble(in: transformed)
+    }
+
+    private static func normalizeEngineSpecificPreamble(in source: String) -> String {
+        var result = source
+        result = replacingLines(
+            matching: #"(?m)^([ \t]*)\\pdfoutput[ \t]*=[ \t]*([+-]?\d+)([ \t]*(?:%[^\r\n]*)?)$"#,
+            with: #"$1\\ifdefined\\pdfoutput\\pdfoutput=$2\\fi$3"#,
+            in: result
+        )
+        result = replacingLines(
+            matching: #"(?m)^([ \t]*)\\pdfsuppresswarningpagegroup[ \t]*=[ \t]*([+-]?\d+)([ \t]*(?:%[^\r\n]*)?)$"#,
+            with: #"$1\\ifdefined\\pdfsuppresswarningpagegroup\\pdfsuppresswarningpagegroup=$2\\fi$3"#,
+            in: result
+        )
+        return replacingLines(
+            matching: #"(?m)^([ \t]*)(\\(?:usepackage|RequirePackage))[ \t]*(?:\[[^\]]*\])?[ \t]*\{inputenc\}([ \t]*(?:%[^\r\n]*)?)$"#,
+            with: #"$1\\ifdefined\\pdftexversion$2[utf8]{inputenc}\\fi$3"#,
+            in: result
+        )
+    }
+
+    private static func replacingLines(
+        matching pattern: String,
+        with replacement: String,
+        in source: String
+    ) -> String {
+        source.replacingOccurrences(
+            of: pattern,
+            with: replacement,
+            options: .regularExpression
+        )
+    }
+}
+
 actor ReadPaperLaTeXTranslationService {
     typealias ProgressHandler = @Sendable (ReadPaperLaTeXProgressUpdate) -> Void
 
@@ -694,7 +738,9 @@ actor ReadPaperLaTeXTranslationService {
             parser: StructuredLaTeXParser(),
             translator: translator,
             validator: StructuralLaTeXValidator(),
-            reconstructor: StructuredLaTeXReconstructor()
+            reconstructor: StructuredLaTeXReconstructor(
+                preamblePolicy: ReadPaperLaTeXEngineCompatibilityPreamblePolicy()
+            )
         )
         let configuration = TranslationConfiguration(
             sourceLanguage: .english,
