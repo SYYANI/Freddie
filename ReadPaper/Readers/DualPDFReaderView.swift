@@ -17,6 +17,7 @@ struct DualPDFReaderView: View {
     var debugRegionSelectionEnabled = false
     var onDebugRegionSelected: ((PDFDebugRegionSelection) -> Void)? = nil
     var onNoteSelectionChanged: ((NoteSelectionContext?) -> Void)? = nil
+    var onArxivLinkActivated: ((URL) -> Void)? = nil
     @State private var translatedPageIndex = 0
     @State private var translatedPageCount: Int = 0
     @State private var originalPageCount: Int = 0
@@ -155,6 +156,7 @@ struct DualPDFReaderView: View {
                 reloadToken: reloadToken,
                 annotationSession: annotationSession,
                 onNoteSelectionChanged: onSelectionChanged,
+                onArxivLinkActivated: onArxivLinkActivated,
                 debugRegionSelectionEnabled: debugRegionSelectionEnabled,
                 onDebugRegionSelected: onDebugRegionSelected
             )

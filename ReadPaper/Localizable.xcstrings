@@ -2370,6 +2370,17 @@
         }
       }
     },
+    "Import arXiv Paper?" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "导入 arXiv 论文？"
+          }
+        }
+      }
+    },
     "Import from arXiv" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2388,6 +2399,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "导入网页"
+          }
+        }
+      }
+    },
+    "Importing from arXiv" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在从 arXiv 导入"
           }
         }
       }
@@ -3280,6 +3301,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "打开锚点"
+          }
+        }
+      }
+    },
+    "Open in Browser" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在浏览器中打开"
           }
         }
       }
@@ -4990,6 +5022,17 @@
         }
       }
     },
+    "This PDF links to arXiv %@. Would you like to import it into your library?" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此 PDF 链接到 arXiv %@。要将其导入资料库吗？"
+          }
+        }
+      }
+    },
     "Title, authors, arXiv ID, and abstract." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -5141,22 +5184,6 @@
         }
       }
     },
-    "Translated text blocks: %d; formula-layout blocks safely preserved: %d." : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Translated text blocks: %1$d; formula-layout blocks safely preserved: %2$d."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "已翻译 %1$d 个文本块；为保护版面，安全保留了 %2$d 个公式布局块。"
-          }
-        }
-      }
-    },
     "Translated %d/%d text blocks." : {
       "localizations" : {
         "zh-Hans" : {
@@ -5174,6 +5201,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "已翻译第 1–%1$@ 页，共 %2$@ 页。"
+          }
+        }
+      }
+    },
+    "Translated text blocks: %d; formula-layout blocks safely preserved: %d." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Translated text blocks: %1$d; formula-layout blocks safely preserved: %2$d."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已翻译 %1$d 个文本块；为保护版面，安全保留了 %2$d 个公式布局块。"
           }
         }
       }
@@ -5338,6 +5381,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "无法删除论文"
+          }
+        }
+      }
+    },
+    "Unable to Import Paper" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法导入论文"
           }
         }
       }

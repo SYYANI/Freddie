@@ -1,3 +1,4 @@
+import AppKit
 import SwiftData
 import SwiftUI
 
@@ -18,6 +19,12 @@ struct ContentView: View {
     @State private var isAddingPaper = false
     @State private var paperPendingDeletion: Paper?
     @State private var deletionErrorMessage: String?
+    @State private var pendingArxivLinkImport: ArxivLinkImportRequest?
+    @State private var isShowingArxivLinkImport = false
+    @State private var isImportingArxivLink = false
+    @State private var arxivLinkImportProgress: ArxivImportProgress?
+    @State private var arxivLinkImportErrorMessage: String?
+    @State private var arxivLinkImportIdentifier = ""
 
     private var settings: AppSettings? {
         settingsRows.first
@@ -78,7 +85,8 @@ struct ContentView: View {
                 isInspectorCollapsed: inspectorCollapsedBinding,
                 noteSelectionContext: $noteSelectionContext,
                 noteNavigationRequest: $noteNavigationRequest,
-                onCreateAnchoredNote: createNoteFromCurrentSelection
+                onCreateAnchoredNote: createNoteFromCurrentSelection,
+                onArxivLinkActivated: handleArxivLinkActivation
             )
             .navigationSplitViewColumnWidth(min: 520, ideal: 760)
         } detail: {
@@ -100,6 +108,43 @@ struct ContentView: View {
         .sheet(isPresented: $isAddingPaper) {
             AddPaperSheet(isPresented: $isAddingPaper, selectedPaperID: $selectedPaperID)
                 .frame(width: 520)
+        }
+        .sheet(isPresented: $isShowingArxivLinkImport) {
+            ArxivLinkImportStatusSheet(
+                identifier: arxivLinkImportIdentifier,
+                progress: arxivLinkImportProgress,
+                isImporting: isImportingArxivLink,
+                errorMessage: arxivLinkImportErrorMessage,
+                onClose: { isShowingArxivLinkImport = false }
+            )
+            .frame(width: 460)
+            .interactiveDismissDisabled(isImportingArxivLink)
+        }
+        .alert(
+            String(localized: "Import arXiv Paper?", bundle: bundle),
+            isPresented: Binding(
+                get: { pendingArxivLinkImport != nil },
+                set: { isPresented in
+                    if !isPresented {
+                        pendingArxivLinkImport = nil
+                    }
+                }
+            ),
+            presenting: pendingArxivLinkImport
+        ) { request in
+            Button(String(localized: "Import", bundle: bundle)) {
+                startArxivLinkImport(request)
+            }
+            Button(String(localized: "Open in Browser", bundle: bundle)) {
+                NSWorkspace.shared.open(request.url)
+            }
+            Button(String(localized: "Cancel", bundle: bundle), role: .cancel) {}
+        } message: { request in
+            Text(AppLocalization.format(
+                "This PDF links to arXiv %@. Would you like to import it into your library?",
+                bundle: bundle,
+                request.identifier.queryID
+            ))
         }
         .confirmationDialog(
             String(localized: "Delete Paper?", bundle: bundle),
@@ -256,4 +301,111 @@ struct ContentView: View {
         noteNavigationRequest = note.navigationRequest
     }
 
+    private func handleArxivLinkActivation(_ url: URL) {
+        guard !isImportingArxivLink,
+              let request = ArxivLinkImportRequest(url: url)
+        else {
+            return
+        }
+        pendingArxivLinkImport = request
+    }
+
+    private func startArxivLinkImport(_ request: ArxivLinkImportRequest) {
+        pendingArxivLinkImport = nil
+        arxivLinkImportIdentifier = request.identifier.queryID
+        arxivLinkImportProgress = .resolvingInput(identifier: request.identifier.queryID)
+        arxivLinkImportErrorMessage = nil
+        isImportingArxivLink = true
+        isShowingArxivLinkImport = true
+
+        Task {
+            do {
+                let importedPaper = try await PaperImporter().importArxiv(
+                    request.importValue,
+                    modelContext: modelContext
+                ) { progress in
+                    arxivLinkImportProgress = progress
+                }
+                selectedPaperID = importedPaper.id
+                isShowingArxivLinkImport = false
+            } catch {
+                arxivLinkImportErrorMessage = error.localizedDescription
+            }
+            isImportingArxivLink = false
+        }
+    }
+
+}
+
+private struct ArxivLinkImportStatusSheet: View {
+    @Environment(\.localizationBundle) private var bundle
+
+    let identifier: String
+    let progress: ArxivImportProgress?
+    let isImporting: Bool
+    let errorMessage: String?
+    let onClose: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            Text("Importing from arXiv", bundle: bundle)
+                .font(.title2.weight(.semibold))
+
+            Text(AppLocalization.format("arXiv %@", bundle: bundle, identifier))
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+
+            if let progress {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text(progress.stepLabel)
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Text("\(Int(round(progress.fractionCompleted * 100)))%")
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                    }
+
+                    ProgressView(value: progress.fractionCompleted)
+                        .progressViewStyle(.linear)
+
+                    Text(progress.title)
+                        .font(.subheadline.weight(.semibold))
+
+                    if let detail = progress.detail {
+                        Text(detail)
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .padding(14)
+                .background {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(.quaternary.opacity(0.35))
+                }
+            } else if isImporting {
+                ProgressView()
+            }
+
+            if let errorMessage {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Unable to Import Paper", bundle: bundle)
+                        .font(.headline)
+                    Text(errorMessage)
+                        .foregroundStyle(.red)
+                        .textSelection(.enabled)
+                }
+            }
+
+            HStack {
+                Spacer()
+                Button(String(localized: "Close", bundle: bundle), action: onClose)
+                    .disabled(isImporting)
+                    .keyboardShortcut(.cancelAction)
+            }
+        }
+        .padding(24)
+    }
 }

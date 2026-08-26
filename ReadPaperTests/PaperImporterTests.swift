@@ -48,6 +48,35 @@ final class PaperImporterTests: XCTestCase {
     }
 
     @MainActor
+    func testArxivLinkImportRequestRecognizesSupportedPaperLinks() throws {
+        let absRequest = try XCTUnwrap(ArxivLinkImportRequest(
+            url: XCTUnwrap(URL(string: "https://arxiv.org/abs/2303.08774v2#references"))
+        ))
+        XCTAssertEqual(absRequest.identifier.baseID, "2303.08774")
+        XCTAssertEqual(absRequest.identifier.version, "v2")
+
+        let legacyPDFRequest = try XCTUnwrap(ArxivLinkImportRequest(
+            url: XCTUnwrap(URL(string: "https://export.arxiv.org/pdf/hep-th/9901001.pdf"))
+        ))
+        XCTAssertEqual(legacyPDFRequest.importValue, "hep-th/9901001")
+
+        let ar5ivRequest = try XCTUnwrap(ArxivLinkImportRequest(
+            url: XCTUnwrap(URL(string: "https://ar5iv.labs.arxiv.org/html/2404.12365"))
+        ))
+        XCTAssertEqual(ar5ivRequest.importValue, "2404.12365")
+    }
+
+    @MainActor
+    func testArxivLinkImportRequestRejectsLookalikeAndUnrelatedHosts() throws {
+        XCTAssertNil(ArxivLinkImportRequest(
+            url: try XCTUnwrap(URL(string: "https://arxiv.org.example.com/abs/2303.08774"))
+        ))
+        XCTAssertNil(ArxivLinkImportRequest(
+            url: try XCTUnwrap(URL(string: "https://doi.org/10.1145/3731715.3733394"))
+        ))
+    }
+
+    @MainActor
     func testExtractDOIRecognizesExplicitDOI() {
         let doi = PaperImporter.extractDOI(
             from: "Published version doi:10.1145/3731715.3733394"

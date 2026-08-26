@@ -154,6 +154,7 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
     var reloadToken: Int = 0
     var annotationSession: PDFAnnotationSession? = nil
     var onNoteSelectionChanged: ((NoteSelectionContext?) -> Void)? = nil
+    var onArxivLinkActivated: ((URL) -> Void)? = nil
     var debugRegionSelectionEnabled = false
     var onDebugRegionSelected: ((PDFDebugRegionSelection) -> Void)? = nil
 
@@ -206,6 +207,7 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
             annotationSession: annotationSession
         )
         context.coordinator.onNoteSelectionChanged = onNoteSelectionChanged
+        context.coordinator.onArxivLinkActivated = onArxivLinkActivated
         #if os(macOS)
         if let interactiveView = view as? InteractivePDFView {
             interactiveView.interactionMode = debugRegionSelectionEnabled
@@ -265,6 +267,7 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
             attachmentID: attachmentID,
             pageIndex: $pageIndex,
             onNoteSelectionChanged: onNoteSelectionChanged,
+            onArxivLinkActivated: onArxivLinkActivated,
             annotationSession: annotationSession
         )
     }
@@ -289,6 +292,7 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
         weak var pdfView: PDFView?
         var pageIndex: Binding<Int>
         var onNoteSelectionChanged: ((NoteSelectionContext?) -> Void)?
+        var onArxivLinkActivated: ((URL) -> Void)?
         private weak var annotationSession: PDFAnnotationSession?
         private weak var registeredAnnotationSession: PDFAnnotationSession?
         private var registeredAnnotationAttachmentID: UUID?
@@ -309,6 +313,7 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
             attachmentID: UUID?,
             pageIndex: Binding<Int>,
             onNoteSelectionChanged: ((NoteSelectionContext?) -> Void)?,
+            onArxivLinkActivated: ((URL) -> Void)? = nil,
             annotationSession: PDFAnnotationSession? = nil,
             annotationStore: PDFAnnotationStore = PDFAnnotationStore()
         ) {
@@ -316,6 +321,7 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
             self.attachmentID = attachmentID
             self.pageIndex = pageIndex
             self.onNoteSelectionChanged = onNoteSelectionChanged
+            self.onArxivLinkActivated = onArxivLinkActivated
             self.annotationSession = annotationSession
             self.annotationStore = annotationStore
         }
@@ -409,6 +415,9 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
             )
             #if os(macOS)
             if let interactiveView = pdfView as? InteractivePDFView {
+                interactiveView.onLinkActivated = { [weak self] url in
+                    self?.handleLinkActivation(url) ?? false
+                }
                 interactiveView.onInteractionBegan = { [weak self] in
                     self?.activateAnnotationDocument()
                 }
@@ -450,6 +459,17 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
             registeredAnnotationAttachmentID = nil
             registeredAnnotationSession = nil
             self.pdfView = nil
+        }
+
+        func handleLinkActivation(_ url: URL) -> Bool {
+            guard ArxivLinkImportRequest(url: url) != nil,
+                  let onArxivLinkActivated
+            else {
+                return false
+            }
+
+            onArxivLinkActivated(url)
+            return true
         }
 
         func loadAnnotations(in pdfView: PDFView) {
@@ -947,6 +967,7 @@ private final class InteractivePDFView: PDFView {
         didSet { interactionOverlay.inkLineWidth = inkPreviewLineWidth }
     }
     var onInteractionBegan: (() -> Void)?
+    var onLinkActivated: ((URL) -> Bool)?
     var onDebugRegionSelected: ((PDFDebugRegionSelection) -> Void)?
     var onInkStrokeCompleted: ((PDFPage, [CGPoint]) -> Void)?
     var onEraseRequested: ((PDFPage, CGPoint) -> Void)?
@@ -975,6 +996,15 @@ private final class InteractivePDFView: PDFView {
         case .ink, .textNote, .erase, .debugRegion:
             addCursorRect(bounds, cursor: .crosshair)
         }
+    }
+
+    override func perform(_ action: PDFAction) {
+        if let urlAction = action as? PDFActionURL,
+           let url = urlAction.url,
+           onLinkActivated?(url) == true {
+            return
+        }
+        super.perform(action)
     }
 
     override func mouseDown(with event: NSEvent) {

@@ -13,6 +13,27 @@ struct ArxivIdentifier: Equatable {
     }
 }
 
+struct ArxivLinkImportRequest: Equatable, Identifiable {
+    let url: URL
+    let identifier: ArxivIdentifier
+
+    var id: String { url.absoluteString }
+
+    var importValue: String { identifier.queryID }
+
+    init?(url: URL) {
+        guard let host = url.host?.lowercased(),
+              host == "arxiv.org" || host.hasSuffix(".arxiv.org"),
+              let identifier = try? ArxivClient.normalizeIdentifier(url.absoluteString)
+        else {
+            return nil
+        }
+
+        self.url = url
+        self.identifier = identifier
+    }
+}
+
 struct ArxivPaperMetadata: Equatable {
     var arxivID: String
     var arxivVersion: String?

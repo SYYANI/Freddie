@@ -54,6 +54,7 @@ struct ReaderPaneView: View {
     @Binding var noteSelectionContext: NoteSelectionContext?
     @Binding var noteNavigationRequest: NoteNavigationRequest?
     var onCreateAnchoredNote: () -> Void
+    var onArxivLinkActivated: (URL) -> Void
 
     @State private var pdfPageIndex = 0
     @State private var htmlScrollRatio = 0.0
@@ -1131,7 +1132,8 @@ struct ReaderPaneView: View {
                         annotationSession: pdfAnnotationSession,
                         debugRegionSelectionEnabled: pdfDebugModeEnabled,
                         onDebugRegionSelected: handlePDFDebugRegionSelection,
-                        onNoteSelectionChanged: handleNoteSelectionChange
+                        onNoteSelectionChanged: handleNoteSelectionChange,
+                        onArxivLinkActivated: onArxivLinkActivated
                     )
                 } else {
                     centeredUnavailableView(
@@ -1988,6 +1990,7 @@ struct ReaderPaneView: View {
                     reloadToken: reloadToken,
                     annotationSession: pdfAnnotationSession,
                     onNoteSelectionChanged: handleNoteSelectionChange,
+                    onArxivLinkActivated: onArxivLinkActivated,
                     debugRegionSelectionEnabled: debugRegionSelectionEnabled,
                     onDebugRegionSelected: onDebugRegionSelected
                 )

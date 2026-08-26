@@ -187,6 +187,28 @@ final class PDFAnnotationStoreTests: XCTestCase {
     }
 
     @MainActor
+    func testCoordinatorInterceptsOnlyArxivLinksWhenImportHandlerIsAvailable() throws {
+        var pageIndex = 0
+        var activatedURL: URL?
+        let coordinator = PDFReaderView.Coordinator(
+            attachmentID: nil,
+            pageIndex: Binding(get: { pageIndex }, set: { pageIndex = $0 }),
+            onNoteSelectionChanged: nil,
+            onArxivLinkActivated: { activatedURL = $0 }
+        )
+        let arxivURL = try XCTUnwrap(URL(string: "https://arxiv.org/abs/2303.08774"))
+        let doiURL = try XCTUnwrap(URL(string: "https://doi.org/10.1145/3731715.3733394"))
+
+        XCTAssertTrue(coordinator.handleLinkActivation(arxivURL))
+        XCTAssertEqual(activatedURL, arxivURL)
+        XCTAssertFalse(coordinator.handleLinkActivation(doiURL))
+        XCTAssertEqual(activatedURL, arxivURL)
+
+        coordinator.onArxivLinkActivated = nil
+        XCTAssertFalse(coordinator.handleLinkActivation(arxivURL))
+    }
+
+    @MainActor
     func testTranslatedSidecarRecordAppearsWhenPartialDocumentGainsPage() throws {
         let futureRecord = makeHighlightRecord(pageIndex: 2)
         try annotationStore.save(
