@@ -66,8 +66,21 @@ struct BabelDocTranslationDiagnostics: Codable, Sendable, Equatable {
     var semanticFallbackCount: Int
     var continuationGroupCount: Int
 
+    /// A nonzero `failedCount` does not always mean that translation failed.
+    /// BabelDoc also reports formula-dense paragraphs that it deliberately leaves
+    /// untouched to protect their geometry as failed candidates. Those paragraphs
+    /// have no provider or placeholder-validation failures.
+    var hasActionableFailures: Bool {
+        failedCount > 0
+            && (providerFailureCount > 0 || placeholderValidationFailureCount > 0)
+    }
+
+    var safelyPreservedLayoutCount: Int {
+        failedCount > 0 && !hasActionableFailures ? failedCount : 0
+    }
+
     var isDegraded: Bool {
-        failedCount > 0 || translatedCount < candidateCount
+        hasActionableFailures
     }
 
     func merging(_ other: BabelDocTranslationDiagnostics) -> BabelDocTranslationDiagnostics {
@@ -588,11 +601,22 @@ struct BabelDocRunner {
             }
             if let translated = event.translationCompleted,
                let candidates = event.translationCandidates {
-                if let failed = event.translationFailed, failed > 0 {
+                let failed = event.translationFailed ?? max(candidates - translated, 0)
+                let hasActionableFailures = failed > 0
+                    && ((event.providerFailures ?? 0) > 0
+                        || (event.placeholderValidationFailures ?? 0) > 0)
+                if hasActionableFailures {
                     return AppLocalization.format(
                         "Translated %d/%d text blocks; %d failed and kept their original layout.",
                         translated,
                         candidates,
+                        failed
+                    )
+                }
+                if failed > 0 {
+                    return AppLocalization.format(
+                        "Translated text blocks: %d; formula-layout blocks safely preserved: %d.",
+                        translated,
                         failed
                     )
                 }

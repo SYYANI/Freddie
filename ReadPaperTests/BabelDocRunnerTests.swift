@@ -482,6 +482,38 @@ final class BabelDocRunnerTests: XCTestCase {
         XCTAssertEqual(try BabelDocRunner.readDiagnostics(for: outputPDF), diagnostics)
     }
 
+    func testSafelyPreservedFormulaLayoutDoesNotSurfaceAsTranslationFailure() throws {
+        let parser = BabelDocOutputParser(apiKey: "sk-secret")
+        let parsed = parser.consume(ProcessOutputEvent(
+            channel: .standardOutput,
+            text: """
+            \(BabelDocRunner.bridgeEventPrefix){"type":"translation_diagnostics","translation_candidates":193,"translation_completed":192,"translation_failed":1,"provider_failures":0,"placeholder_validation_failures":0}\n
+            """
+        ))
+        let diagnostics = try XCTUnwrap(parsed.diagnostics)
+
+        XCTAssertFalse(diagnostics.isDegraded)
+        XCTAssertFalse(diagnostics.hasActionableFailures)
+        XCTAssertEqual(diagnostics.safelyPreservedLayoutCount, 1)
+        XCTAssertEqual(
+            parsed.statusMessages,
+            ["Translated text blocks: 192; formula-layout blocks safely preserved: 1."]
+        )
+
+        let tempRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: tempRoot, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempRoot) }
+        let outputPDF = tempRoot.appendingPathComponent("translated.pdf")
+        try Data(
+            #"{"candidateCount":193,"continuationGroupCount":0,"failedCount":1,"placeholderValidationFailureCount":0,"providerFailureCount":0,"semanticFallbackCount":0,"semanticStatus":"notProvided","translatedCount":192}"#.utf8
+        ).write(to: BabelDocRunner.diagnosticsURL(for: outputPDF))
+
+        let restored = try BabelDocRunner.readDiagnostics(for: outputPDF)
+        XCTAssertFalse(restored.isDegraded)
+        XCTAssertEqual(restored.safelyPreservedLayoutCount, 1)
+    }
+
     func testDismissedDiagnosticsNoticeOnlySuppressesTheSameTranslationResult() throws {
         let suiteName = "PDFTranslationDiagnosticsNoticeStoreTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))

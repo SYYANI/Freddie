@@ -5141,6 +5141,22 @@
         }
       }
     },
+    "Translated text blocks: %d; formula-layout blocks safely preserved: %d." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Translated text blocks: %1$d; formula-layout blocks safely preserved: %2$d."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已翻译 %1$d 个文本块；为保护版面，安全保留了 %2$d 个公式布局块。"
+          }
+        }
+      }
+    },
     "Translated %d/%d text blocks." : {
       "localizations" : {
         "zh-Hans" : {
