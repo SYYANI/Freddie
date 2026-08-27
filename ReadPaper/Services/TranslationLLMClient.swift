@@ -33,6 +33,7 @@ struct TranslationLLMClient: TranslationLLMClientProtocol {
         let response = try await provider.complete(
             request: LLMCompletionRequest(
                 baseURL: baseURL,
+                apiStyle: route.apiStyle,
                 apiKey: apiKey,
                 model: route.modelName,
                 messages: [

@@ -6,6 +6,7 @@ struct LLMModelRouteSnapshot: Equatable, Sendable {
     var modelProfileID: UUID
     var modelProfileName: String
     var baseURL: String
+    var apiStyle: LLMAPIStyle
     var apiKeyRef: String
     var modelName: String
     var temperature: Double?
@@ -20,6 +21,7 @@ struct LLMModelRouteSnapshot: Equatable, Sendable {
         modelProfileID: UUID,
         modelProfileName: String,
         baseURL: String,
+        apiStyle: LLMAPIStyle = .chatCompletions,
         apiKeyRef: String,
         modelName: String,
         temperature: Double? = nil,
@@ -33,6 +35,7 @@ struct LLMModelRouteSnapshot: Equatable, Sendable {
         self.modelProfileID = modelProfileID
         self.modelProfileName = modelProfileName
         self.baseURL = baseURL
+        self.apiStyle = apiStyle
         self.apiKeyRef = apiKeyRef
         self.modelName = modelName
         self.temperature = temperature
@@ -51,6 +54,7 @@ struct LLMModelRouteSnapshot: Equatable, Sendable {
         let maxTokensIdentity = maxTokens.map { String($0) } ?? "default"
         return [
             "model=\(modelName)",
+            "api=\(apiStyle.rawValue)",
             "temperature=\(temperatureIdentity)",
             "topP=\(topPIdentity)",
             "maxTokens=\(maxTokensIdentity)",

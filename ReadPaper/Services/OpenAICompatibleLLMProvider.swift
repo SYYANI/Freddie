@@ -40,6 +40,7 @@ struct LLMNetworkTimeoutProfile: Equatable, Sendable {
 
 struct LLMCompletionRequest: Sendable {
     let baseURL: URL
+    let apiStyle: LLMAPIStyle
     let apiKey: String
     let model: String
     let messages: [LLMCompletionMessage]
@@ -52,6 +53,7 @@ struct LLMCompletionRequest: Sendable {
 
     init(
         baseURL: URL,
+        apiStyle: LLMAPIStyle = .chatCompletions,
         apiKey: String,
         model: String,
         messages: [LLMCompletionMessage],
@@ -63,6 +65,7 @@ struct LLMCompletionRequest: Sendable {
         timeoutProfile: LLMNetworkTimeoutProfile? = nil
     ) {
         self.baseURL = baseURL
+        self.apiStyle = apiStyle
         self.apiKey = apiKey
         self.model = model
         self.messages = messages
@@ -139,13 +142,14 @@ nonisolated struct OpenAICompatibleLLMProvider: Sendable {
         do {
             return try await performComplete(request: request, routePlan: primaryPlan)
         } catch let primaryError {
-            if let fallbackPlan = fallbackRoutePlanRemovingVersionIfNeeded(primaryPlan: primaryPlan, error: primaryError) {
+            if let fallbackPlan = fallbackRoutePlanTogglingV1IfNeeded(primaryPlan: primaryPlan, error: primaryError) {
                 do {
                     return try await performComplete(request: request, routePlan: fallbackPlan)
                 } catch let fallbackError {
                     throw mapError(
                         fallbackError,
                         baseURL: request.baseURL,
+                        apiStyle: request.apiStyle,
                         primaryPlan: primaryPlan,
                         fallbackPlanTried: fallbackPlan
                     )
@@ -155,6 +159,7 @@ nonisolated struct OpenAICompatibleLLMProvider: Sendable {
             throw mapError(
                 primaryError,
                 baseURL: request.baseURL,
+                apiStyle: request.apiStyle,
                 primaryPlan: primaryPlan,
                 fallbackPlanTried: nil
             )
@@ -179,7 +184,7 @@ nonisolated struct OpenAICompatibleLLMProvider: Sendable {
         let trimmedPath = rawPath.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
 
         var pathSegments = trimmedPath.isEmpty ? [] : trimmedPath.split(separator: "/").map(String.init)
-        var version: String? = "v1"
+        var version: String?
         if let lastSegment = pathSegments.last, isVersionSegment(lastSegment) {
             version = lastSegment
             pathSegments.removeLast()
@@ -200,7 +205,7 @@ nonisolated struct OpenAICompatibleLLMProvider: Sendable {
         )
     }
 
-    func inferredChatEndpoint(from routePlan: ServiceRoutePlan) -> String {
+    func inferredEndpoint(from routePlan: ServiceRoutePlan, apiStyle: LLMAPIStyle) -> String {
         guard var components = URLComponents(string: routePlan.overrideBaseURL) else {
             return "<invalid endpoint>"
         }
@@ -213,8 +218,13 @@ nonisolated struct OpenAICompatibleLLMProvider: Sendable {
         if let version = routePlan.version, version.isEmpty == false {
             segments.append(version)
         }
-        segments.append("chat")
-        segments.append("completions")
+        switch apiStyle {
+        case .chatCompletions:
+            segments.append("chat")
+            segments.append("completions")
+        case .responses:
+            segments.append("responses")
+        }
 
         components.path = "/" + segments.joined(separator: "/")
         components.query = nil
@@ -226,10 +236,10 @@ nonisolated struct OpenAICompatibleLLMProvider: Sendable {
         request: LLMCompletionRequest,
         routePlan: ServiceRoutePlan
     ) async throws -> LLMCompletionResponse {
-        guard let endpoint = URL(string: inferredChatEndpoint(from: routePlan)) else {
+        guard let endpoint = URL(string: inferredEndpoint(from: routePlan, apiStyle: request.apiStyle)) else {
             throw LLMProviderError.invalidConfiguration(
                 AppLocalization.format(
-                    "Invalid provider chat endpoint for base URL: %@",
+                    "Invalid provider endpoint for base URL: %@",
                     request.baseURL.absoluteString
                 )
             )
@@ -239,7 +249,12 @@ nonisolated struct OpenAICompatibleLLMProvider: Sendable {
         urlRequestBuilder.httpMethod = "POST"
         urlRequestBuilder.setValue("application/json", forHTTPHeaderField: "Content-Type")
         urlRequestBuilder.setValue("Bearer \(request.apiKey)", forHTTPHeaderField: "Authorization")
-        urlRequestBuilder.httpBody = try JSONEncoder().encode(LLMChatCompletionBody(request: request))
+        switch request.apiStyle {
+        case .chatCompletions:
+            urlRequestBuilder.httpBody = try JSONEncoder().encode(LLMChatCompletionBody(request: request))
+        case .responses:
+            urlRequestBuilder.httpBody = try JSONEncoder().encode(LLMResponsesBody(request: request))
+        }
         let urlRequest = urlRequestBuilder
 
         let session = makeURLSession(timeoutProfile: request.timeoutProfile)
@@ -256,11 +271,21 @@ nonisolated struct OpenAICompatibleLLMProvider: Sendable {
                 throw Self.apiError(data: data, statusCode: httpResponse.statusCode)
             }
 
-            let decoded = try JSONDecoder().decode(LLMChatCompletionResponseBody.self, from: data)
-            let text = decoded.choices?.first?.message?.content ?? ""
+            let text: String
+            switch request.apiStyle {
+            case .chatCompletions:
+                let decoded = try JSONDecoder().decode(LLMChatCompletionResponseBody.self, from: data)
+                text = decoded.choices?.first?.message?.content ?? ""
+            case .responses:
+                let decoded = try JSONDecoder().decode(LLMResponsesBody.self, from: data)
+                text = decoded.outputText
+            }
             return LLMCompletionResponse(
                 text: text,
-                resolvedEndpoint: makeResolvedEndpointSnapshot(from: routePlan)
+                resolvedEndpoint: makeResolvedEndpointSnapshot(
+                    from: routePlan,
+                    apiStyle: request.apiStyle
+                )
             )
         }
     }
@@ -283,8 +308,11 @@ nonisolated struct OpenAICompatibleLLMProvider: Sendable {
         return APIError.responseUnsuccessful(description: message, statusCode: statusCode)
     }
 
-    private func makeResolvedEndpointSnapshot(from routePlan: ServiceRoutePlan) -> LLMResolvedEndpoint? {
-        guard let endpoint = URL(string: inferredChatEndpoint(from: routePlan)) else {
+    private func makeResolvedEndpointSnapshot(
+        from routePlan: ServiceRoutePlan,
+        apiStyle: LLMAPIStyle
+    ) -> LLMResolvedEndpoint? {
+        guard let endpoint = URL(string: inferredEndpoint(from: routePlan, apiStyle: apiStyle)) else {
             return nil
         }
         let host = endpoint.host?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -333,6 +361,7 @@ nonisolated struct OpenAICompatibleLLMProvider: Sendable {
     private func mapError(
         _ error: Error,
         baseURL: URL,
+        apiStyle: LLMAPIStyle,
         primaryPlan: ServiceRoutePlan,
         fallbackPlanTried: ServiceRoutePlan?
     ) -> LLMProviderError {
@@ -355,10 +384,16 @@ nonisolated struct OpenAICompatibleLLMProvider: Sendable {
                     return .unauthorized
                 }
                 if statusCode == 404 {
-                    let primaryEndpoint = inferredChatEndpoint(from: primaryPlan)
+                    let primaryEndpoint = inferredEndpoint(
+                        from: primaryPlan,
+                        apiStyle: apiStyle
+                    )
                     let retryDetails: String
                     if let fallbackPlanTried {
-                        let fallbackEndpoint = inferredChatEndpoint(from: fallbackPlanTried)
+                        let fallbackEndpoint = inferredEndpoint(
+                            from: fallbackPlanTried,
+                            apiStyle: apiStyle
+                        )
                         retryDetails = AppLocalization.format(
                             " Retried with resolved endpoint %@.",
                             fallbackEndpoint
@@ -368,7 +403,7 @@ nonisolated struct OpenAICompatibleLLMProvider: Sendable {
                     }
                     return .network(
                         AppLocalization.format(
-                            "HTTP 404: endpoint not found. Current base URL is %@. Resolved endpoint is %@.%@ Expected OpenAI-compatible chat endpoint is usually '<baseURL>/chat/completions'.",
+                            "HTTP 404: endpoint not found. Current base URL is %@. Resolved endpoint is %@.%@ Check the selected API protocol and provider base URL.",
                             baseURL.absoluteString,
                             primaryEndpoint,
                             retryDetails
@@ -400,20 +435,24 @@ nonisolated struct OpenAICompatibleLLMProvider: Sendable {
         return .unknown(error.localizedDescription)
     }
 
-    private func fallbackRoutePlanRemovingVersionIfNeeded(
+    private func fallbackRoutePlanTogglingV1IfNeeded(
         primaryPlan: ServiceRoutePlan,
         error: Error
     ) -> ServiceRoutePlan? {
         guard isHTTP404(error) else {
             return nil
         }
-        guard (primaryPlan.version ?? "").lowercased() == "v1" else {
-            return nil
+        if (primaryPlan.version ?? "").lowercased() == "v1" {
+            return ServiceRoutePlan(
+                overrideBaseURL: primaryPlan.overrideBaseURL,
+                proxyPath: primaryPlan.proxyPath,
+                version: nil
+            )
         }
         return ServiceRoutePlan(
             overrideBaseURL: primaryPlan.overrideBaseURL,
             proxyPath: primaryPlan.proxyPath,
-            version: ""
+            version: "v1"
         )
     }
 
@@ -508,6 +547,75 @@ private struct LLMChatCompletionResponseBody: Decodable {
     }
 
     let choices: [Choice]?
+}
+
+private struct LLMResponsesBody: Codable {
+    struct InputMessage: Codable {
+        let role: String
+        let content: String
+    }
+
+    struct Reasoning: Codable {
+        let effort: String
+    }
+
+    struct OutputItem: Codable {
+        struct Content: Codable {
+            let type: String?
+            let text: String?
+        }
+
+        let type: String?
+        let content: [Content]?
+    }
+
+    let model: String?
+    let input: [InputMessage]?
+    let temperature: Double?
+    let topP: Double?
+    let maxOutputTokens: Int?
+    let reasoning: Reasoning?
+    let output: [OutputItem]?
+
+    init(request: LLMCompletionRequest) {
+        model = request.model
+        input = request.messages.map { InputMessage(role: $0.role, content: $0.content) }
+        temperature = request.temperature
+        topP = request.topP
+        maxOutputTokens = request.maxTokens
+        output = nil
+
+        switch request.thinkingMode {
+        case .disabled:
+            reasoning = Reasoning(effort: "none")
+        case .enabled:
+            reasoning = request.reasoningEffort.map { Reasoning(effort: $0.rawValue) }
+        case nil:
+            reasoning = request.reasoningEffort.map { Reasoning(effort: $0.rawValue) }
+        }
+    }
+
+    var outputText: String {
+        var texts: [String] = []
+        for item in output ?? [] where item.type == nil || item.type == "message" {
+            for content in item.content ?? [] where content.type == nil || content.type == "output_text" {
+                if let text = content.text, !text.isEmpty {
+                    texts.append(text)
+                }
+            }
+        }
+        return texts.joined(separator: "\n")
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case model
+        case input
+        case temperature
+        case topP = "top_p"
+        case maxOutputTokens = "max_output_tokens"
+        case reasoning
+        case output
+    }
 }
 
 private struct LLMAPIErrorResponseBody: Decodable {

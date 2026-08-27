@@ -48,6 +48,7 @@ struct LLMProviderValidationUseCase {
 
     func testConnection(
         baseURL: String,
+        apiStyle: LLMAPIStyle = .chatCompletions,
         apiKey: String,
         model: String,
         temperature: Double? = nil,
@@ -65,6 +66,7 @@ struct LLMProviderValidationUseCase {
 
         let request = LLMCompletionRequest(
             baseURL: try validateBaseURLAsURL(baseURL),
+            apiStyle: apiStyle,
             apiKey: validatedAPIKey,
             model: validatedModel,
             messages: [

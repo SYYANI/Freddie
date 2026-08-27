@@ -86,6 +86,7 @@ struct IPadContentView: View {
         }
         .onAppear {
             _ = try? LLMConfigurationBootstrapper().ensureBootstrap(modelContext: modelContext)
+            try? LLMDefaultProfileSeeder().ensureDefaults(modelContext: modelContext)
             restoreSelection()
         }
         .onChange(of: papers.map(\.id)) { _, _ in restoreSelection() }

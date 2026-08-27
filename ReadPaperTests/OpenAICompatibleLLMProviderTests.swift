@@ -180,6 +180,107 @@ final class OpenAICompatibleLLMProviderTests: XCTestCase {
         XCTAssertNil(json["reasoning_effort"])
     }
 
+    func testResponsesRequestUsesResponsesEndpointAndDecodesOutputText() async throws {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [MockURLProtocol.self]
+
+        MockURLProtocol.requestHandler = { request in
+            XCTAssertEqual(request.url?.path, "/v1/responses")
+            return (
+                HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: ["Content-Type": "application/json"])!,
+                Data(Self.responsesSuccessBody.utf8)
+            )
+        }
+
+        let provider = OpenAICompatibleLLMProvider(sessionConfigurationOverride: configuration)
+        let response = try await provider.complete(
+            request: LLMCompletionRequest(
+                baseURL: URL(string: "https://api.openai.com/v1")!,
+                apiStyle: .responses,
+                apiKey: "sk-test",
+                model: "gpt-5.6-terra",
+                messages: [
+                    LLMCompletionMessage(role: "system", content: "You are concise."),
+                    LLMCompletionMessage(role: "user", content: "Reply with exactly: ok")
+                ],
+                temperature: 0.2,
+                maxTokens: 128,
+                thinkingMode: .disabled,
+                timeoutProfile: .validation(timeoutSeconds: 10)
+            )
+        )
+
+        XCTAssertEqual(response.text, "ok")
+        XCTAssertEqual(response.resolvedEndpoint?.path, "/v1/responses")
+
+        let body = try XCTUnwrap(MockURLProtocol.requestBodies.last)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
+        XCTAssertEqual(json["model"] as? String, "gpt-5.6-terra")
+        XCTAssertEqual(json["max_output_tokens"] as? Int, 128)
+        XCTAssertEqual((json["reasoning"] as? [String: String])?["effort"], "none")
+        let input = try XCTUnwrap(json["input"] as? [[String: Any]])
+        XCTAssertEqual(input.map { $0["role"] as? String }, ["system", "user"])
+        XCTAssertEqual(input.map { $0["content"] as? String }, ["You are concise.", "Reply with exactly: ok"])
+        XCTAssertNil(json["messages"])
+    }
+
+    func testResponsesRootBaseURLDoesNotInsertV1() async throws {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [MockURLProtocol.self]
+
+        MockURLProtocol.requestHandler = { request in
+            XCTAssertEqual(request.url?.path, "/responses")
+            return (
+                HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: ["Content-Type": "application/json"])!,
+                Data(Self.responsesSuccessBody.utf8)
+            )
+        }
+
+        let provider = OpenAICompatibleLLMProvider(sessionConfigurationOverride: configuration)
+        _ = try await provider.complete(request: LLMCompletionRequest(
+            baseURL: URL(string: "https://api.deepseek.com")!,
+            apiStyle: .responses,
+            apiKey: "sk-test",
+            model: "deepseek-v4-flash",
+            messages: [LLMCompletionMessage(role: "user", content: "Hello")],
+            timeoutProfile: .validation(timeoutSeconds: 10)
+        ))
+
+        XCTAssertEqual(MockURLProtocol.requestPaths, ["/responses"])
+    }
+
+    func testResponsesRootBaseURLRetriesWithV1On404() async throws {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [MockURLProtocol.self]
+
+        MockURLProtocol.requestHandler = { request in
+            if request.url?.path == "/responses" {
+                return (
+                    HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 404, httpVersion: nil, headerFields: nil)!,
+                    Data("{}".utf8)
+                )
+            }
+            XCTAssertEqual(request.url?.path, "/v1/responses")
+            return (
+                HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: ["Content-Type": "application/json"])!,
+                Data(Self.responsesSuccessBody.utf8)
+            )
+        }
+
+        let provider = OpenAICompatibleLLMProvider(sessionConfigurationOverride: configuration)
+        let response = try await provider.complete(request: LLMCompletionRequest(
+            baseURL: URL(string: "https://api.example.com")!,
+            apiStyle: .responses,
+            apiKey: "sk-test",
+            model: "test-model",
+            messages: [LLMCompletionMessage(role: "user", content: "Hello")],
+            timeoutProfile: .validation(timeoutSeconds: 10)
+        ))
+
+        XCTAssertEqual(response.text, "ok")
+        XCTAssertEqual(MockURLProtocol.requestPaths, ["/responses", "/v1/responses"])
+    }
+
     private static let chatCompletionSuccessBody = """
     {
       "id": "chatcmpl-test",
@@ -201,6 +302,29 @@ final class OpenAICompatibleLLMProviderTests: XCTestCase {
         "completion_tokens": 1,
         "total_tokens": 2
       }
+    }
+    """
+
+    private static let responsesSuccessBody = """
+    {
+      "id": "resp-test",
+      "object": "response",
+      "status": "completed",
+      "model": "test-model",
+      "output": [
+        {
+          "type": "reasoning",
+          "id": "rs-test",
+          "content": [{"type": "reasoning_text", "text": "internal"}]
+        },
+        {
+          "type": "message",
+          "id": "msg-test",
+          "role": "assistant",
+          "status": "completed",
+          "content": [{"type": "output_text", "text": "ok"}]
+        }
+      ]
     }
     """
 }

@@ -32,6 +32,8 @@ It focuses on three practical reading workflows:
 - Xcode with Swift 6 support
 - `xcodegen`
 - `swift-readability` checked out at `./swift-readability`
+- `reWriteBabelDoc` checked out at `../reWriteBabelDoc`
+- `arxivLatex` checked out at `../arxivLatex`
 
 `create-dmg` is only needed if you want to build a distributable DMG locally.
 
@@ -65,8 +67,15 @@ open ReadPaper.xcodeproj
 Or build from the command line:
 
 ```sh
-xcodebuild -project ReadPaper.xcodeproj -scheme ReadPaper -destination 'platform=macOS' -derivedDataPath .DerivedData build
+./scripts/build
 ```
+
+The build script performs an unsigned Release build, verifies the embedded
+BabelDOC runtime and helper, and writes the app to
+`build/Release/Freddie.app`; compilation intermediates remain under
+`.DerivedData`, so the release directory contains only the app bundle. Run
+`./scripts/build --help` for Debug builds, custom output paths, optional
+XcodeGen project regeneration, and Xcode signing options.
 
 Run tests:
 

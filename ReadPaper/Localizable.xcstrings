@@ -183,6 +183,16 @@
         }
       }
     },
+    "A model profile points to one provider and stores the exact model name plus optional sampling parameters. You can create separate profiles for fast HTML translation and heavier PDF work." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "模型配置指向一个 Provider，并保存准确的模型名称和可选采样参数。你可以分别为快速 HTML 翻译和较重的 PDF 任务创建配置。"
+          }
+        }
+      }
+    },
     "Abstract" : {
       "localizations" : {
         "zh-Hans" : {
@@ -393,6 +403,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "API key 不能为空。"
+          }
+        }
+      }
+    },
+    "API keys are stored in Keychain. Leaving the API key field blank while editing keeps the saved key." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "API 密钥保存在钥匙串中。编辑时将 API 密钥留空会保留已保存的密钥。"
+          }
+        }
+      }
+    },
+    "API protocol" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "API 协议"
           }
         }
       }
@@ -770,6 +800,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "搭建你的本地论文书桌"
+          }
+        }
+      }
+    },
+    "Chat Completions" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chat Completions"
           }
         }
       }
@@ -1356,6 +1396,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "已恢复默认文摘模板。"
+          }
+        }
+      }
+    },
+    "Default OpenAI and DeepSeek model profiles are ready when their provider has a saved API key." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "保存对应 Provider 的 API 密钥后，即可使用默认的 OpenAI 和 DeepSeek 模型配置。"
           }
         }
       }
@@ -2274,6 +2324,16 @@
         }
       }
     },
+    "HTTP 404: endpoint not found. Current base URL is %@. Resolved endpoint is %@.%@ Check the selected API protocol and provider base URL." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "HTTP 404：未找到 endpoint。当前 Base URL 为 %1$@。解析后的 endpoint 为 %2$@。%3$@ 请检查所选 API 协议和 Provider Base URL。"
+          }
+        }
+      }
+    },
     "https://example.com/paper.html" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2528,6 +2588,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "无法为 Base URL 构建有效的聊天端点：%1$@"
+          }
+        }
+      }
+    },
+    "Invalid provider endpoint for base URL: %@" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法为 Base URL 构建有效的 Provider endpoint：%1$@"
           }
         }
       }
@@ -3349,6 +3419,26 @@
         }
       }
     },
+    "Open Providers, choose OpenAI or DeepSeek, and save an API key." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打开 Providers，选择 OpenAI 或 DeepSeek，然后保存 API 密钥。"
+          }
+        }
+      }
+    },
+    "OpenAI and DeepSeek are ready to use after you save an API key. You can also add custom providers and choose either the Responses API or Chat Completions." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "保存 API 密钥后即可使用 OpenAI 和 DeepSeek。你也可以添加自定义 Provider，并选择 Responses API 或 Chat Completions。"
+          }
+        }
+      }
+    },
     "Open Reader" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -4029,6 +4119,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "已移除 BabelDOC。"
+          }
+        }
+      }
+    },
+    "Responses API" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Responses API"
           }
         }
       }

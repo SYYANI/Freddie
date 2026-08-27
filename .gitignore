@@ -1,4 +1,5 @@
 .DerivedData
+build/
 .cache
 .home
 mercury

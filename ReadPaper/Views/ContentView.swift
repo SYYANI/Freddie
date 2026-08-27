@@ -199,7 +199,13 @@ struct ContentView: View {
     }
 
     private func ensureSettings() -> AppSettings? {
-        try? LLMConfigurationBootstrapper().ensureBootstrap(modelContext: modelContext)
+        do {
+            let settings = try LLMConfigurationBootstrapper().ensureBootstrap(modelContext: modelContext)
+            try LLMDefaultProfileSeeder().ensureDefaults(modelContext: modelContext)
+            return settings
+        } catch {
+            return nil
+        }
     }
 
     private func confirmDeletion(at offsets: IndexSet) {

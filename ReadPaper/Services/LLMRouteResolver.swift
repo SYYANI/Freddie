@@ -36,9 +36,14 @@ enum LLMRouteError: LocalizedError, Equatable {
 @MainActor
 struct LLMRouteResolver {
     let keychainStore: KeychainStore
+    let apiStyleStore: LLMProviderAPIStyleStore
 
-    init(keychainStore: KeychainStore = KeychainStore()) {
+    init(
+        keychainStore: KeychainStore = KeychainStore(),
+        apiStyleStore: LLMProviderAPIStyleStore = LLMProviderAPIStyleStore()
+    ) {
         self.keychainStore = keychainStore
+        self.apiStyleStore = apiStyleStore
     }
 
     func resolveHTMLRoute(
@@ -103,6 +108,7 @@ struct LLMRouteResolver {
                 modelProfileID: model.id,
                 modelProfileName: model.name,
                 baseURL: provider.baseURL,
+                apiStyle: apiStyleStore.apiStyle(for: provider.id),
                 apiKeyRef: provider.apiKeyRef,
                 modelName: model.modelName,
                 temperature: model.temperature,

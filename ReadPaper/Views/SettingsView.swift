@@ -71,6 +71,7 @@ struct SettingsView: View {
                 ProgressView()
                     .task {
                         _ = try? LLMConfigurationBootstrapper().ensureBootstrap(modelContext: modelContext)
+                        try? LLMDefaultProfileSeeder().ensureDefaults(modelContext: modelContext)
                     }
             }
         }
@@ -113,6 +114,7 @@ private struct SettingsForm: View {
     @State private var providerBaseURL = "https://api.openai.com/v1"
     @State private var providerAPIKey = ""
     @State private var providerTestModel = ""
+    @State private var providerAPIStyle: LLMAPIStyle = .chatCompletions
     @State private var providerEnabled = true
     @State private var providerHasStoredAPIKey = false
     @State private var providerStatusMessage: String?
@@ -149,6 +151,8 @@ private struct SettingsForm: View {
     @State private var detectedLaTeXInstallations: [ReadPaperLaTeXInstallation] = []
 
     private let keychainStore = KeychainStore()
+    private let apiStyleStore = LLMProviderAPIStyleStore()
+    private let defaultProfileDeletionStore = LLMDefaultProfileDeletionStore()
     private let validator = LLMProviderValidationUseCase()
 
     private var sortedProviders: [LLMProviderProfile] {
@@ -344,6 +348,7 @@ private struct SettingsForm: View {
         .formStyle(.grouped)
         .task {
             _ = try? LLMConfigurationBootstrapper().ensureBootstrap(modelContext: modelContext)
+            try? LLMDefaultProfileSeeder(apiStyleStore: apiStyleStore).ensureDefaults(modelContext: modelContext)
             loadInitialSelectionIfNeeded()
             refreshLaTeXInstallations()
             await refreshInstalledBabelDOCVersion()
@@ -355,10 +360,10 @@ private struct SettingsForm: View {
             applySelectedModel()
         }
         .onChange(of: providers.map(\.id)) { _, _ in
-            normalizeSelections()
+            loadInitialSelectionIfNeeded()
         }
         .onChange(of: models.map(\.id)) { _, _ in
-            normalizeSelections()
+            loadInitialSelectionIfNeeded()
         }
         .onChange(of: latexToolchainDirectoryPath) { _, _ in
             refreshLaTeXInstallations()
@@ -847,10 +852,10 @@ private struct SettingsForm: View {
     private var providerDetailPanel: some View {
         Form {
             Section(String(localized: "Providers", bundle: bundle)) {
-                Text("Create one provider for each OpenAI-compatible endpoint you want to use. The API key is stored in Keychain, so leaving the API key field blank while editing an existing provider keeps the saved key.", bundle: bundle)
+                Text("OpenAI and DeepSeek are ready to use after you save an API key. You can also add custom providers and choose either the Responses API or Chat Completions.", bundle: bundle)
                     .fixedSize(horizontal: false, vertical: true)
 
-                Text("For a typical setup, fill in the service base URL, paste the API key, set a lightweight test model, then click Save and Test.", bundle: bundle)
+                Text("API keys are stored in Keychain. Leaving the API key field blank while editing keeps the saved key.", bundle: bundle)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -862,6 +867,14 @@ private struct SettingsForm: View {
                 }
                 SettingsFieldRow(String(localized: "Base URL", bundle: bundle)) {
                     SettingsPlainTextField(text: $providerBaseURL)
+                }
+                SettingsFieldRow(String(localized: "API protocol", bundle: bundle)) {
+                    Picker(String(localized: "API protocol", bundle: bundle), selection: $providerAPIStyle) {
+                        ForEach(LLMAPIStyle.allCases, id: \.self) { style in
+                            Text(apiStyleLabel(style)).tag(style)
+                        }
+                    }
+                    .labelsHidden()
                 }
                 SettingsFieldRow(String(localized: "API key", bundle: bundle)) {
                     SettingsSecureTextField(text: $providerAPIKey, placeholder: providerAPIKeyPrompt)
@@ -950,7 +963,7 @@ private struct SettingsForm: View {
     private var modelDetailPanel: some View {
         Form {
             Section(String(localized: "Models", bundle: bundle)) {
-                Text("A model profile points to one provider and stores the exact chat model name plus optional sampling parameters. You can create separate profiles for fast HTML translation and heavier PDF work.", bundle: bundle)
+                Text("A model profile points to one provider and stores the exact model name plus optional sampling parameters. You can create separate profiles for fast HTML translation and heavier PDF work.", bundle: bundle)
                     .fixedSize(horizontal: false, vertical: true)
 
                 Text("Profile name is only for display inside ReadPaper. Model name must match the real model identifier accepted by your provider.", bundle: bundle)
@@ -1177,6 +1190,10 @@ private struct SettingsForm: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .textSelection(.enabled)
+
+            Text(apiStyleLabel(apiStyleStore.apiStyle(for: provider.id)))
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
         }
         .padding(.vertical, 4)
         .opacity(provider.isEnabled ? 1 : 0.68)
@@ -1233,7 +1250,7 @@ private struct SettingsForm: View {
                         configuredProviderCount,
                         configuredProviderCount == 1 ? "" : "s"
                     )
-                    : String(localized: "Open Providers, fill in the base URL, API key, and test model, then save and test it.", bundle: bundle),
+                    : String(localized: "Open Providers, choose OpenAI or DeepSeek, and save an API key.", bundle: bundle),
                 isComplete: configuredProviderCount > 0,
                 actionTitle: String(localized: "Open Providers", bundle: bundle),
                 targetTab: .providers
@@ -1247,7 +1264,7 @@ private struct SettingsForm: View {
                         readyModelCount,
                         readyModelCount == 1 ? "" : "s"
                     )
-                    : String(localized: "Create at least one enabled model profile and attach it to a provider with a saved API key.", bundle: bundle),
+                    : String(localized: "Default OpenAI and DeepSeek model profiles are ready when their provider has a saved API key.", bundle: bundle),
                 isComplete: readyModelCount > 0,
                 actionTitle: String(localized: "Open Models", bundle: bundle),
                 targetTab: .models
@@ -1391,6 +1408,7 @@ private struct SettingsForm: View {
         providerBaseURL = provider.baseURL
         providerAPIKey = ""
         providerTestModel = provider.testModel
+        providerAPIStyle = apiStyleStore.apiStyle(for: provider.id)
         providerEnabled = provider.isEnabled
         providerHasStoredAPIKey = hasStoredAPIKey(ref: provider.apiKeyRef)
         providerStatusMessage = nil
@@ -1426,6 +1444,7 @@ private struct SettingsForm: View {
         providerBaseURL = "https://api.openai.com/v1"
         providerAPIKey = ""
         providerTestModel = ""
+        providerAPIStyle = .chatCompletions
         providerEnabled = true
         providerHasStoredAPIKey = false
         providerStatusMessage = nil
@@ -1457,6 +1476,7 @@ private struct SettingsForm: View {
 
             let normalizedBaseURL = try validator.normalizedBaseURL(providerBaseURL)
             let normalizedTestModel = try validator.validateModelName(providerTestModel)
+            let normalizedAPIStyle = providerAPIStyle
             let now = Date()
 
             let provider: LLMProviderProfile
@@ -1482,6 +1502,7 @@ private struct SettingsForm: View {
             provider.testModel = normalizedTestModel
             provider.isEnabled = providerEnabled
             provider.modifiedAt = now
+            apiStyleStore.setAPIStyle(normalizedAPIStyle, for: provider.id)
 
             let trimmedAPIKey = providerAPIKey.trimmingCharacters(in: .whitespacesAndNewlines)
             if trimmedAPIKey.isEmpty == false {
@@ -1490,6 +1511,13 @@ private struct SettingsForm: View {
                 throw LLMProviderValidationError.emptyAPIKey
             }
 
+            LLMDefaultRouteActivator().selectRoutesIfNeeded(
+                for: provider.id,
+                settings: settings,
+                providers: providers.contains(where: { $0.id == provider.id }) ? providers : providers + [provider],
+                models: models,
+                hasStoredAPIKey: hasStoredAPIKey
+            )
             settings.modifiedAt = now
             try modelContext.save()
 
@@ -1505,8 +1533,11 @@ private struct SettingsForm: View {
 
     private func deleteSelectedProvider() {
         guard let provider = selectedProvider else { return }
+        let providerID = provider.id
+        let isBuiltInProvider = LLMDefaultProfiles.isBuiltInProvider(providerID)
 
         let relatedModelIDs = Set(models.filter { $0.providerID == provider.id }.map(\.id))
+        let relatedBuiltInModelIDs = relatedModelIDs.filter(LLMDefaultProfiles.isBuiltInModel)
         for model in models where relatedModelIDs.contains(model.id) {
             modelContext.delete(model)
         }
@@ -1517,10 +1548,17 @@ private struct SettingsForm: View {
             settings.selectedPDFModelProfileID = nil
         }
         modelContext.delete(provider)
+        apiStyleStore.removeAPIStyle(for: provider.id)
 
         do {
             settings.modifiedAt = Date()
             try modelContext.save()
+            if isBuiltInProvider {
+                defaultProfileDeletionStore.markProviderDeleted(providerID)
+            }
+            for modelID in relatedBuiltInModelIDs {
+                defaultProfileDeletionStore.markModelDeleted(modelID)
+            }
             resetProviderForm()
             if let selectedModelID, relatedModelIDs.contains(selectedModelID) {
                 resetModelForm()
@@ -1553,6 +1591,7 @@ private struct SettingsForm: View {
 
                 let result = try await validator.testConnection(
                     baseURL: providerBaseURL,
+                    apiStyle: providerAPIStyle,
                     apiKey: apiKey,
                     model: providerTestModel
                 )
@@ -1632,6 +1671,8 @@ private struct SettingsForm: View {
 
     private func deleteSelectedModel() {
         guard let model = selectedModel else { return }
+        let modelID = model.id
+        let isBuiltInModel = LLMDefaultProfiles.isBuiltInModel(modelID)
         if settings.selectedHTMLModelProfileID == model.id {
             settings.selectedHTMLModelProfileID = nil
         }
@@ -1643,6 +1684,9 @@ private struct SettingsForm: View {
         do {
             settings.modifiedAt = Date()
             try modelContext.save()
+            if isBuiltInModel {
+                defaultProfileDeletionStore.markModelDeleted(modelID)
+            }
             resetModelForm()
             modelStatusMessage = String(localized: "Model deleted.", bundle: bundle)
             modelOutputPreview = nil
@@ -1670,6 +1714,7 @@ private struct SettingsForm: View {
                 let apiKey = try loadStoredAPIKey(ref: provider.apiKeyRef)
                 let result = try await validator.testConnection(
                     baseURL: provider.baseURL,
+                    apiStyle: apiStyleStore.apiStyle(for: provider.id),
                     apiKey: apiKey,
                     model: modelIdentifier,
                     temperature: try parseOptionalDouble(modelTemperature, label: String(localized: "Temperature", bundle: bundle)),
@@ -1865,6 +1910,15 @@ private struct SettingsForm: View {
         let providerName = providers.first(where: { $0.id == model.providerID })?.name
             ?? String(localized: "Unknown Provider", bundle: bundle)
         return "\(providerName) / \(model.name)"
+    }
+
+    private func apiStyleLabel(_ style: LLMAPIStyle) -> String {
+        switch style {
+        case .responses:
+            return String(localized: "Responses API", bundle: bundle)
+        case .chatCompletions:
+            return String(localized: "Chat Completions", bundle: bundle)
+        }
     }
 
     private func thinkingModeLabel(_ mode: LLMThinkingMode) -> String {

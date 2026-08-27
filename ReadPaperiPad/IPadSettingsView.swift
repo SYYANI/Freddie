@@ -40,6 +40,7 @@ struct IPadSettingsView: View {
     @State private var providerBaseURL = "https://api.openai.com/v1"
     @State private var providerAPIKey = ""
     @State private var providerTestModel = ""
+    @State private var providerAPIStyle: LLMAPIStyle = .chatCompletions
     @State private var providerEnabled = true
     @State private var providerHasStoredAPIKey = false
     @State private var providerStatusMessage: String?
@@ -68,6 +69,8 @@ struct IPadSettingsView: View {
     @State private var embeddedRuntimeIsReady: Bool?
 
     private let keychainStore = KeychainStore()
+    private let apiStyleStore = LLMProviderAPIStyleStore()
+    private let defaultProfileDeletionStore = LLMDefaultProfileDeletionStore()
     private let validator = LLMProviderValidationUseCase()
 
     private var settings: AppSettings? { settingsRows.first }
@@ -143,6 +146,7 @@ struct IPadSettingsView: View {
                 ProgressView()
                     .task {
                         _ = try? LLMConfigurationBootstrapper().ensureBootstrap(modelContext: modelContext)
+                        try? LLMDefaultProfileSeeder().ensureDefaults(modelContext: modelContext)
                     }
             }
         }
@@ -155,13 +159,14 @@ struct IPadSettingsView: View {
         }
         .task {
             _ = try? LLMConfigurationBootstrapper().ensureBootstrap(modelContext: modelContext)
+            try? LLMDefaultProfileSeeder(apiStyleStore: apiStyleStore).ensureDefaults(modelContext: modelContext)
             loadInitialSelectionIfNeeded()
             embeddedRuntimeIsReady = (try? InProcessBabelDocRunner().embeddedRuntimeAssets()) != nil
         }
         .onChange(of: selectedProviderID) { _, _ in applySelectedProvider() }
         .onChange(of: selectedModelID) { _, _ in applySelectedModel() }
-        .onChange(of: providers.map(\.id)) { _, _ in normalizeSelections() }
-        .onChange(of: models.map(\.id)) { _, _ in normalizeSelections() }
+        .onChange(of: providers.map(\.id)) { _, _ in loadInitialSelectionIfNeeded() }
+        .onChange(of: models.map(\.id)) { _, _ in loadInitialSelectionIfNeeded() }
         .confirmationDialog(
             String(localized: "Delete", bundle: bundle),
             isPresented: $showsProviderDeleteConfirmation,
@@ -465,14 +470,14 @@ struct IPadSettingsView: View {
                 }
 
                 Text(
-                    "Create one provider for each OpenAI-compatible endpoint you want to use. The API key is stored in Keychain, so leaving the API key field blank while editing an existing provider keeps the saved key.",
+                    "OpenAI and DeepSeek are ready to use after you save an API key. You can also add custom providers and choose either the Responses API or Chat Completions.",
                     bundle: bundle
                 )
                 .font(.footnote)
                 .foregroundStyle(.secondary)
 
                 Text(
-                    "For a typical setup, fill in the service base URL, paste the API key, set a lightweight test model, then click Save and Test.",
+                    "API keys are stored in Keychain. Leaving the API key field blank while editing keeps the saved key.",
                     bundle: bundle
                 )
                 .font(.footnote)
@@ -485,6 +490,11 @@ struct IPadSettingsView: View {
                     .keyboardType(.URL)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
+                Picker(String(localized: "API protocol", bundle: bundle), selection: $providerAPIStyle) {
+                    ForEach(LLMAPIStyle.allCases, id: \.self) { style in
+                        Text(apiStyleLabel(style)).tag(style)
+                    }
+                }
                 SecureField(
                     providerHasStoredAPIKey
                         ? String(repeating: "•", count: 12)
@@ -557,7 +567,7 @@ struct IPadSettingsView: View {
                 }
 
                 Text(
-                    "A model profile points to one provider and stores the exact chat model name plus optional sampling parameters. You can create separate profiles for fast HTML translation and heavier PDF work.",
+                    "A model profile points to one provider and stores the exact model name plus optional sampling parameters. You can create separate profiles for fast HTML translation and heavier PDF work.",
                     bundle: bundle
                 )
                 .font(.footnote)
@@ -743,13 +753,13 @@ struct IPadSettingsView: View {
             VStack(alignment: .leading, spacing: 16) {
                 settingsDetailSection(title: String(localized: "Providers", bundle: bundle)) {
                     Text(
-                        "Create one provider for each OpenAI-compatible endpoint you want to use. The API key is stored in Keychain, so leaving the API key field blank while editing an existing provider keeps the saved key.",
+                        "OpenAI and DeepSeek are ready to use after you save an API key. You can also add custom providers and choose either the Responses API or Chat Completions.",
                         bundle: bundle
                     )
                     .fixedSize(horizontal: false, vertical: true)
 
                     Text(
-                        "For a typical setup, fill in the service base URL, paste the API key, set a lightweight test model, then click Save and Test.",
+                        "API keys are stored in Keychain. Leaving the API key field blank while editing keeps the saved key.",
                         bundle: bundle
                     )
                     .font(.footnote)
@@ -769,6 +779,16 @@ struct IPadSettingsView: View {
                             .keyboardType(.URL)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
+                    }
+
+                    settingsDetailField(String(localized: "API protocol", bundle: bundle)) {
+                        Picker(String(localized: "API protocol", bundle: bundle), selection: $providerAPIStyle) {
+                            ForEach(LLMAPIStyle.allCases, id: \.self) { style in
+                                Text(apiStyleLabel(style)).tag(style)
+                            }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.menu)
                     }
 
                     settingsDetailField(String(localized: "API key", bundle: bundle)) {
@@ -828,7 +848,7 @@ struct IPadSettingsView: View {
             VStack(alignment: .leading, spacing: 16) {
                 settingsDetailSection(title: String(localized: "Models", bundle: bundle)) {
                     Text(
-                        "A model profile points to one provider and stores the exact chat model name plus optional sampling parameters. You can create separate profiles for fast HTML translation and heavier PDF work.",
+                        "A model profile points to one provider and stores the exact model name plus optional sampling parameters. You can create separate profiles for fast HTML translation and heavier PDF work.",
                         bundle: bundle
                     )
                     .fixedSize(horizontal: false, vertical: true)
@@ -1107,6 +1127,10 @@ struct IPadSettingsView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
+
+            Text(apiStyleLabel(apiStyleStore.apiStyle(for: provider.id)))
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
         }
         .padding(.vertical, 4)
         .contentShape(Rectangle())
@@ -1274,6 +1298,7 @@ struct IPadSettingsView: View {
     }
 
     private func loadInitialSelectionIfNeeded() {
+        normalizeSelections()
         if selectedProviderID == nil { selectedProviderID = sortedProviders.first?.id }
         if selectedModelID == nil { selectedModelID = sortedModels.first?.id }
         if selectedProviderID == nil { resetProviderForm() } else { applySelectedProvider() }
@@ -1305,6 +1330,7 @@ struct IPadSettingsView: View {
         providerBaseURL = provider.baseURL
         providerAPIKey = ""
         providerTestModel = provider.testModel
+        providerAPIStyle = apiStyleStore.apiStyle(for: provider.id)
         providerEnabled = provider.isEnabled
         providerHasStoredAPIKey = hasStoredAPIKey(ref: provider.apiKeyRef)
         providerStatusMessage = nil
@@ -1340,6 +1366,7 @@ struct IPadSettingsView: View {
         providerBaseURL = "https://api.openai.com/v1"
         providerAPIKey = ""
         providerTestModel = ""
+        providerAPIStyle = .chatCompletions
         providerEnabled = true
         providerHasStoredAPIKey = false
         providerStatusMessage = nil
@@ -1370,6 +1397,7 @@ struct IPadSettingsView: View {
             }
             let normalizedBaseURL = try validator.normalizedBaseURL(providerBaseURL)
             let normalizedTestModel = try validator.validateModelName(providerTestModel)
+            let normalizedAPIStyle = providerAPIStyle
             let now = Date()
             let provider: LLMProviderProfile
 
@@ -1395,6 +1423,7 @@ struct IPadSettingsView: View {
             provider.testModel = normalizedTestModel
             provider.isEnabled = providerEnabled
             provider.modifiedAt = now
+            apiStyleStore.setAPIStyle(normalizedAPIStyle, for: provider.id)
 
             let trimmedAPIKey = providerAPIKey.trimmingCharacters(in: .whitespacesAndNewlines)
             if trimmedAPIKey.isEmpty == false {
@@ -1403,6 +1432,13 @@ struct IPadSettingsView: View {
                 throw LLMProviderValidationError.emptyAPIKey
             }
 
+            LLMDefaultRouteActivator().selectRoutesIfNeeded(
+                for: provider.id,
+                settings: settings,
+                providers: providers.contains(where: { $0.id == provider.id }) ? providers : providers + [provider],
+                models: models,
+                hasStoredAPIKey: hasStoredAPIKey
+            )
             settings.modifiedAt = now
             try modelContext.save()
             selectedProviderID = provider.id
@@ -1417,7 +1453,10 @@ struct IPadSettingsView: View {
 
     private func deleteSelectedProvider() {
         guard let settings, let provider = selectedProvider else { return }
+        let providerID = provider.id
+        let isBuiltInProvider = LLMDefaultProfiles.isBuiltInProvider(providerID)
         let relatedModelIDs = Set(models.filter { $0.providerID == provider.id }.map(\.id))
+        let relatedBuiltInModelIDs = relatedModelIDs.filter(LLMDefaultProfiles.isBuiltInModel)
         for model in models where relatedModelIDs.contains(model.id) {
             modelContext.delete(model)
         }
@@ -1428,10 +1467,17 @@ struct IPadSettingsView: View {
             settings.selectedPDFModelProfileID = nil
         }
         modelContext.delete(provider)
+        apiStyleStore.removeAPIStyle(for: provider.id)
 
         do {
             settings.modifiedAt = Date()
             try modelContext.save()
+            if isBuiltInProvider {
+                defaultProfileDeletionStore.markProviderDeleted(providerID)
+            }
+            for modelID in relatedBuiltInModelIDs {
+                defaultProfileDeletionStore.markModelDeleted(modelID)
+            }
             resetProviderForm()
             if let selectedModelID, relatedModelIDs.contains(selectedModelID) { resetModelForm() }
             providerStatusMessage = String(localized: "Provider deleted.", bundle: bundle)
@@ -1460,6 +1506,7 @@ struct IPadSettingsView: View {
 
                 let result = try await validator.testConnection(
                     baseURL: providerBaseURL,
+                    apiStyle: providerAPIStyle,
                     apiKey: apiKey,
                     model: providerTestModel
                 )
@@ -1531,6 +1578,8 @@ struct IPadSettingsView: View {
 
     private func deleteSelectedModel() {
         guard let settings, let model = selectedModel else { return }
+        let modelID = model.id
+        let isBuiltInModel = LLMDefaultProfiles.isBuiltInModel(modelID)
         if settings.selectedHTMLModelProfileID == model.id { settings.selectedHTMLModelProfileID = nil }
         if settings.selectedPDFModelProfileID == model.id { settings.selectedPDFModelProfileID = nil }
         modelContext.delete(model)
@@ -1538,6 +1587,9 @@ struct IPadSettingsView: View {
         do {
             settings.modifiedAt = Date()
             try modelContext.save()
+            if isBuiltInModel {
+                defaultProfileDeletionStore.markModelDeleted(modelID)
+            }
             resetModelForm()
             modelStatusMessage = String(localized: "Model deleted.", bundle: bundle)
         } catch {
@@ -1561,6 +1613,7 @@ struct IPadSettingsView: View {
                 }
                 let result = try await validator.testConnection(
                     baseURL: provider.baseURL,
+                    apiStyle: apiStyleStore.apiStyle(for: provider.id),
                     apiKey: try loadStoredAPIKey(ref: provider.apiKeyRef),
                     model: modelIdentifier,
                     temperature: try parseOptionalDouble(modelTemperature, label: String(localized: "Temperature", bundle: bundle)),
@@ -1602,6 +1655,15 @@ struct IPadSettingsView: View {
         let providerName = providers.first(where: { $0.id == model.providerID })?.name
             ?? String(localized: "Unknown Provider", bundle: bundle)
         return "\(providerName) / \(model.name)"
+    }
+
+    private func apiStyleLabel(_ style: LLMAPIStyle) -> String {
+        switch style {
+        case .responses:
+            return String(localized: "Responses API", bundle: bundle)
+        case .chatCompletions:
+            return String(localized: "Chat Completions", bundle: bundle)
+        }
     }
 
     private func thinkingModeLabel(_ mode: LLMThinkingMode) -> String {

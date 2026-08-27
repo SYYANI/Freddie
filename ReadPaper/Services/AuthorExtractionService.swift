@@ -109,6 +109,7 @@ struct AuthorExtractionService {
 
             let response = try await provider.complete(request: LLMCompletionRequest(
                 baseURL: baseURL,
+                apiStyle: route.snapshot.apiStyle,
                 apiKey: route.apiKey,
                 model: route.snapshot.modelName,
                 messages: [

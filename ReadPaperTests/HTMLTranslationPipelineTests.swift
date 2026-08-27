@@ -74,9 +74,10 @@ final class HTMLTranslationPipelineTests: XCTestCase {
         XCTAssertTrue(userPrompt.contains("<<<SOURCE_SEGMENT_TO_TRANSLATE>>>\nCurrent source"))
     }
 
-    func testPromptVersionIsPartOfRouteCacheIdentity() {
+    func testPromptVersionAndAPIStyleArePartOfRouteCacheIdentity() {
         let route = makeRoute(modelID: UUID(), providerID: UUID(), modelName: "paper-model")
         XCTAssertTrue(route.translationCacheIdentity.contains("prompt=\(AcademicTranslationPrompt.version)"))
+        XCTAssertTrue(route.translationCacheIdentity.contains("api=chat-completions"))
     }
 
     @MainActor

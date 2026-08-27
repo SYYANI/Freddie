@@ -7,6 +7,10 @@ final class LLMRouteResolverTests: XCTestCase {
     func testResolverReturnsIndependentHTMLAndPDFRoutes() throws {
         let service = "LLMRouteResolverTests.\(UUID().uuidString)"
         let keychainStore = KeychainStore(service: service)
+        let defaultsSuite = "LLMRouteResolverTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: defaultsSuite))
+        defer { defaults.removePersistentDomain(forName: defaultsSuite) }
+        let apiStyleStore = LLMProviderAPIStyleStore(userDefaults: defaults)
         let container = try makeContainer()
         let modelContext = ModelContext(container)
 
@@ -29,8 +33,12 @@ final class LLMRouteResolverTests: XCTestCase {
         modelContext.insert(settings)
         try modelContext.save()
         try keychainStore.save("sk-test", account: provider.apiKeyRef)
+        apiStyleStore.setAPIStyle(.responses, for: provider.id)
 
-        let resolver = LLMRouteResolver(keychainStore: keychainStore)
+        let resolver = LLMRouteResolver(
+            keychainStore: keychainStore,
+            apiStyleStore: apiStyleStore
+        )
         let htmlRoute = try resolver.resolveHTMLRoute(settings: settings, modelContext: modelContext)
         let pdfRoute = try resolver.resolvePDFRoute(settings: settings, modelContext: modelContext)
 
@@ -38,6 +46,8 @@ final class LLMRouteResolverTests: XCTestCase {
         XCTAssertEqual(pdfRoute.snapshot.modelProfileID, pdfModel.id)
         XCTAssertEqual(htmlRoute.apiKey, "sk-test")
         XCTAssertEqual(pdfRoute.apiKey, "sk-test")
+        XCTAssertEqual(htmlRoute.snapshot.apiStyle, .responses)
+        XCTAssertEqual(pdfRoute.snapshot.apiStyle, .responses)
     }
 
     @MainActor
