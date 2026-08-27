@@ -318,6 +318,30 @@ final class HTMLLocalizerTests: XCTestCase {
         XCTAssertEqual(try document.select("p").text(), "short")
         XCTAssertEqual(try document.select("a[href]").first()?.attr("href"), "https://example.com/note")
     }
+
+    func testRequiresBrowserRenderingForEmptyJavaScriptAppShell() {
+        let html = """
+        <!doctype html>
+        <html>
+        <head><script type="module" src="/assets/article.js"></script></head>
+        <body><div id="root"></div></body>
+        </html>
+        """
+
+        XCTAssertTrue(HTMLLocalizer().requiresBrowserRendering(html))
+    }
+
+    func testDoesNotRequireBrowserRenderingForStaticArticle() {
+        let paragraph = String(repeating: "This server-rendered article is already available. ", count: 4)
+        let html = """
+        <html>
+        <head><script src="/analytics.js"></script></head>
+        <body><article><p>\(paragraph)</p></article></body>
+        </html>
+        """
+
+        XCTAssertFalse(HTMLLocalizer().requiresBrowserRendering(html))
+    }
 }
 
 private final class MockHTMLLocalizerURLProtocol: URLProtocol {

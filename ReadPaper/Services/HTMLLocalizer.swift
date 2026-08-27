@@ -83,6 +83,27 @@ struct HTMLLocalizer: @unchecked Sendable {
         return readableDocument
     }
 
+    func requiresBrowserRendering(_ html: String) -> Bool {
+        guard let document = try? SwiftSoup.parse(html),
+              let body = document.body() else {
+            return false
+        }
+
+        let visibleText = ((try? body.text()) ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let externalScriptCount = (try? document.select("script[src]").count) ?? 0
+        return visibleText.count < 40 && externalScriptCount > 0
+    }
+
+    func shouldUseRenderedHTML(_ renderedHTML: String, insteadOf originalHTML: String) -> Bool {
+        visibleBodyTextLength(in: renderedHTML) >= 40 &&
+            visibleBodyTextLength(in: renderedHTML) > visibleBodyTextLength(in: originalHTML)
+    }
+
+    func hasMeaningfulHTMLContent(_ html: String) -> Bool {
+        visibleBodyTextLength(in: html) >= 40
+    }
+
     func rewriteCSS(_ css: String, baseURL: URL, resourcesDirectory: URL) async throws -> String {
         var rewritten = css
         let pattern = #"url\(([^)]+)\)"#
@@ -356,6 +377,16 @@ struct HTMLLocalizer: @unchecked Sendable {
             .components(separatedBy: .whitespacesAndNewlines)
             .filter { !$0.isEmpty }
             .joined(separator: " ")
+    }
+
+    private func visibleBodyTextLength(in html: String) -> Int {
+        guard let document = try? SwiftSoup.parse(html),
+              let body = document.body() else {
+            return 0
+        }
+        return ((try? body.text()) ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .count
     }
 
     private func reconcileCharsetDeclaration(in document: Document) throws {

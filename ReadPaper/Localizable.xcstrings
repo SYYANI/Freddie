@@ -174,6 +174,7 @@
       }
     },
     "A model profile points to one provider and stores the exact chat model name plus optional sampling parameters. You can create separate profiles for fast HTML translation and heavier PDF work." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -804,16 +805,6 @@
         }
       }
     },
-    "Chat Completions" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Chat Completions"
-          }
-        }
-      }
-    },
     "by %@" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -887,6 +878,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在取消..."
+          }
+        }
+      }
+    },
+    "Chat Completions" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chat Completions"
           }
         }
       }
@@ -1316,6 +1317,7 @@
       }
     },
     "Create one provider for each OpenAI-compatible endpoint you want to use. The API key is stored in Keychain, so leaving the API key field blank while editing an existing provider keeps the saved key." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -1401,6 +1403,7 @@
       }
     },
     "Default OpenAI and DeepSeek model profiles are ready when their provider has a saved API key." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -2019,6 +2022,7 @@
       }
     },
     "For a typical setup, fill in the service base URL, paste the API key, set a lightweight test model, then click Save and Test." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -2313,6 +2317,16 @@
         }
       }
     },
+    "HTTP 404: endpoint not found. Current base URL is %@. Resolved endpoint is %@.%@ Check the selected API protocol and provider base URL." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "HTTP 404：未找到 endpoint。当前 Base URL 为 %1$@。解析后的 endpoint 为 %2$@。%3$@ 请检查所选 API 协议和 Provider Base URL。"
+          }
+        }
+      }
+    },
     "HTTP 404: endpoint not found. Current base URL is %@. Resolved endpoint is %@.%@ Expected OpenAI-compatible chat endpoint is usually '<baseURL>/chat/completions'." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2320,16 +2334,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "HTTP 404：未找到 endpoint。当前 base URL 为 %1$@。解析后的 endpoint 为 %2$@。%3$@ OpenAI-compatible chat endpoint 通常应为 '<baseURL>/chat/completions'。"
-          }
-        }
-      }
-    },
-    "HTTP 404: endpoint not found. Current base URL is %@. Resolved endpoint is %@.%@ Check the selected API protocol and provider base URL." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "HTTP 404：未找到 endpoint。当前 Base URL 为 %1$@。解析后的 endpoint 为 %2$@。%3$@ 请检查所选 API 协议和 Provider Base URL。"
           }
         }
       }
@@ -2583,21 +2587,12 @@
       }
     },
     "Invalid provider chat endpoint for base URL: %@" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "无法为 Base URL 构建有效的聊天端点：%1$@"
-          }
-        }
-      }
-    },
-    "Invalid provider endpoint for base URL: %@" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "无法为 Base URL 构建有效的 Provider endpoint：%1$@"
           }
         }
       }
@@ -2609,6 +2604,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "无效的 provider 配置：%1$@"
+          }
+        }
+      }
+    },
+    "Invalid provider endpoint for base URL: %@" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法为 Base URL 构建有效的 Provider endpoint：%1$@"
           }
         }
       }
@@ -3408,6 +3413,17 @@
         }
       }
     },
+    "Open Providers, choose OpenAI or DeepSeek, and save an API key." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打开 Providers，选择 OpenAI 或 DeepSeek，然后保存 API 密钥。"
+          }
+        }
+      }
+    },
     "Open Providers, fill in the base URL, API key, and test model, then save and test it." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -3419,12 +3435,13 @@
         }
       }
     },
-    "Open Providers, choose OpenAI or DeepSeek, and save an API key." : {
+    "Open Reader" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "打开 Providers，选择 OpenAI 或 DeepSeek，然后保存 API 密钥。"
+            "value" : "打开 Reader"
           }
         }
       }
@@ -3435,17 +3452,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "保存 API 密钥后即可使用 OpenAI 和 DeepSeek。你也可以添加自定义 Provider，并选择 Responses API 或 Chat Completions。"
-          }
-        }
-      }
-    },
-    "Open Reader" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "打开 Reader"
           }
         }
       }
@@ -4123,16 +4129,6 @@
         }
       }
     },
-    "Responses API" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Responses API"
-          }
-        }
-      }
-    },
     "Removing BabelDOC..." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -4172,6 +4168,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "重置字号"
+          }
+        }
+      }
+    },
+    "Responses API" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Responses API"
           }
         }
       }
