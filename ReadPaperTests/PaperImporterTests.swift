@@ -110,7 +110,7 @@ final class PaperImporterTests: XCTestCase {
     }
 
     @MainActor
-    func testImportArxivReportsProgressAcrossFallbackHTMLImport() async throws {
+    func testImportArxivCanIncludeHTMLWhenExplicitlyEnabled() async throws {
         let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: rootURL) }
 
@@ -183,7 +183,11 @@ final class PaperImporterTests: XCTestCase {
         let modelContext = ModelContext(try makeContainer())
         var progressEvents: [ArxivImportProgress] = []
 
-        let paper = try await importer.importArxiv("2303.08774", modelContext: modelContext) { progress in
+        let paper = try await importer.importArxiv(
+            "2303.08774",
+            modelContext: modelContext,
+            includeHTML: true
+        ) { progress in
             progressEvents.append(progress)
         }
 
@@ -213,7 +217,7 @@ final class PaperImporterTests: XCTestCase {
     }
 
     @MainActor
-    func testImportArxivFallsBackToAbsPageWhenAPIIsRateLimited() async throws {
+    func testDefaultImportArxivDownloadsPDFOnlyWhenAPIFallsBackToAbsPage() async throws {
         let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: rootURL) }
 
@@ -269,10 +273,8 @@ final class PaperImporterTests: XCTestCase {
                 )
             case ("arxiv.org", "/html/2404.12365"),
                 ("ar5iv.labs.arxiv.org", "/html/2404.12365"):
-                return (
-                    HTTPURLResponse(url: url, statusCode: 500, httpVersion: nil, headerFields: ["Content-Type": "text/html"])!,
-                    Data("Internal Error".utf8)
-                )
+                XCTFail("Default arXiv import should not request HTML: \(url.absoluteString)")
+                throw URLError(.badURL)
             default:
                 XCTFail("Unexpected request: \(url.absoluteString)")
                 throw URLError(.badURL)
@@ -300,8 +302,6 @@ final class PaperImporterTests: XCTestCase {
                 .fetchingMetadata,
                 .creatingLibraryEntry,
                 .downloadingPDF,
-                .importingHTML,
-                .importingHTML,
                 .finalizing
             ]
         )
@@ -313,7 +313,8 @@ final class PaperImporterTests: XCTestCase {
         XCTAssertTrue(paper.abstractText.contains("We present FastFit"))
         XCTAssertEqual(paper.pdfURLString, "https://arxiv.org/pdf/2404.12365")
         XCTAssertEqual(paper.htmlURLString, "https://arxiv.org/abs/2404.12365")
-        XCTAssertEqual(progressEvents.last?.detail, "Saving the paper and PDF. HTML was unavailable, so the import will finish with PDF only.")
+        XCTAssertEqual(progressEvents.last?.stepLabel, "Step 5 of 5")
+        XCTAssertEqual(progressEvents.last?.detail, "Saving the paper metadata and PDF to your library.")
 
         let attachments = try modelContext.fetch(FetchDescriptor<PaperAttachment>())
         let attachment = try XCTUnwrap(attachments.first)

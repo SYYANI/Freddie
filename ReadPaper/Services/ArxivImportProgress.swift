@@ -9,8 +9,11 @@ struct ArxivImportProgress: Equatable {
         case importingHTML
         case finalizing
 
-        var stepNumber: Int {
-            rawValue + 1
+        func stepNumber(includesHTML: Bool) -> Int {
+            if self == .finalizing, !includesHTML {
+                return rawValue
+            }
+            return rawValue + 1
         }
     }
 
@@ -32,16 +35,17 @@ struct ArxivImportProgress: Equatable {
     let fractionCompleted: Double
     let title: String
     let detail: String?
+    let includesHTML: Bool
 
     var totalSteps: Int {
-        Stage.allCases.count
+        Stage.allCases.count - (includesHTML ? 0 : 1)
     }
 
     var stepLabel: String {
-        AppLocalization.format("Step %d of %d", stage.stepNumber, totalSteps)
+        AppLocalization.format("Step %d of %d", stage.stepNumber(includesHTML: includesHTML), totalSteps)
     }
 
-    static func resolvingInput(identifier: String? = nil) -> Self {
+    static func resolvingInput(identifier: String? = nil, includesHTML: Bool = false) -> Self {
         Self(
             stage: .resolvingInput,
             fractionCompleted: 0.08,
@@ -49,34 +53,38 @@ struct ArxivImportProgress: Equatable {
             detail: identifier.map {
                 AppLocalization.format("Normalized to %@ and checking whether it already exists in your library.", $0)
             }
-                ?? AppLocalization.localized("Normalizing the input and checking whether it already exists in your library.")
+                ?? AppLocalization.localized("Normalizing the input and checking whether it already exists in your library."),
+            includesHTML: includesHTML
         )
     }
 
-    static func fetchingMetadata(for identifier: String) -> Self {
+    static func fetchingMetadata(for identifier: String, includesHTML: Bool = false) -> Self {
         Self(
             stage: .fetchingMetadata,
             fractionCompleted: 0.22,
             title: AppLocalization.localized("Fetching metadata"),
-            detail: AppLocalization.format("Loading title, authors, abstract, and links for %@.", identifier)
+            detail: AppLocalization.format("Loading title, authors, abstract, and links for %@.", identifier),
+            includesHTML: includesHTML
         )
     }
 
-    static func creatingLibraryEntry(title: String) -> Self {
+    static func creatingLibraryEntry(title: String, includesHTML: Bool = false) -> Self {
         Self(
             stage: .creatingLibraryEntry,
             fractionCompleted: 0.38,
             title: AppLocalization.localized("Creating library entry"),
-            detail: AppLocalization.format("Preparing local storage for \"%@\".", title)
+            detail: AppLocalization.format("Preparing local storage for \"%@\".", title),
+            includesHTML: includesHTML
         )
     }
 
-    static func downloadingPDF(for identifier: String) -> Self {
+    static func downloadingPDF(for identifier: String, includesHTML: Bool = false) -> Self {
         Self(
             stage: .downloadingPDF,
             fractionCompleted: 0.56,
             title: AppLocalization.localized("Downloading PDF"),
-            detail: AppLocalization.format("Saving the source PDF for %@ to your local library.", identifier)
+            detail: AppLocalization.format("Saving the source PDF for %@ to your local library.", identifier),
+            includesHTML: includesHTML
         )
     }
 
@@ -87,18 +95,22 @@ struct ArxivImportProgress: Equatable {
             title: isFallback ? AppLocalization.localized("Trying backup HTML source") : AppLocalization.localized("Fetching reader HTML"),
             detail: isFallback
                 ? AppLocalization.format("The primary HTML source was unavailable, so ReadPaper is trying %@.", source.displayName)
-                : AppLocalization.format("Localizing the paper body from %@ for reading and translation.", source.displayName)
+                : AppLocalization.format("Localizing the paper body from %@ for reading and translation.", source.displayName),
+            includesHTML: true
         )
     }
 
-    static func finalizing(htmlImported: Bool) -> Self {
+    static func finalizing(htmlImported: Bool, includesHTML: Bool = false) -> Self {
         Self(
             stage: .finalizing,
             fractionCompleted: 0.92,
             title: AppLocalization.localized("Finalizing import"),
-            detail: htmlImported
-                ? AppLocalization.localized("Saving the paper, PDF, and localized HTML to your library.")
-                : AppLocalization.localized("Saving the paper and PDF. HTML was unavailable, so the import will finish with PDF only.")
+            detail: includesHTML
+                ? (htmlImported
+                    ? AppLocalization.localized("Saving the paper, PDF, and localized HTML to your library.")
+                    : AppLocalization.localized("Saving the paper and PDF. HTML was unavailable, so the import will finish with PDF only."))
+                : AppLocalization.localized("Saving the paper metadata and PDF to your library."),
+            includesHTML: includesHTML
         )
     }
 }

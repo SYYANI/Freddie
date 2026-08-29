@@ -29,19 +29,23 @@ final class PaperImporter {
     func importArxiv(
         _ rawValue: String,
         modelContext: ModelContext,
+        includeHTML: Bool = false,
         onProgress: ((ArxivImportProgress) -> Void)? = nil
     ) async throws -> Paper {
-        onProgress?(.resolvingInput())
+        onProgress?(.resolvingInput(includesHTML: includeHTML))
         let identifier = try ArxivClient.normalizeIdentifier(rawValue)
-        onProgress?(.resolvingInput(identifier: identifier.queryID))
+        onProgress?(.resolvingInput(identifier: identifier.queryID, includesHTML: includeHTML))
         let existingPapers = try modelContext.fetch(FetchDescriptor<Paper>())
         if let existing = existingPapers.first(where: { $0.arxivID == identifier.baseID }) {
             return existing
         }
 
-        onProgress?(.fetchingMetadata(for: identifier.queryID))
+        onProgress?(.fetchingMetadata(for: identifier.queryID, includesHTML: includeHTML))
         let metadata = try await arxivClient.fetchMetadata(for: rawValue)
-        onProgress?(.creatingLibraryEntry(title: metadata.title.isEmpty ? metadata.arxivID : metadata.title))
+        onProgress?(.creatingLibraryEntry(
+            title: metadata.title.isEmpty ? metadata.arxivID : metadata.title,
+            includesHTML: includeHTML
+        ))
         let paper = Paper(
             arxivID: metadata.arxivID,
             arxivVersion: metadata.arxivVersion,
@@ -58,7 +62,7 @@ final class PaperImporter {
         modelContext.insert(paper)
 
         if let pdfURL = metadata.pdfURL ?? URL(string: "https://arxiv.org/pdf/\(metadata.arxivID)") {
-            onProgress?(.downloadingPDF(for: metadata.arxivID))
+            onProgress?(.downloadingPDF(for: metadata.arxivID, includesHTML: includeHTML))
             let request = BrowserRequestHeaders.request(for: pdfURL, accept: .resource)
             let (data, response) = try await session.data(for: request)
             if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
@@ -74,12 +78,17 @@ final class PaperImporter {
             ))
         }
 
-        let htmlImported = await importArxivHTMLIfAvailable(
-            for: paper,
-            modelContext: modelContext,
-            onProgress: onProgress
-        )
-        onProgress?(.finalizing(htmlImported: htmlImported))
+        let htmlImported: Bool
+        if includeHTML {
+            htmlImported = await importArxivHTMLIfAvailable(
+                for: paper,
+                modelContext: modelContext,
+                onProgress: onProgress
+            )
+        } else {
+            htmlImported = false
+        }
+        onProgress?(.finalizing(htmlImported: htmlImported, includesHTML: includeHTML))
         try modelContext.save()
         AuthorExtractionService.extractAuthorsIfNeeded(for: paper, modelContext: modelContext)
         return paper

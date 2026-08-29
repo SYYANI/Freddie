@@ -225,6 +225,16 @@
         }
       }
     },
+    "Adds a localized HTML copy for HTML reading and translation. Import may take longer." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "同时保存本地化的 HTML 副本，用于 HTML 阅读和翻译；导入可能需要更长时间。"
+          }
+        }
+      }
+    },
     "Add an arXiv ID, an arXiv URL, or a local PDF from the library sidebar." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1617,6 +1627,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "下载 MacTeX"
+          }
+        }
+      }
+    },
+    "Download HTML version" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "下载 HTML 版本"
           }
         }
       }
@@ -4311,6 +4331,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在保存论文和 PDF。由于 HTML 不可用，此次导入将仅以 PDF 完成。"
+          }
+        }
+      }
+    },
+    "Saving the paper metadata and PDF to your library." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在将论文元数据和 PDF 保存到你的资料库。"
           }
         }
       }
