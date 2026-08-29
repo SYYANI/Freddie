@@ -396,10 +396,6 @@ private struct SettingsForm: View {
                         }
                     }
                     .pickerStyle(.menu)
-
-                    Text("Choose whether ReadPaper follows the macOS language setting or always uses English or Simplified Chinese.", bundle: bundle)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
                 }
 
                 Section(String(localized: "Translation", bundle: bundle)) {
@@ -828,6 +824,10 @@ private struct SettingsForm: View {
                 ForEach(sortedProviders, id: \.id) { provider in
                     providerListRow(provider)
                         .tag(Optional(provider.id))
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            selectedProviderID = provider.id
+                        }
                 }
             }
             .listStyle(.inset(alternatesRowBackgrounds: false))
@@ -939,6 +939,10 @@ private struct SettingsForm: View {
                 ForEach(sortedModels, id: \.id) { model in
                     modelListRow(model)
                         .tag(Optional(model.id))
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            selectedModelID = model.id
+                        }
                 }
             }
             .listStyle(.inset(alternatesRowBackgrounds: false))
@@ -1152,16 +1156,20 @@ private struct SettingsForm: View {
                 Spacer(minLength: 0)
             }
             .buttonStyle(.borderless)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
+            .frame(height: 28)
+            .padding(.horizontal, 8)
             .background(Color(nsColor: .windowBackgroundColor).opacity(0.65))
         }
         .background(panelBackground)
-        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(Color(nsColor: .separatorColor), lineWidth: 0.5)
+        }
     }
 
     private var panelBackground: some View {
-        RoundedRectangle(cornerRadius: 8, style: .continuous)
+        RoundedRectangle(cornerRadius: 10, style: .continuous)
             .fill(Color(nsColor: .controlBackgroundColor))
     }
 

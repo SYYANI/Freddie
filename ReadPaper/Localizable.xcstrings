@@ -1097,16 +1097,6 @@
         }
       }
     },
-    "Choose whether ReadPaper follows the macOS language setting or always uses English or Simplified Chinese." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "选择 ReadPaper 是跟随 macOS 语言设置，还是始终使用英文或简体中文。"
-          }
-        }
-      }
-    },
     "Choose which model powers HTML translation and which model is used by BabelDOC/PDF translation." : {
       "extractionState" : "stale",
       "localizations" : {

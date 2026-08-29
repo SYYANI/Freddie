@@ -10,34 +10,47 @@ struct LibrarySidebarView: View {
     var onDeletePaper: (Paper) -> Void
 
     var body: some View {
-        VStack(spacing: 0) {
-            if papers.isEmpty {
-                ContentUnavailableView {
-                    Label {
-                        Text("No papers yet", bundle: bundle)
-                    } icon: {
-                        Image(systemName: "doc.text.magnifyingglass")
+        ZStack {
+            // The detail column sits underneath the floating sidebar on macOS 26.
+            // Keep this in the sidebar's content layer so reader surfaces cannot
+            // be composited above it.
+            Color(nsColor: .windowBackgroundColor)
+                .ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                if papers.isEmpty {
+                    ContentUnavailableView {
+                        Label {
+                            Text("No papers yet", bundle: bundle)
+                        } icon: {
+                            Image(systemName: "doc.text.magnifyingglass")
+                        }
+                    } description: {
+                        Text("Add an arXiv ID, arXiv URL, web page URL, or a local PDF. Before using translation, open Settings and save at least one LLM provider API key and model profile.", bundle: bundle)
+                    } actions: {
+                        emptyStateActions
                     }
-                } description: {
-                    Text("Add an arXiv ID, arXiv URL, web page URL, or a local PDF. Before using translation, open Settings and save at least one LLM provider API key and model profile.", bundle: bundle)
-                } actions: {
-                    emptyStateActions
-                }
-                .padding()
-            } else {
-                List(selection: $selectedPaperID) {
-                    ForEach(papers) { paper in
-                        PaperRowView(paper: paper)
-                            .tag(paper.id)
-                            .contextMenu {
-                                Button(role: .destructive) {
-                                    onDeletePaper(paper)
-                                } label: {
-                                    Label(String(localized: "Delete Paper", bundle: bundle), systemImage: "trash")
+                    .padding()
+                } else {
+                    List(selection: $selectedPaperID) {
+                        ForEach(papers) { paper in
+                            PaperRowView(paper: paper)
+                                .tag(paper.id)
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    selectedPaperID = paper.id
                                 }
-                            }
+                                .contextMenu {
+                                    Button(role: .destructive) {
+                                        onDeletePaper(paper)
+                                    } label: {
+                                        Label(String(localized: "Delete Paper", bundle: bundle), systemImage: "trash")
+                                    }
+                                }
+                        }
+                        .onDelete(perform: onDeleteOffsets)
                     }
-                    .onDelete(perform: onDeleteOffsets)
+                    .listStyle(.sidebar)
                 }
             }
         }

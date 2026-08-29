@@ -91,10 +91,13 @@ struct PDFDisplaySurface<Content: View>: View {
     var body: some View {
         content()
             .background(appearance.surfaceColor)
-            .compositingGroup()
             .overlay {
                 overlay
             }
+            // Keep difference/multiply blending local to the reader. Otherwise
+            // the overlay can blend with macOS 26's floating sidebar backdrop.
+            .compositingGroup()
+            .clipped()
     }
 
     @ViewBuilder

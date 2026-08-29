@@ -30,15 +30,21 @@ struct AddPaperSheet: View {
                     text: $arxivInput
                 )
                     .textFieldStyle(.roundedBorder)
-                Toggle(isOn: $includeArxivHTML) {
+                HStack(alignment: .center, spacing: 12) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Download HTML version", bundle: bundle)
                         Text("Adds a localized HTML copy for HTML reading and translation. Import may take longer.", bundle: bundle)
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
+                    Spacer(minLength: 12)
+
+                    Toggle("", isOn: $includeArxivHTML)
+                        .labelsHidden()
+                        .toggleStyle(.switch)
                 }
-                .toggleStyle(.switch)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 4)
                 .disabled(isImporting)
                 Button(String(localized: "Import from arXiv", bundle: bundle)) {
                     importArxiv()
