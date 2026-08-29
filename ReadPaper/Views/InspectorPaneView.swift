@@ -782,6 +782,7 @@ private struct InsetTextView: NSViewRepresentable {
         coordinator.stopOutsideClickMonitoring()
     }
 
+    @MainActor
     final class Coordinator: NSObject, NSTextViewDelegate {
         @Binding private var text: String
         private let onFocusApplied: () -> Void
@@ -791,7 +792,7 @@ private struct InsetTextView: NSViewRepresentable {
         private var isFocusScheduled = false
         private var focusGeneration = 0
         weak var hostScrollView: NSScrollView?
-        private var outsideClickMonitor: Any?
+        nonisolated(unsafe) private var outsideClickMonitor: Any?
 
         init(
             text: Binding<String>,
@@ -871,21 +872,24 @@ private struct InsetTextView: NSViewRepresentable {
             outsideClickMonitor = NSEvent.addLocalMonitorForEvents(
                 matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]
             ) { [weak self] event in
-                guard let self,
-                      let scrollView = self.hostScrollView,
-                      let window = scrollView.window,
-                      event.window === window else {
-                    return event
-                }
-
+                let eventWindowNumber = event.windowNumber
                 let pointInWindow = event.locationInWindow
-                let pointInScrollView = scrollView.convert(pointInWindow, from: nil)
-                let isInsideEditor = scrollView.bounds.contains(pointInScrollView)
 
-                if !isInsideEditor {
-                    window.makeFirstResponder(nil)
+                MainActor.assumeIsolated {
+                    guard let self,
+                          let scrollView = self.hostScrollView,
+                          let window = scrollView.window,
+                          eventWindowNumber == window.windowNumber else {
+                        return
+                    }
+
+                    let pointInScrollView = scrollView.convert(pointInWindow, from: nil)
+                    let isInsideEditor = scrollView.bounds.contains(pointInScrollView)
+
+                    if !isInsideEditor {
+                        window.makeFirstResponder(nil)
+                    }
                 }
-
                 return event
             }
         }
@@ -898,7 +902,9 @@ private struct InsetTextView: NSViewRepresentable {
         }
 
         deinit {
-            stopOutsideClickMonitoring()
+            if let outsideClickMonitor {
+                NSEvent.removeMonitor(outsideClickMonitor)
+            }
         }
     }
 }

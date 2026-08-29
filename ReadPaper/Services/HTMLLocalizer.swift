@@ -405,7 +405,7 @@ struct HTMLLocalizer: @unchecked Sendable {
         if let head = document.head() {
             let charsetMeta = try document.createElement("meta")
             try charsetMeta.attr("charset", "UTF-8")
-            let existingMetaTags = try head.children().array()
+            let existingMetaTags = head.children().array()
             if let firstMeta = existingMetaTags.first(where: { $0.tagName() == "meta" }) {
                 try firstMeta.before(charsetMeta.outerHtml())
             } else if let firstChild = existingMetaTags.first {
