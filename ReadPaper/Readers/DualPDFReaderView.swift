@@ -168,7 +168,7 @@ struct DualPDFReaderView: View {
             .font(.caption.weight(.semibold))
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6))
+            .readPaperGlassEffect(in: RoundedRectangle(cornerRadius: 6, style: .continuous))
             .padding(8)
     }
 

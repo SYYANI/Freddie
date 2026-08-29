@@ -36,7 +36,7 @@ struct InspectorPaneView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(Color(nsColor: .windowBackgroundColor))
+        .readPaperInspectorBackground()
         .onAppear {
             syncMetadataEditorState(with: paper)
         }
@@ -85,9 +85,6 @@ struct InspectorPaneView: View {
 
     private var expandedInspectorPane: some View {
         VStack(spacing: 0) {
-            paneHeader
-            Divider()
-
             Group {
                 if let paper {
                     ScrollView {
@@ -105,37 +102,8 @@ struct InspectorPaneView: View {
         }
     }
 
-    private var paneHeader: some View {
-        HStack(spacing: 12) {
-            Text("INSPECTOR", bundle: bundle)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-                .tracking(1.1)
-
-            if paper == nil {
-                Text("Paper details, abstract, and notes", bundle: bundle)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            } else {
-                Text("Metadata, abstract, and notes", bundle: bundle)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-
-            Spacer(minLength: 0)
-        }
-        .frame(minHeight: 20)
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .background(Color(nsColor: .windowBackgroundColor))
-    }
-
     private func metadataSection(_ paper: Paper) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Metadata", bundle: bundle)
-                .font(.headline)
             Text(paper.title)
                 .font(.title3.weight(.semibold))
                 .textSelection(.enabled)

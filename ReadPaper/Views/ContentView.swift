@@ -58,53 +58,91 @@ struct ContentView: View {
         )
     }
 
-    var body: some View {
-        NavigationSplitView {
-            LibrarySidebarView(
-                papers: papers,
-                selectedPaper: selectedPaper,
-                selectedPaperID: $selectedPaperID,
-                isAddingPaper: $isAddingPaper,
-                onDeleteOffsets: confirmDeletion(at:),
-                onDeletePaper: requestDeletion(of:)
-            )
-            .navigationSplitViewColumnWidth(min: 240, ideal: 260, max: 340)
-            .overlay(alignment: .trailing) {
+    private var inspectorPresentedBinding: Binding<Bool> {
+        Binding(
+            get: { !isInspectorCollapsed },
+            set: { inspectorCollapsedBinding.wrappedValue = !$0 }
+        )
+    }
+
+    private var sidebarColumn: some View {
+        LibrarySidebarView(
+            papers: papers,
+            selectedPaper: selectedPaper,
+            selectedPaperID: $selectedPaperID,
+            isAddingPaper: $isAddingPaper,
+            onDeleteOffsets: confirmDeletion(at:),
+            onDeletePaper: requestDeletion(of:)
+        )
+        .navigationSplitViewColumnWidth(min: 240, ideal: 260, max: 340)
+        .overlay(alignment: .trailing) {
+            if #unavailable(macOS 26.0) {
                 StableNavigationSplitDividerHandle()
                     .frame(width: 8)
                     .accessibilityHidden(true)
             }
-        } content: {
-            ReaderPaneView(
-                paper: selectedPaper,
-                attachments: attachments.filter { $0.paperID == selectedPaper?.id },
-                notes: notes.filter { $0.paperID == selectedPaper?.id },
-                settings: settings,
-                readerMode: $readerMode,
-                displayMode: $displayMode,
-                isInspectorCollapsed: inspectorCollapsedBinding,
-                noteSelectionContext: $noteSelectionContext,
-                noteNavigationRequest: $noteNavigationRequest,
-                onCreateAnchoredNote: createNoteFromCurrentSelection,
-                onArxivLinkActivated: handleArxivLinkActivation
-            )
-            .navigationSplitViewColumnWidth(min: 520, ideal: 760)
-        } detail: {
-            InspectorPaneView(
-                paper: selectedPaper,
-                notes: notes.filter { $0.paperID == selectedPaper?.id },
-                isCollapsed: isInspectorCollapsed,
-                currentSelectionContext: noteSelectionContext,
-                focusedNoteID: $focusedNoteID,
-                onCreateNote: createNoteFromCurrentSelection,
-                onOpenNoteAnchor: openNoteAnchor
-            )
-            .navigationSplitViewColumnWidth(
-                min: isInspectorCollapsed ? 0 : 280,
-                ideal: isInspectorCollapsed ? 0 : 340,
-                max: isInspectorCollapsed ? 0 : 420
-            )
         }
+    }
+
+    private var readerColumn: some View {
+        ReaderPaneView(
+            paper: selectedPaper,
+            attachments: attachments.filter { $0.paperID == selectedPaper?.id },
+            notes: notes.filter { $0.paperID == selectedPaper?.id },
+            settings: settings,
+            readerMode: $readerMode,
+            displayMode: $displayMode,
+            isInspectorCollapsed: inspectorCollapsedBinding,
+            noteSelectionContext: $noteSelectionContext,
+            noteNavigationRequest: $noteNavigationRequest,
+            onCreateAnchoredNote: createNoteFromCurrentSelection,
+            onArxivLinkActivated: handleArxivLinkActivation
+        )
+        .navigationSplitViewColumnWidth(min: 520, ideal: 760)
+    }
+
+    private func inspectorColumn(isCollapsed: Bool) -> some View {
+        InspectorPaneView(
+            paper: selectedPaper,
+            notes: notes.filter { $0.paperID == selectedPaper?.id },
+            isCollapsed: isCollapsed,
+            currentSelectionContext: noteSelectionContext,
+            focusedNoteID: $focusedNoteID,
+            onCreateNote: createNoteFromCurrentSelection,
+            onOpenNoteAnchor: openNoteAnchor
+        )
+    }
+
+    @ViewBuilder
+    private var mainNavigation: some View {
+        if #available(macOS 26.0, *) {
+            NavigationSplitView {
+                sidebarColumn
+            } detail: {
+                readerColumn
+                    .inspector(isPresented: inspectorPresentedBinding) {
+                        inspectorColumn(isCollapsed: false)
+                            .inspectorColumnWidth(min: 280, ideal: 340, max: 420)
+                    }
+            }
+        } else {
+            NavigationSplitView {
+                sidebarColumn
+            } content: {
+                readerColumn
+            } detail: {
+                inspectorColumn(isCollapsed: isInspectorCollapsed)
+                    .navigationSplitViewColumnWidth(
+                        min: isInspectorCollapsed ? 0 : 280,
+                        ideal: isInspectorCollapsed ? 0 : 340,
+                        max: isInspectorCollapsed ? 0 : 420
+                    )
+            }
+        }
+    }
+
+    var body: some View {
+        mainNavigation
         .sheet(isPresented: $isAddingPaper) {
             AddPaperSheet(isPresented: $isAddingPaper, selectedPaperID: $selectedPaperID)
                 .frame(width: 520)

@@ -21,31 +21,7 @@ struct LibrarySidebarView: View {
                 } description: {
                     Text("Add an arXiv ID, arXiv URL, web page URL, or a local PDF. Before using translation, open Settings and save at least one LLM provider API key and model profile.", bundle: bundle)
                 } actions: {
-                    HStack(spacing: 0) {
-                        SettingsLink {
-                            emptyStateActionLabel(String(localized: "Settings", bundle: bundle), systemImage: "gearshape")
-                        }
-                        .buttonStyle(.plain)
-
-                        Divider()
-                            .frame(height: 18)
-
-                        Button {
-                            isAddingPaper = true
-                        } label: {
-                            emptyStateActionLabel(String(localized: "First Paper", bundle: bundle), systemImage: "plus")
-                        }
-                        .buttonStyle(.plain)
-                    }
-                    .background(
-                        RoundedRectangle(cornerRadius: 9, style: .continuous)
-                            .fill(Color(nsColor: .controlBackgroundColor))
-                    )
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 9, style: .continuous)
-                            .strokeBorder(Color.primary.opacity(0.08))
-                    }
-                    .frame(minWidth: 280)
+                    emptyStateActions
                 }
                 .padding()
             } else {
@@ -75,6 +51,10 @@ struct LibrarySidebarView: View {
                 }
             }
 
+            if #available(macOS 26.0, *) {
+                ToolbarSpacer(.fixed)
+            }
+
             ToolbarItem {
                 Button(role: .destructive) {
                     guard let selectedPaper else { return }
@@ -84,6 +64,54 @@ struct LibrarySidebarView: View {
                 }
                 .disabled(selectedPaper == nil)
             }
+        }
+    }
+
+    @ViewBuilder
+    private var emptyStateActions: some View {
+        if #available(macOS 26.0, *) {
+            ReadPaperGlassEffectContainer(spacing: 8) {
+                HStack(spacing: 8) {
+                    SettingsLink {
+                        emptyStateActionLabel(String(localized: "Settings", bundle: bundle), systemImage: "gearshape")
+                    }
+                    .readPaperGlassButtonStyle()
+
+                    Button {
+                        isAddingPaper = true
+                    } label: {
+                        emptyStateActionLabel(String(localized: "First Paper", bundle: bundle), systemImage: "plus")
+                    }
+                    .readPaperGlassButtonStyle(prominent: true)
+                }
+            }
+            .frame(minWidth: 280)
+        } else {
+            HStack(spacing: 0) {
+                SettingsLink {
+                    emptyStateActionLabel(String(localized: "Settings", bundle: bundle), systemImage: "gearshape")
+                }
+                .buttonStyle(.plain)
+
+                Divider()
+                    .frame(height: 18)
+
+                Button {
+                    isAddingPaper = true
+                } label: {
+                    emptyStateActionLabel(String(localized: "First Paper", bundle: bundle), systemImage: "plus")
+                }
+                .buttonStyle(.plain)
+            }
+            .background(
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .fill(Color(nsColor: .controlBackgroundColor))
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .strokeBorder(Color.primary.opacity(0.08))
+            }
+            .frame(minWidth: 280)
         }
     }
 }

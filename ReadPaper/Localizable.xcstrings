@@ -2950,6 +2950,7 @@
       }
     },
     "Metadata, abstract, and notes" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -3509,6 +3510,7 @@
       }
     },
     "Paper details, abstract, and notes" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -4023,6 +4025,7 @@
       }
     },
     "READER" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {

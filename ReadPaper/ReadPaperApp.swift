@@ -1,8 +1,12 @@
+import AppKit
 import SwiftData
 import SwiftUI
 
 @main
 struct ReadPaperApp: App {
+    @NSApplicationDelegateAdaptor(ReadPaperApplicationDelegate.self)
+    private var applicationDelegate
+
     private let sharedModelContainer: ModelContainer
 
     init() {
@@ -37,6 +41,20 @@ struct ReadPaperApp: App {
                 .modelContainer(sharedModelContainer)
                 .frame(width: 920, height: 720)
         }
+    }
+}
+
+private final class ReadPaperApplicationDelegate: NSObject, NSApplicationDelegate {
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        guard #unavailable(macOS 26.0) else {
+            return
+        }
+
+        guard let icon = NSImage(named: "LegacyAppIcon") else {
+            return
+        }
+
+        NSApplication.shared.applicationIconImage = icon
     }
 }
 

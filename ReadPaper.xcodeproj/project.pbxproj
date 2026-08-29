@@ -11,6 +11,7 @@
 		02EC751E02B0B56BC03B1326 /* DualPDFPageIndexSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEE226283E8433A4B2395468 /* DualPDFPageIndexSync.swift */; };
 		0379005A013F0B80E16DE77E /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 6430BCDDD5126C2478477D4B /* Assets.xcassets */; };
 		03CDFDC549AB8AA1570B20E1 /* HTMLTranslationPipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30444FC979F813B5B76B4726 /* HTMLTranslationPipeline.swift */; };
+		043D2391C05C58225171B98A /* LiquidGlassStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86A0B3222D26D3E011AC790A /* LiquidGlassStyle.swift */; };
 		06EBC879C1BD1F12F4B5F1D2 /* OpenAICompatibleLLMProviderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBA58435DCA0AF5A28A23115 /* OpenAICompatibleLLMProviderTests.swift */; };
 		06FF9EE63AC39F6DB1C926CA /* ToolInstallState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 817802100CC82AF9E893032F /* ToolInstallState.swift */; };
 		08266A40E5E94F7FE0E805A1 /* Note.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81666A1EE76A077C9CDB5FE7 /* Note.swift */; };
@@ -252,6 +253,7 @@
 		7BEEBF714C87EB1F35CEAA54 /* Freddie.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Freddie.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		7D81E9697498069EC2F633A5 /* LibrarySidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibrarySidebarView.swift; sourceTree = "<group>"; };
 		7E083AAB214008E4FF489EC9 /* PaperSelectionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaperSelectionStore.swift; sourceTree = "<group>"; };
+		86A0B3222D26D3E011AC790A /* LiquidGlassStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiquidGlassStyle.swift; sourceTree = "<group>"; };
 		8039BE637474B04E1F1BC128 /* TranslationSegment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslationSegment.swift; sourceTree = "<group>"; };
 		809B4B8993526B9CB85F7CDB /* BabelDocSemanticHintService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BabelDocSemanticHintService.swift; sourceTree = "<group>"; };
 		81666A1EE76A077C9CDB5FE7 /* Note.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Note.swift; sourceTree = "<group>"; };
@@ -419,6 +421,7 @@
 				E0F1DEEFF5B77D9A4472738A /* ContentView.swift */,
 				3E5B1B3F81B9307F629924D1 /* InspectorPaneView.swift */,
 				7D81E9697498069EC2F633A5 /* LibrarySidebarView.swift */,
+				86A0B3222D26D3E011AC790A /* LiquidGlassStyle.swift */,
 				72E527A1CB9BF6F7422C42BA /* NoteMarkdownPreview.swift */,
 				15605D44878CFDBFBF883E0F /* ReaderPaneView.swift */,
 				585E60D2D3441D8A764523FD /* SettingsView.swift */,
@@ -957,6 +960,7 @@
 				232F284192F5BD23F23A23A9 /* LaTeXTranslationService.swift in Sources */,
 				156629ACBCAA0DFDC06D4F5C /* LanguageManager.swift in Sources */,
 				A88C29934E8FE196990CAD61 /* LibrarySidebarView.swift in Sources */,
+				043D2391C05C58225171B98A /* LiquidGlassStyle.swift in Sources */,
 				D24C62A4F3063599D4B2803A /* Note.swift in Sources */,
 				39BDFACE0145666CF83BBDA3 /* NoteAnchor.swift in Sources */,
 				BEBF197F4257357F15F0BCF7 /* NoteMarkdownPreview.swift in Sources */,

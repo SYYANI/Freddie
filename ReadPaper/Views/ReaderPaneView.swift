@@ -377,12 +377,7 @@ struct ReaderPaneView: View {
     }
 
     private var paneHeader: some View {
-        HStack(spacing: 12) {
-            Text("READER", bundle: bundle)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-                .tracking(1.1)
-
+        HStack {
             if let paper {
                 Text(paper.title)
                     .font(.subheadline.weight(.medium))
@@ -1919,29 +1914,31 @@ struct ReaderPaneView: View {
         let lastPage = translatedPDFAttachment?.translatedLastPage ?? 0
         let total = originalPDFPageCount ?? 0
         let nextEnd = min(lastPage + pdfTranslationBatchSize, total)
-        return HStack(spacing: 8) {
-            Text(AppLocalization.format("Translated pages 1–%@ of %@.", "\(lastPage)", "\(total)"))
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            Spacer(minLength: 0)
-            Button {
-                extendPDFTranslation()
-            } label: {
-                Text(AppLocalization.format("Translate pages %@–%@", "\(lastPage + 1)", "\(nextEnd)"))
+        return ReadPaperGlassEffectContainer(spacing: 8) {
+            HStack(spacing: 8) {
+                Text(AppLocalization.format("Translated pages 1–%@ of %@.", "\(lastPage)", "\(total)"))
                     .font(.caption)
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-
-            if nextEnd < total {
+                    .foregroundStyle(.secondary)
+                Spacer(minLength: 0)
                 Button {
-                    extendPDFTranslation(to: total)
+                    extendPDFTranslation()
                 } label: {
-                    Text("Translate All", bundle: bundle)
+                    Text(AppLocalization.format("Translate pages %@–%@", "\(lastPage + 1)", "\(nextEnd)"))
                         .font(.caption)
                 }
-                .buttonStyle(.bordered)
+                .readPaperGlassButtonStyle(prominent: true)
                 .controlSize(.small)
+
+                if nextEnd < total {
+                    Button {
+                        extendPDFTranslation(to: total)
+                    } label: {
+                        Text("Translate All", bundle: bundle)
+                            .font(.caption)
+                    }
+                    .readPaperGlassButtonStyle()
+                    .controlSize(.small)
+                }
             }
         }
         .padding(.horizontal, 12)
@@ -2133,7 +2130,7 @@ struct ReaderPaneView: View {
             .font(.caption.weight(.semibold))
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6))
+            .readPaperGlassEffect(in: RoundedRectangle(cornerRadius: 6, style: .continuous))
             .padding(8)
     }
 
