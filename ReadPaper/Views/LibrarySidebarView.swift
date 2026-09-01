@@ -20,7 +20,7 @@ struct LibrarySidebarView: View {
             // The detail column sits underneath the floating sidebar on macOS 26.
             // Keep this in the sidebar's content layer so reader surfaces cannot
             // be composited above it.
-            ReadPaperAppearanceSurface(role: .library, textureOpacity: 0.52)
+            sidebarBackground
                 .ignoresSafeArea()
 
             VStack(spacing: 0) {
@@ -57,7 +57,7 @@ struct LibrarySidebarView: View {
                         .onDelete(perform: onDeleteOffsets)
                     }
                     .listStyle(.sidebar)
-                    .modifier(PaperListBackgroundModifier(isPaperAppearance: isPaperAppearance))
+                    .modifier(SidebarListBackgroundModifier())
                 }
             }
         }
@@ -84,6 +84,17 @@ struct LibrarySidebarView: View {
                 }
                 .disabled(selectedPaper == nil)
             }
+        }
+    }
+
+    @ViewBuilder
+    private var sidebarBackground: some View {
+        if isPaperAppearance {
+            ReadPaperAppearanceSurface(role: .library, textureOpacity: 0.52)
+        } else {
+            Color.clear
+                .accessibilityHidden(true)
+                .allowsHitTesting(false)
         }
     }
 
@@ -136,16 +147,9 @@ struct LibrarySidebarView: View {
     }
 }
 
-private struct PaperListBackgroundModifier: ViewModifier {
-    var isPaperAppearance: Bool
-
-    @ViewBuilder
+private struct SidebarListBackgroundModifier: ViewModifier {
     func body(content: Content) -> some View {
-        if isPaperAppearance {
-            content.scrollContentBackground(.hidden)
-        } else {
-            content
-        }
+        content.scrollContentBackground(.hidden)
     }
 }
 
