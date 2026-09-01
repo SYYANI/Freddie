@@ -118,26 +118,16 @@ private extension PDFDisplayAppearance {
             """
         case .paper:
             return """
-            :root { color-scheme: light; }
+            :root { color-scheme: light dark; }
             html,
             body {
-                background: #f4ecd9 !important;
+                background: transparent !important;
             }
             body {
                 color: #2b261f !important;
             }
-            html[data-rp-reader-appearance='paper']::before {
-                content: "";
-                position: fixed;
-                inset: 0;
-                pointer-events: none;
-                z-index: 2147483647;
-                background: linear-gradient(180deg, #fff8e8 0%, #e8dcc0 100%);
-                mix-blend-mode: multiply;
-                opacity: 0.32;
-            }
             body.rp-readability-body {
-                background: #f4ecd9 !important;
+                background: transparent !important;
             }
             body.rp-readability-body .rp-readability-shell,
             body.rp-readability-body .rp-readability-header,
@@ -152,6 +142,7 @@ private extension PDFDisplayAppearance {
             body.rp-readability-body .rp-readability-content h5,
             body.rp-readability-body .rp-readability-content h6 {
                 color: #211b14 !important;
+                font-family: "New York", "Iowan Old Style", "Songti SC", "STSong", Georgia, serif !important;
             }
             body.rp-readability-body .rp-readability-byline,
             body.rp-readability-body .rp-readability-excerpt {
@@ -195,8 +186,57 @@ private extension PDFDisplayAppearance {
                 background: rgba(36, 83, 61, 0.10) !important;
             }
             body:not(.rp-readability-body) {
-                background: #f4ecd9 !important;
+                background: transparent !important;
                 color: #2b261f !important;
+            }
+            @media (prefers-color-scheme: dark) {
+                body,
+                body.rp-readability-body .rp-readability-shell,
+                body.rp-readability-body .rp-readability-header,
+                body.rp-readability-body .rp-readability-content,
+                body:not(.rp-readability-body) {
+                    color: #e4ded1 !important;
+                }
+                body.rp-readability-body .rp-readability-title,
+                body.rp-readability-body .rp-readability-content h1,
+                body.rp-readability-body .rp-readability-content h2,
+                body.rp-readability-body .rp-readability-content h3,
+                body.rp-readability-body .rp-readability-content h4,
+                body.rp-readability-body .rp-readability-content h5,
+                body.rp-readability-body .rp-readability-content h6 {
+                    color: #f5efe4 !important;
+                }
+                body.rp-readability-body .rp-readability-byline,
+                body.rp-readability-body .rp-readability-excerpt {
+                    color: #aaa397 !important;
+                }
+                body.rp-readability-body .rp-readability-content a,
+                body:not(.rp-readability-body) a {
+                    color: #9fc9ff !important;
+                }
+                body.rp-readability-body .rp-translation-block,
+                body:not(.rp-readability-body) .rp-translation-block {
+                    color: #9fd3aa !important;
+                }
+                body.rp-readability-body code,
+                body.rp-readability-body pre {
+                    background: rgba(255, 255, 255, 0.08) !important;
+                    color: #f1eadc !important;
+                }
+                body.rp-readability-body blockquote {
+                    border-color: rgba(232, 227, 215, 0.28) !important;
+                    color: #d5cec2 !important;
+                }
+                body.rp-readability-body table,
+                body.rp-readability-body th,
+                body.rp-readability-body td {
+                    border-color: rgba(232, 227, 215, 0.24) !important;
+                }
+                body.rp-readability-body .rp-note-anchor-target,
+                body:not(.rp-readability-body) .rp-note-anchor-target {
+                    outline-color: rgba(159, 211, 170, 0.52) !important;
+                    background: rgba(159, 211, 170, 0.14) !important;
+                }
             }
             """
         }
@@ -310,11 +350,22 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
     private func applyHostDisplayAppearance(_ appearance: PDFDisplayAppearance, to webView: WKWebView) {
         #if os(macOS)
         webView.wantsLayer = true
-        webView.layer?.backgroundColor = appearance.htmlReaderBackgroundColor.cgColor
+        let usesTransparentPaper = appearance == .paper
+        webView.setValue(!usesTransparentPaper, forKey: "drawsBackground")
+        webView.layer?.backgroundColor = usesTransparentPaper
+            ? NSColor.clear.cgColor
+            : appearance.htmlReaderBackgroundColor.cgColor
+        if #available(macOS 12.0, *) {
+            webView.underPageBackgroundColor = usesTransparentPaper
+                ? .clear
+                : appearance.htmlReaderBackgroundColor
+        }
+        webView.enclosingScrollView?.drawsBackground = !usesTransparentPaper
         #else
-        webView.isOpaque = true
-        webView.backgroundColor = appearance.htmlReaderBackgroundColor
-        webView.scrollView.backgroundColor = appearance.htmlReaderBackgroundColor
+        let usesTransparentPaper = appearance == .paper
+        webView.isOpaque = !usesTransparentPaper
+        webView.backgroundColor = usesTransparentPaper ? .clear : appearance.htmlReaderBackgroundColor
+        webView.scrollView.backgroundColor = usesTransparentPaper ? .clear : appearance.htmlReaderBackgroundColor
         #endif
     }
 

@@ -53,13 +53,30 @@ extension View {
         }
     }
 
-    /// Navigation containers supply their own background on macOS 26.
-    @ViewBuilder
     func readPaperInspectorBackground() -> some View {
-        if #available(macOS 26.0, *) {
-            self
+        modifier(ReadPaperInspectorBackgroundModifier())
+    }
+}
+
+private struct ReadPaperInspectorBackgroundModifier: ViewModifier {
+    @AppStorage(PDFDisplayAppearance.userDefaultsKey)
+    private var displayAppearanceRawValue = PDFDisplayAppearance.defaultValue.rawValue
+
+    private var isPaperAppearance: Bool {
+        PDFDisplayAppearance.resolve(rawValue: displayAppearanceRawValue) == .paper
+    }
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if isPaperAppearance {
+            content.background {
+                ReadPaperSurface(role: .inspector, textureOpacity: 0.62)
+                    .ignoresSafeArea()
+            }
+        } else if #available(macOS 26.0, *) {
+            content
         } else {
-            background(Color(nsColor: .windowBackgroundColor))
+            content.background(Color(nsColor: .windowBackgroundColor))
         }
     }
 }

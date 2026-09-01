@@ -1,0 +1,308 @@
+import AppKit
+import SwiftUI
+
+enum ReadPaperSurfaceRole {
+    case library
+    case reader
+    case inspector
+}
+
+enum ReadPaperTheme {
+    static func surfaceColor(_ role: ReadPaperSurfaceRole, scheme: ColorScheme) -> Color {
+        switch (role, scheme) {
+        case (.library, .light):
+            Color(red: 0.918, green: 0.910, blue: 0.884)
+        case (.reader, .light):
+            Color(red: 0.965, green: 0.949, blue: 0.906)
+        case (.inspector, .light):
+            Color(red: 0.944, green: 0.931, blue: 0.895)
+        case (.library, .dark):
+            Color(red: 0.138, green: 0.133, blue: 0.120)
+        case (.reader, .dark):
+            Color(red: 0.105, green: 0.102, blue: 0.092)
+        case (.inspector, .dark):
+            Color(red: 0.122, green: 0.118, blue: 0.106)
+        @unknown default:
+            Color(nsColor: .windowBackgroundColor)
+        }
+    }
+
+    static func accentColor(scheme: ColorScheme) -> Color {
+        scheme == .dark
+            ? Color(red: 0.620, green: 0.686, blue: 0.569)
+            : Color(red: 0.373, green: 0.451, blue: 0.333)
+    }
+
+    static func grainColor(scheme: ColorScheme) -> Color {
+        scheme == .dark ? .white.opacity(0.028) : .black.opacity(0.026)
+    }
+
+    static func fiberColor(scheme: ColorScheme) -> Color {
+        scheme == .dark
+            ? Color(red: 0.72, green: 0.68, blue: 0.58).opacity(0.032)
+            : Color(red: 0.42, green: 0.36, blue: 0.26).opacity(0.035)
+    }
+}
+
+enum PaperTextureMetrics {
+    static func dotCount(for size: CGSize) -> Int {
+        let area = max(1, size.width * size.height)
+        return min(720, max(90, Int(area / 2_000)))
+    }
+
+    static func fiberCount(for height: CGFloat) -> Int {
+        min(24, max(8, Int(height / 70)))
+    }
+
+    static func unit(_ value: Int, modulus: Int) -> CGFloat {
+        CGFloat(abs(value % modulus)) / CGFloat(modulus)
+    }
+}
+
+struct ReadPaperSurface: View {
+    var role: ReadPaperSurfaceRole
+    var textureOpacity = 1.0
+
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        ZStack {
+            ReadPaperTheme.surfaceColor(role, scheme: colorScheme)
+            ReadPaperTextureOverlay(role: role, textureOpacity: textureOpacity)
+        }
+        .accessibilityHidden(true)
+        .allowsHitTesting(false)
+    }
+}
+
+struct ReadPaperAppearanceSurface: View {
+    var role: ReadPaperSurfaceRole
+    var textureOpacity = 1.0
+
+    @AppStorage(PDFDisplayAppearance.userDefaultsKey)
+    private var displayAppearanceRawValue = PDFDisplayAppearance.defaultValue.rawValue
+
+    @ViewBuilder
+    var body: some View {
+        if PDFDisplayAppearance.resolve(rawValue: displayAppearanceRawValue) == .paper {
+            ReadPaperSurface(role: role, textureOpacity: textureOpacity)
+        } else {
+            Color(nsColor: .windowBackgroundColor)
+                .accessibilityHidden(true)
+                .allowsHitTesting(false)
+        }
+    }
+}
+
+struct ReadPaperTextureOverlay: View {
+    var role: ReadPaperSurfaceRole
+    var textureOpacity = 1.0
+
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        ZStack {
+            LinearGradient(
+                colors: colorScheme == .dark
+                    ? [.white.opacity(0.018), .clear, .black.opacity(0.035)]
+                    : [
+                        .white.opacity(role == .reader ? 0.22 : 0.14),
+                        .clear,
+                        Color(red: 0.64, green: 0.34, blue: 0.24).opacity(0.018)
+                    ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            ReadPaperGrain(opacity: textureOpacity)
+        }
+        .accessibilityHidden(true)
+        .allowsHitTesting(false)
+    }
+}
+
+struct ReadPaperHeaderSurface: View {
+    var role: ReadPaperSurfaceRole
+
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        ZStack {
+            Rectangle().fill(.ultraThinMaterial)
+            ReadPaperTheme.surfaceColor(role, scheme: colorScheme)
+                .opacity(colorScheme == .dark ? 0.80 : 0.86)
+            ReadPaperGrain(opacity: 0.42)
+        }
+        .accessibilityHidden(true)
+        .allowsHitTesting(false)
+    }
+}
+
+struct ReadPaperAppearanceHeaderSurface: View {
+    var role: ReadPaperSurfaceRole
+
+    @AppStorage(PDFDisplayAppearance.userDefaultsKey)
+    private var displayAppearanceRawValue = PDFDisplayAppearance.defaultValue.rawValue
+
+    @ViewBuilder
+    var body: some View {
+        if PDFDisplayAppearance.resolve(rawValue: displayAppearanceRawValue) == .paper {
+            ReadPaperHeaderSurface(role: role)
+        } else {
+            Color(nsColor: .windowBackgroundColor)
+                .accessibilityHidden(true)
+                .allowsHitTesting(false)
+        }
+    }
+}
+
+private struct ReadPaperGrain: View {
+    var opacity: Double
+
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        Canvas(opaque: false, rendersAsynchronously: true) { context, size in
+            let grain = ReadPaperTheme.grainColor(scheme: colorScheme)
+            let fiber = ReadPaperTheme.fiberColor(scheme: colorScheme)
+
+            for index in 0..<PaperTextureMetrics.dotCount(for: size) {
+                let x = PaperTextureMetrics.unit(index &* 83 &+ 17, modulus: 997) * size.width
+                let y = PaperTextureMetrics.unit(index &* 191 &+ 43, modulus: 991) * size.height
+                let diameter = 0.38 + PaperTextureMetrics.unit(index &* 47 &+ 11, modulus: 89) * 0.72
+                context.fill(
+                    Path(ellipseIn: CGRect(x: x, y: y, width: diameter, height: diameter)),
+                    with: .color(grain)
+                )
+            }
+
+            for index in 0..<PaperTextureMetrics.fiberCount(for: size.height) {
+                let y = PaperTextureMetrics.unit(index &* 127 &+ 31, modulus: 983) * size.height
+                let length = 24 + PaperTextureMetrics.unit(index &* 53 &+ 7, modulus: 97) * 72
+                let x = PaperTextureMetrics.unit(index &* 211 &+ 13, modulus: 977) * max(1, size.width - length)
+                var path = Path()
+                path.move(to: CGPoint(x: x, y: y))
+                path.addCurve(
+                    to: CGPoint(x: x + length, y: y + 0.5),
+                    control1: CGPoint(x: x + length * 0.32, y: y - 0.7),
+                    control2: CGPoint(x: x + length * 0.68, y: y + 0.9)
+                )
+                context.stroke(path, with: .color(fiber), lineWidth: 0.42)
+            }
+        }
+        .opacity(opacity)
+    }
+}
+
+struct ReadPaperWindowChrome: NSViewRepresentable {
+    var colorScheme: ColorScheme
+    var isPaperEnabled: Bool
+
+    func makeNSView(context: Context) -> PaperWindowChromeView {
+        PaperWindowChromeView(
+            colorScheme: colorScheme,
+            isPaperEnabled: isPaperEnabled
+        )
+    }
+
+    func updateNSView(_ nsView: PaperWindowChromeView, context: Context) {
+        nsView.apply(
+            colorScheme: colorScheme,
+            isPaperEnabled: isPaperEnabled
+        )
+    }
+
+    static func dismantleNSView(_ nsView: PaperWindowChromeView, coordinator: Void) {
+        nsView.restoreWindowChrome()
+    }
+}
+
+final class PaperWindowChromeView: NSView {
+    private struct OriginalWindowChrome {
+        var styleMask: NSWindow.StyleMask
+        var titlebarAppearsTransparent: Bool
+        var titlebarSeparatorStyle: NSTitlebarSeparatorStyle
+        var backgroundColor: NSColor
+        var isOpaque: Bool
+    }
+
+    private var colorScheme: ColorScheme
+    private var isPaperEnabled: Bool
+    private weak var configuredWindow: NSWindow?
+    private var originalWindowChrome: OriginalWindowChrome?
+
+    init(colorScheme: ColorScheme, isPaperEnabled: Bool) {
+        self.colorScheme = colorScheme
+        self.isPaperEnabled = isPaperEnabled
+        super.init(frame: .zero)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        updateWindowChrome()
+    }
+
+    override func viewWillMove(toWindow newWindow: NSWindow?) {
+        if newWindow !== window {
+            restoreWindowChrome()
+        }
+        super.viewWillMove(toWindow: newWindow)
+    }
+
+    func apply(colorScheme: ColorScheme, isPaperEnabled: Bool) {
+        self.colorScheme = colorScheme
+        self.isPaperEnabled = isPaperEnabled
+        updateWindowChrome()
+    }
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        nil
+    }
+
+    private func updateWindowChrome() {
+        guard let window else { return }
+
+        guard isPaperEnabled else {
+            restoreWindowChrome()
+            return
+        }
+
+        if configuredWindow !== window || originalWindowChrome == nil {
+            restoreWindowChrome()
+            configuredWindow = window
+            originalWindowChrome = OriginalWindowChrome(
+                styleMask: window.styleMask,
+                titlebarAppearsTransparent: window.titlebarAppearsTransparent,
+                titlebarSeparatorStyle: window.titlebarSeparatorStyle,
+                backgroundColor: window.backgroundColor,
+                isOpaque: window.isOpaque
+            )
+        }
+
+        window.styleMask.insert(.fullSizeContentView)
+        window.titlebarAppearsTransparent = true
+        window.titlebarSeparatorStyle = .none
+        window.backgroundColor = NSColor(
+            ReadPaperTheme.surfaceColor(.reader, scheme: colorScheme)
+        )
+        window.isOpaque = true
+    }
+
+    func restoreWindowChrome() {
+        guard let window = configuredWindow,
+              let originalWindowChrome
+        else { return }
+
+        window.styleMask = originalWindowChrome.styleMask
+        window.titlebarAppearsTransparent = originalWindowChrome.titlebarAppearsTransparent
+        window.titlebarSeparatorStyle = originalWindowChrome.titlebarSeparatorStyle
+        window.backgroundColor = originalWindowChrome.backgroundColor
+        window.isOpaque = originalWindowChrome.isOpaque
+        configuredWindow = nil
+        self.originalWindowChrome = nil
+    }
+}

@@ -208,7 +208,10 @@ struct ReaderPaneView: View {
     private var readerBody: some View {
         readerSurface
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .background(Color(nsColor: .windowBackgroundColor))
+            .background {
+                ReadPaperAppearanceSurface(role: .reader)
+                    .ignoresSafeArea()
+            }
             .toolbar {
                 readerToolbar
             }
@@ -362,7 +365,7 @@ struct ReaderPaneView: View {
                 statusRow
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
-                    .background(Color(nsColor: .windowBackgroundColor))
+                    .background(ReadPaperAppearanceHeaderSurface(role: .reader))
 
                 Divider()
             }
@@ -380,7 +383,10 @@ struct ReaderPaneView: View {
         HStack {
             if let paper {
                 Text(paper.title)
-                    .font(.subheadline.weight(.medium))
+                    .font(.system(
+                        .subheadline,
+                        design: pdfDisplayAppearance == .paper ? .serif : .default
+                    ).weight(.semibold))
                     .lineLimit(1)
                     .truncationMode(.tail)
             } else {
@@ -395,7 +401,7 @@ struct ReaderPaneView: View {
         .frame(minHeight: 20)
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
-        .background(Color(nsColor: .windowBackgroundColor))
+        .background(ReadPaperAppearanceHeaderSurface(role: .reader))
     }
 
     @ToolbarContentBuilder
@@ -1943,7 +1949,7 @@ struct ReaderPaneView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
-        .background(Color(nsColor: .windowBackgroundColor))
+        .background(ReadPaperAppearanceHeaderSurface(role: .reader))
     }
 
     private func syncReaderModeWithAvailableContent() {
@@ -2031,7 +2037,11 @@ struct ReaderPaneView: View {
                         .tracking(1.2)
 
                     Text("Build your local paper desk", bundle: bundle)
-                        .font(.system(size: 30, weight: .semibold, design: .rounded))
+                        .font(.system(
+                            size: 30,
+                            weight: .semibold,
+                            design: pdfDisplayAppearance == .paper ? .serif : .rounded
+                        ))
 
                     Text("Import an arXiv paper, web page, or local PDF from the sidebar. Once the first paper is added, HTML, PDF, bilingual reading, and translation tools all appear here.", bundle: bundle)
                         .font(.callout)
@@ -2087,7 +2097,7 @@ struct ReaderPaneView: View {
         }
         .scrollIndicators(.hidden)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(Color(nsColor: .windowBackgroundColor))
+        .background(ReadPaperAppearanceSurface(role: .reader))
     }
 
     private func emptyStateCard(

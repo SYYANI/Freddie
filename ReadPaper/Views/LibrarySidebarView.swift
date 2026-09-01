@@ -2,6 +2,8 @@ import SwiftUI
 
 struct LibrarySidebarView: View {
     @Environment(\.localizationBundle) private var bundle
+    @AppStorage(PDFDisplayAppearance.userDefaultsKey)
+    private var displayAppearanceRawValue = PDFDisplayAppearance.defaultValue.rawValue
     var papers: [Paper]
     var selectedPaper: Paper?
     @Binding var selectedPaperID: UUID?
@@ -9,12 +11,16 @@ struct LibrarySidebarView: View {
     var onDeleteOffsets: (IndexSet) -> Void
     var onDeletePaper: (Paper) -> Void
 
+    private var isPaperAppearance: Bool {
+        PDFDisplayAppearance.resolve(rawValue: displayAppearanceRawValue) == .paper
+    }
+
     var body: some View {
         ZStack {
             // The detail column sits underneath the floating sidebar on macOS 26.
             // Keep this in the sidebar's content layer so reader surfaces cannot
             // be composited above it.
-            Color(nsColor: .windowBackgroundColor)
+            ReadPaperAppearanceSurface(role: .library, textureOpacity: 0.52)
                 .ignoresSafeArea()
 
             VStack(spacing: 0) {
@@ -51,6 +57,7 @@ struct LibrarySidebarView: View {
                         .onDelete(perform: onDeleteOffsets)
                     }
                     .listStyle(.sidebar)
+                    .modifier(PaperListBackgroundModifier(isPaperAppearance: isPaperAppearance))
                 }
             }
         }
@@ -129,6 +136,19 @@ struct LibrarySidebarView: View {
     }
 }
 
+private struct PaperListBackgroundModifier: ViewModifier {
+    var isPaperAppearance: Bool
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if isPaperAppearance {
+            content.scrollContentBackground(.hidden)
+        } else {
+            content
+        }
+    }
+}
+
 private func emptyStateActionLabel(_ title: String, systemImage: String) -> some View {
     Label(title, systemImage: systemImage)
         .font(.subheadline.weight(.medium))
@@ -141,11 +161,19 @@ private func emptyStateActionLabel(_ title: String, systemImage: String) -> some
 
 private struct PaperRowView: View {
     var paper: Paper
+    @AppStorage(PDFDisplayAppearance.userDefaultsKey)
+    private var displayAppearanceRawValue = PDFDisplayAppearance.defaultValue.rawValue
+
+    private var titleDesign: Font.Design {
+        PDFDisplayAppearance.resolve(rawValue: displayAppearanceRawValue) == .paper
+            ? .serif
+            : .default
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(paper.title)
-                .font(.headline)
+                .font(.system(.headline, design: titleDesign).weight(.semibold))
                 .lineLimit(2)
             Text(paper.displayAuthors)
                 .font(.caption)
