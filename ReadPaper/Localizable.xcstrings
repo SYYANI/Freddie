@@ -280,6 +280,7 @@
       }
     },
     "Add an arXiv ID, arXiv URL, web page URL, or a local PDF. Before using translation, open Settings and save at least one LLM provider API key and model profile." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -2540,6 +2541,7 @@
       }
     },
     "Import an arXiv paper, web page, or local PDF from the sidebar. Once the first paper is added, HTML, PDF, bilingual reading, and translation tools all appear here." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -2626,6 +2628,7 @@
       }
     },
     "INSPECTOR" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -4198,6 +4201,7 @@
       }
     },
     "READY TO READ" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -4519,6 +4523,7 @@
       }
     },
     "Select a paper to start reading" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -4745,6 +4750,7 @@
       }
     },
     "Start from the left sidebar" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -5809,6 +5815,7 @@
       }
     },
     "Use the + button in the library to create the first paper record." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {

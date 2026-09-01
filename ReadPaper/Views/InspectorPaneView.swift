@@ -490,10 +490,6 @@ struct InspectorPaneView: View {
     private var emptyInspectorState: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                Text("INSPECTOR", bundle: bundle)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                    .tracking(1.1)
 
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Paper details will appear here", bundle: bundle)
@@ -502,28 +498,6 @@ struct InspectorPaneView: View {
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
-                }
-
-                VStack(alignment: .leading, spacing: 12) {
-                    inspectorHintRow(
-                        title: String(localized: "Metadata", bundle: bundle),
-                        systemImage: "text.document",
-                        description: String(localized: "Title, authors, arXiv ID, and abstract.", bundle: bundle)
-                    )
-                    inspectorHintRow(
-                        title: String(localized: "Notes", bundle: bundle),
-                        systemImage: "note.text",
-                        description: String(localized: "Quick reading notes stay attached to the current paper.", bundle: bundle)
-                    )
-                }
-                .padding(16)
-                .background(
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .fill(Color(nsColor: .controlBackgroundColor))
-                )
-                .overlay {
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .strokeBorder(Color.primary.opacity(0.06))
                 }
             }
             .padding(16)

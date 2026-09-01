@@ -2,6 +2,7 @@ import SwiftUI
 
 struct LibrarySidebarView: View {
     @Environment(\.localizationBundle) private var bundle
+    @Environment(\.colorScheme) private var colorScheme
     @AppStorage(PDFDisplayAppearance.userDefaultsKey)
     private var displayAppearanceRawValue = PDFDisplayAppearance.defaultValue.rawValue
     var papers: [Paper]
@@ -25,18 +26,7 @@ struct LibrarySidebarView: View {
 
             VStack(spacing: 0) {
                 if papers.isEmpty {
-                    ContentUnavailableView {
-                        Label {
-                            Text("No papers yet", bundle: bundle)
-                        } icon: {
-                            Image(systemName: "doc.text.magnifyingglass")
-                        }
-                    } description: {
-                        Text("Add an arXiv ID, arXiv URL, web page URL, or a local PDF. Before using translation, open Settings and save at least one LLM provider API key and model profile.", bundle: bundle)
-                    } actions: {
-                        emptyStateActions
-                    }
-                    .padding()
+                    emptyLibraryState
                 } else {
                     List(selection: $selectedPaperID) {
                         ForEach(papers) { paper in
@@ -87,6 +77,34 @@ struct LibrarySidebarView: View {
         }
     }
 
+    private var emptyLibraryState: some View {
+        VStack(spacing: 26) {
+            VStack(spacing: 16) {
+                ZStack {
+                    Image(systemName: "doc.text.magnifyingglass")
+                        .font(.system(size: 30, weight: .medium))
+                        .symbolRenderingMode(.hierarchical)
+                        .foregroundStyle(
+                            isPaperAppearance
+                                ? ReadPaperTheme.accentColor
+                                : Color.accentColor
+                        )
+                }
+                .frame(width: 72, height: 60)
+
+                Text("No papers yet", bundle: bundle)
+                    .font(.system(size: 22, weight: .semibold, design: .rounded))
+                    .multilineTextAlignment(.center)
+            }
+
+            emptyStateActions
+        }
+        .frame(maxWidth: 360)
+        .padding(.horizontal, 32)
+        .padding(.vertical, 40)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+    }
+
     @ViewBuilder
     private var sidebarBackground: some View {
         if isPaperAppearance {
@@ -107,22 +125,27 @@ struct LibrarySidebarView: View {
                         emptyStateActionLabel(String(localized: "Settings", bundle: bundle), systemImage: "gearshape")
                     }
                     .readPaperGlassButtonStyle()
+                    .frame(maxWidth: .infinity)
+                    .controlSize(.small)
 
                     Button {
                         isAddingPaper = true
                     } label: {
-                        emptyStateActionLabel(String(localized: "First Paper", bundle: bundle), systemImage: "plus")
+                        emptyStateActionLabel(String(localized: "Add Paper", bundle: bundle), systemImage: "plus")
                     }
                     .readPaperGlassButtonStyle(prominent: true)
+                    .frame(maxWidth: .infinity)
+                    .controlSize(.small)
                 }
             }
-            .frame(minWidth: 280)
+            .frame(maxWidth: .infinity)
         } else {
             HStack(spacing: 0) {
                 SettingsLink {
                     emptyStateActionLabel(String(localized: "Settings", bundle: bundle), systemImage: "gearshape")
                 }
                 .buttonStyle(.plain)
+                .frame(maxWidth: .infinity)
 
                 Divider()
                     .frame(height: 18)
@@ -130,9 +153,10 @@ struct LibrarySidebarView: View {
                 Button {
                     isAddingPaper = true
                 } label: {
-                    emptyStateActionLabel(String(localized: "First Paper", bundle: bundle), systemImage: "plus")
+                    emptyStateActionLabel(String(localized: "Add Paper", bundle: bundle), systemImage: "plus")
                 }
                 .buttonStyle(.plain)
+                .frame(maxWidth: .infinity)
             }
             .background(
                 RoundedRectangle(cornerRadius: 9, style: .continuous)
@@ -142,7 +166,7 @@ struct LibrarySidebarView: View {
                 RoundedRectangle(cornerRadius: 9, style: .continuous)
                     .strokeBorder(Color.primary.opacity(0.08))
             }
-            .frame(minWidth: 280)
+            .frame(maxWidth: .infinity)
         }
     }
 }
@@ -157,9 +181,10 @@ private func emptyStateActionLabel(_ title: String, systemImage: String) -> some
     Label(title, systemImage: systemImage)
         .font(.subheadline.weight(.medium))
         .lineLimit(1)
+        .minimumScaleFactor(0.9)
         .frame(maxWidth: .infinity)
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 9)
         .contentShape(Rectangle())
 }
 

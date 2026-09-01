@@ -32,6 +32,7 @@ struct ReaderPaneView: View {
 
     @Environment(\.modelContext) private var modelContext
     @Environment(\.localizationBundle) private var bundle
+    @Environment(\.colorScheme) private var colorScheme
     @Query(sort: \ReadingState.modifiedAt, order: .reverse) private var readingStates: [ReadingState]
     @AppStorage(PDFDisplayAppearance.userDefaultsKey)
     private var pdfDisplayAppearanceRawValue = PDFDisplayAppearance.defaultValue.rawValue
@@ -358,8 +359,10 @@ struct ReaderPaneView: View {
 
     private var readerSurface: some View {
         VStack(spacing: 0) {
-            paneHeader
-            Divider()
+            if paper != nil {
+                paneHeader
+                Divider()
+            }
 
             if isWorking || statusMessage != nil {
                 statusRow
@@ -389,11 +392,6 @@ struct ReaderPaneView: View {
                     ).weight(.semibold))
                     .lineLimit(1)
                     .truncationMode(.tail)
-            } else {
-                Text("Select a paper to start reading", bundle: bundle)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
             }
 
             Spacer(minLength: 0)
@@ -2030,24 +2028,12 @@ struct ReaderPaneView: View {
     private var emptyReaderState: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 28) {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("READY TO READ", bundle: bundle)
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                        .tracking(1.2)
-
-                    Text("Build your local paper desk", bundle: bundle)
-                        .font(.system(
-                            size: 30,
-                            weight: .semibold,
-                            design: pdfDisplayAppearance == .paper ? .serif : .rounded
-                        ))
-
-                    Text("Import an arXiv paper, web page, or local PDF from the sidebar. Once the first paper is added, HTML, PDF, bilingual reading, and translation tools all appear here.", bundle: bundle)
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+                Text("Build your local paper desk", bundle: bundle)
+                    .font(.system(
+                        size: 30,
+                        weight: .semibold,
+                        design: pdfDisplayAppearance == .paper ? .serif : .rounded
+                    ))
 
                 LazyVGrid(
                     columns: [
@@ -2074,21 +2060,6 @@ struct ReaderPaneView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-                HStack(spacing: 12) {
-                    Image(systemName: "sidebar.left")
-                        .font(.title3)
-                        .foregroundStyle(.secondary)
-                        .frame(width: 36, height: 36)
-                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
-
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Start from the left sidebar", bundle: bundle)
-                            .font(.headline)
-                        Text("Use the + button in the library to create the first paper record.", bundle: bundle)
-                            .font(.callout)
-                            .foregroundStyle(.secondary)
-                    }
-                }
             }
             .padding(.horizontal, 32)
             .padding(.top, 28)
@@ -2108,9 +2079,22 @@ struct ReaderPaneView: View {
         VStack(alignment: .leading, spacing: 14) {
             Image(systemName: systemImage)
                 .font(.title2)
-                .foregroundStyle(.primary)
+                .foregroundStyle(
+                    pdfDisplayAppearance == .paper
+                        ? ReadPaperTheme.accentColor
+                        : Color.primary
+                )
                 .frame(width: 40, height: 40)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+                .background {
+                    if pdfDisplayAppearance == .paper {
+                        ReadPaperTheme.accentColor
+                            .opacity(colorScheme == .dark ? 0.16 : 0.10)
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                    } else {
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(.regularMaterial)
+                    }
+                }
 
             VStack(alignment: .leading, spacing: 6) {
                 Text(title)
@@ -2127,11 +2111,19 @@ struct ReaderPaneView: View {
         .padding(20)
         .background(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color(nsColor: .controlBackgroundColor))
+                .fill(
+                    pdfDisplayAppearance == .paper
+                        ? ReadPaperTheme.cardColor(scheme: colorScheme)
+                        : Color(nsColor: .controlBackgroundColor)
+                )
         )
         .overlay {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.06))
+                .strokeBorder(
+                    pdfDisplayAppearance == .paper
+                        ? ReadPaperTheme.cardBorderColor(scheme: colorScheme)
+                        : Color.primary.opacity(0.06)
+                )
         }
     }
 

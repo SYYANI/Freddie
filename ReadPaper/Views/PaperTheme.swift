@@ -27,10 +27,20 @@ enum ReadPaperTheme {
         }
     }
 
-    static func accentColor(scheme: ColorScheme) -> Color {
+    static var accentColor: Color {
+        Color(nsColor: .controlAccentColor)
+    }
+
+    static func cardColor(scheme: ColorScheme) -> Color {
         scheme == .dark
-            ? Color(red: 0.620, green: 0.686, blue: 0.569)
-            : Color(red: 0.373, green: 0.451, blue: 0.333)
+            ? Color(red: 0.157, green: 0.153, blue: 0.140)
+            : Color(red: 0.982, green: 0.971, blue: 0.941)
+    }
+
+    static func cardBorderColor(scheme: ColorScheme) -> Color {
+        scheme == .dark
+            ? Color.white.opacity(0.075)
+            : Color(red: 0.333, green: 0.294, blue: 0.231).opacity(0.11)
     }
 
     static func grainColor(scheme: ColorScheme) -> Color {
