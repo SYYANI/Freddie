@@ -27,11 +27,15 @@ final class AppWindowConfigurationProbe: NSView {
     var role: AppWindowBackdropRole
 
     private weak var configuredWindow: NSWindow?
+    private var didConfigureWindow = false
     private var didCenterConfiguredWindow = false
 
     init(role: AppWindowBackdropRole) {
         self.role = role
         super.init(frame: .zero)
+        if case .settings = role {
+            installMaterialLayer()
+        }
     }
 
     @available(*, unavailable)
@@ -49,6 +53,7 @@ final class AppWindowConfigurationProbe: NSView {
         guard let newWindow else { return }
         if configuredWindow !== newWindow {
             configuredWindow = newWindow
+            didConfigureWindow = false
             didCenterConfiguredWindow = false
         }
 
@@ -60,17 +65,11 @@ final class AppWindowConfigurationProbe: NSView {
 
         if let window, configuredWindow !== window {
             configuredWindow = window
+            didConfigureWindow = false
             didCenterConfiguredWindow = false
         }
 
         applyWindowAppearanceIfNeeded()
-        scheduleWindowConfiguration()
-    }
-
-    override func viewDidMoveToSuperview() {
-        super.viewDidMoveToSuperview()
-        applyWindowAppearanceIfNeeded()
-        scheduleWindowConfiguration()
     }
 
     func applyWindowAppearanceIfNeeded() {
@@ -79,6 +78,9 @@ final class AppWindowConfigurationProbe: NSView {
     }
 
     private func applyWindowAppearance(to window: NSWindow) {
+        guard didConfigureWindow == false else { return }
+        didConfigureWindow = true
+
         window.isOpaque = false
         window.backgroundColor = .clear
         window.titlebarAppearsTransparent = true
@@ -87,12 +89,14 @@ final class AppWindowConfigurationProbe: NSView {
         window.styleMask.insert([.titled, .closable, .fullSizeContentView])
         window.styleMask.remove([.miniaturizable, .resizable])
         window.isMovableByWindowBackground = false
-        window.standardWindowButton(.miniaturizeButton)?.isEnabled = false
-        window.standardWindowButton(.zoomButton)?.isEnabled = false
         window.toolbar?.showsBaselineSeparator = false
 
-        installWindowMaterialIfNeeded(in: window)
+        if case .about = role {
+            installWindowMaterialIfNeeded(in: window)
+        }
 
+        window.standardWindowButton(.miniaturizeButton)?.isEnabled = false
+        window.standardWindowButton(.zoomButton)?.isEnabled = false
         centerWindowIfNeeded(window)
     }
 
@@ -128,16 +132,29 @@ final class AppWindowConfigurationProbe: NSView {
 
         originalContentView.frame = containerView.bounds
         originalContentView.autoresizingMask = [.width, .height]
-
         containerView.addSubview(visualEffectView)
         containerView.addSubview(originalContentView)
         window.contentView = containerView
     }
 
-    private func scheduleWindowConfiguration() {
-        DispatchQueue.main.async { [weak self] in
-            self?.applyWindowAppearanceIfNeeded()
+    private func installMaterialLayer() {
+        let materialView: NSView
+        if #available(macOS 26.0, *) {
+            let glassEffectView = NSGlassEffectView(frame: bounds)
+            glassEffectView.style = .regular
+            glassEffectView.tintColor = .clear
+            materialView = glassEffectView
+        } else {
+            let visualEffectView = NSVisualEffectView(frame: bounds)
+            visualEffectView.blendingMode = .behindWindow
+            visualEffectView.material = .underWindowBackground
+            visualEffectView.state = .active
+            materialView = visualEffectView
         }
+
+        materialView.frame = bounds
+        materialView.autoresizingMask = [.width, .height]
+        addSubview(materialView)
     }
 
     private func centerWindowIfNeeded(_ styledWindow: NSWindow) {

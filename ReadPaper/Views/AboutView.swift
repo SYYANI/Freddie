@@ -48,6 +48,7 @@ struct AboutView: View {
         .frame(width: Metrics.width, height: Metrics.contentHeight)
         .background {
             AppWindowBackdrop(role: .about)
+                .ignoresSafeArea()
                 .allowsHitTesting(false)
         }
         .ignoresSafeArea()

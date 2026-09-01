@@ -11,6 +11,11 @@ private enum SettingsTab: String, Hashable {
     case models
 }
 
+private struct NativeBabelDocSettingsProbe: Sendable {
+    let isAvailable: Bool
+    let installedVersion: String?
+}
+
 enum SettingsGeneralStatusSource: Equatable {
     case generic
     case babelDocReady
@@ -54,9 +59,9 @@ struct SettingsView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.localizationBundle) private var bundle
     @Query private var settingsRows: [AppSettings]
-    @Query private var papers: [Paper]
     @Query(sort: [SortDescriptor(\LLMProviderProfile.modifiedAt, order: .reverse)]) private var providers: [LLMProviderProfile]
     @Query(sort: [SortDescriptor(\LLMModelProfile.modifiedAt, order: .reverse)]) private var models: [LLMModelProfile]
+    @State private var paperCount = 0
 
     var body: some View {
         Group {
@@ -65,7 +70,7 @@ struct SettingsView: View {
                     settings: settings,
                     providers: providers,
                     models: models,
-                    paperCount: papers.count
+                    paperCount: paperCount
                 )
             } else {
                 ProgressView()
@@ -78,7 +83,11 @@ struct SettingsView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background {
             AppWindowBackdrop(role: .settings)
+                .ignoresSafeArea()
                 .allowsHitTesting(false)
+        }
+        .task {
+            paperCount = (try? modelContext.fetchCount(FetchDescriptor<Paper>())) ?? 0
         }
     }
 }
@@ -152,6 +161,7 @@ private struct SettingsForm: View {
     @State private var digestStatusMessage: String?
     @State private var glossaryInsertion: String?
     @State private var detectedLaTeXInstallations: [ReadPaperLaTeXInstallation] = []
+    @State private var providerIDsWithStoredAPIKeys: Set<UUID> = []
 
     private let keychainStore = KeychainStore()
     private let apiStyleStore = LLMProviderAPIStyleStore()
@@ -202,7 +212,7 @@ private struct SettingsForm: View {
 
     private var readyProviders: [LLMProviderProfile] {
         sortedProviders.filter { provider in
-            provider.isEnabled && hasStoredAPIKey(ref: provider.apiKeyRef)
+            provider.isEnabled && providerIDsWithStoredAPIKeys.contains(provider.id)
         }
     }
 
@@ -312,37 +322,49 @@ private struct SettingsForm: View {
 
     var body: some View {
         TabView(selection: selectedTabBinding) {
-            generalTab
+            tabContent(for: .general) {
+                generalTab
+            }
                 .tag(SettingsTab.general)
                 .tabItem {
                     Label(String(localized: "General", bundle: bundle), systemImage: "gearshape")
                 }
 
-            readerTab
+            tabContent(for: .reader) {
+                readerTab
+            }
                 .tag(SettingsTab.reader)
                 .tabItem {
                     Label(String(localized: "Reader", bundle: bundle), systemImage: "book.closed")
                 }
 
-            latexTab
+            tabContent(for: .latex) {
+                latexTab
+            }
                 .tag(SettingsTab.latex)
                 .tabItem {
                     Label(String(localized: "LaTeX", bundle: bundle), systemImage: "text.document")
                 }
 
-            digestTab
+            tabContent(for: .digest) {
+                digestTab
+            }
                 .tag(SettingsTab.digest)
                 .tabItem {
                     Label(String(localized: "Digest", bundle: bundle), systemImage: "doc.plaintext")
                 }
 
-            providerTab
+            tabContent(for: .providers) {
+                providerTab
+            }
                 .tag(SettingsTab.providers)
                 .tabItem {
                     Label(String(localized: "Providers", bundle: bundle), systemImage: "network")
                 }
 
-            modelTab
+            tabContent(for: .models) {
+                modelTab
+            }
                 .tag(SettingsTab.models)
                 .tabItem {
                     Label(String(localized: "Models", bundle: bundle), systemImage: "sparkles.rectangle.stack")
@@ -351,11 +373,12 @@ private struct SettingsForm: View {
         .formStyle(.grouped)
         .scrollContentBackground(.hidden)
         .task {
-            _ = try? LLMConfigurationBootstrapper().ensureBootstrap(modelContext: modelContext)
-            try? LLMDefaultProfileSeeder(apiStyleStore: apiStyleStore).ensureDefaults(modelContext: modelContext)
             loadInitialSelectionIfNeeded()
-            refreshLaTeXInstallations()
-            await refreshInstalledBabelDOCVersion()
+            await Task.yield()
+            refreshStoredAPIKeyAvailability()
+            async let latexRefresh: Void = refreshLaTeXInstallations()
+            async let babelDocRefresh: Void = refreshInstalledBabelDOCVersion()
+            _ = await (latexRefresh, babelDocRefresh)
         }
         .onChange(of: selectedProviderID) { _, _ in
             applySelectedProvider()
@@ -364,19 +387,38 @@ private struct SettingsForm: View {
             applySelectedModel()
         }
         .onChange(of: providers.map(\.id)) { _, _ in
+            refreshStoredAPIKeyAvailability()
             loadInitialSelectionIfNeeded()
         }
         .onChange(of: models.map(\.id)) { _, _ in
             loadInitialSelectionIfNeeded()
         }
         .onChange(of: latexToolchainDirectoryPath) { _, _ in
-            refreshLaTeXInstallations()
+            Task {
+                await refreshLaTeXInstallations()
+            }
         }
+    }
+
+    @ViewBuilder
+    private func tabContent<Content: View>(
+        for tab: SettingsTab,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        if selectedTab == tab {
+            content()
+        } else {
+            Color.clear
+        }
+    }
+
+    private var selectedTab: SettingsTab {
+        SettingsTab(rawValue: selectedTabRawValue) ?? .general
     }
 
     private var selectedTabBinding: Binding<SettingsTab> {
         Binding(
-            get: { SettingsTab(rawValue: selectedTabRawValue) ?? .general },
+            get: { selectedTab },
             set: { selectedTabRawValue = $0.rawValue }
         )
     }
@@ -651,7 +693,9 @@ private struct SettingsForm: View {
 
                     HStack(spacing: 10) {
                         Button(String(localized: "Refresh", bundle: bundle)) {
-                            refreshLaTeXInstallations()
+                            Task {
+                                await refreshLaTeXInstallations()
+                            }
                         }
 
                         Button(String(localized: "Choose Folder", bundle: bundle)) {
@@ -1186,7 +1230,7 @@ private struct SettingsForm: View {
             .buttonStyle(.borderless)
             .frame(height: 28)
             .padding(.horizontal, 8)
-            .background(.ultraThinMaterial)
+            .background(Color(nsColor: .controlBackgroundColor).opacity(0.28))
         }
         .background(panelBackground)
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
@@ -1197,12 +1241,8 @@ private struct SettingsForm: View {
     }
 
     private var panelBackground: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(.regularMaterial)
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(Color(nsColor: .controlBackgroundColor).opacity(0.18))
-        }
+        RoundedRectangle(cornerRadius: 10, style: .continuous)
+            .fill(Color(nsColor: .controlBackgroundColor).opacity(0.3))
     }
 
     private func entityListRow<RowContent: View>(
@@ -1216,12 +1256,8 @@ private struct SettingsForm: View {
             .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             .background {
                 if isSelected {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .fill(.regularMaterial)
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .fill(Color(nsColor: .selectedContentBackgroundColor).opacity(0.16))
-                    }
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(Color(nsColor: .selectedContentBackgroundColor).opacity(0.18))
                 }
             }
     }
@@ -1235,7 +1271,7 @@ private struct SettingsForm: View {
 
                 Spacer(minLength: 0)
 
-                if hasStoredAPIKey(ref: provider.apiKeyRef) {
+                if providerIDsWithStoredAPIKeys.contains(provider.id) {
                     Image(systemName: "key.fill")
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -1587,6 +1623,7 @@ private struct SettingsForm: View {
             selectedProviderID = provider.id
             providerAPIKey = ""
             providerHasStoredAPIKey = true
+            providerIDsWithStoredAPIKeys.insert(provider.id)
             providerStatusMessage = String(localized: "Provider saved.", bundle: bundle)
             providerOutputPreview = nil
         } catch {
@@ -1617,6 +1654,7 @@ private struct SettingsForm: View {
             settings.modifiedAt = Date()
             try modelContext.save()
             try? keychainStore.delete(account: provider.apiKeyRef)
+            providerIDsWithStoredAPIKeys.remove(providerID)
             if isBuiltInProvider {
                 defaultProfileDeletionStore.markProviderDeleted(providerID)
             }
@@ -1870,14 +1908,22 @@ private struct SettingsForm: View {
         isLoadingInstalledBabelDocVersion = true
         defer { isLoadingInstalledBabelDocVersion = false }
 
-        let manager = BabelDocToolManager()
-        hasManagedBabelDOCFiles = (try? manager.nativeToolPaths()) != nil
-
-        do {
-            installedBabelDocVersion = try await manager.nativeInstalledVersion()
-        } catch {
-            installedBabelDocVersion = nil
-        }
+        let probe = await Task.detached(priority: .utility) {
+            do {
+                let paths = try BabelDocToolManager().nativeToolPaths()
+                return NativeBabelDocSettingsProbe(
+                    isAvailable: true,
+                    installedVersion: paths.runtimeVersion
+                )
+            } catch {
+                return NativeBabelDocSettingsProbe(
+                    isAvailable: false,
+                    installedVersion: nil
+                )
+            }
+        }.value
+        hasManagedBabelDOCFiles = probe.isAvailable
+        installedBabelDocVersion = probe.installedVersion
 
         generalStatus.syncInstalledBabelDocVersion(installedBabelDocVersion, bundle: bundle)
     }
@@ -1893,17 +1939,21 @@ private struct SettingsForm: View {
         }
     }
 
-    private func refreshLaTeXInstallations() {
+    private func refreshLaTeXInstallations() async {
         let selectedDirectories = selectedLaTeXDirectoryURL.map { [$0] } ?? []
-        var installations = ReadPaperLaTeXToolchain.installations(
-            additionalSearchDirectories: selectedDirectories
-        )
-        if let selectedLaTeXDirectoryURL,
-           !installations.contains(where: { $0.directoryURL == selectedLaTeXDirectoryURL }) {
-            installations.append(
-                ReadPaperLaTeXToolchain.installation(at: selectedLaTeXDirectoryURL)
+        let selectedDirectory = selectedLaTeXDirectoryURL
+        let installations = await Task.detached(priority: .utility) {
+            var detected = ReadPaperLaTeXToolchain.installations(
+                additionalSearchDirectories: selectedDirectories
             )
-        }
+            if let selectedDirectory,
+               !detected.contains(where: { $0.directoryURL == selectedDirectory }) {
+                detected.append(
+                    ReadPaperLaTeXToolchain.installation(at: selectedDirectory)
+                )
+            }
+            return detected
+        }.value
         detectedLaTeXInstallations = installations.sorted {
             $0.directoryURL.path.localizedStandardCompare($1.directoryURL.path) == .orderedAscending
         }
@@ -1926,7 +1976,9 @@ private struct SettingsForm: View {
 
         guard panel.runModal() == .OK, let directoryURL = panel.url else { return }
         latexToolchainDirectoryPath = directoryURL.standardizedFileURL.path
-        refreshLaTeXInstallations()
+        Task {
+            await refreshLaTeXInstallations()
+        }
     }
 
     private func chooseDigestExportDirectory() {
@@ -1968,6 +2020,14 @@ private struct SettingsForm: View {
 
     private func hasStoredAPIKey(ref: String) -> Bool {
         (try? keychainStore.contains(account: ref)) == true
+    }
+
+    private func refreshStoredAPIKeyAvailability() {
+        providerIDsWithStoredAPIKeys = Set(
+            providers.compactMap { provider in
+                hasStoredAPIKey(ref: provider.apiKeyRef) ? provider.id : nil
+            }
+        )
     }
 
     private func modelDisplayName(_ model: LLMModelProfile) -> String {
