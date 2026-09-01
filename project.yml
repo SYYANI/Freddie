@@ -98,8 +98,8 @@ targets:
         SWIFT_VERSION: 6.0
         ENABLE_TESTABILITY: YES
         CODE_SIGN_STYLE: Automatic
-        CURRENT_PROJECT_VERSION: 34
-        MARKETING_VERSION: 0.3.14
+        CURRENT_PROJECT_VERSION: 35
+        MARKETING_VERSION: 0.3.15
   ReadPaperiPad:
     type: application
     platform: iOS
@@ -147,8 +147,8 @@ targets:
         SWIFT_VERSION: 6.0
         ENABLE_TESTABILITY: YES
         CODE_SIGN_STYLE: Automatic
-        CURRENT_PROJECT_VERSION: 34
-        MARKETING_VERSION: 0.3.14
+        CURRENT_PROJECT_VERSION: 35
+        MARKETING_VERSION: 0.3.15
         TARGETED_DEVICE_FAMILY: 2
   ReadPaperTests:
     type: bundle.unit-test

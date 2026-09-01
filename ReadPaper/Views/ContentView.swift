@@ -161,7 +161,7 @@ struct ContentView: View {
             }
             .ignoresSafeArea()
         }
-        .tint(isPaperAppearance ? ReadPaperTheme.accentColor : nil)
+        // .tint(isPaperAppearance ? ReadPaperTheme.accentColor : nil)
         .sheet(isPresented: $isAddingPaper) {
             AddPaperSheet(isPresented: $isAddingPaper, selectedPaperID: $selectedPaperID)
                 .frame(width: 520)

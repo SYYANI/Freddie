@@ -126,7 +126,7 @@ struct LibrarySidebarView: View {
                     }
                     .readPaperGlassButtonStyle()
                     .frame(maxWidth: .infinity)
-                    .controlSize(.small)
+                    .controlSize(.mini)
 
                     Button {
                         isAddingPaper = true
@@ -135,7 +135,7 @@ struct LibrarySidebarView: View {
                     }
                     .readPaperGlassButtonStyle(prominent: true)
                     .frame(maxWidth: .infinity)
-                    .controlSize(.small)
+                    .controlSize(.mini)
                 }
             }
             .frame(maxWidth: .infinity)
