@@ -344,6 +344,75 @@ final class AbstractTranslationServiceTests: XCTestCase {
     }
 }
 
+final class AbstractTranslationPresentationStateTests: XCTestCase {
+    func testSelectingAnotherPaperClearsDisplayedTranslation() {
+        let firstPaperID = UUID()
+        let secondPaperID = UUID()
+        var state = AbstractTranslationPresentationState()
+
+        state.selectPaper(firstPaperID)
+        let firstRequestID = state.beginTranslation(for: firstPaperID)
+        XCTAssertTrue(state.acceptTranslation(
+            "Translation from the first paper",
+            paperID: firstPaperID,
+            requestID: firstRequestID
+        ))
+        XCTAssertEqual(state.translatedText, "Translation from the first paper")
+
+        state.selectPaper(secondPaperID)
+
+        XCTAssertEqual(state.paperID, secondPaperID)
+        XCTAssertNil(state.translatedText)
+        XCTAssertNil(state.errorMessage)
+        XCTAssertFalse(state.isTranslating)
+    }
+
+    func testSelectingAnotherPaperRejectsPreviousRequest() {
+        let firstPaperID = UUID()
+        let secondPaperID = UUID()
+        var state = AbstractTranslationPresentationState()
+
+        state.selectPaper(firstPaperID)
+        let firstRequestID = state.beginTranslation(for: firstPaperID)
+        state.selectPaper(secondPaperID)
+
+        XCTAssertFalse(state.acceptTranslation(
+            "Translation from the first paper",
+            paperID: firstPaperID,
+            requestID: firstRequestID
+        ))
+        XCTAssertNil(state.translatedText)
+    }
+
+    func testOldRequestCannotOverwriteNewRequestAfterReturningToSamePaper() {
+        let firstPaperID = UUID()
+        let secondPaperID = UUID()
+        var state = AbstractTranslationPresentationState()
+
+        state.selectPaper(firstPaperID)
+        let oldRequestID = state.beginTranslation(for: firstPaperID)
+        state.selectPaper(secondPaperID)
+        state.selectPaper(firstPaperID)
+        let currentRequestID = state.beginTranslation(for: firstPaperID)
+
+        XCTAssertFalse(state.acceptTranslation(
+            "Stale translation",
+            paperID: firstPaperID,
+            requestID: oldRequestID
+        ))
+        XCTAssertTrue(state.isTranslating)
+        XCTAssertNil(state.translatedText)
+
+        XCTAssertTrue(state.acceptTranslation(
+            "Current translation",
+            paperID: firstPaperID,
+            requestID: currentRequestID
+        ))
+        XCTAssertFalse(state.isTranslating)
+        XCTAssertEqual(state.translatedText, "Current translation")
+    }
+}
+
 // Mock translation client for testing
 private final class MockTranslationClient: TranslationLLMClientProtocol {
     func translate(

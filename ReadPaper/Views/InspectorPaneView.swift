@@ -13,9 +13,8 @@ struct InspectorPaneView: View {
     @State private var noteDeletionErrorMessage: String?
     @State private var authorsSaveErrorMessage: String?
     @State private var isAbstractExpanded = false
-    @State private var isTranslatingAbstract = false
-    @State private var abstractTranslationError: String?
-    @State private var translatedAbstract: String?
+    @State private var abstractTranslationState = AbstractTranslationPresentationState()
+    @State private var abstractTranslationTask: Task<Void, Never>?
     @State private var isEditingAuthors = false
     @State private var authorsDraft = ""
     @FocusState private var focusedMetadataField: MetadataField?
@@ -39,9 +38,14 @@ struct InspectorPaneView: View {
         .readPaperInspectorBackground()
         .onAppear {
             syncMetadataEditorState(with: paper)
+            synchronizeAbstractPresentation(with: paper?.id)
         }
-        .onChange(of: paper?.id) { _, _ in
+        .onChange(of: paper?.id) { _, newPaperID in
             syncMetadataEditorState(with: paper)
+            synchronizeAbstractPresentation(with: newPaperID)
+        }
+        .onDisappear {
+            cancelAbstractTranslation()
         }
         .confirmationDialog(
             String(localized: "Delete Note?", bundle: bundle),
@@ -178,9 +182,9 @@ struct InspectorPaneView: View {
                 Spacer()
                 
                 HStack(spacing: 8) {
-                    if translatedAbstract != nil {
+                    if abstractTranslationState.translatedText != nil {
                         Button {
-                            self.translatedAbstract = nil
+                            abstractTranslationState.showOriginal()
                         } label: {
                             HStack(spacing: 4) {
                                 Text(String(localized: "Original", bundle: bundle))
@@ -202,7 +206,7 @@ struct InspectorPaneView: View {
                         }
                         .buttonStyle(.plain)
                         .foregroundStyle(.secondary)
-                    } else if !isTranslatingAbstract {
+                    } else if !abstractTranslationState.isTranslating {
                         Button {
                             translateAbstract()
                         } label: {
@@ -226,7 +230,7 @@ struct InspectorPaneView: View {
                         }
                         .buttonStyle(.plain)
                         .foregroundStyle(.secondary)
-                        .disabled(isTranslatingAbstract)
+                        .disabled(abstractTranslationState.isTranslating)
                     }
                     
                     Button {
@@ -261,7 +265,7 @@ struct InspectorPaneView: View {
                 }
             }
             
-            if let error = abstractTranslationError {
+            if let error = abstractTranslationState.errorMessage {
                 Text(error)
                     .font(.caption)
                     .foregroundStyle(.red)
@@ -269,7 +273,7 @@ struct InspectorPaneView: View {
             }
             
             ZStack(alignment: .bottom) {
-                if isTranslatingAbstract {
+                if abstractTranslationState.isTranslating {
                     HStack(spacing: 8) {
                         ProgressView()
                             .controlSize(.small)
@@ -280,7 +284,7 @@ struct InspectorPaneView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.vertical, 8)
                 } else {
-                    Text(translatedAbstract ?? abstractText)
+                    Text(abstractTranslationState.translatedText ?? abstractText)
                         .font(.callout)
                         .textSelection(.enabled)
                         .lineLimit(isAbstractExpanded ? nil : 8)
@@ -288,7 +292,7 @@ struct InspectorPaneView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 
-                if !isAbstractExpanded && !isTranslatingAbstract {
+                if !isAbstractExpanded && !abstractTranslationState.isTranslating {
                     LinearGradient(
                         gradient: Gradient(colors: [
                             .clear,
@@ -430,11 +434,14 @@ struct InspectorPaneView: View {
     
     private func translateAbstract() {
         guard let paper = paper else { return }
-        
-        isTranslatingAbstract = true
-        abstractTranslationError = nil
-        
-        Task {
+
+        synchronizeAbstractPresentation(with: paper.id)
+        abstractTranslationTask?.cancel()
+
+        let paperID = paper.id
+        let requestID = abstractTranslationState.beginTranslation(for: paperID)
+
+        abstractTranslationTask = Task { @MainActor in
             do {
                 let service = AbstractTranslationService()
                 let settings = try modelContext.fetch(FetchDescriptor<AppSettings>()).first ?? AppSettings()
@@ -445,18 +452,39 @@ struct InspectorPaneView: View {
                     modelContext: modelContext,
                     onProgress: nil
                 )
-                
-                await MainActor.run {
-                    translatedAbstract = translated
-                    isTranslatingAbstract = false
+
+                if abstractTranslationState.acceptTranslation(
+                    translated,
+                    paperID: paperID,
+                    requestID: requestID
+                ) {
+                    abstractTranslationTask = nil
                 }
             } catch {
-                await MainActor.run {
-                    abstractTranslationError = error.localizedDescription
-                    isTranslatingAbstract = false
+                if abstractTranslationState.acceptFailure(
+                    error.localizedDescription,
+                    paperID: paperID,
+                    requestID: requestID
+                ) {
+                    abstractTranslationTask = nil
                 }
             }
         }
+    }
+
+    private func synchronizeAbstractPresentation(with paperID: UUID?) {
+        guard abstractTranslationState.paperID != paperID else { return }
+
+        abstractTranslationTask?.cancel()
+        abstractTranslationTask = nil
+        abstractTranslationState.selectPaper(paperID)
+        isAbstractExpanded = false
+    }
+
+    private func cancelAbstractTranslation() {
+        abstractTranslationTask?.cancel()
+        abstractTranslationTask = nil
+        abstractTranslationState.cancelActiveRequest()
     }
 
     private var emptyInspectorState: some View {
@@ -525,6 +553,82 @@ struct InspectorPaneView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
+    }
+}
+
+struct AbstractTranslationPresentationState {
+    private(set) var paperID: UUID?
+    private(set) var activeRequestID: UUID?
+    private(set) var isTranslating = false
+    private(set) var translatedText: String?
+    private(set) var errorMessage: String?
+
+    mutating func selectPaper(_ paperID: UUID?) {
+        self.paperID = paperID
+        activeRequestID = nil
+        isTranslating = false
+        translatedText = nil
+        errorMessage = nil
+    }
+
+    mutating func beginTranslation(for paperID: UUID) -> UUID {
+        if self.paperID != paperID {
+            selectPaper(paperID)
+        }
+
+        let requestID = UUID()
+        activeRequestID = requestID
+        isTranslating = true
+        translatedText = nil
+        errorMessage = nil
+        return requestID
+    }
+
+    @discardableResult
+    mutating func acceptTranslation(
+        _ translatedText: String,
+        paperID: UUID,
+        requestID: UUID
+    ) -> Bool {
+        guard isCurrentRequest(paperID: paperID, requestID: requestID) else {
+            return false
+        }
+
+        activeRequestID = nil
+        isTranslating = false
+        self.translatedText = translatedText
+        errorMessage = nil
+        return true
+    }
+
+    @discardableResult
+    mutating func acceptFailure(
+        _ errorMessage: String,
+        paperID: UUID,
+        requestID: UUID
+    ) -> Bool {
+        guard isCurrentRequest(paperID: paperID, requestID: requestID) else {
+            return false
+        }
+
+        activeRequestID = nil
+        isTranslating = false
+        translatedText = nil
+        self.errorMessage = errorMessage
+        return true
+    }
+
+    mutating func showOriginal() {
+        translatedText = nil
+    }
+
+    mutating func cancelActiveRequest() {
+        activeRequestID = nil
+        isTranslating = false
+    }
+
+    private func isCurrentRequest(paperID: UUID, requestID: UUID) -> Bool {
+        self.paperID == paperID && activeRequestID == requestID
     }
 }
 
