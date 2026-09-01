@@ -6,7 +6,7 @@ final class LLMRouteResolverTests: XCTestCase {
     @MainActor
     func testResolverReturnsIndependentHTMLAndPDFRoutes() throws {
         let service = "LLMRouteResolverTests.\(UUID().uuidString)"
-        let keychainStore = KeychainStore(service: service)
+        let keychainStore = KeychainStore(service: service, accessPolicy: .unprotected)
         let defaultsSuite = "LLMRouteResolverTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: defaultsSuite))
         defer { defaults.removePersistentDomain(forName: defaultsSuite) }
@@ -32,7 +32,9 @@ final class LLMRouteResolverTests: XCTestCase {
         modelContext.insert(pdfModel)
         modelContext.insert(settings)
         try modelContext.save()
+        XCTAssertFalse(try keychainStore.contains(account: provider.apiKeyRef))
         try keychainStore.save("sk-test", account: provider.apiKeyRef)
+        XCTAssertTrue(try keychainStore.contains(account: provider.apiKeyRef))
         apiStyleStore.setAPIStyle(.responses, for: provider.id)
 
         let resolver = LLMRouteResolver(
@@ -52,7 +54,10 @@ final class LLMRouteResolverTests: XCTestCase {
 
     @MainActor
     func testResolverPassesThinkingModeAndReasoningEffortThroughSnapshot() throws {
-        let keychainStore = KeychainStore(service: "LLMRouteResolverTests.\(UUID().uuidString)")
+        let keychainStore = KeychainStore(
+            service: "LLMRouteResolverTests.\(UUID().uuidString)",
+            accessPolicy: .unprotected
+        )
         let container = try makeContainer()
         let modelContext = ModelContext(container)
 
@@ -89,7 +94,10 @@ final class LLMRouteResolverTests: XCTestCase {
 
     @MainActor
     func testResolverRejectsDisabledProviderAndMissingSelection() throws {
-        let keychainStore = KeychainStore(service: "LLMRouteResolverTests.\(UUID().uuidString)")
+        let keychainStore = KeychainStore(
+            service: "LLMRouteResolverTests.\(UUID().uuidString)",
+            accessPolicy: .unprotected
+        )
         let container = try makeContainer()
         let modelContext = ModelContext(container)
 
@@ -125,7 +133,10 @@ final class LLMRouteResolverTests: XCTestCase {
 
     @MainActor
     func testResolverRejectsMissingAPIKey() throws {
-        let keychainStore = KeychainStore(service: "LLMRouteResolverTests.\(UUID().uuidString)")
+        let keychainStore = KeychainStore(
+            service: "LLMRouteResolverTests.\(UUID().uuidString)",
+            accessPolicy: .unprotected
+        )
         let container = try makeContainer()
         let modelContext = ModelContext(container)
 

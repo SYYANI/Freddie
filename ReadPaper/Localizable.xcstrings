@@ -225,16 +225,6 @@
         }
       }
     },
-    "Adds a localized HTML copy for HTML reading and translation. Import may take longer." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "同时保存本地化的 HTML 副本，用于 HTML 阅读和翻译；导入可能需要更长时间。"
-          }
-        }
-      }
-    },
     "Add an arXiv ID, an arXiv URL, or a local PDF from the library sidebar." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -332,6 +322,16 @@
         }
       }
     },
+    "Adds a localized HTML copy for HTML reading and translation. Import may take longer." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "同时保存本地化的 HTML 副本，用于 HTML 阅读和翻译；导入可能需要更长时间。"
+          }
+        }
+      }
+    },
     "Advanced Parameters" : {
       "localizations" : {
         "zh-Hans" : {
@@ -414,6 +414,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "API key 不能为空。"
+          }
+        }
+      }
+    },
+    "API keys are protected in Keychain with Touch ID or your device password. Leaving the API key field blank while editing keeps the saved key." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "API 密钥通过触控 ID 或设备密码保护并存储在钥匙串中。编辑时将 API 密钥留空会保留已保存的密钥。"
+          }
+        }
+      }
+    },
+    "API keys are protected with Touch ID or your device password. After the first approval, this Freddie installation stays authorized until the app is updated or the key changes. Leaving the API key field blank while editing keeps the saved key." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "API 密钥通过触控 ID 或设备密码保护。首次授权后，当前 Freddie 安装会保持授权，直到 App 更新或 API 密钥发生变化。编辑时将 API 密钥留空会保留已保存的密钥。"
+          }
+        }
+      }
+    },
+    "API keys are protected with Touch ID or your device password. Leaving the API key field blank while editing keeps the saved key." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "API 密钥通过触控 ID 或设备密码保护。编辑时将 API 密钥留空会保留已保存的密钥。"
           }
         }
       }
@@ -531,6 +563,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "arXiv：%1$@"
+          }
+        }
+      }
+    },
+    "Authenticate to access the saved API key." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请使用触控 ID 或设备密码访问已存储的 API 密钥。"
           }
         }
       }
@@ -1265,6 +1307,16 @@
         }
       }
     },
+    "Could not create access control for the saved API key." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法为已保存的 API 密钥创建访问控制。"
+          }
+        }
+      }
+    },
     "Could not parse the LaTeX source." : {
       "localizations" : {
         "zh-Hans" : {
@@ -1281,6 +1333,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "无法准备 arXiv LaTeX 源码。"
+          }
+        }
+      }
+    },
+    "Could not protect the API key for storage." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法加密保护要存储的 API 密钥。"
           }
         }
       }
@@ -1610,6 +1672,16 @@
         }
       }
     },
+    "Download HTML version" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "下载 HTML 版本"
+          }
+        }
+      }
+    },
     "Download MacTeX" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1617,16 +1689,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "下载 MacTeX"
-          }
-        }
-      }
-    },
-    "Download HTML version" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "下载 HTML 版本"
           }
         }
       }
@@ -4357,6 +4419,16 @@
         }
       }
     },
+    "Secure Enclave is unavailable on this device." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此设备无法使用安全隔区。"
+          }
+        }
+      }
+    },
     "Select a paper from the library." : {
       "localizations" : {
         "zh-Hans" : {
@@ -4907,6 +4979,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "主要 HTML 来源不可用，因此 ReadPaper 正在尝试 %1$@。"
+          }
+        }
+      }
+    },
+    "The protected API key data is invalid." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "受保护的 API 密钥数据无效。"
           }
         }
       }

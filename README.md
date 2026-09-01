@@ -84,6 +84,16 @@ Run tests:
 xcodebuild -project ReadPaper.xcodeproj -scheme ReadPaper -destination 'platform=macOS' -derivedDataPath /tmp/read-paper-derived-data test
 ```
 
+Enable the repository's Git hooks once per clone:
+
+```sh
+git config core.hooksPath .githooks
+```
+
+The pre-commit hook increments the patch version and build number together,
+then stages only those version fields in `project.yml` and the generated Xcode
+project. A commit after `0.3.8 (28)`, for example, becomes `0.3.9 (29)`.
+
 ## Project Structure
 
 - `ReadPaper/Models`: SwiftData models and enums

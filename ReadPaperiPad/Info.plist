@@ -24,6 +24,8 @@
 	<true/>
 	<key>NSHumanReadableCopyright</key>
 	<string>Personal build.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Freddie uses Face ID to protect access to saved API keys.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

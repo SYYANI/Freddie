@@ -855,7 +855,7 @@ private struct SettingsForm: View {
                 Text("OpenAI and DeepSeek are ready to use after you save an API key. You can also add custom providers and choose either the Responses API or Chat Completions.", bundle: bundle)
                     .fixedSize(horizontal: false, vertical: true)
 
-                Text("API keys are stored in Keychain. Leaving the API key field blank while editing keeps the saved key.", bundle: bundle)
+                Text("API keys are protected with Touch ID or your device password. After the first approval, this Freddie installation stays authorized until the app is updated or the key changes. Leaving the API key field blank while editing keeps the saved key.", bundle: bundle)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -1515,8 +1515,10 @@ private struct SettingsForm: View {
             let trimmedAPIKey = providerAPIKey.trimmingCharacters(in: .whitespacesAndNewlines)
             if trimmedAPIKey.isEmpty == false {
                 try keychainStore.save(trimmedAPIKey, account: provider.apiKeyRef)
-            } else if hasStoredAPIKey(ref: provider.apiKeyRef) == false {
-                throw LLMProviderValidationError.emptyAPIKey
+            } else {
+                guard try keychainStore.migrateToUserPresenceIfNeeded(account: provider.apiKeyRef) else {
+                    throw LLMProviderValidationError.emptyAPIKey
+                }
             }
 
             LLMDefaultRouteActivator().selectRoutesIfNeeded(
@@ -1561,6 +1563,7 @@ private struct SettingsForm: View {
         do {
             settings.modifiedAt = Date()
             try modelContext.save()
+            try? keychainStore.delete(account: provider.apiKeyRef)
             if isBuiltInProvider {
                 defaultProfileDeletionStore.markProviderDeleted(providerID)
             }
@@ -1911,7 +1914,7 @@ private struct SettingsForm: View {
     }
 
     private func hasStoredAPIKey(ref: String) -> Bool {
-        ((try? keychainStore.load(account: ref)) ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+        (try? keychainStore.contains(account: ref)) == true
     }
 
     private func modelDisplayName(_ model: LLMModelProfile) -> String {
