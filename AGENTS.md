@@ -34,19 +34,19 @@ open ReadPaper.xcodeproj
 命令行构建：
 
 ```sh
-xcodebuild -project ReadPaper.xcodeproj -scheme ReadPaper -destination 'platform=macOS' -derivedDataPath .DerivedData build
+xcodebuild -project ReadPaper.xcodeproj -scheme ReadPaper -destination 'platform=macOS' -derivedDataPath /tmp/read-paper-derived-data build
 ```
 
 命令行测试：
 
 ```sh
-xcodebuild -project ReadPaper.xcodeproj -scheme ReadPaper -destination 'platform=macOS' -derivedDataPath .DerivedData test
+xcodebuild -project ReadPaper.xcodeproj -scheme ReadPaper -destination 'platform=macOS' -derivedDataPath /tmp/read-paper-derived-data test
 ```
 
 窄改动只跑相关测试时，可直接指定 `-only-testing`，例如验证 BabelDOC 安装/版本解析相关改动：
 
 ```sh
-xcodebuild -project ReadPaper.xcodeproj -scheme ReadPaper -destination 'platform=macOS' -derivedDataPath .DerivedData -only-testing:ReadPaperTests/BabelDocToolManagerTests test
+xcodebuild -project ReadPaper.xcodeproj -scheme ReadPaper -destination 'platform=macOS' -derivedDataPath /tmp/read-paper-derived-data -only-testing:ReadPaperTests/BabelDocToolManagerTests test
 ```
 
 GitHub Actions 构建 DMG：
@@ -152,7 +152,7 @@ LLM 配置现已拆成独立 SwiftData 模型：`LLMProviderProfile` 负责 prov
 针对单个测试类做快速回归时，优先使用下面这种命令形式，避免每次都跑完整测试集：
 
 ```sh
-xcodebuild -project ReadPaper.xcodeproj -scheme ReadPaper -destination 'platform=macOS' -derivedDataPath .DerivedData -only-testing:ReadPaperTests/BabelDocToolManagerTests test
+xcodebuild -project ReadPaper.xcodeproj -scheme ReadPaper -destination 'platform=macOS' -derivedDataPath /tmp/read-paper-derived-data -only-testing:ReadPaperTests/BabelDocToolManagerTests test
 ```
 
 重点测试映射：

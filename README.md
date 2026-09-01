@@ -73,14 +73,15 @@ Or build from the command line:
 The build script performs an unsigned Release build, verifies the embedded
 BabelDOC runtime and helper, and writes the app to
 `build/Release/Freddie.app`; compilation intermediates remain under
-`.DerivedData`, so the release directory contains only the app bundle. Run
+`/tmp/read-paper-derived-data`, so the repository and release directory stay
+free of compilation intermediates. Run
 `./scripts/build --help` for Debug builds, custom output paths, optional
 XcodeGen project regeneration, and Xcode signing options.
 
 Run tests:
 
 ```sh
-xcodebuild -project ReadPaper.xcodeproj -scheme ReadPaper -destination 'platform=macOS' -derivedDataPath .DerivedData test
+xcodebuild -project ReadPaper.xcodeproj -scheme ReadPaper -destination 'platform=macOS' -derivedDataPath /tmp/read-paper-derived-data test
 ```
 
 ## Project Structure
