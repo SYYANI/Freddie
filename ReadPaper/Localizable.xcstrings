@@ -194,6 +194,17 @@
         }
       }
     },
+    "About Freddie" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "关于 Freddie"
+          }
+        }
+      }
+    },
     "Abstract" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1400,6 +1411,16 @@
         }
       }
     },
+    "Credits" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "致谢"
+          }
+        }
+      }
+    },
     "Current installed version" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1551,6 +1572,17 @@
         }
       }
     },
+    "Development" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "开发"
+          }
+        }
+      }
+    },
     "Digest" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1646,6 +1678,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "显示名称"
+          }
+        }
+      }
+    },
+    "Document Reading" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "文档阅读"
           }
         }
       }
@@ -2636,6 +2679,17 @@
         }
       }
     },
+    "Interface and Localization" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "界面与本地化"
+          }
+        }
+      }
+    },
     "Invalid arXiv identifier: %@" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -3519,6 +3573,17 @@
         }
       }
     },
+    "Open Source License" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "开源许可"
+          }
+        }
+      }
+    },
     "OpenAI and DeepSeek are ready to use after you save an API key. You can also add custom providers and choose either the Responses API or Chat Completions." : {
       "localizations" : {
         "zh-Hans" : {
@@ -3746,6 +3811,17 @@
         }
       }
     },
+    "PDF Translation" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PDF 翻译"
+          }
+        }
+      }
+    },
     "PDF translation completed with warnings: translated %d/%d text blocks; %d failed and kept their original layout." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -3789,6 +3865,9 @@
           }
         }
       }
+    },
+    "PDFKit · SwiftSoup" : {
+
     },
     "Place PDF Note" : {
       "extractionState" : "stale",
@@ -4696,6 +4775,9 @@
           }
         }
       }
+    },
+    "SwiftUI · AppKit · SwiftData" : {
+
     },
     "Switch between HTML and PDF reading" : {
       "extractionState" : "stale",
@@ -5763,6 +5845,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在校验 LaTeX 译稿..."
+          }
+        }
+      }
+    },
+    "Version %@ (Build %@)" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "版本 %1$@（构建 %2$@）"
           }
         }
       }

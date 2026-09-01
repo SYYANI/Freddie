@@ -23,7 +23,7 @@
 	<key>NSDocumentsFolderUsageDescription</key>
 	<string>Freddie imports local PDF papers selected by you.</string>
 	<key>NSHumanReadableCopyright</key>
-	<string>Personal build.</string>
+	<string>Copyright © 2026 SYYANI.</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
 </dict>

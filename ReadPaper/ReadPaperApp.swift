@@ -34,12 +34,35 @@ struct ReadPaperApp: App {
         )
         .windowResizability(.contentMinSize)
         .modelContainer(sharedModelContainer)
+        .commands {
+            AboutFreddieCommands()
+        }
+
+        Window("About Freddie", id: AboutFreddieCommands.windowID) {
+            AboutView()
+                .environment(\.localizationBundle, bundle)
+        }
+        .windowResizability(.contentSize)
 
         Settings {
             SettingsView()
                 .environment(\.localizationBundle, bundle)
                 .modelContainer(sharedModelContainer)
                 .frame(width: 920, height: 720)
+        }
+    }
+}
+
+private struct AboutFreddieCommands: Commands {
+    static let windowID = "about-freddie"
+
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some Commands {
+        CommandGroup(replacing: .appInfo) {
+            Button(String(localized: "About Freddie", bundle: LanguageManager.shared.bundle)) {
+                openWindow(id: Self.windowID)
+            }
         }
     }
 }

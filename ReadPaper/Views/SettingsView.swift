@@ -76,7 +76,10 @@ struct SettingsView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(SettingsWindowCenteringView())
+        .background {
+            AppWindowBackdrop(role: .settings)
+                .allowsHitTesting(false)
+        }
     }
 }
 
@@ -346,6 +349,7 @@ private struct SettingsForm: View {
                 }
         }
         .formStyle(.grouped)
+        .scrollContentBackground(.hidden)
         .task {
             _ = try? LLMConfigurationBootstrapper().ensureBootstrap(modelContext: modelContext)
             try? LLMDefaultProfileSeeder(apiStyleStore: apiStyleStore).ensureDefaults(modelContext: modelContext)
@@ -490,6 +494,7 @@ private struct SettingsForm: View {
                 }
             }
             .formStyle(.grouped)
+            .scrollContentBackground(.hidden)
 
             Spacer(minLength: 0)
         }
@@ -567,6 +572,7 @@ private struct SettingsForm: View {
                 }
             }
             .formStyle(.grouped)
+            .scrollContentBackground(.hidden)
 
             Spacer(minLength: 0)
         }
@@ -716,6 +722,7 @@ private struct SettingsForm: View {
                 }
             }
             .formStyle(.grouped)
+            .scrollContentBackground(.hidden)
 
             Spacer(minLength: 0)
         }
@@ -790,6 +797,7 @@ private struct SettingsForm: View {
                 }
             }
             .formStyle(.grouped)
+            .scrollContentBackground(.hidden)
 
             Spacer(minLength: 0)
         }
@@ -820,17 +828,26 @@ private struct SettingsForm: View {
             title: String(localized: "Providers", bundle: bundle),
             count: sortedProviders.count
         ) {
-            List(selection: $selectedProviderID) {
-                ForEach(sortedProviders, id: \.id) { provider in
-                    providerListRow(provider)
-                        .tag(Optional(provider.id))
-                        .contentShape(Rectangle())
+            ScrollView {
+                LazyVStack(spacing: 0) {
+                    ForEach(sortedProviders, id: \.id) { provider in
+                        entityListRow(isSelected: selectedProviderID == provider.id) {
+                            providerListRow(provider)
+                        }
                         .onTapGesture {
                             selectedProviderID = provider.id
                         }
+
+                        if provider.id != sortedProviders.last?.id {
+                            Divider()
+                                .padding(.leading, 12)
+                        }
+                    }
                 }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 10)
             }
-            .listStyle(.inset(alternatesRowBackgrounds: false))
+            .background(Color.clear)
         } toolbar: {
             Button {
                 resetProviderForm()
@@ -928,6 +945,7 @@ private struct SettingsForm: View {
             }
         }
         .formStyle(.grouped)
+        .scrollContentBackground(.hidden)
     }
 
     private var modelListPanel: some View {
@@ -935,17 +953,26 @@ private struct SettingsForm: View {
             title: String(localized: "Models", bundle: bundle),
             count: sortedModels.count
         ) {
-            List(selection: $selectedModelID) {
-                ForEach(sortedModels, id: \.id) { model in
-                    modelListRow(model)
-                        .tag(Optional(model.id))
-                        .contentShape(Rectangle())
+            ScrollView {
+                LazyVStack(spacing: 0) {
+                    ForEach(sortedModels, id: \.id) { model in
+                        entityListRow(isSelected: selectedModelID == model.id) {
+                            modelListRow(model)
+                        }
                         .onTapGesture {
                             selectedModelID = model.id
                         }
+
+                        if model.id != sortedModels.last?.id {
+                            Divider()
+                                .padding(.leading, 12)
+                        }
+                    }
                 }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 10)
             }
-            .listStyle(.inset(alternatesRowBackgrounds: false))
+            .background(Color.clear)
         } toolbar: {
             Button {
                 resetModelForm()
@@ -1093,6 +1120,7 @@ private struct SettingsForm: View {
             }
         }
         .formStyle(.grouped)
+        .scrollContentBackground(.hidden)
     }
 
     @ViewBuilder
@@ -1158,7 +1186,7 @@ private struct SettingsForm: View {
             .buttonStyle(.borderless)
             .frame(height: 28)
             .padding(.horizontal, 8)
-            .background(Color(nsColor: .windowBackgroundColor).opacity(0.65))
+            .background(.ultraThinMaterial)
         }
         .background(panelBackground)
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
@@ -1169,8 +1197,33 @@ private struct SettingsForm: View {
     }
 
     private var panelBackground: some View {
-        RoundedRectangle(cornerRadius: 10, style: .continuous)
-            .fill(Color(nsColor: .controlBackgroundColor))
+        ZStack {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(.regularMaterial)
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color(nsColor: .controlBackgroundColor).opacity(0.18))
+        }
+    }
+
+    private func entityListRow<RowContent: View>(
+        isSelected: Bool,
+        @ViewBuilder content: () -> RowContent
+    ) -> some View {
+        content()
+            .padding(.horizontal, 4)
+            .padding(.vertical, 6)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .background {
+                if isSelected {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(.regularMaterial)
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(Color(nsColor: .selectedContentBackgroundColor).opacity(0.16))
+                    }
+                }
+            }
     }
 
     private func providerListRow(_ provider: LLMProviderProfile) -> some View {
@@ -2203,71 +2256,6 @@ private struct SettingsTemplateTextEditor: NSViewRepresentable {
             }
             return true
         }
-    }
-}
-
-private struct SettingsWindowCenteringView: NSViewRepresentable {
-    func makeNSView(context: Context) -> SettingsWindowCenteringNSView {
-        SettingsWindowCenteringNSView()
-    }
-
-    func updateNSView(_ nsView: SettingsWindowCenteringNSView, context: Context) {}
-}
-
-private final class SettingsWindowCenteringNSView: NSView {
-    private weak var observedWindow: NSWindow?
-    private var didCenterCurrentWindow = false
-
-    override func viewDidMoveToWindow() {
-        super.viewDidMoveToWindow()
-        guard window !== observedWindow else { return }
-
-        observedWindow = window
-        didCenterCurrentWindow = false
-        scheduleCenteringIfNeeded()
-    }
-
-    override func viewDidMoveToSuperview() {
-        super.viewDidMoveToSuperview()
-        scheduleCenteringIfNeeded()
-    }
-
-    private func scheduleCenteringIfNeeded() {
-        DispatchQueue.main.async { [weak self] in
-            self?.centerWindowIfNeeded()
-        }
-    }
-
-    private func centerWindowIfNeeded() {
-        guard didCenterCurrentWindow == false, let settingsWindow = window else { return }
-
-        let anchorWindow = NSApp.windows.first { candidate in
-            candidate !== settingsWindow && candidate.isVisible && (candidate.isMainWindow || candidate.isKeyWindow)
-        } ?? NSApp.orderedWindows.first { candidate in
-            candidate !== settingsWindow && candidate.isVisible
-        }
-
-        let targetScreen = anchorWindow?.screen ?? settingsWindow.screen ?? NSScreen.main
-        let visibleFrame = targetScreen?.visibleFrame ?? settingsWindow.frame
-
-        var frame = settingsWindow.frame
-
-        if let anchorFrame = anchorWindow?.frame {
-            frame.origin.x = anchorFrame.midX - (frame.width / 2)
-            frame.origin.y = anchorFrame.midY - (frame.height / 2)
-        } else {
-            frame.origin.x = visibleFrame.midX - (frame.width / 2)
-            frame.origin.y = visibleFrame.midY - (frame.height / 2)
-        }
-
-        let maxOriginX = max(visibleFrame.minX, visibleFrame.maxX - frame.width)
-        let maxOriginY = max(visibleFrame.minY, visibleFrame.maxY - frame.height)
-
-        frame.origin.x = min(max(frame.origin.x, visibleFrame.minX), maxOriginX)
-        frame.origin.y = min(max(frame.origin.y, visibleFrame.minY), maxOriginY)
-
-        settingsWindow.setFrame(frame, display: false)
-        didCenterCurrentWindow = true
     }
 }
 

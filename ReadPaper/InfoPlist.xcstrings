@@ -50,7 +50,13 @@
         "en" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "Personal build."
+            "value" : "Copyright © 2026 SYYANI."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copyright © 2026 SYYANI."
           }
         }
       }
