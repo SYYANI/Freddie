@@ -1,6 +1,7 @@
 name: ReadPaper
 options:
-  minimumXcodeGenVersion: 2.42.0
+  minimumXcodeGenVersion: 2.46.0
+  projectFormat: xcode15_3
   deploymentTarget:
     macOS: "14.0"
 packages:
@@ -28,6 +29,7 @@ targets:
         product: BabelDocKit
     settings:
       base:
+        ARCHS: arm64
         PRODUCT_NAME: babeldoc-readpaper-helper
         PRODUCT_BUNDLE_IDENTIFIER: com.yiyan.ReadPaper.BabelDocHelper
         SWIFT_VERSION: 6.0
@@ -88,18 +90,25 @@ targets:
           - $(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/Helpers/babeldoc-readpaper-helper
     settings:
       base:
+        ARCHS: arm64
         PRODUCT_BUNDLE_IDENTIFIER: com.yiyan.ReadPaper
         PRODUCT_NAME: Freddie
         PRODUCT_MODULE_NAME: ReadPaper
         DEVELOPMENT_LANGUAGE: en
         INFOPLIST_FILE: ReadPaper/Info.plist
         INFOPLIST_KEY_CFBundleDisplayName: Freddie
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.books
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS: NO
         SWIFT_VERSION: 6.0
-        ENABLE_TESTABILITY: YES
         CODE_SIGN_STYLE: Automatic
-        CURRENT_PROJECT_VERSION: 37
-        MARKETING_VERSION: 0.3.17
+        CURRENT_PROJECT_VERSION: 38
+        MARKETING_VERSION: 0.3.18
+      configs:
+        Debug:
+          ENABLE_TESTABILITY: YES
+        Release:
+          ENABLE_TESTABILITY: NO
   ReadPaperiPad:
     type: application
     platform: iOS
@@ -147,8 +156,12 @@ targets:
         SWIFT_VERSION: 6.0
         ENABLE_TESTABILITY: YES
         CODE_SIGN_STYLE: Automatic
-        CURRENT_PROJECT_VERSION: 37
-        MARKETING_VERSION: 0.3.17
+        DEVELOPMENT_TEAM: 3VM5RUH8V5
+        CURRENT_PROJECT_VERSION: 38
+        MARKETING_VERSION: 0.3.18
+        SUPPORTED_PLATFORMS: iphoneos iphonesimulator
+        SUPPORTS_MACCATALYST: NO
+        SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD: NO
         TARGETED_DEVICE_FAMILY: 2
   ReadPaperTests:
     type: bundle.unit-test
@@ -161,6 +174,7 @@ targets:
       - target: ReadPaper
     settings:
       base:
+        ARCHS: arm64
         PRODUCT_BUNDLE_IDENTIFIER: com.yiyan.ReadPaperTests
         PRODUCT_NAME: ReadPaperTests
         DEVELOPMENT_LANGUAGE: en
@@ -184,6 +198,9 @@ targets:
         DEVELOPMENT_LANGUAGE: en
         INFOPLIST_FILE: ReadPaperiPadTests/Info.plist
         SWIFT_VERSION: 6.0
+        SUPPORTED_PLATFORMS: iphoneos iphonesimulator
+        SUPPORTS_MACCATALYST: YES
+        SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD: NO
         TEST_HOST: $(BUILT_PRODUCTS_DIR)/Freddie.app/Freddie
         BUNDLE_LOADER: $(TEST_HOST)
 schemes:
