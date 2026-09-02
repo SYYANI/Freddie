@@ -128,15 +128,29 @@ head_version="$(read_version_value "$head_project" MARKETING_VERSION)"
 head_build="$(read_version_value "$head_project" CURRENT_PROJECT_VERSION)"
 staged_version="$(read_version_value "$staged_project" MARKETING_VERSION)"
 staged_build="$(read_version_value "$staged_project" CURRENT_PROJECT_VERSION)"
+worktree_version="$(read_version_value "$project_file" MARKETING_VERSION)"
+worktree_build="$(read_version_value "$project_file" CURRENT_PROJECT_VERSION)"
 validate_version "$head_version"
 validate_version "$staged_version"
+validate_version "$worktree_version"
 validate_build "$head_build"
 validate_build "$staged_build"
+validate_build "$worktree_build"
 
 next_version="$(next_patch_version "$head_version")"
 next_build="$((10#$head_build + 1))"
 
-if [[ "$staged_version" == "$head_version" && "$staged_build" == "$head_build" ]]; then
+if [[ "$worktree_version" == "$staged_version" && "$worktree_build" != "$staged_build" ]] \
+    || [[ "$worktree_version" != "$staged_version" && "$worktree_build" == "$staged_build" ]]; then
+    fail "change MARKETING_VERSION and CURRENT_PROJECT_VERSION together in $project_file"
+elif [[ "$worktree_version" != "$staged_version" && "$worktree_build" != "$staged_build" ]]; then
+    # Version fields are intentionally staged by this hook, so an explicit bump in
+    # the working tree must not be discarded merely because the developer did not
+    # stage project.yml before committing other files.
+    target_version="$worktree_version"
+    target_build="$worktree_build"
+    did_bump=false
+elif [[ "$staged_version" == "$head_version" && "$staged_build" == "$head_build" ]]; then
     target_version="$next_version"
     target_build="$next_build"
     did_bump=true

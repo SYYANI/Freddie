@@ -92,7 +92,10 @@ git config core.hooksPath .githooks
 
 The pre-commit hook increments the patch version and build number together,
 then stages only those version fields in `project.yml` and the generated Xcode
-project. A commit after `0.3.8 (28)`, for example, becomes `0.3.9 (29)`.
+project. A commit after `0.3.8 (28)`, for example, becomes `0.3.9 (29)`. To
+start a new minor or major version, change `MARKETING_VERSION` and
+`CURRENT_PROJECT_VERSION` together in `project.yml`; the hook preserves and
+stages that explicit version change even if `project.yml` was not staged yet.
 
 ## Project Structure
 
