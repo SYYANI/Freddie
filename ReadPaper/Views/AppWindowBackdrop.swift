@@ -70,6 +70,15 @@ final class AppWindowConfigurationProbe: NSView {
         }
 
         applyWindowAppearanceIfNeeded()
+
+        // SwiftUI can update a Window scene's style mask and sizing constraints
+        // after its hosted view has joined the window, notably on macOS 15.
+        // Reapply the AppKit constraints on the next run-loop turn so the About
+        // window does not become freely resizable due to that ordering.
+        DispatchQueue.main.async { [weak self, weak window] in
+            guard let self, let window else { return }
+            self.applyWindowAppearance(to: window)
+        }
     }
 
     func applyWindowAppearanceIfNeeded() {
@@ -78,25 +87,39 @@ final class AppWindowConfigurationProbe: NSView {
     }
 
     private func applyWindowAppearance(to window: NSWindow) {
-        guard didConfigureWindow == false else { return }
-        didConfigureWindow = true
+        if didConfigureWindow == false {
+            didConfigureWindow = true
 
-        window.isOpaque = false
-        window.backgroundColor = .clear
-        window.titlebarAppearsTransparent = true
-        window.titleVisibility = .hidden
-        window.titlebarSeparatorStyle = .none
-        window.styleMask.insert([.titled, .closable, .fullSizeContentView])
-        window.styleMask.remove([.miniaturizable, .resizable])
-        window.isMovableByWindowBackground = false
-        window.toolbar?.showsBaselineSeparator = false
+            window.isOpaque = false
+            window.backgroundColor = .clear
+            window.titlebarAppearsTransparent = true
+            window.titleVisibility = .hidden
+            window.titlebarSeparatorStyle = .none
+            window.styleMask.insert([.titled, .closable, .fullSizeContentView])
+            window.isMovableByWindowBackground = false
+            window.toolbar?.showsBaselineSeparator = false
 
-        if case .about = role {
-            installWindowMaterialIfNeeded(in: window)
+            if case .about = role {
+                installWindowMaterialIfNeeded(in: window)
+            }
         }
 
+        // Keep these constraints outside the one-time appearance setup. SwiftUI
+        // may restore `.resizable` while reconciling a Window scene on macOS 15.
+        window.styleMask.remove([.miniaturizable, .resizable])
         window.standardWindowButton(.miniaturizeButton)?.isEnabled = false
         window.standardWindowButton(.zoomButton)?.isEnabled = false
+
+        if case .about = role {
+            let contentSize = AboutWindowMetrics.contentSize
+            window.contentMinSize = contentSize
+            window.contentMaxSize = contentSize
+
+            if window.contentLayoutRect.size != contentSize {
+                window.setContentSize(contentSize)
+            }
+        }
+
         centerWindowIfNeeded(window)
     }
 

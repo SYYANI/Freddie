@@ -1,12 +1,16 @@
 import AppKit
 import SwiftUI
 
+enum AboutWindowMetrics {
+    static let width: CGFloat = 490
+    static let height: CGFloat = 247
+    static let contentSize = NSSize(width: width, height: height)
+}
+
 struct AboutView: View {
     @Environment(\.localizationBundle) private var bundle
 
     private enum Metrics {
-        static let width: CGFloat = 490
-        static let contentHeight: CGFloat = 247
         static let columnHeight: CGFloat = 198
         static let topPadding: CGFloat = 48
         static let bottomPadding: CGFloat = 1
@@ -45,7 +49,7 @@ struct AboutView: View {
         .padding(.leading, 18)
         .padding(.trailing, 20)
         .padding(.bottom, Metrics.bottomPadding)
-        .frame(width: Metrics.width, height: Metrics.contentHeight)
+        .frame(width: AboutWindowMetrics.width, height: AboutWindowMetrics.height)
         .background {
             AppWindowBackdrop(role: .about)
                 .ignoresSafeArea()

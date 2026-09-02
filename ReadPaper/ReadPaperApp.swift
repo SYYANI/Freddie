@@ -42,6 +42,10 @@ struct ReadPaperApp: App {
             AboutView()
                 .environment(\.localizationBundle, bundle)
         }
+        .defaultSize(
+            width: AboutWindowMetrics.width,
+            height: AboutWindowMetrics.height
+        )
         .windowResizability(.contentSize)
 
         Settings {
