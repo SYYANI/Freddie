@@ -82,6 +82,8 @@ struct ReaderPaneView: View {
     @State private var digestNoticeMessage: String?
     @State private var digestNoticeTitle: String?
     @State private var digestErrorMessage: String?
+    @State private var copyToastMessage: String?
+    @State private var copyToastDismissTask: Task<Void, Never>?
     @State private var pdfDebugModeEnabled = false
     @State private var pdfDebugExportDirectoryURL: URL?
     @State private var pdfDebugDirectoryHasSecurityScope = false
@@ -223,6 +225,15 @@ struct ReaderPaneView: View {
                 ReadPaperAppearanceSurface(role: .reader)
                     .ignoresSafeArea()
             }
+            .overlay(alignment: .bottom) {
+                if let copyToastMessage {
+                    copyToast(message: copyToastMessage)
+                        .padding(.bottom, 20)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                        .zIndex(20)
+                }
+            }
+            .animation(.easeOut(duration: 0.18), value: copyToastMessage != nil)
             .toolbar {
                 readerToolbar
             }
@@ -267,6 +278,7 @@ struct ReaderPaneView: View {
                 persistReadingStateIfNeeded()
                 deactivatePDFTranslationDebugMode()
                 clearSelectionAssistant()
+                dismissCopyToast()
             }
             .confirmationDialog(
                 String(localized: "Choose Translation Scope", bundle: bundle),
@@ -1022,8 +1034,41 @@ struct ReaderPaneView: View {
 
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(sourceLinkURL.absoluteString, forType: .string)
-        digestNoticeTitle = String(localized: "Link Copied", bundle: bundle)
-        digestNoticeMessage = String(localized: "Link copied to the clipboard.", bundle: bundle)
+        showCopyToast(message: String(localized: "Link copied to the clipboard.", bundle: bundle))
+    }
+
+    private func showCopyToast(message: String) {
+        copyToastDismissTask?.cancel()
+        copyToastMessage = message
+        copyToastDismissTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            guard Task.isCancelled == false else { return }
+            withAnimation(.easeIn(duration: 0.18)) {
+                copyToastMessage = nil
+            }
+            copyToastDismissTask = nil
+        }
+    }
+
+    private func dismissCopyToast() {
+        copyToastDismissTask?.cancel()
+        copyToastDismissTask = nil
+        copyToastMessage = nil
+    }
+
+    private func copyToast(message: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundStyle(.green)
+            Text(message)
+                .font(.callout.weight(.medium))
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .readPaperGlassEffect(in: Capsule())
+        .shadow(color: .black.opacity(0.14), radius: 10, y: 4)
+        .allowsHitTesting(false)
+        .accessibilityElement(children: .combine)
     }
 
     private func copyDigest() {
@@ -1037,8 +1082,7 @@ struct ReaderPaneView: View {
         )
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(markdown, forType: .string)
-        digestNoticeTitle = String(localized: "Digest Ready", bundle: bundle)
-        digestNoticeMessage = String(localized: "Digest copied to the clipboard.", bundle: bundle)
+        showCopyToast(message: String(localized: "Digest copied to the clipboard.", bundle: bundle))
     }
 
     private func exportDigest() {
