@@ -42,8 +42,18 @@ read_xcode_version_value() {
 
 validate_version() {
     local version="$1"
+    local major
+    local minor
+    local patch
+
     [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] \
         || fail "MARKETING_VERSION must use major.minor.patch format (found $version)"
+
+    IFS=. read -r major minor patch <<< "$version"
+    ((10#$minor <= 9)) \
+        || fail "MARKETING_VERSION minor component must not exceed 9 (found $version)"
+    ((10#$patch <= 20)) \
+        || fail "MARKETING_VERSION patch component must not exceed 20 (found $version)"
 }
 
 validate_build() {
@@ -52,14 +62,29 @@ validate_build() {
         || fail "CURRENT_PROJECT_VERSION must be an integer (found $build)"
 }
 
-next_patch_version() {
+next_marketing_version() {
     local version="$1"
     local major
     local minor
     local patch
 
     IFS=. read -r major minor patch <<< "$version"
-    printf '%d.%d.%d' "$((10#$major))" "$((10#$minor))" "$((10#$patch + 1))"
+    major="$((10#$major))"
+    minor="$((10#$minor))"
+    patch="$((10#$patch))"
+
+    if ((patch < 20)); then
+        patch="$((patch + 1))"
+    elif ((minor < 9)); then
+        minor="$((minor + 1))"
+        patch=0
+    else
+        major="$((major + 1))"
+        minor=0
+        patch=0
+    fi
+
+    printf '%d.%d.%d' "$major" "$minor" "$patch"
 }
 
 rewrite_versions() {
@@ -137,7 +162,7 @@ validate_build "$head_build"
 validate_build "$staged_build"
 validate_build "$worktree_build"
 
-next_version="$(next_patch_version "$head_version")"
+next_version="$(next_marketing_version "$head_version")"
 next_build="$((10#$head_build + 1))"
 
 if [[ "$worktree_version" == "$staged_version" && "$worktree_build" != "$staged_build" ]] \

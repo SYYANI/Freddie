@@ -90,12 +90,14 @@ Enable the repository's Git hooks once per clone:
 git config core.hooksPath .githooks
 ```
 
-The pre-commit hook increments the patch version and build number together,
+The pre-commit hook increments the marketing version and build number together,
 then stages only those version fields in `project.yml` and the generated Xcode
-project. A commit after `0.3.8 (28)`, for example, becomes `0.3.9 (29)`. To
-start a new minor or major version, change `MARKETING_VERSION` and
-`CURRENT_PROJECT_VERSION` together in `project.yml`; the hook preserves and
-stages that explicit version change even if `project.yml` was not staged yet.
+project. The patch component runs from `0` through `20`, and the minor component
+runs from `0` through `9`: `0.3.19` becomes `0.3.20`, `0.3.20` becomes `0.4.0`,
+and `0.9.20` becomes `1.0.0`. To set an explicit version, change
+`MARKETING_VERSION` and `CURRENT_PROJECT_VERSION` together in `project.yml`;
+the hook preserves and stages that change even if `project.yml` was not staged
+yet.
 
 ## Project Structure
 
