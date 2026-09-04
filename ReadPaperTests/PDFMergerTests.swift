@@ -384,4 +384,20 @@ final class PDFMergerTests: XCTestCase {
             accuracy: 0.001
         )
     }
+
+    func testDualPDFSelectionOwnershipClearsPreviousSideWhenSelectionSwitches() {
+        var ownership = DualPDFSelectionOwnership()
+
+        XCTAssertNil(ownership.activate(.original))
+        XCTAssertEqual(ownership.activeSource, .original)
+        XCTAssertNil(ownership.activate(.original))
+
+        XCTAssertEqual(ownership.activate(.translated), .original)
+        XCTAssertEqual(ownership.activeSource, .translated)
+
+        XCTAssertFalse(ownership.clear(.original))
+        XCTAssertEqual(ownership.activeSource, .translated)
+        XCTAssertTrue(ownership.clear(.translated))
+        XCTAssertNil(ownership.activeSource)
+    }
 }

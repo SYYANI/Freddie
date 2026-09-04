@@ -364,6 +364,17 @@
         }
       }
     },
+    "AI Explanation" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "AI 解释"
+          }
+        }
+      }
+    },
     "All Pages" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -575,6 +586,39 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "arXiv：%1$@"
+          }
+        }
+      }
+    },
+    "Ask about the selected text..." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "针对划选文字提问…"
+          }
+        }
+      }
+    },
+    "Ask AI" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "问 AI"
+          }
+        }
+      }
+    },
+    "Ask AI About Selected Text" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "针对所选文字问 AI"
           }
         }
       }
@@ -1835,6 +1879,16 @@
         }
       }
     },
+    "Enter a question about the selected text." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请输入针对所选文字的问题。"
+          }
+        }
+      }
+    },
     "Enter one preferred term mapping per line, for example “large language model = 大语言模型”. The glossary is optional and is used as reference context by both HTML and PDF translation." : {
       "localizations" : {
         "zh-Hans" : {
@@ -1884,6 +1938,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "错误：%1$@"
+          }
+        }
+      }
+    },
+    "Explain Selected Text" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "解释所选文字"
           }
         }
       }
@@ -2188,6 +2253,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "由 Freddie 生成"
+          }
+        }
+      }
+    },
+    "Generating an answer..." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在生成解答…"
           }
         }
       }
@@ -4145,6 +4221,17 @@
         }
       }
     },
+    "Question: %@" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "问：%1$@"
+          }
+        }
+      }
+    },
     "Quick reading notes stay attached to the current paper." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -4426,6 +4513,17 @@
         }
       }
     },
+    "Save as Note" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "保存为笔记"
+          }
+        }
+      }
+    },
     "Save Model" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -4444,6 +4542,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "保存服务商"
+          }
+        }
+      }
+    },
+    "Saved to Notes" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已保存到笔记"
           }
         }
       }
@@ -4564,6 +4673,16 @@
         }
       }
     },
+    "Select some text before using the reading assistant." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请先选择文字，再使用阅读助手。"
+          }
+        }
+      }
+    },
     "Select text in PDF or HTML to attach a note." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -4614,6 +4733,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "选择"
+          }
+        }
+      }
+    },
+    "Send Question" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "发送提问"
           }
         }
       }
@@ -5463,6 +5593,17 @@
         }
       }
     },
+    "Translate Selected Text" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "翻译所选文字"
+          }
+        }
+      }
+    },
     "Translated" : {
       "localizations" : {
         "zh-Hans" : {
@@ -5563,6 +5704,17 @@
         }
       }
     },
+    "Translating..." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在翻译…"
+          }
+        }
+      }
+    },
     "Translation" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -5614,6 +5766,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "翻译路由"
+          }
+        }
+      }
+    },
+    "Translation settings are unavailable." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "翻译设置不可用。"
           }
         }
       }
@@ -5694,6 +5857,17 @@
         }
       }
     },
+    "Unable to save note: %@" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法保存笔记：%1$@"
+          }
+        }
+      }
+    },
     "Unavailable" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -5712,6 +5886,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "给所选内容添加下划线"
+          }
+        }
+      }
+    },
+    "Understanding the selected text in context..." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在结合上下文理解所选文字…"
           }
         }
       }

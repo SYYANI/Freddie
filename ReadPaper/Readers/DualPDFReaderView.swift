@@ -2,6 +2,31 @@ import AppKit
 import PDFKit
 import SwiftUI
 
+enum DualPDFSelectionSource: Equatable {
+    case original
+    case translated
+}
+
+struct DualPDFSelectionOwnership: Equatable {
+    private(set) var activeSource: DualPDFSelectionSource?
+
+    mutating func activate(_ source: DualPDFSelectionSource) -> DualPDFSelectionSource? {
+        let sourceToClear = activeSource != source ? activeSource : nil
+        activeSource = source
+        return sourceToClear
+    }
+
+    mutating func clear(_ source: DualPDFSelectionSource) -> Bool {
+        guard activeSource == source else { return false }
+        activeSource = nil
+        return true
+    }
+
+    mutating func reset() {
+        activeSource = nil
+    }
+}
+
 struct DualPDFReaderView: View {
     @Environment(\.localizationBundle) private var bundle
     var paperID: UUID? = nil
@@ -21,13 +46,10 @@ struct DualPDFReaderView: View {
     @State private var translatedPageIndex = 0
     @State private var translatedPageCount: Int = 0
     @State private var originalPageCount: Int = 0
-    @State private var activeSelectionSource: SelectionSource?
+    @State private var selectionOwnership = DualPDFSelectionOwnership()
+    @State private var originalSelectionResetToken = 0
+    @State private var translatedSelectionResetToken = 0
     @State private var pendingProgrammaticTranslatedPageTargets: Set<Int> = []
-
-    private enum SelectionSource {
-        case original
-        case translated
-    }
 
     private var isPartialTranslation: Bool {
         PDFTranslationCoverage.isPartial(
@@ -63,12 +85,12 @@ struct DualPDFReaderView: View {
         }
         .onChange(of: originalURL) { _, _ in
             updateOriginalPageCount()
-            activeSelectionSource = nil
+            selectionOwnership.reset()
             onNoteSelectionChanged?(nil)
         }
         .onChange(of: translatedURL) { _, _ in
             updateTranslatedPageCount()
-            activeSelectionSource = nil
+            selectionOwnership.reset()
             onNoteSelectionChanged?(nil)
         }
         .onChange(of: translatedPageCount) { _, newCount in
@@ -82,6 +104,7 @@ struct DualPDFReaderView: View {
             fileURL: originalURL,
             attachmentID: originalAttachmentID,
             pageIndex: $pageIndex,
+            selectionResetToken: originalSelectionResetToken,
             debugRegionSelectionEnabled: false
         ) { selection in
             handleSelectionChange(selection, source: .original)
@@ -97,6 +120,7 @@ struct DualPDFReaderView: View {
             attachmentID: translatedAttachmentID,
             pageIndex: $translatedPageIndex,
             reloadToken: reloadToken,
+            selectionResetToken: translatedSelectionResetToken,
             debugRegionSelectionEnabled: debugRegionSelectionEnabled
         ) { selection in
             handleSelectionChange(selection, source: .translated)
@@ -143,6 +167,7 @@ struct DualPDFReaderView: View {
         attachmentID: UUID?,
         pageIndex: Binding<Int>,
         reloadToken: Int = 0,
+        selectionResetToken: Int,
         debugRegionSelectionEnabled: Bool,
         onSelectionChanged: @escaping (NoteSelectionContext?) -> Void
     ) -> some View {
@@ -154,6 +179,7 @@ struct DualPDFReaderView: View {
                 displayAppearance: displayAppearance,
                 pageIndex: pageIndex,
                 reloadToken: reloadToken,
+                selectionResetToken: selectionResetToken,
                 annotationSession: annotationSession,
                 onNoteSelectionChanged: onSelectionChanged,
                 onArxivLinkActivated: onArxivLinkActivated,
@@ -172,15 +198,24 @@ struct DualPDFReaderView: View {
             .padding(8)
     }
 
-    private func handleSelectionChange(_ selection: NoteSelectionContext?, source: SelectionSource) {
+    private func handleSelectionChange(
+        _ selection: NoteSelectionContext?,
+        source: DualPDFSelectionSource
+    ) {
         if let selection {
-            activeSelectionSource = source
+            if let sourceToClear = selectionOwnership.activate(source) {
+                switch sourceToClear {
+                case .original:
+                    originalSelectionResetToken &+= 1
+                case .translated:
+                    translatedSelectionResetToken &+= 1
+                }
+            }
             onNoteSelectionChanged?(selection)
             return
         }
 
-        guard activeSelectionSource == source else { return }
-        activeSelectionSource = nil
+        guard selectionOwnership.clear(source) else { return }
         onNoteSelectionChanged?(nil)
     }
 }

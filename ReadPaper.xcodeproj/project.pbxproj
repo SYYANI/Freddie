@@ -48,6 +48,7 @@
 		355CDD9F6A668C753004CD24 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0F1DEEFF5B77D9A4472738A /* ContentView.swift */; };
 		39BDFACE0145666CF83BBDA3 /* NoteAnchor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 873608C4E855A8AC35CB5ABB /* NoteAnchor.swift */; };
 		3BF5DCA0BF9C2FF7EC23D265 /* HTMLReaderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 901230971C8E7AE7E22E6181 /* HTMLReaderView.swift */; };
+		3C21FD701DEA89F59D074292 /* SelectionAssistantOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79F764730530AC64846F716F /* SelectionAssistantOverlay.swift */; };
 		3F6B85F2765F235F2ECF06A4 /* BabelDocSemanticHintServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43EB64FCD308AF6E7DB96575 /* BabelDocSemanticHintServiceTests.swift */; };
 		4000094C0338B27FBA6D5A41 /* ArxivImportProgress.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3B8354421E9159F37194453 /* ArxivImportProgress.swift */; };
 		4071082F08025D60C62849D7 /* AddPaperSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 155075041A25A22CFB1EB008 /* AddPaperSheet.swift */; };
@@ -71,6 +72,7 @@
 		56F482A9DBBA8B631D7AA6AC /* PaperDeletionServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E7C661338A31257C85792F0 /* PaperDeletionServiceTests.swift */; };
 		5863153059F6B2FD21F823A6 /* BabelDocRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E035274FD9E699D832B4D4E /* BabelDocRunner.swift */; };
 		58B675CA23590CFC6485CDA1 /* TranslationTargetLanguage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02AE9D431AB98BDB3F60C322 /* TranslationTargetLanguage.swift */; };
+		5A660C1876A1F333490FC4F6 /* SelectionAssistantService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC648B6420FB81A2A4B8F5E6 /* SelectionAssistantService.swift */; };
 		5AD3BFC4315E9F41E1556652 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 585E60D2D3441D8A764523FD /* SettingsView.swift */; };
 		5B158EF6FCD082BC164A9128 /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = EF1825DEB6A675DDCEAB79A4 /* AppIcon.icon */; };
 		5B6BE9E4CC22893DFF9846AE /* SettingsGeneralStatusTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC93E8D9F0A4BAC6F2F383D3 /* SettingsGeneralStatusTests.swift */; };
@@ -140,6 +142,7 @@
 		BCA436B4169A300D72CEF0E7 /* StableNavigationSplitDividerHandle.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1066FFD97CD0FAFC6EBB7A6 /* StableNavigationSplitDividerHandle.swift */; };
 		BD3E03EA17ACD84102672A0C /* AcademicTranslationPrompt.swift in Sources */ = {isa = PBXBuildFile; fileRef = 090DCC03975706C4B2B4CB9F /* AcademicTranslationPrompt.swift */; };
 		BEBF197F4257357F15F0BCF7 /* NoteMarkdownPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72E527A1CB9BF6F7422C42BA /* NoteMarkdownPreview.swift */; };
+		C1574728AE1899C3DC9A073E /* SelectionAssistantService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC648B6420FB81A2A4B8F5E6 /* SelectionAssistantService.swift */; };
 		C2E48FDCC25C42B611792023 /* HTMLTranslationPipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30444FC979F813B5B76B4726 /* HTMLTranslationPipeline.swift */; };
 		C30A50E23BD5205861D15950 /* AuthorExtractionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 302B63A40C9C12372F265892 /* AuthorExtractionService.swift */; };
 		C32A09DCBB8F25B74FEA92B3 /* BabelDocProgressUpdate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D0129BA774AA8C88DA3C2CE /* BabelDocProgressUpdate.swift */; };
@@ -167,6 +170,7 @@
 		E625C3726999AFBFC0CEF145 /* PaperSelectionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E083AAB214008E4FF489EC9 /* PaperSelectionStore.swift */; };
 		E7542A5BAFC829257053498A /* IPadInspectorPaneView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A986762144D055B297DEC92 /* IPadInspectorPaneView.swift */; };
 		E84EF6C6B757E7331F99BCB9 /* LLMModelProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78A4FD40176F3BF293CF2AD5 /* LLMModelProfile.swift */; };
+		EB4126227490742F7C28AAF1 /* SelectionAssistantServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47A2A8F5AD477567E1240F28 /* SelectionAssistantServiceTests.swift */; };
 		EBD68891314DD0B0035E0C16 /* PaperImporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61B39EE919BF400C2E3155C6 /* PaperImporter.swift */; };
 		EDC74DFF3F1F12EFED1038D1 /* PaperDigestExportPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A5CE9583FC6BBC3FBA18158 /* PaperDigestExportPolicy.swift */; };
 		EFBF8D2475031747FA7B19ED /* AcademicTranslationPrompt.swift in Sources */ = {isa = PBXBuildFile; fileRef = 090DCC03975706C4B2B4CB9F /* AcademicTranslationPrompt.swift */; };
@@ -241,6 +245,7 @@
 		43EB64FCD308AF6E7DB96575 /* BabelDocSemanticHintServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BabelDocSemanticHintServiceTests.swift; sourceTree = "<group>"; };
 		45BD3A614317AAD562260E0C /* LLMReasoningConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLMReasoningConfiguration.swift; sourceTree = "<group>"; };
 		46FC6C17BDF1F5821997810A /* LLMProviderValidationUseCase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLMProviderValidationUseCase.swift; sourceTree = "<group>"; };
+		47A2A8F5AD477567E1240F28 /* SelectionAssistantServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectionAssistantServiceTests.swift; sourceTree = "<group>"; };
 		47E6A94B8E0829E8FD015D53 /* ArxivClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArxivClientTests.swift; sourceTree = "<group>"; };
 		4AD0F3DCACE64FFE539D2434 /* ReadPaper.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ReadPaper.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		51A72BDC5A78B51E6003243F /* PaperFileStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaperFileStore.swift; sourceTree = "<group>"; };
@@ -260,6 +265,7 @@
 		756B3F8A255940BE24DE7FD6 /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
 		75E0E94D4471276EDCB5EC00 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		78A4FD40176F3BF293CF2AD5 /* LLMModelProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLMModelProfile.swift; sourceTree = "<group>"; };
+		79F764730530AC64846F716F /* SelectionAssistantOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectionAssistantOverlay.swift; sourceTree = "<group>"; };
 		7BB7EF5837E7DBA280C8E44E /* LLMRouteResolverTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLMRouteResolverTests.swift; sourceTree = "<group>"; };
 		7BEEBF714C87EB1F35CEAA54 /* ReadPaperiPad.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = ReadPaperiPad.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		7C07E34627BD219A7E2C5862 /* AppWindowBackdrop.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppWindowBackdrop.swift; sourceTree = "<group>"; };
@@ -329,6 +335,7 @@
 		F350E33882E3378286268635 /* BabelDocHelper */ = {isa = PBXFileReference; includeInIndex = 0; path = BabelDocHelper; sourceTree = BUILT_PRODUCTS_DIR; };
 		F553C0540A01F3D40CD9E3DA /* NoteMarkdownRendererTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteMarkdownRendererTests.swift; sourceTree = "<group>"; };
 		F9B5558A93632CE3A9C970E6 /* BabelDocToolManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BabelDocToolManager.swift; sourceTree = "<group>"; };
+		FC648B6420FB81A2A4B8F5E6 /* SelectionAssistantService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectionAssistantService.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -402,6 +409,7 @@
 				F1D66200F6C63D43F207E0E0 /* ProcessRunner.swift */,
 				70518A1BB9FC4CC8F8EB38DF /* ReadingStateStore.swift */,
 				98E27C0AF4AB3AB273C35656 /* SecureAPIKeyVault.swift */,
+				FC648B6420FB81A2A4B8F5E6 /* SelectionAssistantService.swift */,
 				9B99DBBAB3B54CC7AB7DEF2F /* TranslationLLMClient.swift */,
 				90F28004ABD616B1A38ED52A /* TranslationPreferencesSnapshot.swift */,
 			);
@@ -445,6 +453,7 @@
 				72E527A1CB9BF6F7422C42BA /* NoteMarkdownPreview.swift */,
 				AA8A3E83E7A59DCEED930598 /* PaperTheme.swift */,
 				15605D44878CFDBFBF883E0F /* ReaderPaneView.swift */,
+				79F764730530AC64846F716F /* SelectionAssistantOverlay.swift */,
 				585E60D2D3441D8A764523FD /* SettingsView.swift */,
 				D1066FFD97CD0FAFC6EBB7A6 /* StableNavigationSplitDividerHandle.swift */,
 			);
@@ -512,6 +521,7 @@
 				98B4B8D536B2D3EBE2183B41 /* PDFTranslationDebugExporterTests.swift */,
 				31F4A5AE575B4BE0C4DE3E4A /* ReadingStateStoreTests.swift */,
 				738973A1A6296FAAB69D2405 /* SecureAPIKeyVaultTests.swift */,
+				47A2A8F5AD477567E1240F28 /* SelectionAssistantServiceTests.swift */,
 				AC93E8D9F0A4BAC6F2F383D3 /* SettingsGeneralStatusTests.swift */,
 			);
 			path = ReadPaperTests;
@@ -881,6 +891,7 @@
 				B30982C95AC6353C33CC25AC /* PaperThemeTests.swift in Sources */,
 				68276F37DC0F83B2129BFBB5 /* ReadingStateStoreTests.swift in Sources */,
 				093412E3E5A877EE8577C38B /* SecureAPIKeyVaultTests.swift in Sources */,
+				EB4126227490742F7C28AAF1 /* SelectionAssistantServiceTests.swift in Sources */,
 				5B6BE9E4CC22893DFF9846AE /* SettingsGeneralStatusTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -939,6 +950,7 @@
 				855292271CF673BFB9B75114 /* ReadingState.swift in Sources */,
 				11FCBEC3EB43769149D77038 /* ReadingStateStore.swift in Sources */,
 				FF0BF4488AABE4686E8CCEDD /* SecureAPIKeyVault.swift in Sources */,
+				C1574728AE1899C3DC9A073E /* SelectionAssistantService.swift in Sources */,
 				D658CFD64AB7FFD02A29788A /* ToolInstallState.swift in Sources */,
 				1B085EB2387524F1B928C749 /* TranslationJob.swift in Sources */,
 				8D717196C34DD9C93E59DB99 /* TranslationLLMClient.swift in Sources */,
@@ -1019,6 +1031,8 @@
 				89A6E060EB5C7613D3EC46CE /* ReadingState.swift in Sources */,
 				009848F8756B5F5DEC0BC6A9 /* ReadingStateStore.swift in Sources */,
 				E3E21FB65D93DBA72A3DAF49 /* SecureAPIKeyVault.swift in Sources */,
+				3C21FD701DEA89F59D074292 /* SelectionAssistantOverlay.swift in Sources */,
+				5A660C1876A1F333490FC4F6 /* SelectionAssistantService.swift in Sources */,
 				5AD3BFC4315E9F41E1556652 /* SettingsView.swift in Sources */,
 				BCA436B4169A300D72CEF0E7 /* StableNavigationSplitDividerHandle.swift in Sources */,
 				06FF9EE63AC39F6DB1C926CA /* ToolInstallState.swift in Sources */,
@@ -1110,7 +1124,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 40;
+				CURRENT_PROJECT_VERSION = 41;
 				DEVELOPMENT_LANGUAGE = en;
 				ENABLE_TESTABILITY = NO;
 				INFOPLIST_FILE = ReadPaper/Info.plist;
@@ -1121,7 +1135,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 0.3.20;
+				MARKETING_VERSION = 0.4.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.yiyan.ReadPaper;
 				PRODUCT_MODULE_NAME = ReadPaper;
 				PRODUCT_NAME = Freddie;
@@ -1277,7 +1291,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 40;
+				CURRENT_PROJECT_VERSION = 41;
 				DEVELOPMENT_LANGUAGE = en;
 				DEVELOPMENT_TEAM = 3VM5RUH8V5;
 				ENABLE_TESTABILITY = YES;
@@ -1287,7 +1301,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.3.20;
+				MARKETING_VERSION = 0.4.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.yiyan.ReadPaper.iPad;
 				PRODUCT_MODULE_NAME = ReadPaperiPad;
 				PRODUCT_NAME = Freddie;
@@ -1330,7 +1344,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 40;
+				CURRENT_PROJECT_VERSION = 41;
 				DEVELOPMENT_LANGUAGE = en;
 				DEVELOPMENT_TEAM = 3VM5RUH8V5;
 				ENABLE_TESTABILITY = YES;
@@ -1340,7 +1354,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.3.20;
+				MARKETING_VERSION = 0.4.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.yiyan.ReadPaper.iPad;
 				PRODUCT_MODULE_NAME = ReadPaperiPad;
 				PRODUCT_NAME = Freddie;
@@ -1361,7 +1375,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 40;
+				CURRENT_PROJECT_VERSION = 41;
 				DEVELOPMENT_LANGUAGE = en;
 				ENABLE_TESTABILITY = YES;
 				INFOPLIST_FILE = ReadPaper/Info.plist;
@@ -1372,7 +1386,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 0.3.20;
+				MARKETING_VERSION = 0.4.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.yiyan.ReadPaper;
 				PRODUCT_MODULE_NAME = ReadPaper;
 				PRODUCT_NAME = Freddie;

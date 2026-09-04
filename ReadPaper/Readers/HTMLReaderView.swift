@@ -713,7 +713,21 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
                     return;
                 }
 
-                window.webkit.messageHandlers.rpSelection.postMessage({ quote, selector });
+                const semanticSelector = '[data-rp-segment-id],p,h1,h2,h3,h4,h5,h6,figcaption,blockquote,li';
+                const candidates = Array.from(document.querySelectorAll(semanticSelector))
+                    .filter(element => !isTranslationElement(element));
+                const contextIndex = candidates.indexOf(anchorElement);
+                const contextElements = contextIndex >= 0
+                    ? candidates.slice(Math.max(0, contextIndex - 1), Math.min(candidates.length, contextIndex + 2))
+                    : [anchorElement];
+                const localContext = contextElements
+                    .filter(Boolean)
+                    .map(element => normalizeText(element.textContent))
+                    .filter(Boolean)
+                    .join('\n\n')
+                    .slice(0, 8000);
+
+                window.webkit.messageHandlers.rpSelection.postMessage({ quote, selector, localContext });
             };
 
             document.addEventListener('selectionchange', () => {
@@ -1137,7 +1151,8 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
             let selection = NoteSelectionContext(
                 attachmentID: attachmentID,
                 quote: body["quote"] as? String ?? "",
-                htmlSelector: body["selector"] as? String
+                htmlSelector: body["selector"] as? String,
+                localContext: body["localContext"] as? String
             )
             guard selection.trimmedQuote != nil, selection.hasAnchor else {
                 publishNoteSelection(nil)

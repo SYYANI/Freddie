@@ -5,17 +5,20 @@ struct NoteSelectionContext: Equatable {
     var quote: String
     var pageIndex: Int?
     var htmlSelector: String?
+    var localContext: String?
 
     init(
         attachmentID: UUID? = nil,
         quote: String,
         pageIndex: Int? = nil,
-        htmlSelector: String? = nil
+        htmlSelector: String? = nil,
+        localContext: String? = nil
     ) {
         self.attachmentID = attachmentID
         self.quote = Self.normalizedText(quote)
         self.pageIndex = pageIndex.map { max(0, $0) }
         self.htmlSelector = Self.normalizedOptionalText(htmlSelector)
+        self.localContext = Self.normalizedOptionalText(localContext)
     }
 
     var hasAnchor: Bool {
@@ -24,6 +27,15 @@ struct NoteSelectionContext: Equatable {
 
     var trimmedQuote: String? {
         Self.normalizedOptionalText(quote)
+    }
+
+    var selectionAssistantIdentity: String {
+        [
+            attachmentID?.uuidString ?? "",
+            pageIndex.map(String.init) ?? "",
+            htmlSelector ?? "",
+            quote,
+        ].joined(separator: "|")
     }
 
     private static func normalizedText(_ value: String) -> String {
@@ -60,6 +72,21 @@ struct NoteNavigationRequest: Equatable, Identifiable {
 }
 
 extension Note {
+    static func selectionAssistantNote(
+        paperID: UUID,
+        selection: NoteSelectionContext,
+        result: String
+    ) -> Note {
+        Note(
+            paperID: paperID,
+            attachmentID: selection.attachmentID,
+            quote: selection.trimmedQuote ?? "",
+            body: result,
+            pageIndex: selection.pageIndex,
+            htmlSelector: selection.htmlSelector
+        )
+    }
+
     var trimmedQuote: String? {
         let normalized = quote
             .components(separatedBy: .whitespacesAndNewlines)

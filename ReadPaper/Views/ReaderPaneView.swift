@@ -55,6 +55,7 @@ struct ReaderPaneView: View {
     @Binding var noteSelectionContext: NoteSelectionContext?
     @Binding var noteNavigationRequest: NoteNavigationRequest?
     var onCreateAnchoredNote: () -> Void
+    var onSaveSelectionAssistantNote: @MainActor @Sendable (NoteSelectionContext, String) throws -> Void
     var onArxivLinkActivated: (URL) -> Void
 
     @State private var pdfPageIndex = 0
@@ -1082,78 +1083,116 @@ struct ReaderPaneView: View {
 
     @ViewBuilder
     private var content: some View {
-        if paper == nil {
-            emptyReaderState
-        } else {
-            switch readerMode {
-            case .html:
-                if let htmlFileURL = htmlAttachment?.fileURL {
-                    HTMLReaderView(
-                        fileURL: htmlFileURL,
-                        attachmentID: htmlAttachment?.id,
-                        displayMode: displayMode,
-                        displayAppearance: pdfDisplayAppearance,
-                        fontSize: htmlReaderFontSize,
-                        reloadToken: htmlReloadToken,
-                        initialScrollRatio: restoredHTMLScrollRatio,
-                        scrollRatio: $htmlScrollRatio,
-                        segmentUpdate: htmlSegmentUpdate,
-                        noteNavigationRequest: noteNavigationRequest,
-                        onNoteSelectionChanged: handleNoteSelectionChange
-                    )
+        ZStack(alignment: .bottom) {
+            Group {
+                if paper == nil {
+                    emptyReaderState
                 } else {
-                    centeredUnavailableView(
-                        String(localized: "No HTML available", bundle: bundle),
-                        systemImage: "doc.text",
-                        description: Text("Import an arXiv paper or web page with HTML content to read it here.", bundle: bundle)
-                    )
+                    switch readerMode {
+                    case .html:
+                        if let htmlFileURL = htmlAttachment?.fileURL {
+                            HTMLReaderView(
+                                fileURL: htmlFileURL,
+                                attachmentID: htmlAttachment?.id,
+                                displayMode: displayMode,
+                                displayAppearance: pdfDisplayAppearance,
+                                fontSize: htmlReaderFontSize,
+                                reloadToken: htmlReloadToken,
+                                initialScrollRatio: restoredHTMLScrollRatio,
+                                scrollRatio: $htmlScrollRatio,
+                                segmentUpdate: htmlSegmentUpdate,
+                                noteNavigationRequest: noteNavigationRequest,
+                                onNoteSelectionChanged: handleNoteSelectionChange
+                            )
+                        } else {
+                            centeredUnavailableView(
+                                String(localized: "No HTML available", bundle: bundle),
+                                systemImage: "doc.text",
+                                description: Text("Import an arXiv paper or web page with HTML content to read it here.", bundle: bundle)
+                            )
+                        }
+                    case .pdf:
+                        labeledPDFReader(
+                            fileURL: pdfAttachment?.fileURL,
+                            attachmentID: pdfAttachment?.id,
+                            label: String(localized: "Original", bundle: bundle),
+                            emptyTitle: String(localized: "No PDF available", bundle: bundle),
+                            emptyDescription: String(localized: "Import a PDF or fetch one from arXiv to read it here.", bundle: bundle)
+                        )
+                    case .bilingualPDF:
+                        if translatedPDFAttachment != nil {
+                            DualPDFReaderView(
+                                paperID: paper?.id,
+                                originalURL: pdfAttachment?.fileURL,
+                                originalAttachmentID: pdfAttachment?.id,
+                                translatedURL: translatedPDFAttachment?.fileURL,
+                                translatedAttachmentID: translatedPDFAttachment?.id,
+                                translatedLastPage: translatedPDFAttachment?.translatedLastPage,
+                                displayAppearance: pdfDisplayAppearance,
+                                pageIndex: $pdfPageIndex,
+                                reloadToken: pdfReloadToken,
+                                annotationSession: pdfAnnotationSession,
+                                debugRegionSelectionEnabled: pdfDebugModeEnabled,
+                                onDebugRegionSelected: handlePDFDebugRegionSelection,
+                                onNoteSelectionChanged: handleNoteSelectionChange,
+                                onArxivLinkActivated: onArxivLinkActivated
+                            )
+                        } else {
+                            centeredUnavailableView(
+                                String(localized: "No translated PDF", bundle: bundle),
+                                systemImage: "character.book.closed",
+                                description: Text("Run PDF translation first to compare the original and translated versions side by side.", bundle: bundle)
+                            )
+                        }
+                    case .translatedPDF:
+                        labeledPDFReader(
+                            fileURL: translatedPDFAttachment?.fileURL,
+                            attachmentID: translatedPDFAttachment?.id,
+                            label: String(localized: "Translation", bundle: bundle),
+                            emptyTitle: String(localized: "No translated PDF", bundle: bundle),
+                            emptyDescription: String(localized: "Run PDF translation first to read the translated PDF on its own.", bundle: bundle),
+                            reloadToken: pdfReloadToken,
+                            debugRegionSelectionEnabled: pdfDebugModeEnabled,
+                            onDebugRegionSelected: handlePDFDebugRegionSelection
+                        )
+                    }
                 }
-            case .pdf:
-                labeledPDFReader(
-                    fileURL: pdfAttachment?.fileURL,
-                    attachmentID: pdfAttachment?.id,
-                    label: String(localized: "Original", bundle: bundle),
-                    emptyTitle: String(localized: "No PDF available", bundle: bundle),
-                    emptyDescription: String(localized: "Import a PDF or fetch one from arXiv to read it here.", bundle: bundle)
+            }
+
+            if let selection = noteSelectionContext,
+               selection.trimmedQuote != nil,
+               paper != nil {
+                SelectionAssistantOverlay(
+                    selection: selection,
+                    perform: performSelectionAssistantRequest,
+                    saveAsNote: onSaveSelectionAssistantNote
                 )
-            case .bilingualPDF:
-                if translatedPDFAttachment != nil {
-                    DualPDFReaderView(
-                        paperID: paper?.id,
-                        originalURL: pdfAttachment?.fileURL,
-                        originalAttachmentID: pdfAttachment?.id,
-                        translatedURL: translatedPDFAttachment?.fileURL,
-                        translatedAttachmentID: translatedPDFAttachment?.id,
-                        translatedLastPage: translatedPDFAttachment?.translatedLastPage,
-                        displayAppearance: pdfDisplayAppearance,
-                        pageIndex: $pdfPageIndex,
-                        reloadToken: pdfReloadToken,
-                        annotationSession: pdfAnnotationSession,
-                        debugRegionSelectionEnabled: pdfDebugModeEnabled,
-                        onDebugRegionSelected: handlePDFDebugRegionSelection,
-                        onNoteSelectionChanged: handleNoteSelectionChange,
-                        onArxivLinkActivated: onArxivLinkActivated
-                    )
-                } else {
-                    centeredUnavailableView(
-                        String(localized: "No translated PDF", bundle: bundle),
-                        systemImage: "character.book.closed",
-                        description: Text("Run PDF translation first to compare the original and translated versions side by side.", bundle: bundle)
-                    )
-                }
-            case .translatedPDF:
-                labeledPDFReader(
-                    fileURL: translatedPDFAttachment?.fileURL,
-                    attachmentID: translatedPDFAttachment?.id,
-                    label: String(localized: "Translation", bundle: bundle),
-                    emptyTitle: String(localized: "No translated PDF", bundle: bundle),
-                    emptyDescription: String(localized: "Run PDF translation first to read the translated PDF on its own.", bundle: bundle),
-                    reloadToken: pdfReloadToken,
-                    debugRegionSelectionEnabled: pdfDebugModeEnabled,
-                    onDebugRegionSelected: handlePDFDebugRegionSelection
-                )
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .zIndex(10)
             }
         }
+        .animation(.easeOut(duration: 0.18), value: noteSelectionContext != nil)
+    }
+
+    @MainActor
+    private func performSelectionAssistantRequest(
+        _ request: SelectionAssistantRequest
+    ) async throws -> String {
+        guard let paper, let settings else {
+            throw LLMProviderError.invalidConfiguration(
+                String(localized: "Translation settings are unavailable.", bundle: bundle)
+            )
+        }
+        let route = try LLMRouteResolver().resolveHTMLRoute(
+            settings: settings,
+            modelContext: modelContext
+        )
+        return try await SelectionAssistantService().perform(
+            request,
+            paperTitle: paper.title,
+            targetLanguage: settings.targetLanguage,
+            route: route
+        )
     }
 
     private var statusRow: some View {

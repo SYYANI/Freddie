@@ -155,6 +155,7 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
     var displayAppearance: PDFDisplayAppearance = .defaultMode
     @Binding var pageIndex: Int
     var reloadToken: Int = 0
+    var selectionResetToken: Int = 0
     var annotationSession: PDFAnnotationSession? = nil
     var onNoteSelectionChanged: ((NoteSelectionContext?) -> Void)? = nil
     var onArxivLinkActivated: ((URL) -> Void)? = nil
@@ -211,6 +212,11 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
         )
         context.coordinator.onNoteSelectionChanged = onNoteSelectionChanged
         context.coordinator.onArxivLinkActivated = onArxivLinkActivated
+        if context.coordinator.lastSelectionResetToken != selectionResetToken {
+            context.coordinator.lastSelectionResetToken = selectionResetToken
+            view.clearSelection()
+            context.coordinator.publishSelection(nil)
+        }
         #if os(macOS)
         if let interactiveView = view as? InteractivePDFView {
             interactiveView.interactionMode = debugRegionSelectionEnabled
@@ -290,6 +296,7 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
         var loadedPaperID: UUID?
         var loadedAttachmentID: UUID?
         var lastReloadToken: Int = 0
+        var lastSelectionResetToken: Int = 0
         var paperID: UUID?
         var attachmentID: UUID?
         weak var pdfView: PDFView?
@@ -944,10 +951,17 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
             let pageIndex = document.index(for: page)
             guard pageIndex != NSNotFound else { return nil }
 
+            let contextStart = max(0, pageIndex - 1)
+            let contextEnd = min(document.pageCount - 1, pageIndex + 1)
+            let localContext = (contextStart...contextEnd)
+                .compactMap { document.page(at: $0)?.string }
+                .joined(separator: "\n\n")
+
             return NoteSelectionContext(
                 attachmentID: attachmentID,
                 quote: quote,
-                pageIndex: pageIndex
+                pageIndex: pageIndex,
+                localContext: String(localContext.prefix(8_000))
             )
         }
     }

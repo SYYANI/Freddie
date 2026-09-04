@@ -103,6 +103,7 @@ struct ContentView: View {
             noteSelectionContext: $noteSelectionContext,
             noteNavigationRequest: $noteNavigationRequest,
             onCreateAnchoredNote: createNoteFromCurrentSelection,
+            onSaveSelectionAssistantNote: saveSelectionAssistantResultAsNote,
             onArxivLinkActivated: handleArxivLinkActivation
         )
         .navigationSplitViewColumnWidth(min: 520, ideal: 760)
@@ -357,6 +358,31 @@ struct ContentView: View {
         } catch {
             modelContext.rollback()
             assertionFailure("Failed to save note: \(error.localizedDescription)")
+        }
+    }
+
+    private func saveSelectionAssistantResultAsNote(
+        selection: NoteSelectionContext,
+        result: String
+    ) throws {
+        guard let paper = selectedPaper else { return }
+
+        let note = Note.selectionAssistantNote(
+            paperID: paper.id,
+            selection: selection,
+            result: result
+        )
+        modelContext.insert(note)
+
+        do {
+            try modelContext.save()
+            if isInspectorCollapsed {
+                inspectorCollapsedBinding.wrappedValue = false
+            }
+            focusedNoteID = note.id
+        } catch {
+            modelContext.rollback()
+            throw error
         }
     }
 
