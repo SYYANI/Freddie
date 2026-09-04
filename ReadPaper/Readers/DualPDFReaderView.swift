@@ -38,6 +38,7 @@ struct DualPDFReaderView: View {
     var displayAppearance: PDFDisplayAppearance = .defaultMode
     @Binding var pageIndex: Int
     var reloadToken: Int = 0
+    var noteNavigationRequest: NoteNavigationRequest? = nil
     var annotationSession: PDFAnnotationSession? = nil
     var debugRegionSelectionEnabled = false
     var onDebugRegionSelected: ((PDFDebugRegionSelection) -> Void)? = nil
@@ -108,6 +109,7 @@ struct DualPDFReaderView: View {
             attachmentID: originalAttachmentID,
             pageIndex: $pageIndex,
             selectionResetToken: originalSelectionResetToken,
+            noteNavigationRequest: originalNoteNavigationRequest,
             debugRegionSelectionEnabled: false
         ) { selection in
             handleSelectionChange(selection, source: .original)
@@ -124,6 +126,7 @@ struct DualPDFReaderView: View {
             pageIndex: $translatedPageIndex,
             reloadToken: reloadToken,
             selectionResetToken: translatedSelectionResetToken,
+            noteNavigationRequest: translatedNoteNavigationRequest,
             debugRegionSelectionEnabled: debugRegionSelectionEnabled
         ) { selection in
             handleSelectionChange(selection, source: .translated)
@@ -139,6 +142,23 @@ struct DualPDFReaderView: View {
 
     private var maxTranslatedPage: Int {
         max(translatedPageCount - 1, 0)
+    }
+
+    private var originalNoteNavigationRequest: NoteNavigationRequest? {
+        guard let request = noteNavigationRequest else { return nil }
+        guard request.attachmentID == nil || request.attachmentID == originalAttachmentID else {
+            return nil
+        }
+        return request
+    }
+
+    private var translatedNoteNavigationRequest: NoteNavigationRequest? {
+        guard let request = noteNavigationRequest,
+              request.attachmentID != nil,
+              request.attachmentID == translatedAttachmentID else {
+            return nil
+        }
+        return request
     }
 
     private func updatePageCounts() {
@@ -171,6 +191,7 @@ struct DualPDFReaderView: View {
         pageIndex: Binding<Int>,
         reloadToken: Int = 0,
         selectionResetToken: Int,
+        noteNavigationRequest: NoteNavigationRequest?,
         debugRegionSelectionEnabled: Bool,
         onSelectionChanged: @escaping (NoteSelectionContext?) -> Void
     ) -> some View {
@@ -185,6 +206,7 @@ struct DualPDFReaderView: View {
                 pageIndex: pageIndex,
                 reloadToken: reloadToken,
                 selectionResetToken: selectionResetToken,
+                noteNavigationRequest: noteNavigationRequest,
                 annotationSession: annotationSession,
                 onNoteSelectionChanged: onSelectionChanged,
                 onArxivLinkActivated: onArxivLinkActivated,

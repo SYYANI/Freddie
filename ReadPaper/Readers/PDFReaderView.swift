@@ -160,6 +160,66 @@ enum PDFAutomaticScalingPolicy {
     }
 }
 
+enum PDFNoteNavigationTextMatcher {
+    static func range(of quote: String, in pageText: String) -> NSRange? {
+        let normalizedQuote = normalize(quote).text
+        guard normalizedQuote.isEmpty == false else { return nil }
+
+        let normalizedPage = normalize(pageText)
+        let match = (normalizedPage.text as NSString).range(of: normalizedQuote)
+        guard match.location != NSNotFound,
+              match.length > 0,
+              match.location < normalizedPage.sourceRanges.count,
+              NSMaxRange(match) <= normalizedPage.sourceRanges.count
+        else {
+            return nil
+        }
+
+        let first = normalizedPage.sourceRanges[match.location]
+        let last = normalizedPage.sourceRanges[NSMaxRange(match) - 1]
+        return NSRange(
+            location: first.location,
+            length: NSMaxRange(last) - first.location
+        )
+    }
+
+    private static func normalize(_ text: String) -> (text: String, sourceRanges: [NSRange]) {
+        let source = text as NSString
+        var normalized = ""
+        var sourceRanges: [NSRange] = []
+        var pendingWhitespaceRange: NSRange?
+
+        source.enumerateSubstrings(
+            in: NSRange(location: 0, length: source.length),
+            options: [.byComposedCharacterSequences]
+        ) { substring, substringRange, _, _ in
+            guard let substring else { return }
+            if substring.rangeOfCharacter(from: .whitespacesAndNewlines) != nil {
+                if normalized.isEmpty == false, pendingWhitespaceRange == nil {
+                    pendingWhitespaceRange = substringRange
+                } else if let currentWhitespaceRange = pendingWhitespaceRange {
+                    pendingWhitespaceRange = NSRange(
+                        location: currentWhitespaceRange.location,
+                        length: NSMaxRange(substringRange) - currentWhitespaceRange.location
+                    )
+                }
+                return
+            }
+
+            if let pendingWhitespaceRange {
+                normalized.append(" ")
+                sourceRanges.append(pendingWhitespaceRange)
+            }
+            pendingWhitespaceRange = nil
+
+            normalized.append(substring)
+            sourceRanges.append(contentsOf: repeatElement(substringRange, count: (substring as NSString).length))
+        }
+
+        return (normalized, sourceRanges)
+    }
+}
+
 struct PDFDebugRegionSelection: Equatable, Sendable {
     var pageIndex: Int
     var pageBounds: CGRect
@@ -176,6 +236,7 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
     @Binding var pageIndex: Int
     var reloadToken: Int = 0
     var selectionResetToken: Int = 0
+    var noteNavigationRequest: NoteNavigationRequest? = nil
     var annotationSession: PDFAnnotationSession? = nil
     var onNoteSelectionChanged: ((NoteSelectionContext?) -> Void)? = nil
     var onArxivLinkActivated: ((URL) -> Void)? = nil
@@ -291,6 +352,7 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
             in: view,
             suppressIntermediateUpdates: shouldReloadDocument
         )
+        context.coordinator.applyNoteNavigationIfNeeded(noteNavigationRequest, in: view)
         context.coordinator.scheduleCurrentPageIndexUpdate()
         context.coordinator.scheduleSelectionUpdate()
     }
@@ -344,6 +406,9 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
         private var lastPublishedSelection: NoteSelectionContext?
         private var pendingProgrammaticPosition: PDFReadingPosition?
         private var appliedAutomaticScaling: Bool?
+        private var lastAppliedNoteNavigationID: UUID?
+        private var noteNavigationHighlightAnnotations: [PDFAnnotation] = []
+        private var noteNavigationHighlightTask: Task<Void, Never>?
 
         init(
             paperID: UUID? = nil,
@@ -492,6 +557,7 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
         }
 
         func detach() {
+            clearNoteNavigationHighlight()
             if let pdfView {
                 NotificationCenter.default.removeObserver(
                     self,
@@ -516,6 +582,77 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
             registeredAnnotationAttachmentID = nil
             registeredAnnotationSession = nil
             self.pdfView = nil
+        }
+
+        func applyNoteNavigationIfNeeded(
+            _ request: NoteNavigationRequest?,
+            in pdfView: PDFView
+        ) {
+            guard let request,
+                  request.id != lastAppliedNoteNavigationID,
+                  request.attachmentID == nil || request.attachmentID == attachmentID,
+                  let pageIndex = request.pageIndex,
+                  let document = pdfView.document,
+                  document.pageCount > 0
+            else {
+                return
+            }
+
+            lastAppliedNoteNavigationID = request.id
+            clearNoteNavigationHighlight()
+
+            let targetPageIndex = min(max(0, pageIndex), document.pageCount - 1)
+            guard let page = document.page(at: targetPageIndex) else { return }
+
+            guard let quote = request.quote,
+                  let pageText = page.string,
+                  let range = PDFNoteNavigationTextMatcher.range(of: quote, in: pageText),
+                  let selection = page.selection(for: range)
+            else {
+                if pdfView.currentPage != page {
+                    pdfView.go(to: page)
+                }
+                return
+            }
+
+            pdfView.go(to: selection)
+            noteNavigationHighlightAnnotations = selection.selectionsByLine().compactMap { line in
+                let bounds = line.bounds(for: page).intersection(page.bounds(for: .cropBox))
+                guard bounds.isNull == false, bounds.width > 0, bounds.height > 0 else {
+                    return nil
+                }
+                let annotation = PDFAnnotation(
+                    bounds: bounds,
+                    forType: .highlight,
+                    withProperties: nil
+                )
+                #if os(macOS)
+                let highlightColor = NSColor.systemYellow.withAlphaComponent(0.55)
+                #else
+                let highlightColor = UIColor.systemYellow.withAlphaComponent(0.55)
+                #endif
+                annotation.color = displayAdjustedAnnotationColor(
+                    highlightColor,
+                    inverted: annotationColorsAreInverted
+                )
+                page.addAnnotation(annotation)
+                return annotation
+            }
+
+            noteNavigationHighlightTask = Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .milliseconds(1_400))
+                guard Task.isCancelled == false else { return }
+                self?.clearNoteNavigationHighlight()
+            }
+        }
+
+        private func clearNoteNavigationHighlight() {
+            noteNavigationHighlightTask?.cancel()
+            noteNavigationHighlightTask = nil
+            for annotation in noteNavigationHighlightAnnotations {
+                annotation.page?.removeAnnotation(annotation)
+            }
+            noteNavigationHighlightAnnotations = []
         }
 
         func handleLinkActivation(_ url: URL) -> Bool {

@@ -34,6 +34,23 @@ final class NoteAnchorTests: XCTestCase {
         XCTAssertEqual(request.attachmentID, note.attachmentID)
         XCTAssertEqual(request.pageIndex, 5)
         XCTAssertEqual(request.htmlSelector, "rp-anchor:4/2")
+        XCTAssertEqual(request.quote, "Selected quote")
+    }
+
+    func testPDFNavigationTextMatcherMapsNormalizedWhitespaceToSourceRange() throws {
+        let pageText = "Before  Selected\nquote\tcontinues. After"
+        let range = try XCTUnwrap(
+            PDFNoteNavigationTextMatcher.range(
+                of: " Selected   quote continues. ",
+                in: pageText
+            )
+        )
+
+        XCTAssertEqual((pageText as NSString).substring(with: range), "Selected\nquote\tcontinues.")
+    }
+
+    func testPDFNavigationTextMatcherReturnsNilForMissingQuote() {
+        XCTAssertNil(PDFNoteNavigationTextMatcher.range(of: "Missing", in: "Page text"))
     }
 
     func testNoteWithoutAnchorDoesNotProduceNavigationRequest() {

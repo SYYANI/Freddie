@@ -57,17 +57,20 @@ struct NoteNavigationRequest: Equatable, Identifiable {
     var attachmentID: UUID?
     var pageIndex: Int?
     var htmlSelector: String?
+    var quote: String?
 
     init(
         id: UUID = UUID(),
         attachmentID: UUID? = nil,
         pageIndex: Int? = nil,
-        htmlSelector: String? = nil
+        htmlSelector: String? = nil,
+        quote: String? = nil
     ) {
         self.id = id
         self.attachmentID = attachmentID
         self.pageIndex = pageIndex.map { max(0, $0) }
         self.htmlSelector = htmlSelector?.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.quote = Self.normalizedText(quote ?? "")
     }
 }
 
@@ -110,7 +113,18 @@ extension Note {
         return NoteNavigationRequest(
             attachmentID: attachmentID,
             pageIndex: pageIndex,
-            htmlSelector: normalizedHTMLSelector
+            htmlSelector: normalizedHTMLSelector,
+            quote: trimmedQuote
         )
+    }
+}
+
+private extension NoteNavigationRequest {
+    static func normalizedText(_ value: String) -> String? {
+        let normalized = value
+            .components(separatedBy: .whitespacesAndNewlines)
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+        return normalized.isEmpty ? nil : normalized
     }
 }
