@@ -254,7 +254,10 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
     @Binding var scrollRatio: Double
     var segmentUpdate: HTMLTranslationSegmentUpdate?
     var noteNavigationRequest: NoteNavigationRequest? = nil
+    var selectionHighlightResetToken: Int = 0
+    var nativeSelectionClearToken: Int = 0
     var onNoteSelectionChanged: ((NoteSelectionContext?) -> Void)? = nil
+    var onSelectionAssistantDismissed: (() -> Void)? = nil
 
     #if os(macOS)
     func makeNSView(context: Context) -> WKWebView {
@@ -279,6 +282,7 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
         configuration.preferences.javaScriptCanOpenWindowsAutomatically = false
         configuration.userContentController.add(context.coordinator, name: Coordinator.scrollMessageHandlerName)
         configuration.userContentController.add(context.coordinator, name: Coordinator.selectionMessageHandlerName)
+        configuration.userContentController.add(context.coordinator, name: Coordinator.selectionResetMessageHandlerName)
         configuration.userContentController.addUserScript(
             WKUserScript(
                 source: Coordinator.mediaPreparationScript,
@@ -306,7 +310,16 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
         context.coordinator.fontSize = HTMLReaderTypography.clampFontSize(fontSize)
         context.coordinator.scrollRatio = $scrollRatio
         context.coordinator.onNoteSelectionChanged = onNoteSelectionChanged
+        context.coordinator.onSelectionAssistantDismissed = onSelectionAssistantDismissed
         applyHostDisplayAppearance(displayAppearance, to: view)
+        context.coordinator.clearSelectionHighlightIfNeeded(
+            resetToken: selectionHighlightResetToken,
+            in: view
+        )
+        context.coordinator.clearNativeSelectionIfNeeded(
+            clearToken: nativeSelectionClearToken,
+            in: view
+        )
 
         let readAccessURL = fileURL.deletingLastPathComponent()
         if context.coordinator.loadedURL != fileURL {
@@ -343,7 +356,8 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
     func makeCoordinator() -> Coordinator {
         Coordinator(
             scrollRatio: $scrollRatio,
-            onNoteSelectionChanged: onNoteSelectionChanged
+            onNoteSelectionChanged: onNoteSelectionChanged,
+            onSelectionAssistantDismissed: onSelectionAssistantDismissed
         )
     }
 
@@ -380,6 +394,13 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
 
         static let scrollMessageHandlerName = "rpScroll"
         static let selectionMessageHandlerName = "rpSelection"
+        static let selectionResetMessageHandlerName = "rpSelectionReset"
+        static let nativeSelectionClearScript = """
+        (() => {
+            const selection = window.getSelection();
+            if (selection) { selection.removeAllRanges(); }
+        })();
+        """
         static let mediaPreparationScript = """
         (() => {
             if (window.__rpMediaPreparationInstalled) { return; }
@@ -676,6 +697,35 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
                 }
             }
 
+            if (!document.getElementById('rp-selection-assistant-highlight-style')) {
+                const style = document.createElement('style');
+                style.id = 'rp-selection-assistant-highlight-style';
+                style.textContent = `
+                    ::highlight(rp-assistant-selection) {
+                        background-color: rgba(0, 122, 255, 0.24);
+                        color: inherit;
+                    }
+                `;
+                (document.head || document.documentElement).appendChild(style);
+            }
+
+            const preserveAssistantSelectionHighlight = range => {
+                if (!range || !window.CSS?.highlights || typeof Highlight === 'undefined') { return; }
+                try {
+                    CSS.highlights.set('rp-assistant-selection', new Highlight(range.cloneRange()));
+                } catch {}
+            };
+
+            window.__rpClearSelectionAssistantHighlight = () => {
+                try { CSS.highlights?.delete('rp-assistant-selection'); } catch {}
+            };
+
+            document.addEventListener('pointerdown', event => {
+                if (event.button !== 0) { return; }
+                window.__rpClearSelectionAssistantHighlight();
+                window.webkit.messageHandlers.rpSelectionReset.postMessage(null);
+            }, true);
+
             window.__rpScrollToNoteAnchor = anchor => {
                 const target = window.__rpResolveNoteAnchor(anchor);
                 if (!target) { return false; }
@@ -713,6 +763,10 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
                     return;
                 }
 
+                if (selection.rangeCount > 0) {
+                    preserveAssistantSelectionHighlight(selection.getRangeAt(0));
+                }
+
                 const semanticSelector = '[data-rp-segment-id],p,h1,h2,h3,h4,h5,h6,figcaption,blockquote,li';
                 const candidates = Array.from(document.querySelectorAll(semanticSelector))
                     .filter(element => !isTranslationElement(element));
@@ -724,7 +778,7 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
                     .filter(Boolean)
                     .map(element => normalizeText(element.textContent))
                     .filter(Boolean)
-                    .join('\n\n')
+                    .join('\\n\\n')
                     .slice(0, 8000);
 
                 window.webkit.messageHandlers.rpSelection.postMessage({ quote, selector, localContext });
@@ -750,6 +804,7 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
         var fontSize: Double = HTMLReaderTypography.defaultFontSize
         var scrollRatio: Binding<Double>
         var onNoteSelectionChanged: ((NoteSelectionContext?) -> Void)?
+        var onSelectionAssistantDismissed: (() -> Void)?
         private var currentRequest: LoadRequest?
         private var pendingRequest: LoadRequest?
         private var pendingScrollRatio: Double?
@@ -758,15 +813,19 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
         private var pendingNoteNavigationRequest: NoteNavigationRequest?
         private var lastAppliedNoteNavigationID: UUID?
         private var lastPublishedNoteSelection: NoteSelectionContext?
+        private var lastSelectionHighlightResetToken = 0
+        private var lastNativeSelectionClearToken = 0
         private var isLoading = false
         private var isDocumentReady = false
 
         init(
             scrollRatio: Binding<Double>,
-            onNoteSelectionChanged: ((NoteSelectionContext?) -> Void)?
+            onNoteSelectionChanged: ((NoteSelectionContext?) -> Void)?,
+            onSelectionAssistantDismissed: (() -> Void)?
         ) {
             self.scrollRatio = scrollRatio
             self.onNoteSelectionChanged = onNoteSelectionChanged
+            self.onSelectionAssistantDismissed = onSelectionAssistantDismissed
         }
 
         func resetLoadedState() {
@@ -969,6 +1028,9 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
                 handleScrollMessage(message)
             case Self.selectionMessageHandlerName:
                 handleSelectionMessage(message)
+            case Self.selectionResetMessageHandlerName:
+                publishNoteSelection(nil)
+                onSelectionAssistantDismissed?()
             default:
                 return
             }
@@ -1105,6 +1167,18 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
             """
             runJavaScript(script, in: webView)
             lastAppliedNoteNavigationID = request.id
+        }
+
+        func clearSelectionHighlightIfNeeded(resetToken: Int, in webView: WKWebView) {
+            guard resetToken != lastSelectionHighlightResetToken else { return }
+            lastSelectionHighlightResetToken = resetToken
+            runJavaScript("window.__rpClearSelectionAssistantHighlight?.();", in: webView)
+        }
+
+        func clearNativeSelectionIfNeeded(clearToken: Int, in webView: WKWebView) {
+            guard clearToken != lastNativeSelectionClearToken else { return }
+            lastNativeSelectionClearToken = clearToken
+            runJavaScript(Self.nativeSelectionClearScript, in: webView)
         }
 
         private func flushPendingNoteNavigationIfNeeded(in webView: WKWebView) {

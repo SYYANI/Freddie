@@ -87,6 +87,11 @@ struct ReaderPaneView: View {
     @State private var pdfDebugDirectoryHasSecurityScope = false
     @StateObject private var pdfAnnotationSession = PDFAnnotationSession()
     @State private var pdfAnnotationNoteText = ""
+    @State private var selectionAssistantSelection: NoteSelectionContext?
+    @State private var isSelectionAssistantPinned = false
+    @State private var selectionAssistantDismissTask: Task<Void, Never>?
+    @State private var htmlSelectionHighlightResetToken = 0
+    @State private var htmlNativeSelectionClearToken = 0
 
     private var pdfAttachment: PaperAttachment? {
         attachments.first { $0.kind == .pdf }
@@ -229,6 +234,7 @@ struct ReaderPaneView: View {
                 deactivatePDFTranslationDebugMode()
                 pdfAnnotationSession.resetForDocumentChange()
                 noteSelectionContext = nil
+                clearSelectionAssistant()
                 restoreReadingStateForCurrentPaper()
             }
             .onChange(of: readerAvailability) { _, _ in
@@ -237,6 +243,7 @@ struct ReaderPaneView: View {
             }
             .onChange(of: readerMode) { _, newValue in
                 noteSelectionContext = nil
+                clearSelectionAssistant()
                 if newValue != .html {
                     lastPDFReaderMode = normalizedPDFReaderMode(newValue)
                 }
@@ -259,6 +266,7 @@ struct ReaderPaneView: View {
             .onDisappear {
                 persistReadingStateIfNeeded()
                 deactivatePDFTranslationDebugMode()
+                clearSelectionAssistant()
             }
             .confirmationDialog(
                 String(localized: "Choose Translation Scope", bundle: bundle),
@@ -1106,7 +1114,10 @@ struct ReaderPaneView: View {
                                 scrollRatio: $htmlScrollRatio,
                                 segmentUpdate: htmlSegmentUpdate,
                                 noteNavigationRequest: noteNavigationRequest,
-                                onNoteSelectionChanged: handleNoteSelectionChange
+                                selectionHighlightResetToken: htmlSelectionHighlightResetToken,
+                                nativeSelectionClearToken: htmlNativeSelectionClearToken,
+                                onNoteSelectionChanged: handleNoteSelectionChange,
+                                onSelectionAssistantDismissed: handleHTMLSelectionAssistantDismissal
                             )
                         } else {
                             centeredUnavailableView(
@@ -1163,19 +1174,21 @@ struct ReaderPaneView: View {
                 }
             }
 
-            if let selection = noteSelectionContext,
+            if let selection = selectionAssistantSelection,
                selection.trimmedQuote != nil,
                paper != nil {
                 SelectionAssistantOverlay(
                     selection: selection,
                     perform: performSelectionAssistantRequest,
-                    saveAsNote: onSaveSelectionAssistantNote
+                    saveAsNote: onSaveSelectionAssistantNote,
+                    onInteractionBegan: pinSelectionAssistant,
+                    onDismiss: clearSelectionAssistant
                 )
                 .transition(.move(edge: .bottom).combined(with: .opacity))
                 .zIndex(10)
             }
         }
-        .animation(.easeOut(duration: 0.18), value: noteSelectionContext != nil)
+        .animation(.easeOut(duration: 0.18), value: selectionAssistantSelection != nil)
     }
 
     @MainActor
@@ -2181,6 +2194,45 @@ struct ReaderPaneView: View {
 
     private func handleNoteSelectionChange(_ selection: NoteSelectionContext?) {
         noteSelectionContext = selection
+        selectionAssistantDismissTask?.cancel()
+        selectionAssistantDismissTask = nil
+
+        if let selection {
+            isSelectionAssistantPinned = false
+            selectionAssistantSelection = selection
+            return
+        }
+
+        guard isSelectionAssistantPinned == false else { return }
+        selectionAssistantDismissTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 350_000_000)
+            guard Task.isCancelled == false,
+                  isSelectionAssistantPinned == false else { return }
+            selectionAssistantSelection = nil
+            selectionAssistantDismissTask = nil
+        }
+    }
+
+    private func pinSelectionAssistant() {
+        selectionAssistantDismissTask?.cancel()
+        selectionAssistantDismissTask = nil
+        if isSelectionAssistantPinned == false {
+            htmlNativeSelectionClearToken &+= 1
+        }
+        isSelectionAssistantPinned = true
+    }
+
+    private func handleHTMLSelectionAssistantDismissal() {
+        noteSelectionContext = nil
+        clearSelectionAssistant()
+    }
+
+    private func clearSelectionAssistant() {
+        selectionAssistantDismissTask?.cancel()
+        selectionAssistantDismissTask = nil
+        isSelectionAssistantPinned = false
+        selectionAssistantSelection = nil
+        htmlSelectionHighlightResetToken &+= 1
     }
 
     private func revealNoteAnchorIfNeeded() {

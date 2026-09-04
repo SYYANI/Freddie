@@ -11,6 +11,21 @@ final class HTMLTranslationPipelineTests: XCTestCase {
     }
 
     @MainActor
+    func testHTMLSelectionInstrumentationKeepsJavaScriptNewlineEscapesIntact() {
+        let script = HTMLReaderView.Coordinator.instrumentationScript
+
+        XCTAssertTrue(script.contains(".join('\\n\\n')"))
+        XCTAssertFalse(script.contains(".join('\n\n')"))
+        XCTAssertTrue(script.contains("rpSelection.postMessage({ quote, selector, localContext })"))
+        XCTAssertTrue(script.contains("CSS.highlights.set('rp-assistant-selection'"))
+        XCTAssertTrue(script.contains("window.__rpClearSelectionAssistantHighlight"))
+        XCTAssertTrue(script.contains("::highlight(rp-assistant-selection)"))
+        XCTAssertTrue(HTMLReaderView.Coordinator.nativeSelectionClearScript.contains("removeAllRanges"))
+        XCTAssertTrue(script.contains("rpSelectionReset.postMessage(null)"))
+        XCTAssertTrue(script.contains("document.addEventListener('pointerdown'"))
+    }
+
+    @MainActor
     func testExtractsSegmentsAndProtectsMathAndCitations() throws {
         let html = """
         <html><body>

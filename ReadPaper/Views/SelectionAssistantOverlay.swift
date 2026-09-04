@@ -7,6 +7,8 @@ struct SelectionAssistantOverlay: View {
     let selection: NoteSelectionContext
     let perform: @MainActor (SelectionAssistantRequest) async throws -> String
     let saveAsNote: @MainActor (NoteSelectionContext, String, UUID?) throws -> UUID
+    let onInteractionBegan: @MainActor @Sendable () -> Void
+    let onDismiss: @MainActor @Sendable () -> Void
 
     @State private var question = ""
     @State private var isEnteringQuestion = false
@@ -31,6 +33,12 @@ struct SelectionAssistantOverlay: View {
             }
 
             actionCapsule
+                .simultaneousGesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { _ in
+                            onInteractionBegan()
+                        }
+                )
         }
         .frame(maxWidth: 390)
         .padding(.horizontal, 18)
@@ -152,7 +160,8 @@ struct SelectionAssistantOverlay: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .frame(maxHeight: 260)
+                .frame(maxHeight: conversationMaximumHeight)
+                .animation(.easeOut(duration: 0.2), value: isMultiTurnConversation)
             }
 
             if let pendingQuestion,
@@ -242,6 +251,7 @@ struct SelectionAssistantOverlay: View {
         systemImage: String
     ) -> some View {
         Button {
+            onInteractionBegan()
             if action == .ask {
                 isEnteringQuestion = true
                 Task { @MainActor in
@@ -263,6 +273,7 @@ struct SelectionAssistantOverlay: View {
     }
 
     private func submitQuestion() {
+        onInteractionBegan()
         let normalized = question.trimmingCharacters(in: .whitespacesAndNewlines)
         guard normalized.isEmpty == false else { return }
         isEnteringQuestion = false
@@ -308,6 +319,7 @@ struct SelectionAssistantOverlay: View {
     }
 
     private func submitFollowUp() {
+        onInteractionBegan()
         let normalized = followUpQuestion.trimmingCharacters(in: .whitespacesAndNewlines)
         guard normalized.isEmpty == false, isWorking == false else { return }
 
@@ -367,9 +379,11 @@ struct SelectionAssistantOverlay: View {
 
     private func closeResultCard() {
         resetForNewSelection()
+        onDismiss()
     }
 
     private func saveConversationAsNote() {
+        onInteractionBegan()
         guard isSavedAsNote == false else { return }
         do {
             savedNoteID = try saveAsNote(selection, conversationMarkdown, savedNoteID)
@@ -386,6 +400,14 @@ struct SelectionAssistantOverlay: View {
 
     private func shouldShowQuestion(at index: Int) -> Bool {
         index > 0 || activeAction == .ask
+    }
+
+    private var isMultiTurnConversation: Bool {
+        conversation.count > 1 || (conversation.isEmpty == false && pendingQuestion != nil)
+    }
+
+    private var conversationMaximumHeight: CGFloat {
+        isMultiTurnConversation ? 480 : 260
     }
 
     private func initialInstruction(for action: SelectionAssistantAction) -> String {

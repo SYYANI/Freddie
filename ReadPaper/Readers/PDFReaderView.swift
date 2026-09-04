@@ -194,7 +194,8 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
         #else
         let view = PDFView()
         #endif
-        view.autoScales = true
+        view.autoScales = false
+        view.scaleFactor = 1
         view.displayMode = .singlePageContinuous
         view.displayDirection = .vertical
         view.displaysPageBreaks = true
