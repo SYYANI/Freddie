@@ -644,19 +644,24 @@ struct ReadPaperLaTeXEngineCompatibilityPreamblePolicy: LaTeXPreambleTransformin
 
     func transform(_ source: String, targetLanguage: TranslationLanguage) throws -> String {
         let transformed = try base.transform(source, targetLanguage: targetLanguage)
-        return Self.normalizeEngineSpecificPreamble(in: transformed)
+        return Self.normalizeEngineSpecificSource(transformed)
     }
 
-    private static func normalizeEngineSpecificPreamble(in source: String) -> String {
+    static func normalizeEngineSpecificSource(_ source: String) -> String {
         var result = source
         result = replacingLines(
-            matching: #"(?m)^([ \t]*)\\pdfoutput[ \t]*=[ \t]*([+-]?\d+)([ \t]*(?:%[^\r\n]*)?)$"#,
-            with: #"$1\\ifdefined\\pdfoutput\\pdfoutput=$2\\fi$3"#,
+            matching: #"(?m)^([ \t]*)\\(pdfoutput|pdfsuppresswarningpagegroup|pdfminorversion|pdfcompresslevel|pdfobjcompresslevel|pdfinclusioncopyfonts|pdfgentounicode)[ \t]*=[ \t]*([+-]?\d+)([ \t]*(?:%[^\r\n]*)?)$"#,
+            with: #"$1\\ifdefined\\$2\\$2=$3\\fi$4"#,
             in: result
         )
         result = replacingLines(
-            matching: #"(?m)^([ \t]*)\\pdfsuppresswarningpagegroup[ \t]*=[ \t]*([+-]?\d+)([ \t]*(?:%[^\r\n]*)?)$"#,
-            with: #"$1\\ifdefined\\pdfsuppresswarningpagegroup\\pdfsuppresswarningpagegroup=$2\\fi$3"#,
+            matching: #"(?m)^([ \t]*)(\\(pdfmapline|pdfmapfile|pdfglyphtounicode)[^%\r\n]*)([ \t]*(?:%[^\r\n]*)?)$"#,
+            with: #"$1\\ifdefined\\$3$2\\fi$4"#,
+            in: result
+        )
+        result = replacingLines(
+            matching: #"(?m)^([ \t]*)(\\DisableLigatures[^%\r\n]*)([ \t]*(?:%[^\r\n]*)?)$"#,
+            with: #"$1\\ifdefined\\pdftexversion$2\\fi$3"#,
             in: result
         )
         return replacingLines(
@@ -676,6 +681,48 @@ struct ReadPaperLaTeXEngineCompatibilityPreamblePolicy: LaTeXPreambleTransformin
             with: replacement,
             options: .regularExpression
         )
+    }
+}
+
+enum ReadPaperLaTeXProjectCompatibilityNormalizer {
+    private static let sourceExtensions: Set<String> = [
+        "tex", "cls", "sty", "ltx", "def", "cfg",
+    ]
+
+    static func normalizeProject(
+        at projectDirectory: URL,
+        fileManager: FileManager = .default
+    ) throws {
+        let resourceKeys: [URLResourceKey] = [
+            .isRegularFileKey,
+            .isSymbolicLinkKey,
+        ]
+        guard let enumerator = fileManager.enumerator(
+            at: projectDirectory,
+            includingPropertiesForKeys: resourceKeys,
+            options: [.skipsHiddenFiles, .skipsPackageDescendants]
+        ) else {
+            throw CocoaError(.fileReadUnknown)
+        }
+
+        for case let fileURL as URL in enumerator {
+            try Task.checkCancellation()
+            guard sourceExtensions.contains(fileURL.pathExtension.lowercased()) else {
+                continue
+            }
+            let values = try fileURL.resourceValues(forKeys: Set(resourceKeys))
+            guard values.isRegularFile == true, values.isSymbolicLink != true else {
+                continue
+            }
+            guard let source = try? String(contentsOf: fileURL, encoding: .utf8) else {
+                continue
+            }
+            let normalized = ReadPaperLaTeXEngineCompatibilityPreamblePolicy
+                .normalizeEngineSpecificSource(source)
+            if normalized != source {
+                try normalized.write(to: fileURL, atomically: true, encoding: .utf8)
+            }
+        }
     }
 }
 
@@ -763,6 +810,9 @@ actor ReadPaperLaTeXTranslationService {
                 onProgress(ReadPaperLaTeXProgressMapper.update(for: event))
             }
         }
+        try ReadPaperLaTeXProjectCompatibilityNormalizer.normalizeProject(
+            at: artifact.projectDirectory
+        )
 
         guard let compiler else {
             onProgress(ReadPaperLaTeXProgressMapper.update(for: PipelineEvent(stage: .finished)))

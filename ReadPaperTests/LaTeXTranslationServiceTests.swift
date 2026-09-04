@@ -87,10 +87,12 @@ final class LaTeXTranslationServiceTests: XCTestCase {
     func testEndToEndSourceTranslationLivesUnderManagedPaperDirectory() async throws {
         let temporary = try TemporaryTestDirectory()
         defer { temporary.remove() }
-        let project = temporary.url.appendingPathComponent("input", isDirectory: true)
+        let project = URL(fileURLWithPath: "/private/tmp", isDirectory: true)
+            .appendingPathComponent("ReadPaperLaTeX-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: project) }
         try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
         try """
-        \\documentclass{article}
+        \\documentclass{legacy_template}
         \\pdfoutput=1
         \\pdfsuppresswarningpagegroup=1
         \\usepackage[latin9]{inputenc}
@@ -100,6 +102,19 @@ final class LaTeXTranslationServiceTests: XCTestCase {
         \\end{document}
         """.write(
             to: project.appendingPathComponent("main.tex"),
+            atomically: true,
+            encoding: .utf8
+        )
+        try #"""
+        \NeedsTeXFormat{LaTeX2e}
+        \ProvidesClass{legacy_template}
+        \LoadClass{article}
+        \pdfoutput=1
+        \RequirePackage{microtype}
+        \DisableLigatures[f]{family=sf*}
+        \pdfmapline{+customfont < customfont.ttf}
+        """#.write(
+            to: project.appendingPathComponent("legacy_template.cls"),
             atomically: true,
             encoding: .utf8
         )
@@ -147,6 +162,22 @@ final class LaTeXTranslationServiceTests: XCTestCase {
         ))
         XCTAssertTrue(translatedSource.contains(
             "\\ifdefined\\pdftexversion\\usepackage[utf8]{inputenc}\\fi"
+        ))
+        let translatedProjectFiles = try XCTUnwrap(FileManager.default.enumerator(
+            at: output.artifact.projectDirectory,
+            includingPropertiesForKeys: nil
+        )?.allObjects as? [URL])
+        let translatedClassURL = try XCTUnwrap(
+            translatedProjectFiles.first { $0.lastPathComponent == "legacy_template.cls" },
+            "Translated files: \(translatedProjectFiles.map(\.path).sorted())"
+        )
+        let translatedClass = try String(contentsOf: translatedClassURL, encoding: .utf8)
+        XCTAssertTrue(translatedClass.contains(#"\ifdefined\pdfoutput\pdfoutput=1\fi"#))
+        XCTAssertTrue(translatedClass.contains(
+            #"\ifdefined\pdftexversion\DisableLigatures[f]{family=sf*}\fi"#
+        ))
+        XCTAssertTrue(translatedClass.contains(
+            #"\ifdefined\pdfmapline\pdfmapline{+customfont < customfont.ttf}\fi"#
         ))
         let managedFiles = try XCTUnwrap(FileManager.default.enumerator(
             at: URL(fileURLWithPath: managedRoot, isDirectory: true),
@@ -388,6 +419,55 @@ final class LaTeXTranslationServiceTests: XCTestCase {
         XCTAssertTrue(transformed.contains(#"% \pdfoutput=0"#))
         XCTAssertFalse(transformed.contains(#"\usepackage[latin9]{inputenc}"#))
         XCTAssertEqual(transformedTwice, transformed)
+    }
+
+    func testLaTeXProjectCompatibilityNormalizerRewritesNestedSupportFilesIdempotently() throws {
+        let temporary = try TemporaryTestDirectory()
+        defer { temporary.remove() }
+        let supportDirectory = temporary.url.appendingPathComponent("support", isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: supportDirectory,
+            withIntermediateDirectories: true
+        )
+        let classURL = supportDirectory.appendingPathComponent("legacy.cls")
+        try #"""
+        % \pdfoutput=0
+        \pdfoutput = 1 % force PDF output
+        \pdfminorversion=7
+        \pdfmapline{+legacy < legacy.ttf <legacy.enc}
+        \DisableLigatures[f]{family=sf*}
+        """#.write(to: classURL, atomically: true, encoding: .utf8)
+        let styleURL = supportDirectory.appendingPathComponent("legacy.sty")
+        try #"\pdfglyphtounicode{f_f}{0066 0066}"#.write(
+            to: styleURL,
+            atomically: true,
+            encoding: .utf8
+        )
+
+        try ReadPaperLaTeXProjectCompatibilityNormalizer.normalizeProject(at: temporary.url)
+        let normalizedClass = try String(contentsOf: classURL, encoding: .utf8)
+        let normalizedStyle = try String(contentsOf: styleURL, encoding: .utf8)
+        try ReadPaperLaTeXProjectCompatibilityNormalizer.normalizeProject(at: temporary.url)
+
+        XCTAssertTrue(normalizedClass.contains(#"% \pdfoutput=0"#))
+        XCTAssertTrue(normalizedClass.contains(
+            #"\ifdefined\pdfoutput\pdfoutput=1\fi % force PDF output"#
+        ))
+        XCTAssertTrue(normalizedClass.contains(
+            #"\ifdefined\pdfminorversion\pdfminorversion=7\fi"#
+        ))
+        XCTAssertTrue(normalizedClass.contains(
+            #"\ifdefined\pdfmapline\pdfmapline{+legacy < legacy.ttf <legacy.enc}\fi"#
+        ))
+        XCTAssertTrue(normalizedClass.contains(
+            #"\ifdefined\pdftexversion\DisableLigatures[f]{family=sf*}\fi"#
+        ))
+        XCTAssertEqual(
+            normalizedStyle,
+            #"\ifdefined\pdfglyphtounicode\pdfglyphtounicode{f_f}{0066 0066}\fi"#
+        )
+        XCTAssertEqual(try String(contentsOf: classURL, encoding: .utf8), normalizedClass)
+        XCTAssertEqual(try String(contentsOf: styleURL, encoding: .utf8), normalizedStyle)
     }
 
     func testArXivIdentifierResolutionDoesNotDuplicateVersions() {
