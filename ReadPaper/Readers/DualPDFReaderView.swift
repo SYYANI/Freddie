@@ -50,6 +50,7 @@ struct DualPDFReaderView: View {
     @State private var originalSelectionResetToken = 0
     @State private var translatedSelectionResetToken = 0
     @State private var pendingProgrammaticTranslatedPageTargets: Set<Int> = []
+    @State private var automaticScalingRestoreToken = 0
 
     private var isPartialTranslation: Bool {
         PDFTranslationCoverage.isPartial(
@@ -59,7 +60,9 @@ struct DualPDFReaderView: View {
     }
 
     var body: some View {
-        StableHorizontalPDFSplitView {
+        StableHorizontalPDFSplitView(onDividerDragBegan: {
+            automaticScalingRestoreToken &+= 1
+        }) {
             originalReader
         } trailing: {
             translatedReader
@@ -178,6 +181,7 @@ struct DualPDFReaderView: View {
                 attachmentID: attachmentID,
                 displayAppearance: displayAppearance,
                 usesAutomaticScaling: true,
+                automaticScalingRestoreToken: automaticScalingRestoreToken,
                 pageIndex: pageIndex,
                 reloadToken: reloadToken,
                 selectionResetToken: selectionResetToken,
@@ -254,13 +258,16 @@ struct DualPDFSplitLayout {
 
 private struct StableHorizontalPDFSplitView<Leading: View, Trailing: View>: View {
     @State private var leadingFraction: CGFloat = 0.5
+    private let onDividerDragBegan: () -> Void
     private let leading: Leading
     private let trailing: Trailing
 
     init(
+        onDividerDragBegan: @escaping () -> Void = {},
         @ViewBuilder leading: () -> Leading,
         @ViewBuilder trailing: () -> Trailing
     ) {
+        self.onDividerDragBegan = onDividerDragBegan
         self.leading = leading()
         self.trailing = trailing()
     }
@@ -277,13 +284,16 @@ private struct StableHorizontalPDFSplitView<Leading: View, Trailing: View>: View
                 leading
                     .frame(width: leadingWidth)
 
-                StablePDFSplitDivider { delta in
-                    leadingFraction = DualPDFSplitLayout.fraction(
-                        afterDraggingBy: delta,
-                        totalWidth: totalWidth,
-                        currentFraction: leadingFraction
-                    )
-                }
+                StablePDFSplitDivider(
+                    onDragBegan: onDividerDragBegan,
+                    onDrag: { delta in
+                        leadingFraction = DualPDFSplitLayout.fraction(
+                            afterDraggingBy: delta,
+                            totalWidth: totalWidth,
+                            currentFraction: leadingFraction
+                        )
+                    }
+                )
                 .frame(width: DualPDFSplitLayout.dividerWidth)
 
                 trailing
@@ -294,19 +304,23 @@ private struct StableHorizontalPDFSplitView<Leading: View, Trailing: View>: View
 }
 
 private struct StablePDFSplitDivider: NSViewRepresentable {
+    var onDragBegan: () -> Void
     var onDrag: (CGFloat) -> Void
 
     func makeNSView(context: Context) -> DividerView {
         let view = DividerView()
+        view.onDragBegan = onDragBegan
         view.onDrag = onDrag
         return view
     }
 
     func updateNSView(_ nsView: DividerView, context: Context) {
+        nsView.onDragBegan = onDragBegan
         nsView.onDrag = onDrag
     }
 
     final class DividerView: NSView {
+        var onDragBegan: (() -> Void)?
         var onDrag: ((CGFloat) -> Void)?
         private var lastDragLocationX: CGFloat?
 
@@ -333,6 +347,7 @@ private struct StablePDFSplitDivider: NSViewRepresentable {
 
         override func mouseDown(with event: NSEvent) {
             lastDragLocationX = event.locationInWindow.x
+            onDragBegan?()
             NSCursor.resizeLeftRight.set()
         }
 

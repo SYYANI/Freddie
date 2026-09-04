@@ -142,6 +142,24 @@ struct PDFReadingPosition: Equatable {
     }
 }
 
+enum PDFAutomaticScalingPolicy {
+    static let relativeTolerance: CGFloat = 0.12
+
+    static func shouldRestore(
+        currentScale: CGFloat,
+        fittedScale: CGFloat,
+        tolerance: CGFloat = relativeTolerance
+    ) -> Bool {
+        guard currentScale.isFinite,
+              fittedScale.isFinite,
+              fittedScale > 0,
+              tolerance >= 0 else {
+            return false
+        }
+        return abs(currentScale - fittedScale) / fittedScale <= tolerance
+    }
+}
+
 struct PDFDebugRegionSelection: Equatable, Sendable {
     var pageIndex: Int
     var pageBounds: CGRect
@@ -154,6 +172,7 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
     var attachmentID: UUID? = nil
     var displayAppearance: PDFDisplayAppearance = .defaultMode
     var usesAutomaticScaling = false
+    var automaticScalingRestoreToken = 0
     @Binding var pageIndex: Int
     var reloadToken: Int = 0
     var selectionResetToken: Int = 0
@@ -206,6 +225,10 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
 
     private func updateView(_ view: PDFView, context: Context) {
         context.coordinator.applyScalingPreference(usesAutomaticScaling, to: view)
+        if context.coordinator.lastAutomaticScalingRestoreToken != automaticScalingRestoreToken {
+            context.coordinator.lastAutomaticScalingRestoreToken = automaticScalingRestoreToken
+            context.coordinator.restoreAutomaticScalingIfNearFit(in: view)
+        }
         applyDisplayAppearance(displayAppearance, to: view)
         context.coordinator.configure(
             paperID: paperID,
@@ -299,6 +322,7 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
         var loadedAttachmentID: UUID?
         var lastReloadToken: Int = 0
         var lastSelectionResetToken: Int = 0
+        var lastAutomaticScalingRestoreToken: Int = 0
         var paperID: UUID?
         var attachmentID: UUID?
         weak var pdfView: PDFView?
@@ -356,6 +380,17 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
             if usesAutomaticScaling == false {
                 pdfView.scaleFactor = 1
             }
+        }
+
+        func restoreAutomaticScalingIfNearFit(in pdfView: PDFView) {
+            guard pdfView.autoScales == false,
+                  PDFAutomaticScalingPolicy.shouldRestore(
+                    currentScale: pdfView.scaleFactor,
+                    fittedScale: pdfView.scaleFactorForSizeToFit
+                  ) else {
+                return
+            }
+            pdfView.autoScales = true
         }
 
         func configure(
@@ -1034,6 +1069,13 @@ private final class InteractivePDFView: PDFView {
             return
         }
         super.perform(action)
+    }
+
+    override func magnify(with event: NSEvent) {
+        // Automatic scaling is useful when a narrower dual-pane reader first
+        // opens, but it otherwise snaps a manual pinch zoom back to fit.
+        autoScales = false
+        super.magnify(with: event)
     }
 
     override func mouseDown(with event: NSEvent) {

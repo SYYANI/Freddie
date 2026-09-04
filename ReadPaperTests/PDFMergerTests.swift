@@ -385,6 +385,21 @@ final class PDFMergerTests: XCTestCase {
         )
     }
 
+    func testAutomaticScalingRestoresOnlyWhenCurrentScaleIsNearFit() {
+        XCTAssertTrue(PDFAutomaticScalingPolicy.shouldRestore(
+            currentScale: 0.55,
+            fittedScale: 0.5
+        ))
+        XCTAssertFalse(PDFAutomaticScalingPolicy.shouldRestore(
+            currentScale: 0.7,
+            fittedScale: 0.5
+        ))
+        XCTAssertFalse(PDFAutomaticScalingPolicy.shouldRestore(
+            currentScale: 1,
+            fittedScale: 0
+        ))
+    }
+
     func testDualPDFSelectionOwnershipClearsPreviousSideWhenSelectionSwitches() {
         var ownership = DualPDFSelectionOwnership()
 
