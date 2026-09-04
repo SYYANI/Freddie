@@ -177,6 +177,7 @@ struct DualPDFReaderView: View {
                 paperID: paperID,
                 attachmentID: attachmentID,
                 displayAppearance: displayAppearance,
+                usesAutomaticScaling: true,
                 pageIndex: pageIndex,
                 reloadToken: reloadToken,
                 selectionResetToken: selectionResetToken,

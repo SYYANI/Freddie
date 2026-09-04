@@ -153,6 +153,7 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
     var paperID: UUID? = nil
     var attachmentID: UUID? = nil
     var displayAppearance: PDFDisplayAppearance = .defaultMode
+    var usesAutomaticScaling = false
     @Binding var pageIndex: Int
     var reloadToken: Int = 0
     var selectionResetToken: Int = 0
@@ -194,8 +195,7 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
         #else
         let view = PDFView()
         #endif
-        view.autoScales = false
-        view.scaleFactor = 1
+        context.coordinator.applyScalingPreference(usesAutomaticScaling, to: view)
         view.displayMode = .singlePageContinuous
         view.displayDirection = .vertical
         view.displaysPageBreaks = true
@@ -205,6 +205,7 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
     }
 
     private func updateView(_ view: PDFView, context: Context) {
+        context.coordinator.applyScalingPreference(usesAutomaticScaling, to: view)
         applyDisplayAppearance(displayAppearance, to: view)
         context.coordinator.configure(
             paperID: paperID,
@@ -318,6 +319,7 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
         private var isSelectionUpdateScheduled = false
         private var lastPublishedSelection: NoteSelectionContext?
         private var pendingProgrammaticPosition: PDFReadingPosition?
+        private var appliedAutomaticScaling: Bool?
 
         init(
             paperID: UUID? = nil,
@@ -346,6 +348,15 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
         var canUndoPDFAnnotation: Bool { undoAnnotationHistory.isEmpty == false }
         var canRedoPDFAnnotation: Bool { redoAnnotationHistory.isEmpty == false }
         var hasPDFAnnotations: Bool { annotationRecords.isEmpty == false }
+
+        func applyScalingPreference(_ usesAutomaticScaling: Bool, to pdfView: PDFView) {
+            guard appliedAutomaticScaling != usesAutomaticScaling else { return }
+            appliedAutomaticScaling = usesAutomaticScaling
+            pdfView.autoScales = usesAutomaticScaling
+            if usesAutomaticScaling == false {
+                pdfView.scaleFactor = 1
+            }
+        }
 
         func configure(
             paperID: UUID?,
