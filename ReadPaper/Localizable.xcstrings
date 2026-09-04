@@ -590,6 +590,17 @@
         }
       }
     },
+    "Ask a follow-up..." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "继续追问…"
+          }
+        }
+      }
+    },
     "Ask about the selected text..." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -4733,6 +4744,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "选择"
+          }
+        }
+      }
+    },
+    "Send Follow-up" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "发送追问"
           }
         }
       }

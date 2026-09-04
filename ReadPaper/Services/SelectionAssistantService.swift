@@ -6,22 +6,40 @@ enum SelectionAssistantAction: String, Sendable {
     case ask
 }
 
+struct SelectionAssistantConversationTurn: Equatable, Sendable {
+    var question: String
+    var answer: String
+
+    init(question: String, answer: String) {
+        self.question = question.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.answer = answer.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
+
 struct SelectionAssistantRequest: Equatable, Sendable {
     var action: SelectionAssistantAction
     var selection: String
     var localContext: String?
     var question: String?
+    var conversation: [SelectionAssistantConversationTurn]
 
     init(
         action: SelectionAssistantAction,
         selection: String,
         localContext: String? = nil,
-        question: String? = nil
+        question: String? = nil,
+        conversation: [SelectionAssistantConversationTurn] = []
     ) {
         self.action = action
         self.selection = Self.normalized(selection, limit: 4_000) ?? ""
         self.localContext = Self.normalized(localContext, limit: 8_000)
         self.question = Self.normalized(question, limit: 1_000)
+        self.conversation = conversation.suffix(12).map { turn in
+            SelectionAssistantConversationTurn(
+                question: String(turn.question.prefix(1_000)),
+                answer: String(turn.answer.prefix(8_000))
+            )
+        }
     }
 
     private static func normalized(_ value: String?, limit: Int) -> String? {
@@ -95,7 +113,7 @@ struct SelectionAssistantService: Sendable {
 }
 
 enum SelectionAssistantPrompt {
-    static let version = "selection-assistant-v1"
+    static let version = "selection-assistant-v2"
 
     static func messages(
         for request: SelectionAssistantRequest,
@@ -131,13 +149,23 @@ enum SelectionAssistantPrompt {
             fields.append("<<<LOCAL_CONTEXT>>>\n\(context)\n<<<END_LOCAL_CONTEXT>>>")
         }
         fields.append("<<<SELECTED_TEXT>>>\n\(request.selection)\n<<<END_SELECTED_TEXT>>>")
-        if let question = request.question {
-            fields.append("<<<QUESTION>>>\n\(question)\n<<<END_QUESTION>>>")
-        }
-
-        return [
+        var messages = [
             LLMCompletionMessage(role: "system", content: system),
             LLMCompletionMessage(role: "user", content: fields.joined(separator: "\n\n"))
         ]
+        for turn in request.conversation {
+            messages.append(LLMCompletionMessage(
+                role: "user",
+                content: "<<<PRIOR_QUESTION>>>\n\(turn.question)\n<<<END_PRIOR_QUESTION>>>"
+            ))
+            messages.append(LLMCompletionMessage(role: "assistant", content: turn.answer))
+        }
+        if let question = request.question {
+            messages.append(LLMCompletionMessage(
+                role: "user",
+                content: "<<<QUESTION>>>\n\(question)\n<<<END_QUESTION>>>"
+            ))
+        }
+        return messages
     }
 }

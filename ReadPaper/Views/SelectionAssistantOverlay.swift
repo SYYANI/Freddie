@@ -6,19 +6,22 @@ struct SelectionAssistantOverlay: View {
 
     let selection: NoteSelectionContext
     let perform: @MainActor (SelectionAssistantRequest) async throws -> String
-    let saveAsNote: @MainActor (NoteSelectionContext, String) throws -> Void
+    let saveAsNote: @MainActor (NoteSelectionContext, String, UUID?) throws -> UUID
 
     @State private var question = ""
     @State private var isEnteringQuestion = false
     @State private var isWorking = false
     @State private var activeAction: SelectionAssistantAction?
-    @State private var resultText: String?
+    @State private var conversation: [SelectionAssistantConversationTurn] = []
+    @State private var pendingQuestion: String?
+    @State private var followUpQuestion = ""
     @State private var errorText: String?
     @State private var saveErrorText: String?
     @State private var isSavedAsNote = false
+    @State private var savedNoteID: UUID?
     @State private var task: Task<Void, Never>?
-    @State private var submittedQuestion: String?
     @FocusState private var isQuestionFieldFocused: Bool
+    @FocusState private var isFollowUpFieldFocused: Bool
 
     var body: some View {
         VStack(spacing: 10) {
@@ -104,9 +107,9 @@ struct SelectionAssistantOverlay: View {
 
                 Spacer(minLength: 8)
 
-                if let resultText, resultText.isEmpty == false {
+                if conversation.isEmpty == false {
                     Button {
-                        saveResultAsNote(resultText)
+                        saveConversationAsNote()
                     } label: {
                         Label(
                             isSavedAsNote
@@ -122,7 +125,7 @@ struct SelectionAssistantOverlay: View {
 
                     Button {
                         NSPasteboard.general.clearContents()
-                        NSPasteboard.general.setString(resultText, forType: .string)
+                        NSPasteboard.general.setString(conversationMarkdown, forType: .string)
                     } label: {
                         Image(systemName: "doc.on.doc")
                     }
@@ -131,10 +134,7 @@ struct SelectionAssistantOverlay: View {
                 }
 
                 Button {
-                    task?.cancel()
-                    activeAction = nil
-                    resultText = nil
-                    errorText = nil
+                    closeResultCard()
                 } label: {
                     Image(systemName: "xmark")
                 }
@@ -143,10 +143,21 @@ struct SelectionAssistantOverlay: View {
             }
             .foregroundStyle(activeAction == .translate ? Color.orange : Color.accentColor)
 
-            if activeAction == .ask,
-               let submittedQuestion = submittedQuestion,
-               submittedQuestion.isEmpty == false {
-                Text(AppLocalization.format("Question: %@", bundle: bundle, submittedQuestion))
+            if conversation.isEmpty == false {
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 12) {
+                        ForEach(Array(conversation.enumerated()), id: \.offset) { index, turn in
+                            conversationTurn(turn, index: index)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .frame(maxHeight: 260)
+            }
+
+            if let pendingQuestion,
+               shouldShowQuestion(at: conversation.count) {
+                Text(AppLocalization.format("Question: %@", bundle: bundle, pendingQuestion))
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
             }
@@ -162,13 +173,34 @@ struct SelectionAssistantOverlay: View {
                 Text(errorText)
                     .foregroundStyle(.red)
                     .textSelection(.enabled)
-            } else if let resultText {
-                ScrollView {
-                    Text(resultText)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .textSelection(.enabled)
+            }
+
+            if conversation.isEmpty == false {
+                Divider()
+
+                HStack(spacing: 6) {
+                    TextField(
+                        String(localized: "Ask a follow-up...", bundle: bundle),
+                        text: $followUpQuestion
+                    )
+                    .textFieldStyle(.plain)
+                    .focused($isFollowUpFieldFocused)
+                    .onSubmit(submitFollowUp)
+
+                    Button(action: submitFollowUp) {
+                        Image(systemName: "arrow.up.circle.fill")
+                            .font(.system(size: 18))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(
+                        followUpQuestion.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isWorking
+                    )
+                    .help(String(localized: "Send Follow-up", bundle: bundle))
+                    .accessibilityLabel(String(localized: "Send Follow-up", bundle: bundle))
                 }
-                .frame(maxHeight: 260)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .background(Color.primary.opacity(0.055), in: Capsule())
             }
 
             if let saveErrorText {
@@ -184,6 +216,26 @@ struct SelectionAssistantOverlay: View {
         .selectionAssistantMaterial(cornerRadius: 14)
     }
 
+    @ViewBuilder
+    private func conversationTurn(
+        _ turn: SelectionAssistantConversationTurn,
+        index: Int
+    ) -> some View {
+        if shouldShowQuestion(at: index) {
+            Text(AppLocalization.format("Question: %@", bundle: bundle, turn.question))
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+        }
+
+        Text(turn.answer)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .textSelection(.enabled)
+
+        if index < conversation.count - 1 {
+            Divider()
+        }
+    }
+
     private func actionButton(
         _ action: SelectionAssistantAction,
         title: String,
@@ -196,7 +248,7 @@ struct SelectionAssistantOverlay: View {
                     isQuestionFieldFocused = true
                 }
             } else {
-                run(action: action, question: nil)
+                runInitialAction(action, question: nil)
             }
         } label: {
             Image(systemName: systemImage)
@@ -213,18 +265,20 @@ struct SelectionAssistantOverlay: View {
     private func submitQuestion() {
         let normalized = question.trimmingCharacters(in: .whitespacesAndNewlines)
         guard normalized.isEmpty == false else { return }
-        submittedQuestion = normalized
         isEnteringQuestion = false
-        run(action: .ask, question: normalized)
+        runInitialAction(.ask, question: normalized)
     }
 
-    private func run(action: SelectionAssistantAction, question: String?) {
+    private func runInitialAction(_ action: SelectionAssistantAction, question: String?) {
         task?.cancel()
         activeAction = action
-        resultText = nil
+        conversation = []
+        pendingQuestion = question ?? initialInstruction(for: action)
+        followUpQuestion = ""
         errorText = nil
         saveErrorText = nil
         isSavedAsNote = false
+        savedNoteID = nil
         isWorking = true
 
         let request = SelectionAssistantRequest(
@@ -237,12 +291,57 @@ struct SelectionAssistantOverlay: View {
             do {
                 let response = try await perform(request)
                 guard Task.isCancelled == false else { return }
-                resultText = response
+                conversation = [SelectionAssistantConversationTurn(
+                    question: pendingQuestion ?? initialInstruction(for: action),
+                    answer: response
+                )]
+                pendingQuestion = nil
             } catch is CancellationError {
                 return
             } catch {
                 guard Task.isCancelled == false else { return }
                 errorText = error.localizedDescription
+                pendingQuestion = nil
+            }
+            isWorking = false
+        }
+    }
+
+    private func submitFollowUp() {
+        let normalized = followUpQuestion.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard normalized.isEmpty == false, isWorking == false else { return }
+
+        task?.cancel()
+        followUpQuestion = ""
+        pendingQuestion = normalized
+        errorText = nil
+        saveErrorText = nil
+        isSavedAsNote = false
+        isWorking = true
+
+        let priorConversation = conversation
+        let request = SelectionAssistantRequest(
+            action: .ask,
+            selection: selection.quote,
+            localContext: selection.localContext,
+            question: normalized,
+            conversation: priorConversation
+        )
+        task = Task { @MainActor in
+            do {
+                let response = try await perform(request)
+                guard Task.isCancelled == false else { return }
+                conversation.append(SelectionAssistantConversationTurn(
+                    question: normalized,
+                    answer: response
+                ))
+                pendingQuestion = nil
+            } catch is CancellationError {
+                return
+            } catch {
+                guard Task.isCancelled == false else { return }
+                errorText = error.localizedDescription
+                pendingQuestion = nil
             }
             isWorking = false
         }
@@ -252,21 +351,28 @@ struct SelectionAssistantOverlay: View {
         task?.cancel()
         task = nil
         question = ""
-        submittedQuestion = nil
+        followUpQuestion = ""
+        conversation = []
+        pendingQuestion = nil
         isQuestionFieldFocused = false
+        isFollowUpFieldFocused = false
         isEnteringQuestion = false
         isWorking = false
         activeAction = nil
-        resultText = nil
         errorText = nil
         saveErrorText = nil
         isSavedAsNote = false
+        savedNoteID = nil
     }
 
-    private func saveResultAsNote(_ result: String) {
+    private func closeResultCard() {
+        resetForNewSelection()
+    }
+
+    private func saveConversationAsNote() {
         guard isSavedAsNote == false else { return }
         do {
-            try saveAsNote(selection, result)
+            savedNoteID = try saveAsNote(selection, conversationMarkdown, savedNoteID)
             saveErrorText = nil
             isSavedAsNote = true
         } catch {
@@ -276,6 +382,32 @@ struct SelectionAssistantOverlay: View {
                 error.localizedDescription
             )
         }
+    }
+
+    private func shouldShowQuestion(at index: Int) -> Bool {
+        index > 0 || activeAction == .ask
+    }
+
+    private func initialInstruction(for action: SelectionAssistantAction) -> String {
+        switch action {
+        case .translate:
+            return "Translate the selected text."
+        case .explain:
+            return "Explain the selected text."
+        case .ask:
+            return question
+        }
+    }
+
+    private var conversationMarkdown: String {
+        var sections = ["## \(resultTitle)"]
+        for (index, turn) in conversation.enumerated() {
+            if shouldShowQuestion(at: index) {
+                sections.append("**\(AppLocalization.format("Question: %@", bundle: bundle, turn.question))**")
+            }
+            sections.append(turn.answer)
+        }
+        return sections.joined(separator: "\n\n")
     }
 
     private var resultTitle: String {
@@ -292,6 +424,9 @@ struct SelectionAssistantOverlay: View {
     }
 
     private var loadingText: String {
+        if conversation.isEmpty == false || activeAction == .ask {
+            return String(localized: "Generating an answer...", bundle: bundle)
+        }
         switch activeAction {
         case .translate:
             return String(localized: "Translating...", bundle: bundle)

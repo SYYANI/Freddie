@@ -55,7 +55,11 @@ struct ReaderPaneView: View {
     @Binding var noteSelectionContext: NoteSelectionContext?
     @Binding var noteNavigationRequest: NoteNavigationRequest?
     var onCreateAnchoredNote: () -> Void
-    var onSaveSelectionAssistantNote: @MainActor @Sendable (NoteSelectionContext, String) throws -> Void
+    var onSaveSelectionAssistantNote: @MainActor @Sendable (
+        NoteSelectionContext,
+        String,
+        UUID?
+    ) throws -> UUID
     var onArxivLinkActivated: (URL) -> Void
 
     @State private var pdfPageIndex = 0

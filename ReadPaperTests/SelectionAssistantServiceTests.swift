@@ -66,16 +66,47 @@ final class SelectionAssistantServiceTests: XCTestCase {
     }
 
     func testRequestLimitsUntrustedInputSizes() {
+        let history = (0..<15).map {
+            SelectionAssistantConversationTurn(question: "Question \($0)", answer: "Answer \($0)")
+        }
         let request = SelectionAssistantRequest(
             action: .ask,
             selection: String(repeating: "s", count: 5_000),
             localContext: String(repeating: "c", count: 9_000),
-            question: String(repeating: "q", count: 2_000)
+            question: String(repeating: "q", count: 2_000),
+            conversation: history
         )
 
         XCTAssertEqual(request.selection.count, 4_000)
         XCTAssertEqual(request.localContext?.count, 8_000)
         XCTAssertEqual(request.question?.count, 1_000)
+        XCTAssertEqual(request.conversation.count, 12)
+        XCTAssertEqual(request.conversation.first?.question, "Question 3")
+    }
+
+    func testFollowUpPromptIncludesPriorConversationInOrder() {
+        let messages = SelectionAssistantPrompt.messages(
+            for: SelectionAssistantRequest(
+                action: .ask,
+                selection: "A selected claim.",
+                localContext: "Nearby evidence.",
+                question: "How does that affect the conclusion?",
+                conversation: [
+                    SelectionAssistantConversationTurn(
+                        question: "What does this claim mean?",
+                        answer: "It describes the model assumption."
+                    )
+                ]
+            ),
+            paperTitle: "Paper",
+            targetLanguage: "EN"
+        )
+
+        XCTAssertEqual(messages.map(\.role), ["system", "user", "user", "assistant", "user"])
+        XCTAssertTrue(messages[1].content.contains("<<<SELECTED_TEXT>>>\nA selected claim."))
+        XCTAssertTrue(messages[2].content.contains("<<<PRIOR_QUESTION>>>\nWhat does this claim mean?"))
+        XCTAssertEqual(messages[3].content, "It describes the model assumption.")
+        XCTAssertTrue(messages[4].content.contains("<<<QUESTION>>>\nHow does that affect the conclusion?"))
     }
 
     private func makeRoute() -> ResolvedLLMModelRoute {

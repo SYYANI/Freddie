@@ -363,23 +363,36 @@ struct ContentView: View {
 
     private func saveSelectionAssistantResultAsNote(
         selection: NoteSelectionContext,
-        result: String
-    ) throws {
-        guard let paper = selectedPaper else { return }
-
-        let note = Note.selectionAssistantNote(
-            paperID: paper.id,
-            selection: selection,
-            result: result
-        )
-        modelContext.insert(note)
-
+        result: String,
+        existingNoteID: UUID?
+    ) throws -> UUID {
+        guard let paper = selectedPaper else {
+            throw CocoaError(.validationMissingMandatoryProperty)
+        }
         do {
+            let note: Note
+            if let existingNoteID,
+               let existingNote = try modelContext.fetch(FetchDescriptor<Note>())
+                .first(where: { $0.id == existingNoteID }) {
+                existingNote.body = result
+                existingNote.modifiedAt = Date()
+                note = existingNote
+            } else {
+                let newNote = Note.selectionAssistantNote(
+                    paperID: paper.id,
+                    selection: selection,
+                    result: result
+                )
+                modelContext.insert(newNote)
+                note = newNote
+            }
+
             try modelContext.save()
             if isInspectorCollapsed {
                 inspectorCollapsedBinding.wrappedValue = false
             }
             focusedNoteID = note.id
+            return note.id
         } catch {
             modelContext.rollback()
             throw error
