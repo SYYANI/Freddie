@@ -2,10 +2,6 @@ import AppKit
 import SwiftUI
 
 struct SelectionAssistantOverlay: View {
-    private enum ConversationScrollTarget: Hashable {
-        case pending
-    }
-
     @Environment(\.localizationBundle) private var bundle
 
     let selection: NoteSelectionContext
@@ -25,7 +21,7 @@ struct SelectionAssistantOverlay: View {
     @State private var saveErrorText: String?
     @State private var isSavedAsNote = false
     @State private var savedNoteID: UUID?
-    @State private var conversationContentHeight: CGFloat = 0
+    @State private var conversationScrollRequest: SelectionAssistantConversationScrollRequest?
     @State private var task: Task<Void, Never>?
     @FocusState private var isQuestionFieldFocused: Bool
     @FocusState private var isFollowUpFieldFocused: Bool
@@ -206,90 +202,16 @@ struct SelectionAssistantOverlay: View {
     }
 
     private var conversationArea: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                VStack(alignment: .leading, spacing: 12) {
-                    ForEach(Array(conversation.enumerated()), id: \.offset) { index, turn in
-                        VStack(alignment: .leading, spacing: 10) {
-                            conversationTurn(turn, index: index)
-                        }
-                        .id(index)
-                    }
-
-                    if let pendingQuestion,
-                       shouldShowQuestion(at: conversation.count) {
-                        Text(AppLocalization.format("Question: %@", bundle: bundle, pendingQuestion))
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                            .id(ConversationScrollTarget.pending)
-                            .transition(.opacity)
-                    }
-
-                    if isWorking {
-                        HStack(spacing: 8) {
-                            ProgressView()
-                                .controlSize(.small)
-                            Text(loadingText)
-                                .foregroundStyle(.secondary)
-                        }
-                        .transition(.opacity)
-                    } else if let errorText {
-                        Text(errorText)
-                            .foregroundStyle(.red)
-                            .textSelection(.enabled)
-                            .transition(.opacity)
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background {
-                    GeometryReader { geometry in
-                        Color.clear.preference(
-                            key: SelectionAssistantConversationHeightPreferenceKey.self,
-                            value: geometry.size.height
-                        )
-                    }
-                }
-            }
-            .frame(height: conversationViewportHeight)
-            .clipped()
-            .opacity(hasConversationAreaContent ? 1 : 0)
-            .onPreferenceChange(SelectionAssistantConversationHeightPreferenceKey.self) { height in
-                let normalizedHeight = ceil(max(0, height))
-                guard abs(normalizedHeight - conversationContentHeight) > 0.5 else { return }
-                withAnimation(layoutAnimation) {
-                    conversationContentHeight = normalizedHeight
-                }
-            }
-            .onChange(of: pendingQuestion) { oldQuestion, newQuestion in
-                guard oldQuestion == nil,
-                      newQuestion != nil,
-                      conversation.isEmpty == false else { return }
-                withAnimation(layoutAnimation) {
-                    proxy.scrollTo(ConversationScrollTarget.pending, anchor: .top)
-                }
-            }
-        }
-        .allowsHitTesting(hasConversationAreaContent)
-    }
-
-    @ViewBuilder
-    private func conversationTurn(
-        _ turn: SelectionAssistantConversationTurn,
-        index: Int
-    ) -> some View {
-        if shouldShowQuestion(at: index) {
-            Text(AppLocalization.format("Question: %@", bundle: bundle, turn.question))
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-        }
-
-        Text(turn.answer)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .textSelection(.enabled)
-
-        if index < conversation.count - 1 {
-            Divider()
-        }
+        SelectionAssistantConversationView(
+            conversation: conversation,
+            pendingQuestion: pendingQuestion,
+            isWorking: isWorking,
+            errorText: errorText,
+            loadingText: loadingText,
+            showsInitialQuestion: activeAction == .ask,
+            conversationMaximumHeight: conversationMaximumHeight,
+            conversationScrollRequest: conversationScrollRequest
+        )
     }
 
     private func actionButton(
@@ -333,6 +255,7 @@ struct SelectionAssistantOverlay: View {
             activeAction = action
             conversation = []
             pendingQuestion = question ?? initialInstruction(for: action)
+            conversationScrollRequest = .init(turnIndex: 0)
             followUpQuestion = ""
             errorText = nil
             saveErrorText = nil
@@ -357,6 +280,7 @@ struct SelectionAssistantOverlay: View {
                         answer: response
                     )]
                     pendingQuestion = nil
+                    conversationScrollRequest = .init(turnIndex: 0)
                     isWorking = false
                 }
             } catch is CancellationError {
@@ -365,7 +289,7 @@ struct SelectionAssistantOverlay: View {
                 guard Task.isCancelled == false else { return }
                 withAnimation(layoutAnimation) {
                     errorText = error.localizedDescription
-                    pendingQuestion = nil
+                    conversationScrollRequest = .init(turnIndex: 0)
                     isWorking = false
                 }
             }
@@ -378,9 +302,11 @@ struct SelectionAssistantOverlay: View {
         guard normalized.isEmpty == false, isWorking == false else { return }
 
         task?.cancel()
+        let pendingTurnIndex = conversation.count
         withAnimation(layoutAnimation) {
             followUpQuestion = ""
             pendingQuestion = normalized
+            conversationScrollRequest = .init(turnIndex: pendingTurnIndex)
             errorText = nil
             saveErrorText = nil
             isSavedAsNote = false
@@ -405,6 +331,7 @@ struct SelectionAssistantOverlay: View {
                         answer: response
                     ))
                     pendingQuestion = nil
+                    conversationScrollRequest = .init(turnIndex: pendingTurnIndex)
                     isWorking = false
                 }
             } catch is CancellationError {
@@ -413,7 +340,7 @@ struct SelectionAssistantOverlay: View {
                 guard Task.isCancelled == false else { return }
                 withAnimation(layoutAnimation) {
                     errorText = error.localizedDescription
-                    pendingQuestion = nil
+                    conversationScrollRequest = .init(turnIndex: pendingTurnIndex)
                     isWorking = false
                 }
             }
@@ -428,6 +355,7 @@ struct SelectionAssistantOverlay: View {
             followUpQuestion = ""
             conversation = []
             pendingQuestion = nil
+            conversationScrollRequest = nil
             isQuestionFieldFocused = false
             isFollowUpFieldFocused = false
             isEnteringQuestion = false
@@ -474,17 +402,6 @@ struct SelectionAssistantOverlay: View {
 
     private var conversationMaximumHeight: CGFloat {
         isMultiTurnConversation ? 480 : 260
-    }
-
-    private var conversationViewportHeight: CGFloat {
-        min(conversationContentHeight, conversationMaximumHeight)
-    }
-
-    private var hasConversationAreaContent: Bool {
-        conversation.isEmpty == false
-            || pendingQuestion != nil
-            || isWorking
-            || errorText != nil
     }
 
     private func initialInstruction(for action: SelectionAssistantAction) -> String {
@@ -539,11 +456,184 @@ struct SelectionAssistantOverlay: View {
     }
 }
 
-private struct SelectionAssistantConversationHeightPreferenceKey: PreferenceKey {
-    static var defaultValue: CGFloat { 0 }
+struct SelectionAssistantConversationView: View {
+    @Environment(\.localizationBundle) private var bundle
 
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = max(value, nextValue())
+    let conversation: [SelectionAssistantConversationTurn]
+    let pendingQuestion: String?
+    let isWorking: Bool
+    let errorText: String?
+    let loadingText: String
+    let showsInitialQuestion: Bool
+    let conversationMaximumHeight: CGFloat
+    let conversationScrollRequest: SelectionAssistantConversationScrollRequest?
+
+    @State private var conversationHeights: [SelectionAssistantConversationGeometry: CGFloat] = [:]
+
+    var body: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        // Keep a turn's identity when its loading status becomes
+                        // an answer, so scrollTo never sees two copies of its ID.
+                        ForEach(0..<conversationTurnCount, id: \.self) { index in
+                            VStack(alignment: .leading, spacing: 10) {
+                                if index < conversation.count {
+                                    conversationTurn(conversation[index], index: index)
+                                } else if let pendingQuestion {
+                                    if shouldShowQuestion(at: index) {
+                                        Text(AppLocalization.format("Question: %@", bundle: bundle, pendingQuestion))
+                                            .font(.caption.weight(.semibold))
+                                            .foregroundStyle(.secondary)
+                                    }
+
+                                    conversationStatus
+                                }
+                            }
+                            .id(SelectionAssistantConversationScrollTarget.turn(index))
+                            .measureConversationHeight(.turn(index))
+                        }
+                    }
+
+                    Color.clear
+                        .frame(height: SelectionAssistantConversationScrollTarget.bottomInset)
+                        .id(SelectionAssistantConversationScrollTarget.bottom)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .measureConversationHeight(.content)
+            }
+            // A flexible height lets the card shrink to the reader's available
+            // space, including its header, follow-up field, and action capsule.
+            .frame(minHeight: 0, idealHeight: conversationViewportHeight, maxHeight: conversationViewportHeight)
+            .clipped()
+            .measureConversationHeight(.viewport)
+            .opacity(hasConversationAreaContent ? 1 : 0)
+            .onPreferenceChange(SelectionAssistantConversationHeightPreferenceKey.self) { height in
+                conversationHeights = height
+            }
+            .task(id: conversationScrollUpdate) {
+                guard let target = conversationScrollUpdate.target else { return }
+                // Geometry changes restart this task. Scroll after the measured
+                // layout is installed, including loading -> answer and resizing.
+                await Task.yield()
+                guard Task.isCancelled == false else { return }
+                withAnimation(.easeOut(duration: 0.22)) {
+                    proxy.scrollTo(target, anchor: target == .bottom ? .bottom : .top)
+                }
+            }
+        }
+        .allowsHitTesting(hasConversationAreaContent)
+    }
+
+    @ViewBuilder
+    private var conversationStatus: some View {
+        if isWorking {
+            HStack(spacing: 8) {
+                ProgressView()
+                    .controlSize(.small)
+                Text(loadingText)
+                    .foregroundStyle(.secondary)
+            }
+            .transition(.opacity)
+        } else if let errorText {
+            Text(errorText)
+                .foregroundStyle(.red)
+                .textSelection(.enabled)
+                .transition(.opacity)
+        }
+    }
+
+    @ViewBuilder
+    private func conversationTurn(
+        _ turn: SelectionAssistantConversationTurn,
+        index: Int
+    ) -> some View {
+        if shouldShowQuestion(at: index) {
+            Text(AppLocalization.format("Question: %@", bundle: bundle, turn.question))
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+        }
+
+        Text(turn.answer)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .textSelection(.enabled)
+
+        if index < conversation.count - 1 {
+            Divider()
+        }
+    }
+
+    private func shouldShowQuestion(at index: Int) -> Bool {
+        index > 0 || showsInitialQuestion
+    }
+
+    private var conversationTurnCount: Int {
+        conversation.count + (pendingQuestion == nil ? 0 : 1)
+    }
+
+    private var conversationViewportHeight: CGFloat {
+        min(ceil(conversationHeights[.content] ?? 0), conversationMaximumHeight)
+    }
+
+    private var conversationScrollUpdate: SelectionAssistantConversationScrollUpdate {
+        SelectionAssistantConversationScrollUpdate(
+            request: conversationScrollRequest,
+            heights: conversationHeights
+        )
+    }
+
+    private var hasConversationAreaContent: Bool {
+        conversation.isEmpty == false
+            || pendingQuestion != nil
+            || isWorking
+            || errorText != nil
+    }
+}
+
+enum SelectionAssistantConversationScrollTarget: Hashable {
+    case bottom
+    case turn(Int)
+
+    static let bottomInset: CGFloat = 10
+
+    static func resolve(turnIndex: Int, turnHeight: CGFloat, viewportHeight: CGFloat) -> Self {
+        // Never advance past the latest question just to reveal the answer's tail.
+        turnHeight + bottomInset <= viewportHeight ? .bottom : .turn(turnIndex)
+    }
+}
+
+private enum SelectionAssistantConversationGeometry: Hashable {
+    case content
+    case viewport
+    case turn(Int)
+}
+
+struct SelectionAssistantConversationScrollRequest: Equatable {
+    let id = UUID()
+    let turnIndex: Int
+}
+
+private struct SelectionAssistantConversationScrollUpdate: Equatable {
+    let request: SelectionAssistantConversationScrollRequest?
+    let heights: [SelectionAssistantConversationGeometry: CGFloat]
+
+    var target: SelectionAssistantConversationScrollTarget? {
+        guard let request,
+              let turnHeight = heights[.turn(request.turnIndex)],
+              let viewportHeight = heights[.viewport], viewportHeight > 0 else { return nil }
+        return .resolve(turnIndex: request.turnIndex, turnHeight: turnHeight, viewportHeight: viewportHeight)
+    }
+}
+
+private struct SelectionAssistantConversationHeightPreferenceKey: PreferenceKey {
+    static var defaultValue: [SelectionAssistantConversationGeometry: CGFloat] { [:] }
+
+    static func reduce(
+        value: inout [SelectionAssistantConversationGeometry: CGFloat],
+        nextValue: () -> [SelectionAssistantConversationGeometry: CGFloat]
+    ) {
+        value.merge(nextValue(), uniquingKeysWith: max)
     }
 }
 
@@ -564,6 +654,17 @@ private struct SelectionAssistantCircleButtonStyle: ButtonStyle {
 }
 
 private extension View {
+    func measureConversationHeight(_ element: SelectionAssistantConversationGeometry) -> some View {
+        background {
+            GeometryReader { geometry in
+                Color.clear.preference(
+                    key: SelectionAssistantConversationHeightPreferenceKey.self,
+                    value: [element: geometry.size.height]
+                )
+            }
+        }
+    }
+
     func selectionAssistantMaterial(cornerRadius: CGFloat) -> some View {
         readPaperGlassEffect(
             in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous),
