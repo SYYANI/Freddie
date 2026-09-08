@@ -21,6 +21,9 @@ final class SelectionAssistantConversationStoreTests: XCTestCase {
         )
         let snapshot = SelectionAssistantConversationSnapshot(
             selectionIdentity: "selection-identity",
+            attachmentID: source.attachmentID,
+            quote: "Supporting evidence.",
+            htmlSelector: source.htmlSelector,
             action: .ask,
             scope: .fullPaper,
             turns: [
@@ -45,5 +48,11 @@ final class SelectionAssistantConversationStoreTests: XCTestCase {
         XCTAssertEqual(loaded.scope, .fullPaper)
         XCTAssertEqual(loaded.turns.first?.answer, "It appears in the method [S1].")
         XCTAssertEqual(loaded.turns.first?.result.sources.first?.htmlSelector, source.htmlSelector)
+        let historyAnchor = try XCTUnwrap(store.historyAnchors(
+            paperID: paperID,
+            attachmentID: source.attachmentID
+        ).first)
+        XCTAssertEqual(historyAnchor.quote, "Supporting evidence.")
+        XCTAssertEqual(historyAnchor.htmlSelector, source.htmlSelector)
     }
 }

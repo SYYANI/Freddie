@@ -36,6 +36,30 @@ struct SelectionAssistantConversationStore {
         try data.write(to: archiveURL(paperID: paperID), options: .atomic)
     }
 
+    func historyAnchors(
+        paperID: UUID,
+        attachmentID: UUID? = nil
+    ) throws -> [SelectionAssistantHistoryAnchor] {
+        try loadArchive(paperID: paperID).conversations.compactMap { snapshot in
+            let legacyAnchor = Self.legacyAnchor(from: snapshot.selectionIdentity)
+            let quote = (snapshot.quote ?? legacyAnchor?.quote)?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            guard let quote, quote.isEmpty == false,
+                  attachmentID == nil || (snapshot.attachmentID ?? legacyAnchor?.attachmentID) == attachmentID,
+                  snapshot.pageIndex != nil || legacyAnchor?.pageIndex != nil ||
+                    snapshot.htmlSelector?.isEmpty == false || legacyAnchor?.htmlSelector?.isEmpty == false else {
+                return nil
+            }
+            return SelectionAssistantHistoryAnchor(
+                selectionIdentity: snapshot.selectionIdentity,
+                attachmentID: snapshot.attachmentID ?? legacyAnchor?.attachmentID,
+                quote: quote,
+                pageIndex: snapshot.pageIndex ?? legacyAnchor?.pageIndex,
+                htmlSelector: snapshot.htmlSelector ?? legacyAnchor?.htmlSelector
+            )
+        }
+    }
+
     private func loadArchive(paperID: UUID) throws -> Archive {
         let url = try archiveURL(paperID: paperID)
         guard fileStore.fileManager.fileExists(atPath: url.path) else {
@@ -82,10 +106,31 @@ struct SelectionAssistantConversationStore {
         }
         return SelectionAssistantConversationSnapshot(
             selectionIdentity: snapshot.selectionIdentity,
+            attachmentID: snapshot.attachmentID,
+            quote: snapshot.quote,
+            pageIndex: snapshot.pageIndex,
+            htmlSelector: snapshot.htmlSelector,
             action: snapshot.action,
             scope: snapshot.scope,
             turns: turns,
             modifiedAt: snapshot.modifiedAt
+        )
+    }
+
+    private static func legacyAnchor(from selectionIdentity: String) -> SelectionAssistantHistoryAnchor? {
+        let fields = selectionIdentity.split(separator: "|", maxSplits: 3, omittingEmptySubsequences: false)
+        guard fields.count == 4 else { return nil }
+        let attachmentID = fields[0].isEmpty ? nil : UUID(uuidString: String(fields[0]))
+        let pageIndex = Int(fields[1])
+        let htmlSelector = fields[2].isEmpty ? nil : String(fields[2])
+        let quote = String(fields[3])
+        guard quote.isEmpty == false, pageIndex != nil || htmlSelector != nil else { return nil }
+        return SelectionAssistantHistoryAnchor(
+            selectionIdentity: selectionIdentity,
+            attachmentID: attachmentID,
+            quote: quote,
+            pageIndex: pageIndex,
+            htmlSelector: htmlSelector
         )
     }
 }

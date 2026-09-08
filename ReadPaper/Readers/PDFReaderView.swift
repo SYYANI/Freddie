@@ -237,6 +237,7 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
     var reloadToken: Int = 0
     var selectionResetToken: Int = 0
     var noteNavigationRequest: NoteNavigationRequest? = nil
+    var selectionAssistantHistoryAnchors: [SelectionAssistantHistoryAnchor] = []
     var annotationSession: PDFAnnotationSession? = nil
     var onNoteSelectionChanged: ((NoteSelectionContext?) -> Void)? = nil
     var onArxivLinkActivated: ((URL) -> Void)? = nil
@@ -339,6 +340,7 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
         )
         if shouldReloadDocument {
             context.coordinator.prepareForProgrammaticPageRestore(to: restorePosition)
+            context.coordinator.clearSelectionAssistantHistoryAnnotations()
             view.document = PDFDocument(url: fileURL)
             context.coordinator.loadedURL = fileURL
             context.coordinator.loadedPaperID = paperID
@@ -351,6 +353,11 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
             shouldReloadDocument ? restorePosition : PDFReadingPosition(pageIndex: pageIndex),
             in: view,
             suppressIntermediateUpdates: shouldReloadDocument
+        )
+        context.coordinator.applySelectionAssistantHistoryAnchors(
+            selectionAssistantHistoryAnchors,
+            in: view,
+            force: shouldReloadDocument
         )
         context.coordinator.applyNoteNavigationIfNeeded(noteNavigationRequest, in: view)
         context.coordinator.scheduleCurrentPageIndexUpdate()
@@ -409,6 +416,8 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
         private var lastAppliedNoteNavigationID: UUID?
         private var noteNavigationHighlightAnnotations: [PDFAnnotation] = []
         private var noteNavigationHighlightTask: Task<Void, Never>?
+        private var appliedSelectionAssistantHistoryAnchors: [SelectionAssistantHistoryAnchor] = []
+        private var selectionAssistantHistoryAnnotations: [(SelectionAssistantHistoryAnchor, PDFAnnotation)] = []
 
         init(
             paperID: UUID? = nil,
@@ -543,6 +552,9 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
                 interactiveView.onInteractionBegan = { [weak self] in
                     self?.activateAnnotationDocument()
                 }
+                interactiveView.onBrowseClick = { [weak self] page, point in
+                    self?.handleSelectionAssistantHistoryClick(on: page, at: point) ?? false
+                }
                 interactiveView.onInkStrokeCompleted = { [weak self] page, points in
                     self?.addInkAnnotation(on: page, points: points)
                 }
@@ -558,6 +570,7 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
 
         func detach() {
             clearNoteNavigationHighlight()
+            clearSelectionAssistantHistoryAnnotations()
             if let pdfView {
                 NotificationCenter.default.removeObserver(
                     self,
@@ -655,6 +668,89 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
             noteNavigationHighlightAnnotations = []
         }
 
+        func applySelectionAssistantHistoryAnchors(
+            _ anchors: [SelectionAssistantHistoryAnchor],
+            in pdfView: PDFView,
+            force: Bool = false
+        ) {
+            let matchingAnchors = anchors.filter {
+                $0.attachmentID == nil || $0.attachmentID == attachmentID
+            }
+            guard force || matchingAnchors != appliedSelectionAssistantHistoryAnchors else { return }
+
+            clearSelectionAssistantHistoryAnnotations()
+            appliedSelectionAssistantHistoryAnchors = matchingAnchors
+            guard let document = pdfView.document else { return }
+
+            for anchor in matchingAnchors {
+                guard let pageIndex = anchor.pageIndex,
+                      document.pageCount > 0,
+                      let page = document.page(at: min(max(0, pageIndex), document.pageCount - 1)),
+                      let pageText = page.string,
+                      let range = PDFNoteNavigationTextMatcher.range(of: anchor.quote, in: pageText),
+                      let selection = page.selection(for: range) else {
+                    continue
+                }
+
+                let lineSelections = selection.selectionsByLine()
+                let selections = lineSelections.isEmpty ? [selection] : lineSelections
+                for line in selections {
+                    let bounds = line.bounds(for: page)
+                        .intersection(page.bounds(for: .cropBox))
+                        .standardized
+                    guard bounds.isNull == false, bounds.width > 0, bounds.height > 0 else { continue }
+                    let annotation = PDFAnnotation(
+                        bounds: bounds,
+                        forType: .underline,
+                        withProperties: nil
+                    )
+                    annotation.color = selectionAssistantHistoryColor
+                    let border = PDFBorder()
+                    border.lineWidth = 1
+                    annotation.border = border
+                    page.addAnnotation(annotation)
+                    selectionAssistantHistoryAnnotations.append((anchor, annotation))
+                }
+            }
+        }
+
+        func clearSelectionAssistantHistoryAnnotations() {
+            for (_, annotation) in selectionAssistantHistoryAnnotations {
+                annotation.page?.removeAnnotation(annotation)
+            }
+            selectionAssistantHistoryAnnotations = []
+            appliedSelectionAssistantHistoryAnchors = []
+        }
+
+        private var selectionAssistantHistoryColor: PlatformPDFColor {
+            #if os(macOS)
+            let color = NSColor.systemBlue.withAlphaComponent(0.58)
+            #else
+            let color = UIColor.systemBlue.withAlphaComponent(0.58)
+            #endif
+            return displayAdjustedAnnotationColor(
+                color,
+                inverted: annotationColorsAreInverted
+            )
+        }
+
+        private func handleSelectionAssistantHistoryClick(
+            on page: PDFPage,
+            at point: CGPoint
+        ) -> Bool {
+            guard let match = selectionAssistantHistoryAnnotations.first(where: { _, annotation in
+                annotation.page === page && annotation.bounds.insetBy(dx: -4, dy: -4).contains(point)
+            }) else { return false }
+
+            let anchor = match.0
+            onNoteSelectionChanged?(NoteSelectionContext(
+                attachmentID: anchor.attachmentID ?? attachmentID,
+                quote: anchor.quote,
+                pageIndex: anchor.pageIndex
+            ))
+            return true
+        }
+
         func handleLinkActivation(_ url: URL) -> Bool {
             guard ArxivLinkImportRequest(url: url) != nil,
                   let onArxivLinkActivated
@@ -702,6 +798,9 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
                 renderedAnnotations[record.id]?.color = record.color.platformColor(
                     inverted: shouldInvert
                 )
+            }
+            for (_, annotation) in selectionAssistantHistoryAnnotations {
+                annotation.color = selectionAssistantHistoryColor
             }
         }
 
@@ -974,6 +1073,7 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
         }
 
         func clearLoadedAnnotations() {
+            clearSelectionAssistantHistoryAnnotations()
             annotationRecords = []
             renderedAnnotations = [:]
             sourceAnnotationColors = [:]
@@ -1169,6 +1269,7 @@ private final class InteractivePDFView: PDFView {
     }
     var onInteractionBegan: (() -> Void)?
     var onLinkActivated: ((URL) -> Bool)?
+    var onBrowseClick: ((PDFPage, CGPoint) -> Bool)?
     var onDebugRegionSelected: ((PDFDebugRegionSelection) -> Void)?
     var onInkStrokeCompleted: ((PDFPage, [CGPoint]) -> Void)?
     var onEraseRequested: ((PDFPage, CGPoint) -> Void)?
@@ -1178,6 +1279,7 @@ private final class InteractivePDFView: PDFView {
     private weak var interactionPage: PDFPage?
     private var interactionStartPoint: CGPoint?
     private var inkViewPoints: [CGPoint] = []
+    private var suppressBrowseMouseSequence = false
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -1216,7 +1318,21 @@ private final class InteractivePDFView: PDFView {
     }
 
     override func mouseDown(with event: NSEvent) {
-        guard event.type == .leftMouseDown, interactionMode != .browse else {
+        if interactionMode == .browse {
+            onInteractionBegan?()
+            if event.type == .leftMouseDown {
+                let viewPoint = convert(event.locationInWindow, from: nil)
+                if let page = page(for: viewPoint, nearest: false),
+                   onBrowseClick?(page, convert(viewPoint, to: page)) == true {
+                    suppressBrowseMouseSequence = true
+                    return
+                }
+            }
+            super.mouseDown(with: event)
+            return
+        }
+
+        guard event.type == .leftMouseDown else {
             onInteractionBegan?()
             super.mouseDown(with: event)
             return
@@ -1252,6 +1368,7 @@ private final class InteractivePDFView: PDFView {
         let currentPoint = convert(event.locationInWindow, from: nil)
         switch interactionMode {
         case .browse:
+            if suppressBrowseMouseSequence { return }
             super.mouseDragged(with: event)
         case .debugRegion:
             guard let interactionStartPoint, interactionPage != nil else { return }
@@ -1275,6 +1392,10 @@ private final class InteractivePDFView: PDFView {
     override func mouseUp(with event: NSEvent) {
         switch interactionMode {
         case .browse:
+            if suppressBrowseMouseSequence {
+                suppressBrowseMouseSequence = false
+                return
+            }
             super.mouseUp(with: event)
         case .debugRegion:
             finishDebugSelection(with: event)
@@ -1352,6 +1473,7 @@ private final class InteractivePDFView: PDFView {
     }
 
     private func cancelInteraction() {
+        suppressBrowseMouseSequence = false
         interactionStartPoint = nil
         interactionPage = nil
         inkViewPoints = []

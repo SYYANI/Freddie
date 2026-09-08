@@ -254,6 +254,7 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
     @Binding var scrollRatio: Double
     var segmentUpdate: HTMLTranslationSegmentUpdate?
     var noteNavigationRequest: NoteNavigationRequest? = nil
+    var selectionAssistantHistoryAnchors: [SelectionAssistantHistoryAnchor] = []
     var selectionHighlightResetToken: Int = 0
     var nativeSelectionClearToken: Int = 0
     var onNoteSelectionChanged: ((NoteSelectionContext?) -> Void)? = nil
@@ -311,6 +312,7 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
         context.coordinator.scrollRatio = $scrollRatio
         context.coordinator.onNoteSelectionChanged = onNoteSelectionChanged
         context.coordinator.onSelectionAssistantDismissed = onSelectionAssistantDismissed
+        context.coordinator.selectionAssistantHistoryAnchors = selectionAssistantHistoryAnchors
         applyHostDisplayAppearance(displayAppearance, to: view)
         context.coordinator.clearSelectionHighlightIfNeeded(
             resetToken: selectionHighlightResetToken,
@@ -350,6 +352,7 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
         context.coordinator.applyReaderTypography(to: view)
         context.coordinator.applyDisplayAppearance(to: view)
         context.coordinator.applySegmentUpdateIfNeeded(segmentUpdate, to: view)
+        context.coordinator.applySelectionAssistantHistoryAnchors(to: view)
         context.coordinator.applyNoteNavigationIfNeeded(noteNavigationRequest, to: view)
     }
 
@@ -720,10 +723,136 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
                 try { CSS.highlights?.delete('rp-assistant-selection'); } catch {}
             };
 
+            if (!document.getElementById('rp-selection-assistant-history-style')) {
+                const style = document.createElement('style');
+                style.id = 'rp-selection-assistant-history-style';
+                style.textContent = `
+                    ::highlight(rp-assistant-history) {
+                        background-color: rgba(0, 122, 255, 0.10);
+                        text-decoration: underline rgba(0, 122, 255, 0.52) 1px;
+                    }
+                    .rp-assistant-history-fallback {
+                        background: rgba(0, 122, 255, 0.055);
+                        box-shadow: inset 0 -1px rgba(0, 122, 255, 0.42);
+                        cursor: pointer;
+                    }
+                `;
+                (document.head || document.documentElement).appendChild(style);
+            }
+
+            var assistantHistoryRanges = [];
+            let assistantHistorySelectionGraceMilliseconds = 700;
+            var assistantHistorySelectionGraceUntil = 0;
+            const normalizedTextMap = element => {
+                const walker = document.createTreeWalker(
+                    element,
+                    NodeFilter.SHOW_TEXT,
+                    {
+                        acceptNode: node => {
+                            const parent = node.parentElement;
+                            if (!parent || isTranslationElement(parent)) {
+                                return NodeFilter.FILTER_REJECT;
+                            }
+                            return NodeFilter.FILTER_ACCEPT;
+                        }
+                    }
+                );
+                let text = '';
+                const positions = [];
+                let pendingSpace = null;
+                while (walker.nextNode()) {
+                    const node = walker.currentNode;
+                    const value = node.nodeValue || '';
+                    for (let offset = 0; offset < value.length; offset += 1) {
+                        const character = value[offset];
+                        if (/\\s/.test(character)) {
+                            if (text && text[text.length - 1] !== ' ') {
+                                pendingSpace = { node, offset };
+                            }
+                            continue;
+                        }
+                        if (pendingSpace) {
+                            text += ' ';
+                            positions.push(pendingSpace);
+                            pendingSpace = null;
+                        }
+                        text += character;
+                        positions.push({ node, offset });
+                    }
+                }
+                return { text: text.trim(), positions };
+            };
+
+            const assistantHistoryEntryAtPoint = (x, y) => {
+                for (const item of assistantHistoryRanges) {
+                    const containsPoint = Array.from(item.range.getClientRects()).some(rect =>
+                        x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom
+                    );
+                    if (containsPoint) { return item; }
+                }
+                const fallback = document.elementFromPoint(x, y)?.closest?.('.rp-assistant-history-fallback');
+                if (!fallback) { return null; }
+                return assistantHistoryRanges.find(item => item.target === fallback) || null;
+            };
+            window.__rpAssistantHistoryEntryAtPoint = assistantHistoryEntryAtPoint;
+
+            window.__rpSetSelectionAssistantHistory = entries => {
+                try { CSS.highlights?.delete('rp-assistant-history'); } catch {}
+                document.querySelectorAll('.rp-assistant-history-fallback').forEach(element =>
+                    element.classList.remove('rp-assistant-history-fallback')
+                );
+                assistantHistoryRanges = [];
+                const ranges = [];
+
+                for (const entry of Array.isArray(entries) ? entries : []) {
+                    const target = window.__rpResolveNoteAnchor(entry.htmlSelector);
+                    const quote = normalizeText(entry.quote);
+                    if (!target || !quote) { continue; }
+                    const mapped = normalizedTextMap(target);
+                    const start = mapped.text.indexOf(quote);
+                    const end = start + quote.length - 1;
+                    if (start >= 0 && mapped.positions[start] && mapped.positions[end]) {
+                        const range = document.createRange();
+                        range.setStart(mapped.positions[start].node, mapped.positions[start].offset);
+                        range.setEnd(mapped.positions[end].node, mapped.positions[end].offset + 1);
+                        ranges.push(range);
+                        assistantHistoryRanges.push({ entry, range, target });
+                    } else {
+                        target.classList.add('rp-assistant-history-fallback');
+                        const range = document.createRange();
+                        range.selectNodeContents(target);
+                        assistantHistoryRanges.push({ entry, range, target });
+                    }
+                }
+
+                if (window.CSS?.highlights && typeof Highlight !== 'undefined' && ranges.length > 0) {
+                    try { CSS.highlights.set('rp-assistant-history', new Highlight(...ranges)); } catch {}
+                } else {
+                    assistantHistoryRanges.forEach(item => item.target.classList.add('rp-assistant-history-fallback'));
+                }
+            };
+
             document.addEventListener('pointerdown', event => {
                 if (event.button !== 0) { return; }
+                if (assistantHistoryEntryAtPoint(event.clientX, event.clientY)) {
+                    assistantHistorySelectionGraceUntil = Date.now() + assistantHistorySelectionGraceMilliseconds;
+                    return;
+                }
                 window.__rpClearSelectionAssistantHighlight();
                 window.webkit.messageHandlers.rpSelectionReset.postMessage(null);
+            }, true);
+
+            document.addEventListener('click', event => {
+                const item = assistantHistoryEntryAtPoint(event.clientX, event.clientY);
+                if (!item) { return; }
+                assistantHistorySelectionGraceUntil = Date.now() + assistantHistorySelectionGraceMilliseconds;
+                event.preventDefault();
+                event.stopPropagation();
+                window.webkit.messageHandlers.rpSelection.postMessage({
+                    quote: item.entry.quote,
+                    selector: item.entry.htmlSelector,
+                    localContext: normalizeText(item.target.textContent).slice(0, 8000)
+                });
             }, true);
 
             window.__rpScrollToNoteAnchor = anchor => {
@@ -751,6 +880,7 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
                 const selection = window.getSelection();
                 const quote = normalizeText(selection ? selection.toString() : '');
                 if (!quote) {
+                    if (Date.now() < assistantHistorySelectionGraceUntil) { return; }
                     window.webkit.messageHandlers.rpSelection.postMessage(null);
                     return;
                 }
@@ -805,6 +935,7 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
         var scrollRatio: Binding<Double>
         var onNoteSelectionChanged: ((NoteSelectionContext?) -> Void)?
         var onSelectionAssistantDismissed: (() -> Void)?
+        var selectionAssistantHistoryAnchors: [SelectionAssistantHistoryAnchor] = []
         private var currentRequest: LoadRequest?
         private var pendingRequest: LoadRequest?
         private var pendingScrollRatio: Double?
@@ -815,6 +946,7 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
         private var lastPublishedNoteSelection: NoteSelectionContext?
         private var lastSelectionHighlightResetToken = 0
         private var lastNativeSelectionClearToken = 0
+        private var lastSelectionAssistantHistorySignature: String?
         private var isLoading = false
         private var isDocumentReady = false
 
@@ -838,6 +970,7 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
             lastAppliedSegmentSequence = nil
             pendingNoteNavigationRequest = nil
             lastAppliedNoteNavigationID = nil
+            lastSelectionAssistantHistorySignature = nil
             isLoading = false
             isDocumentReady = false
             publishNoteSelection(nil)
@@ -872,6 +1005,7 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
 
             isLoading = true
             isDocumentReady = false
+            lastSelectionAssistantHistorySignature = nil
             currentRequest = request
             pendingSegmentUpdates = []
             lastAppliedSegmentSequence = nil
@@ -985,6 +1119,7 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
             applyDisplayMode(to: webView)
             applyReaderTypography(to: webView)
             applyDisplayAppearance(to: webView)
+            applySelectionAssistantHistoryAnchors(to: webView)
             restoreScrollRatioIfNeeded(in: webView)
             flushPendingSegmentUpdates(in: webView)
             flushPendingNoteNavigationIfNeeded(in: webView)
@@ -1167,6 +1302,22 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
             """
             runJavaScript(script, in: webView)
             lastAppliedNoteNavigationID = request.id
+        }
+
+        func applySelectionAssistantHistoryAnchors(to webView: WKWebView) {
+            guard isDocumentReady, isLoading == false else { return }
+            let matchingAnchors = selectionAssistantHistoryAnchors.filter {
+                $0.attachmentID == nil || $0.attachmentID == attachmentID
+            }
+            guard let data = try? JSONEncoder().encode(matchingAnchors),
+                  let json = String(data: data, encoding: .utf8) else { return }
+            let signature = Hashing.sha256Hex(json)
+            guard signature != lastSelectionAssistantHistorySignature else { return }
+            runJavaScript(
+                "window.__rpSetSelectionAssistantHistory?.(\(json));",
+                in: webView
+            )
+            lastSelectionAssistantHistorySignature = signature
         }
 
         func clearSelectionHighlightIfNeeded(resetToken: Int, in webView: WKWebView) {

@@ -39,6 +39,7 @@ struct DualPDFReaderView: View {
     @Binding var pageIndex: Int
     var reloadToken: Int = 0
     var noteNavigationRequest: NoteNavigationRequest? = nil
+    var selectionAssistantHistoryAnchors: [SelectionAssistantHistoryAnchor] = []
     var annotationSession: PDFAnnotationSession? = nil
     var debugRegionSelectionEnabled = false
     var onDebugRegionSelected: ((PDFDebugRegionSelection) -> Void)? = nil
@@ -207,6 +208,7 @@ struct DualPDFReaderView: View {
                 reloadToken: reloadToken,
                 selectionResetToken: selectionResetToken,
                 noteNavigationRequest: noteNavigationRequest,
+                selectionAssistantHistoryAnchors: selectionAssistantHistoryAnchors,
                 annotationSession: annotationSession,
                 onNoteSelectionChanged: onSelectionChanged,
                 onArxivLinkActivated: onArxivLinkActivated,

@@ -86,6 +86,10 @@ struct SelectionAssistantResult: Codable, Equatable, Sendable {
 
 struct SelectionAssistantConversationSnapshot: Codable, Equatable, Sendable {
     var selectionIdentity: String
+    var attachmentID: UUID?
+    var quote: String?
+    var pageIndex: Int?
+    var htmlSelector: String?
     var action: SelectionAssistantAction
     var scope: AssistantScope
     var turns: [SelectionAssistantConversationTurn]
@@ -93,17 +97,34 @@ struct SelectionAssistantConversationSnapshot: Codable, Equatable, Sendable {
 
     init(
         selectionIdentity: String,
+        attachmentID: UUID? = nil,
+        quote: String? = nil,
+        pageIndex: Int? = nil,
+        htmlSelector: String? = nil,
         action: SelectionAssistantAction,
         scope: AssistantScope,
         turns: [SelectionAssistantConversationTurn],
         modifiedAt: Date = Date()
     ) {
         self.selectionIdentity = selectionIdentity
+        self.attachmentID = attachmentID
+        self.quote = quote
+        self.pageIndex = pageIndex
+        self.htmlSelector = htmlSelector
         self.action = action
         self.scope = scope
         self.turns = turns
         self.modifiedAt = modifiedAt
     }
+}
+
+struct SelectionAssistantHistoryAnchor: Codable, Equatable, Hashable, Sendable, Identifiable {
+    var id: String { selectionIdentity }
+    var selectionIdentity: String
+    var attachmentID: UUID?
+    var quote: String
+    var pageIndex: Int?
+    var htmlSelector: String?
 }
 
 enum SelectionAssistantProgress: Equatable, Sendable {

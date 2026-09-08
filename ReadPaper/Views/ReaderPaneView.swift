@@ -95,6 +95,7 @@ struct ReaderPaneView: View {
     @State private var selectionAssistantProgress: SelectionAssistantProgress?
     @State private var selectionAssistantPartialAnswer = ""
     @State private var selectionAssistantInitialConversation: SelectionAssistantConversationSnapshot?
+    @State private var selectionAssistantHistoryAnchors: [SelectionAssistantHistoryAnchor] = []
     @State private var htmlSelectionHighlightResetToken = 0
     @State private var htmlNativeSelectionClearToken = 0
 
@@ -243,6 +244,7 @@ struct ReaderPaneView: View {
             .onAppear {
                 restoreReadingStateForCurrentPaper()
                 restorePDFTranslationDiagnostics()
+                refreshSelectionAssistantHistoryAnchors()
             }
             .onChange(of: paper?.id) { _, _ in
                 deactivatePDFTranslationDebugMode()
@@ -250,6 +252,7 @@ struct ReaderPaneView: View {
                 noteSelectionContext = nil
                 clearSelectionAssistant()
                 restoreReadingStateForCurrentPaper()
+                refreshSelectionAssistantHistoryAnchors()
             }
             .onChange(of: readerAvailability) { _, _ in
                 syncReaderModeWithAvailableContent()
@@ -1161,6 +1164,7 @@ struct ReaderPaneView: View {
                                 scrollRatio: $htmlScrollRatio,
                                 segmentUpdate: htmlSegmentUpdate,
                                 noteNavigationRequest: noteNavigationRequest,
+                                selectionAssistantHistoryAnchors: selectionAssistantHistoryAnchors,
                                 selectionHighlightResetToken: htmlSelectionHighlightResetToken,
                                 nativeSelectionClearToken: htmlNativeSelectionClearToken,
                                 onNoteSelectionChanged: handleNoteSelectionChange,
@@ -1194,6 +1198,7 @@ struct ReaderPaneView: View {
                                 pageIndex: $pdfPageIndex,
                                 reloadToken: pdfReloadToken,
                                 noteNavigationRequest: noteNavigationRequest,
+                                selectionAssistantHistoryAnchors: selectionAssistantHistoryAnchors,
                                 annotationSession: pdfAnnotationSession,
                                 debugRegionSelectionEnabled: pdfDebugModeEnabled,
                                 onDebugRegionSelected: handlePDFDebugRegionSelection,
@@ -2133,6 +2138,7 @@ struct ReaderPaneView: View {
                     pageIndex: $pdfPageIndex,
                     reloadToken: reloadToken,
                     noteNavigationRequest: noteNavigationRequest,
+                    selectionAssistantHistoryAnchors: selectionAssistantHistoryAnchors,
                     annotationSession: pdfAnnotationSession,
                     onNoteSelectionChanged: handleNoteSelectionChange,
                     onArxivLinkActivated: onArxivLinkActivated,
@@ -2331,6 +2337,17 @@ struct ReaderPaneView: View {
     ) {
         guard let paper else { return }
         try? SelectionAssistantConversationStore().save(snapshot, paperID: paper.id)
+        refreshSelectionAssistantHistoryAnchors()
+    }
+
+    @MainActor
+    private func refreshSelectionAssistantHistoryAnchors() {
+        guard let paper else {
+            selectionAssistantHistoryAnchors = []
+            return
+        }
+        selectionAssistantHistoryAnchors = (try? SelectionAssistantConversationStore()
+            .historyAnchors(paperID: paper.id)) ?? []
     }
 
     private func clearSelectionAssistant() {

@@ -502,6 +502,10 @@ struct SelectionAssistantOverlay: View {
         guard let activeAction, conversation.isEmpty == false else { return }
         onConversationChanged(SelectionAssistantConversationSnapshot(
             selectionIdentity: selection.selectionAssistantIdentity,
+            attachmentID: selection.attachmentID,
+            quote: selection.trimmedQuote,
+            pageIndex: selection.pageIndex,
+            htmlSelector: selection.htmlSelector,
             action: activeAction,
             scope: conversation.last?.result.scope ?? .nearby,
             turns: conversation
