@@ -166,6 +166,50 @@ nonisolated struct OpenAICompatibleLLMProvider: Sendable {
         }
     }
 
+    func completeStreaming(
+        request: LLMCompletionRequest,
+        onPartialText: @escaping @Sendable (String) async -> Void
+    ) async throws -> LLMCompletionResponse {
+        let primaryPlan = serviceRoutePlan(from: request.baseURL)
+
+        do {
+            return try await performStreamingComplete(
+                request: request,
+                routePlan: primaryPlan,
+                onPartialText: onPartialText
+            )
+        } catch let primaryError {
+            if let fallbackPlan = fallbackRoutePlanTogglingV1IfNeeded(
+                primaryPlan: primaryPlan,
+                error: primaryError
+            ) {
+                do {
+                    return try await performStreamingComplete(
+                        request: request,
+                        routePlan: fallbackPlan,
+                        onPartialText: onPartialText
+                    )
+                } catch let fallbackError {
+                    throw mapError(
+                        fallbackError,
+                        baseURL: request.baseURL,
+                        apiStyle: request.apiStyle,
+                        primaryPlan: primaryPlan,
+                        fallbackPlanTried: fallbackPlan
+                    )
+                }
+            }
+
+            throw mapError(
+                primaryError,
+                baseURL: request.baseURL,
+                apiStyle: request.apiStyle,
+                primaryPlan: primaryPlan,
+                fallbackPlanTried: nil
+            )
+        }
+    }
+
     static func makeURLSessionConfiguration(
         timeoutProfile: LLMNetworkTimeoutProfile?
     ) -> URLSessionConfiguration? {
@@ -287,6 +331,142 @@ nonisolated struct OpenAICompatibleLLMProvider: Sendable {
                     apiStyle: request.apiStyle
                 )
             )
+        }
+    }
+
+    private func performStreamingComplete(
+        request: LLMCompletionRequest,
+        routePlan: ServiceRoutePlan,
+        onPartialText: @escaping @Sendable (String) async -> Void
+    ) async throws -> LLMCompletionResponse {
+        guard let endpoint = URL(string: inferredEndpoint(from: routePlan, apiStyle: request.apiStyle)) else {
+            throw LLMProviderError.invalidConfiguration(
+                AppLocalization.format(
+                    "Invalid provider endpoint for base URL: %@",
+                    request.baseURL.absoluteString
+                )
+            )
+        }
+
+        var urlRequest = URLRequest(url: endpoint)
+        urlRequest.httpMethod = "POST"
+        urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        urlRequest.setValue("text/event-stream", forHTTPHeaderField: "Accept")
+        urlRequest.setValue("Bearer \(request.apiKey)", forHTTPHeaderField: "Authorization")
+        switch request.apiStyle {
+        case .chatCompletions:
+            urlRequest.httpBody = try JSONEncoder().encode(LLMChatCompletionBody(request: request, stream: true))
+        case .responses:
+            urlRequest.httpBody = try JSONEncoder().encode(LLMResponsesBody(request: request, stream: true))
+        }
+
+        let session = makeURLSession(timeoutProfile: request.timeoutProfile)
+        let streamingRequest = urlRequest
+        return try await withResourceTimeout(
+            seconds: request.timeoutProfile?.resourceTimeoutSeconds,
+            timeoutKind: .resource
+        ) {
+            let (bytes, response) = try await session.bytes(for: streamingRequest)
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw URLError(.badServerResponse)
+            }
+            guard httpResponse.statusCode == 200 else {
+                var data = Data()
+                for try await byte in bytes {
+                    data.append(byte)
+                }
+                throw Self.apiError(data: data, statusCode: httpResponse.statusCode)
+            }
+
+            let contentType = httpResponse.value(forHTTPHeaderField: "Content-Type")?.lowercased() ?? ""
+            if contentType.contains("application/json") {
+                var data = Data()
+                for try await byte in bytes {
+                    data.append(byte)
+                }
+                let text: String
+                switch request.apiStyle {
+                case .chatCompletions:
+                    text = try JSONDecoder().decode(LLMChatCompletionResponseBody.self, from: data)
+                        .choices?.first?.message?.content ?? ""
+                case .responses:
+                    text = try JSONDecoder().decode(LLMResponsesBody.self, from: data).outputText
+                }
+                if text.isEmpty == false {
+                    await onPartialText(text)
+                }
+                return LLMCompletionResponse(
+                    text: text,
+                    resolvedEndpoint: makeResolvedEndpointSnapshot(
+                        from: routePlan,
+                        apiStyle: request.apiStyle
+                    )
+                )
+            }
+
+            var accumulatedText = ""
+            var eventName: String?
+            for try await line in bytes.lines {
+                try Task.checkCancellation()
+                if line.hasPrefix("event:") {
+                    eventName = String(line.dropFirst("event:".count))
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                    continue
+                }
+                guard line.hasPrefix("data:") else {
+                    if line.isEmpty { eventName = nil }
+                    continue
+                }
+                let payload = String(line.dropFirst("data:".count))
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                guard payload.isEmpty == false, payload != "[DONE]" else { continue }
+                if let delta = Self.streamingTextDelta(
+                    from: Data(payload.utf8),
+                    eventName: eventName,
+                    apiStyle: request.apiStyle
+                ), delta.isEmpty == false {
+                    accumulatedText += delta
+                    await onPartialText(accumulatedText)
+                }
+            }
+
+            return LLMCompletionResponse(
+                text: accumulatedText,
+                resolvedEndpoint: makeResolvedEndpointSnapshot(
+                    from: routePlan,
+                    apiStyle: request.apiStyle
+                )
+            )
+        }
+    }
+
+    private static func streamingTextDelta(
+        from data: Data,
+        eventName: String?,
+        apiStyle: LLMAPIStyle
+    ) -> String? {
+        guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return nil
+        }
+        switch apiStyle {
+        case .chatCompletions:
+            guard let choice = (object["choices"] as? [[String: Any]])?.first,
+                  let delta = choice["delta"] as? [String: Any] else { return nil }
+            if let content = delta["content"] as? String {
+                return content
+            }
+            if let parts = delta["content"] as? [[String: Any]] {
+                return parts.compactMap { $0["text"] as? String }.joined()
+            }
+            return nil
+        case .responses:
+            let type = (object["type"] as? String) ?? eventName
+            guard type == nil || type == "response.output_text.delta" else { return nil }
+            if let delta = object["delta"] as? String { return delta }
+            if let delta = object["delta"] as? [String: Any] {
+                return delta["text"] as? String
+            }
+            return nil
         }
     }
 
@@ -505,13 +685,15 @@ private struct LLMChatCompletionBody: Encodable {
     let maxTokens: Int?
     let reasoningEffort: String?
     let thinking: Thinking?
+    let stream: Bool?
 
-    init(request: LLMCompletionRequest) {
+    init(request: LLMCompletionRequest, stream: Bool? = nil) {
         model = request.model
         messages = request.messages.map { Message(role: $0.role, content: $0.content) }
         temperature = request.temperature
         topP = request.topP
         maxTokens = request.maxTokens
+        self.stream = stream
 
         switch request.thinkingMode {
         case .disabled:
@@ -534,6 +716,7 @@ private struct LLMChatCompletionBody: Encodable {
         case maxTokens = "max_tokens"
         case reasoningEffort = "reasoning_effort"
         case thinking
+        case stream
     }
 }
 
@@ -576,14 +759,16 @@ private struct LLMResponsesBody: Codable {
     let maxOutputTokens: Int?
     let reasoning: Reasoning?
     let output: [OutputItem]?
+    let stream: Bool?
 
-    init(request: LLMCompletionRequest) {
+    init(request: LLMCompletionRequest, stream: Bool? = nil) {
         model = request.model
         input = request.messages.map { InputMessage(role: $0.role, content: $0.content) }
         temperature = request.temperature
         topP = request.topP
         maxOutputTokens = request.maxTokens
         output = nil
+        self.stream = stream
 
         switch request.thinkingMode {
         case .disabled:
@@ -615,6 +800,7 @@ private struct LLMResponsesBody: Codable {
         case maxOutputTokens = "max_output_tokens"
         case reasoning
         case output
+        case stream
     }
 }
 

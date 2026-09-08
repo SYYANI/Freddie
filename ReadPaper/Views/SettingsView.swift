@@ -120,6 +120,10 @@ private struct SettingsForm: View {
     private var latexToolchainDirectoryPath = ""
     @AppStorage(PaperDigestExportConfiguration.templateKey) private var digestExportTemplate = PaperDigestExportPolicy.defaultMarkdownTemplate
     @AppStorage(PaperDigestExportConfiguration.directoryDisplayPathKey) private var digestExportDirectoryPath = ""
+    @AppStorage(SelectionAssistantPreferences.selectedModelProfileIDKey)
+    private var selectedAssistantModelProfileIDRawValue = ""
+    @AppStorage(SelectionAssistantPreferences.externalSearchEnabledKey)
+    private var externalAssistantSearchEnabled = false
 
     @State private var selectedProviderID: UUID?
     @State private var providerName = ""
@@ -259,6 +263,13 @@ private struct SettingsForm: View {
                 settings.targetLanguage = newValue
                 settings.modifiedAt = Date()
             }
+        )
+    }
+
+    private var selectedAssistantModelProfileIDBinding: Binding<UUID?> {
+        Binding(
+            get: { UUID(uuidString: selectedAssistantModelProfileIDRawValue) },
+            set: { selectedAssistantModelProfileIDRawValue = $0?.uuidString ?? "" }
         )
     }
 
@@ -608,7 +619,22 @@ private struct SettingsForm: View {
                         }
                     }
 
-                    Text("Choose which saved model profile powers HTML translation and the BabelDOC PDF route inside the reader.", bundle: bundle)
+                    Picker(
+                        String(localized: "Reading Assistant Model", bundle: bundle),
+                        selection: selectedAssistantModelProfileIDBinding
+                    ) {
+                        Text("Use HTML Model", bundle: bundle).tag(Optional<UUID>.none)
+                        ForEach(sortedModels, id: \.id) { model in
+                            Text(modelDisplayName(model)).tag(Optional(model.id))
+                        }
+                    }
+
+                    Toggle(
+                        String(localized: "Allow external search for the reading assistant", bundle: bundle),
+                        isOn: $externalAssistantSearchEnabled
+                    )
+
+                    Text("Choose separate saved model profiles for translation and reading assistance. External search sends the question and paper identifiers to arXiv, Crossref, OpenAlex, and Semantic Scholar only when you explicitly choose the external scope.", bundle: bundle)
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
@@ -1494,6 +1520,10 @@ private struct SettingsForm: View {
            models.contains(where: { $0.id == pdfModelID }) == false {
             settings.selectedPDFModelProfileID = nil
         }
+        if let assistantModelID = UUID(uuidString: selectedAssistantModelProfileIDRawValue),
+           models.contains(where: { $0.id == assistantModelID }) == false {
+            selectedAssistantModelProfileIDRawValue = ""
+        }
     }
 
     private func applySelectedProvider() {
@@ -1647,6 +1677,10 @@ private struct SettingsForm: View {
         if let pdfModelID = settings.selectedPDFModelProfileID, relatedModelIDs.contains(pdfModelID) {
             settings.selectedPDFModelProfileID = nil
         }
+        if let assistantModelID = UUID(uuidString: selectedAssistantModelProfileIDRawValue),
+           relatedModelIDs.contains(assistantModelID) {
+            selectedAssistantModelProfileIDRawValue = ""
+        }
         modelContext.delete(provider)
         apiStyleStore.removeAPIStyle(for: provider.id)
 
@@ -1780,6 +1814,9 @@ private struct SettingsForm: View {
         }
         if settings.selectedPDFModelProfileID == model.id {
             settings.selectedPDFModelProfileID = nil
+        }
+        if UUID(uuidString: selectedAssistantModelProfileIDRawValue) == model.id {
+            selectedAssistantModelProfileIDRawValue = ""
         }
         modelContext.delete(model)
 

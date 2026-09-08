@@ -386,6 +386,17 @@
         }
       }
     },
+    "Allow external search for the reading assistant" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "允许阅读助手检索外部资料"
+          }
+        }
+      }
+    },
     "Analyzing layout" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -579,6 +590,16 @@
         }
       }
     },
+    "arXiv search failed: %@" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "arXiv 搜索失败：%1$@"
+          }
+        }
+      }
+    },
     "arXiv: %@" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -630,6 +651,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "针对所选文字问 AI"
+          }
+        }
+      }
+    },
+    "Assistant scope" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "助手范围"
           }
         }
       }
@@ -856,6 +888,50 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Base URL"
+          }
+        }
+      }
+    },
+    "Based on %d full-paper passages" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "依据全文 %d 个片段"
+          }
+        }
+      }
+    },
+    "Based on automatically selected context" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "依据自动选择的上下文"
+          }
+        }
+      }
+    },
+    "Based on paper context and %d external sources" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "依据论文上下文和 %d 条外部资料"
+          }
+        }
+      }
+    },
+    "Based on the current passage" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "依据当前段落"
           }
         }
       }
@@ -1108,6 +1184,16 @@
         }
       }
     },
+    "Choose a reading assistant model in Settings first." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请先在设置中选择阅读助手模型。"
+          }
+        }
+      }
+    },
     "Choose an HTML translation model in Settings first." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1159,6 +1245,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "选择服务商"
+          }
+        }
+      }
+    },
+    "Choose separate saved model profiles for translation and reading assistance. External search sends the question and paper identifiers to arXiv, Crossref, OpenAlex, and Semantic Scholar only when you explicitly choose the external scope." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "可分别为翻译与阅读助手选择已保存的模型配置。只有在你明确选择外部资料范围时，外部检索才会把问题和论文标识发送给 arXiv、Crossref、OpenAlex 与 Semantic Scholar。"
           }
         }
       }
@@ -1275,6 +1371,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "关闭"
+          }
+        }
+      }
+    },
+    "Collecting paper context..." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在收集论文上下文..."
           }
         }
       }
@@ -1477,6 +1584,16 @@
         }
       }
     },
+    "Crossref lookup failed: %@" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Crossref 查找失败：%1$@"
+          }
+        }
+      }
+    },
     "Current installed version" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1495,6 +1612,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "当前 LaTeX 工具链"
+          }
+        }
+      }
+    },
+    "Current passage" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "当前段落"
           }
         }
       }
@@ -1953,6 +2080,17 @@
         }
       }
     },
+    "Expand the background" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "展开背景"
+          }
+        }
+      }
+    },
     "Explain Selected Text" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2048,6 +2186,27 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "将当前论文的元数据、摘要和笔记导出为 Markdown 文摘。"
+          }
+        }
+      }
+    },
+    "External" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "外部资料"
+          }
+        }
+      }
+    },
+    "External search is disabled in Settings." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "设置中已关闭外部检索。"
           }
         }
       }
@@ -2224,6 +2383,17 @@
         }
       }
     },
+    "Found %d relevant passages." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "找到 %d 个相关片段。"
+          }
+        }
+      }
+    },
     "Freddie" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2242,6 +2412,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "自由画笔"
+          }
+        }
+      }
+    },
+    "Full Paper" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "搜索整篇"
           }
         }
       }
@@ -2286,6 +2467,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在生成翻译后的 PDF"
+          }
+        }
+      }
+    },
+    "Generation stopped." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已停止生成。"
           }
         }
       }
@@ -3297,6 +3489,17 @@
         }
       }
     },
+    "Nearby" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "就近解释"
+          }
+        }
+      }
+    },
     "New" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -3346,6 +3549,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Provider “%1$@” 没有保存 API key。"
+          }
+        }
+      }
+    },
+    "No external source was found for this question." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "没有为这个问题找到外部资料。"
           }
         }
       }
@@ -3420,6 +3633,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "没有可用的 PDF"
+          }
+        }
+      }
+    },
+    "No supporting passage was found in this paper." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "没有在论文中找到支持性片段。"
           }
         }
       }
@@ -3684,6 +3907,16 @@
         }
       }
     },
+    "OpenAlex lookup failed: %@" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenAlex 查找失败：%1$@"
+          }
+        }
+      }
+    },
     "Optional glossary" : {
       "localizations" : {
         "zh-Hans" : {
@@ -3711,6 +3944,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "页码"
+          }
+        }
+      }
+    },
+    "Page %d" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "第 %d 页"
           }
         }
       }
@@ -3743,6 +3986,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "论文详情、摘要和笔记"
+          }
+        }
+      }
+    },
+    "Paper passage" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "论文片段"
           }
         }
       }
@@ -4298,6 +4551,17 @@
         }
       }
     },
+    "Reading Assistant Model" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "阅读助手模型"
+          }
+        }
+      }
+    },
     "READY TO READ" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -4359,6 +4623,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "刷新"
+          }
+        }
+      }
+    },
+    "Regenerate" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重新生成"
           }
         }
       }
@@ -4622,6 +4897,28 @@
         }
       }
     },
+    "Searching external sources..." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在查找外部资料..."
+          }
+        }
+      }
+    },
+    "Searching the full paper..." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在搜索全文..."
+          }
+        }
+      }
+    },
     "Secure Enclave is unavailable on this device." : {
       "localizations" : {
         "zh-Hans" : {
@@ -4748,6 +5045,16 @@
         }
       }
     },
+    "Semantic Scholar search failed: %@" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Semantic Scholar 搜索失败：%1$@"
+          }
+        }
+      }
+    },
     "Send Follow-up" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -4835,6 +5142,17 @@
         }
       }
     },
+    "Shorten the answer" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "缩短回答"
+          }
+        }
+      }
+    },
     "Show BabelDOC Log" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -4901,6 +5219,17 @@
         }
       }
     },
+    "Sources" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "来源"
+          }
+        }
+      }
+    },
     "Start from the left sidebar" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -4919,6 +5248,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "第 %1$d/%2$d 步"
+          }
+        }
+      }
+    },
+    "Stop Generating" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "停止生成"
           }
         }
       }
@@ -6021,6 +6361,16 @@
         }
       }
     },
+    "Use HTML Model" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "使用 HTML 模型"
+          }
+        }
+      }
+    },
     "Use the + button in the library to create the first paper record." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -6028,6 +6378,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "使用资料库中的 + 按钮创建第一篇论文记录。"
+          }
+        }
+      }
+    },
+    "User note" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "用户笔记"
           }
         }
       }

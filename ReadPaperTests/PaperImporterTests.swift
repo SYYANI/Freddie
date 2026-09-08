@@ -407,6 +407,14 @@ final class PaperImporterTests: XCTestCase {
         let localizedHTML = try String(contentsOf: attachment.fileURL, encoding: .utf8)
         XCTAssertTrue(localizedHTML.contains("rp-readability-content"))
         XCTAssertFalse(localizedHTML.contains("Site navigation"))
+        XCTAssertTrue(localizedHTML.contains("data-rp-assistant-block-id"))
+        let generatedIndexURLs = (FileManager.default.enumerator(
+            at: rootURL,
+            includingPropertiesForKeys: nil
+        )?.allObjects as? [URL] ?? []).filter {
+            $0.lastPathComponent == "assistant-search-index-v1.json"
+        }
+        XCTAssertEqual(generatedIndexURLs.count, 1)
     }
 
     @MainActor

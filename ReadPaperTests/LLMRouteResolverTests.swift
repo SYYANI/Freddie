@@ -93,6 +93,47 @@ final class LLMRouteResolverTests: XCTestCase {
     }
 
     @MainActor
+    func testAssistantRouteUsesUserDefaultsSelectionWithoutChangingSwiftDataSchema() throws {
+        let keychainStore = KeychainStore(
+            service: "LLMRouteResolverTests.\(UUID().uuidString)",
+            accessPolicy: .unprotected
+        )
+        let defaultsSuite = "LLMRouteResolverTests.Assistant.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: defaultsSuite))
+        defer { defaults.removePersistentDomain(forName: defaultsSuite) }
+        let container = try makeContainer()
+        let modelContext = ModelContext(container)
+        let provider = LLMProviderProfile(
+            name: "Provider",
+            baseURL: "https://api.example.com/v1",
+            apiKeyRef: "provider-ref",
+            testModel: "test-model"
+        )
+        let htmlModel = LLMModelProfile(providerID: provider.id, name: "HTML", modelName: "html-model")
+        let assistantModel = LLMModelProfile(providerID: provider.id, name: "Assistant", modelName: "assistant-model")
+        let settings = AppSettings(selectedHTMLModelProfileID: htmlModel.id)
+        modelContext.insert(provider)
+        modelContext.insert(htmlModel)
+        modelContext.insert(assistantModel)
+        modelContext.insert(settings)
+        try modelContext.save()
+        try keychainStore.save("sk-test", account: provider.apiKeyRef)
+
+        let resolver = LLMRouteResolver(keychainStore: keychainStore, userDefaults: defaults)
+        XCTAssertEqual(
+            try resolver.resolveAssistantRoute(settings: settings, modelContext: modelContext).snapshot.modelProfileID,
+            htmlModel.id
+        )
+
+        defaults.set(assistantModel.id.uuidString, forKey: SelectionAssistantPreferences.selectedModelProfileIDKey)
+        XCTAssertEqual(
+            try resolver.resolveAssistantRoute(settings: settings, modelContext: modelContext).snapshot.modelProfileID,
+            assistantModel.id
+        )
+        XCTAssertEqual(settings.selectedHTMLModelProfileID, htmlModel.id)
+    }
+
+    @MainActor
     func testResolverRejectsDisabledProviderAndMissingSelection() throws {
         let keychainStore = KeychainStore(
             service: "LLMRouteResolverTests.\(UUID().uuidString)",

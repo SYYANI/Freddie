@@ -17,7 +17,8 @@ final class SelectionAssistantServiceTests: XCTestCase {
             route: makeRoute()
         )
 
-        XCTAssertEqual(output, "译文")
+        XCTAssertEqual(output.answer, "译文")
+        XCTAssertEqual(output.scope, .nearby)
         let capturedRequest = await provider.lastRequest()
         let request = try XCTUnwrap(capturedRequest)
         XCTAssertEqual(request.model, "test-model")
@@ -41,6 +42,45 @@ final class SelectionAssistantServiceTests: XCTestCase {
         XCTAssertTrue(messages[0].content.contains("Explain SELECTED_TEXT clearly"))
         XCTAssertTrue(messages[0].content.contains("Do not invent claims"))
         XCTAssertTrue(messages[1].content.contains("<<<PAPER_TITLE>>>\nPaper Blog"))
+    }
+
+    func testEvidenceSourcesAreLabeledAndReturnedStructurally() async throws {
+        let provider = SelectionAssistantProviderSpy(response: "The claim is supported [S1].")
+        let service = SelectionAssistantService(provider: provider)
+        let source = AssistantSource(
+            id: "source-1",
+            kind: .paperHTML,
+            title: "§3.2 Method",
+            excerpt: "The method uses a constrained decoder.",
+            sectionPath: ["3 Method", "3.2 Decoder"],
+            attachmentID: UUID(),
+            htmlSelector: "[data-rp-assistant-block-id=\"source-1\"]"
+        )
+
+        let result = try await service.perform(
+            SelectionAssistantRequest(
+                action: .ask,
+                selection: "constrained decoder",
+                question: "How is this validated?",
+                scope: .fullPaper
+            ),
+            paperTitle: "Paper",
+            targetLanguage: "EN",
+            route: makeRoute(),
+            paperMetadata: "Authors: A. Author",
+            userNotes: "[N1] This assumption matters.",
+            sources: [source]
+        )
+
+        XCTAssertEqual(result.sources, [source])
+        XCTAssertEqual(result.scope, .fullPaper)
+        let providerRequest = await provider.lastRequest()
+        let captured = try XCTUnwrap(providerRequest)
+        XCTAssertTrue(captured.messages[0].content.contains("cite their labels like [S1]"))
+        XCTAssertTrue(captured.messages[1].content.contains("<<<PAPER_METADATA>>>"))
+        XCTAssertTrue(captured.messages[1].content.contains("<<<USER_NOTES>>>"))
+        XCTAssertTrue(captured.messages[1].content.contains("[S1] §3.2 Method"))
+        XCTAssertTrue(captured.messages[1].content.contains("SECTION_PATH: 3 Method > 3.2 Decoder"))
     }
 
     func testQuestionIsRequiredForAskAction() async {

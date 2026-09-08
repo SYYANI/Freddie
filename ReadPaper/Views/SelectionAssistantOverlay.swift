@@ -5,8 +5,13 @@ struct SelectionAssistantOverlay: View {
     @Environment(\.localizationBundle) private var bundle
 
     let selection: NoteSelectionContext
-    let perform: @MainActor (SelectionAssistantRequest) async throws -> String
+    let progress: SelectionAssistantProgress?
+    let partialAnswer: String
+    let initialConversation: SelectionAssistantConversationSnapshot?
+    let perform: @MainActor (SelectionAssistantRequest) async throws -> SelectionAssistantResult
     let saveAsNote: @MainActor (NoteSelectionContext, String, UUID?) throws -> UUID
+    let onSourceActivated: @MainActor (AssistantSource) -> Void
+    let onConversationChanged: @MainActor (SelectionAssistantConversationSnapshot) -> Void
     let onInteractionBegan: @MainActor @Sendable () -> Void
     let onDismiss: @MainActor @Sendable () -> Void
 
@@ -23,6 +28,7 @@ struct SelectionAssistantOverlay: View {
     @State private var savedNoteID: UUID?
     @State private var conversationScrollRequest: SelectionAssistantConversationScrollRequest?
     @State private var task: Task<Void, Never>?
+    @State private var completedRequests: [SelectionAssistantRequest] = []
     @FocusState private var isQuestionFieldFocused: Bool
     @FocusState private var isFollowUpFieldFocused: Bool
 
@@ -50,8 +56,13 @@ struct SelectionAssistantOverlay: View {
         .padding(.bottom, 18)
         .animation(layoutAnimation, value: activeAction)
         .animation(layoutAnimation, value: isEnteringQuestion)
+        .onAppear(perform: restoreInitialConversation)
         .onChange(of: selection.selectionAssistantIdentity) { _, _ in
             resetForNewSelection()
+            restoreInitialConversation()
+        }
+        .onChange(of: initialConversation?.modifiedAt) { _, _ in
+            restoreInitialConversation()
         }
         .onDisappear {
             task?.cancel()
@@ -146,6 +157,15 @@ struct SelectionAssistantOverlay: View {
                     .help(String(localized: "Copy", bundle: bundle))
                 }
 
+                if isWorking {
+                    Button(action: stopGeneration) {
+                        Image(systemName: "stop.circle.fill")
+                    }
+                    .buttonStyle(.plain)
+                    .help(String(localized: "Stop Generating", bundle: bundle))
+                    .accessibilityLabel(String(localized: "Stop Generating", bundle: bundle))
+                }
+
                 Button {
                     closeResultCard()
                 } label: {
@@ -180,6 +200,24 @@ struct SelectionAssistantOverlay: View {
                     )
                     .help(String(localized: "Send Follow-up", bundle: bundle))
                     .accessibilityLabel(String(localized: "Send Follow-up", bundle: bundle))
+
+                    Menu {
+                        Button(String(localized: "Regenerate", bundle: bundle)) {
+                            regenerateLastAnswer()
+                        }
+                        .disabled(completedRequests.isEmpty)
+                        Button(String(localized: "Shorten the answer", bundle: bundle)) {
+                            submitPresetFollowUp("Make the preceding answer shorter while preserving its evidence and caveats.")
+                        }
+                        Button(String(localized: "Expand the background", bundle: bundle)) {
+                            submitPresetFollowUp("Expand the essential background, keeping paper claims distinct from general knowledge.")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                    }
+                    .menuStyle(.borderlessButton)
+                    .menuIndicator(.hidden)
+                    .fixedSize()
                 }
                 .padding(.horizontal, 10)
                 .padding(.vertical, 8)
@@ -208,9 +246,11 @@ struct SelectionAssistantOverlay: View {
             isWorking: isWorking,
             errorText: errorText,
             loadingText: loadingText,
+            partialAnswer: partialAnswer,
             showsInitialQuestion: activeAction == .ask,
             conversationMaximumHeight: conversationMaximumHeight,
-            conversationScrollRequest: conversationScrollRequest
+            conversationScrollRequest: conversationScrollRequest,
+            onSourceActivated: onSourceActivated
         )
     }
 
@@ -254,6 +294,7 @@ struct SelectionAssistantOverlay: View {
         withAnimation(layoutAnimation) {
             activeAction = action
             conversation = []
+            completedRequests = []
             pendingQuestion = question ?? initialInstruction(for: action)
             conversationScrollRequest = .init(turnIndex: 0)
             followUpQuestion = ""
@@ -268,21 +309,24 @@ struct SelectionAssistantOverlay: View {
             action: action,
             selection: selection.quote,
             localContext: selection.localContext,
-            question: question
+            question: question,
+            scope: .automatic
         )
         task = Task { @MainActor in
             do {
-                let response = try await perform(request)
+                let result = try await perform(request)
                 guard Task.isCancelled == false else { return }
                 withAnimation(layoutAnimation) {
                     conversation = [SelectionAssistantConversationTurn(
                         question: pendingQuestion ?? initialInstruction(for: action),
-                        answer: response
+                        result: result
                     )]
+                    completedRequests = [request]
                     pendingQuestion = nil
                     conversationScrollRequest = .init(turnIndex: 0)
                     isWorking = false
                 }
+                persistConversation()
             } catch is CancellationError {
                 return
             } catch {
@@ -292,6 +336,7 @@ struct SelectionAssistantOverlay: View {
                     conversationScrollRequest = .init(turnIndex: 0)
                     isWorking = false
                 }
+                persistConversation()
             }
         }
     }
@@ -319,21 +364,24 @@ struct SelectionAssistantOverlay: View {
             selection: selection.quote,
             localContext: selection.localContext,
             question: normalized,
-            conversation: priorConversation
+            conversation: priorConversation,
+            scope: .automatic
         )
         task = Task { @MainActor in
             do {
-                let response = try await perform(request)
+                let result = try await perform(request)
                 guard Task.isCancelled == false else { return }
                 withAnimation(layoutAnimation) {
                     conversation.append(SelectionAssistantConversationTurn(
                         question: normalized,
-                        answer: response
+                        result: result
                     ))
+                    completedRequests.append(request)
                     pendingQuestion = nil
                     conversationScrollRequest = .init(turnIndex: pendingTurnIndex)
                     isWorking = false
                 }
+                persistConversation()
             } catch is CancellationError {
                 return
             } catch {
@@ -354,6 +402,7 @@ struct SelectionAssistantOverlay: View {
             question = ""
             followUpQuestion = ""
             conversation = []
+            completedRequests = []
             pendingQuestion = nil
             conversationScrollRequest = nil
             isQuestionFieldFocused = false
@@ -371,6 +420,92 @@ struct SelectionAssistantOverlay: View {
     private func closeResultCard() {
         resetForNewSelection()
         onDismiss()
+    }
+
+    private func stopGeneration() {
+        task?.cancel()
+        task = nil
+        withAnimation(layoutAnimation) {
+            pendingQuestion = nil
+            isWorking = false
+            errorText = String(localized: "Generation stopped.", bundle: bundle)
+        }
+    }
+
+    private func submitPresetFollowUp(_ instruction: String) {
+        guard isWorking == false else { return }
+        followUpQuestion = instruction
+        submitFollowUp()
+    }
+
+    private func regenerateLastAnswer() {
+        onInteractionBegan()
+        guard isWorking == false,
+              let request = completedRequests.last,
+              let lastTurn = conversation.last else { return }
+
+        task?.cancel()
+        let turnIndex = max(0, conversation.count - 1)
+        withAnimation(layoutAnimation) {
+            conversation.removeLast()
+            completedRequests.removeLast()
+            pendingQuestion = lastTurn.question
+            conversationScrollRequest = .init(turnIndex: turnIndex)
+            errorText = nil
+            saveErrorText = nil
+            isSavedAsNote = false
+            isWorking = true
+        }
+
+        task = Task { @MainActor in
+            do {
+                let result = try await perform(request)
+                guard Task.isCancelled == false else { return }
+                withAnimation(layoutAnimation) {
+                    conversation.append(SelectionAssistantConversationTurn(
+                        question: lastTurn.question,
+                        result: result
+                    ))
+                    completedRequests.append(request)
+                    pendingQuestion = nil
+                    conversationScrollRequest = .init(turnIndex: turnIndex)
+                    isWorking = false
+                }
+                persistConversation()
+            } catch is CancellationError {
+                return
+            } catch {
+                guard Task.isCancelled == false else { return }
+                withAnimation(layoutAnimation) {
+                    errorText = error.localizedDescription
+                    conversationScrollRequest = .init(turnIndex: turnIndex)
+                    isWorking = false
+                }
+            }
+        }
+    }
+
+    private func restoreInitialConversation() {
+        guard let initialConversation,
+              initialConversation.selectionIdentity == selection.selectionAssistantIdentity,
+              initialConversation.turns.isEmpty == false,
+              isWorking == false else { return }
+        activeAction = initialConversation.action
+        conversation = initialConversation.turns
+        completedRequests = []
+        pendingQuestion = nil
+        errorText = nil
+        conversationScrollRequest = .init(turnIndex: max(0, conversation.count - 1))
+    }
+
+    private func persistConversation() {
+        guard let activeAction, conversation.isEmpty == false else { return }
+        onConversationChanged(SelectionAssistantConversationSnapshot(
+            selectionIdentity: selection.selectionAssistantIdentity,
+            action: activeAction,
+            scope: conversation.last?.result.scope ?? .nearby,
+            turns: conversation
+        ))
     }
 
     private func saveConversationAsNote() {
@@ -422,6 +557,22 @@ struct SelectionAssistantOverlay: View {
                 sections.append("**\(AppLocalization.format("Question: %@", bundle: bundle, turn.question))**")
             }
             sections.append(turn.answer)
+            if turn.result.sources.isEmpty == false {
+                let sourceLines = turn.result.sources.enumerated().map { sourceIndex, source in
+                    var location = source.title
+                    if let pageIndex = source.pageIndex {
+                        location += " (\(AppLocalization.format("Page %d", bundle: bundle, pageIndex + 1)))"
+                    }
+                    if let urlString = source.urlString, urlString.isEmpty == false {
+                        return "- [S\(sourceIndex + 1)] [\(location)](\(urlString))"
+                    }
+                    return "- [S\(sourceIndex + 1)] \(location)"
+                }
+                sections.append("### \(String(localized: "Sources", bundle: bundle))\n\(sourceLines.joined(separator: "\n"))")
+            }
+            if turn.result.warnings.isEmpty == false {
+                sections.append(turn.result.warnings.map { "> ⚠️ \($0)" }.joined(separator: "\n"))
+            }
         }
         return sections.joined(separator: "\n\n")
     }
@@ -440,6 +591,18 @@ struct SelectionAssistantOverlay: View {
     }
 
     private var loadingText: String {
+        switch progress {
+        case .collectingPaperContext:
+            return String(localized: "Collecting paper context...", bundle: bundle)
+        case .searchingFullText:
+            return String(localized: "Searching the full paper...", bundle: bundle)
+        case .foundPaperSources(let count):
+            return AppLocalization.format("Found %d relevant passages.", bundle: bundle, count)
+        case .searchingExternalSources:
+            return String(localized: "Searching external sources...", bundle: bundle)
+        case .generatingAnswer, nil:
+            break
+        }
         if conversation.isEmpty == false || activeAction == .ask {
             return String(localized: "Generating an answer...", bundle: bundle)
         }
@@ -454,6 +617,7 @@ struct SelectionAssistantOverlay: View {
             return String(localized: "Working...", bundle: bundle)
         }
     }
+
 }
 
 struct SelectionAssistantConversationView: View {
@@ -464,11 +628,37 @@ struct SelectionAssistantConversationView: View {
     let isWorking: Bool
     let errorText: String?
     let loadingText: String
+    let partialAnswer: String
     let showsInitialQuestion: Bool
     let conversationMaximumHeight: CGFloat
     let conversationScrollRequest: SelectionAssistantConversationScrollRequest?
+    var onSourceActivated: (AssistantSource) -> Void
 
     @State private var conversationHeights: [SelectionAssistantConversationGeometry: CGFloat] = [:]
+
+    init(
+        conversation: [SelectionAssistantConversationTurn],
+        pendingQuestion: String?,
+        isWorking: Bool,
+        errorText: String?,
+        loadingText: String,
+        partialAnswer: String = "",
+        showsInitialQuestion: Bool,
+        conversationMaximumHeight: CGFloat,
+        conversationScrollRequest: SelectionAssistantConversationScrollRequest?,
+        onSourceActivated: @escaping (AssistantSource) -> Void = { _ in }
+    ) {
+        self.conversation = conversation
+        self.pendingQuestion = pendingQuestion
+        self.isWorking = isWorking
+        self.errorText = errorText
+        self.loadingText = loadingText
+        self.partialAnswer = partialAnswer
+        self.showsInitialQuestion = showsInitialQuestion
+        self.conversationMaximumHeight = conversationMaximumHeight
+        self.conversationScrollRequest = conversationScrollRequest
+        self.onSourceActivated = onSourceActivated
+    }
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -529,13 +719,19 @@ struct SelectionAssistantConversationView: View {
     @ViewBuilder
     private var conversationStatus: some View {
         if isWorking {
-            HStack(spacing: 8) {
-                ProgressView()
-                    .controlSize(.small)
-                Text(loadingText)
-                    .foregroundStyle(.secondary)
+            if partialAnswer.isEmpty {
+                HStack(spacing: 8) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text(loadingText)
+                        .foregroundStyle(.secondary)
+                }
+                .transition(.opacity)
+            } else {
+                Text(partialAnswer)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .textSelection(.enabled)
             }
-            .transition(.opacity)
         } else if let errorText {
             Text(errorText)
                 .foregroundStyle(.red)
@@ -559,6 +755,38 @@ struct SelectionAssistantConversationView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .textSelection(.enabled)
 
+        if turn.result.sources.isEmpty == false {
+            Text(sourceSummary(for: turn.result))
+                .font(.caption2.weight(.medium))
+                .foregroundStyle(.secondary)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(Array(turn.result.sources.enumerated()), id: \.element.id) { sourceIndex, source in
+                        Button {
+                            onSourceActivated(source)
+                        } label: {
+                            Label("S\(sourceIndex + 1) · \(source.title)", systemImage: sourceIcon(source))
+                                .font(.caption)
+                                .lineLimit(1)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 5)
+                                .background(Color.primary.opacity(0.06), in: Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        .help(source.excerpt)
+                    }
+                }
+            }
+        }
+
+        ForEach(Array(turn.result.warnings.enumerated()), id: \.offset) { _, warning in
+            Label(warning, systemImage: "exclamationmark.triangle")
+                .font(.caption)
+                .foregroundStyle(.orange)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+
         if index < conversation.count - 1 {
             Divider()
         }
@@ -566,6 +794,32 @@ struct SelectionAssistantConversationView: View {
 
     private func shouldShowQuestion(at index: Int) -> Bool {
         index > 0 || showsInitialQuestion
+    }
+
+    private func sourceSummary(for result: SelectionAssistantResult) -> String {
+        switch result.scope {
+        case .automatic:
+            return String(localized: "Based on automatically selected context", bundle: bundle)
+        case .nearby:
+            return String(localized: "Based on the current passage", bundle: bundle)
+        case .fullPaper:
+            let count = result.sources.filter { $0.kind == .paperHTML || $0.kind == .paperPDF }.count
+            return AppLocalization.format("Based on %d full-paper passages", bundle: bundle, count)
+        case .external:
+            let count = result.sources.filter { $0.kind == .external }.count
+            return AppLocalization.format("Based on paper context and %d external sources", bundle: bundle, count)
+        }
+    }
+
+    private func sourceIcon(_ source: AssistantSource) -> String {
+        switch source.kind {
+        case .currentSelection: return "text.quote"
+        case .paperHTML: return "doc.richtext"
+        case .paperPDF: return "doc.text"
+        case .userNote: return "note.text"
+        case .paperMetadata: return "info.circle"
+        case .external: return "network"
+        }
     }
 
     private var conversationTurnCount: Int {

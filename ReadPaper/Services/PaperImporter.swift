@@ -11,19 +11,23 @@ final class PaperImporter {
     private let htmlLocalizer: HTMLLocalizer
     private let webPageHTMLRenderer: any WebPageHTMLRendering
     private let session: URLSession
+    private let fullTextSearchService: PaperFullTextSearchService
 
     init(
         fileStore: PaperFileStore = PaperFileStore(),
         arxivClient: ArxivClient = .shared,
         htmlLocalizer: HTMLLocalizer = HTMLLocalizer(),
         webPageHTMLRenderer: any WebPageHTMLRendering = WebKitWebPageHTMLRenderer(),
-        session: URLSession = .shared
+        session: URLSession = .shared,
+        fullTextSearchService: PaperFullTextSearchService? = nil
     ) {
         self.fileStore = fileStore
         self.arxivClient = arxivClient
         self.htmlLocalizer = htmlLocalizer
         self.webPageHTMLRenderer = webPageHTMLRenderer
         self.session = session
+        self.fullTextSearchService = fullTextSearchService
+            ?? PaperFullTextSearchService(fileStore: fileStore)
     }
 
     func importArxiv(
@@ -202,11 +206,15 @@ final class PaperImporter {
             if isNewPaper {
                 modelContext.insert(paper)
             }
-            try upsertWebPageAttachment(
+            let htmlAttachment = try upsertWebPageAttachment(
                 for: paper,
                 kind: .html,
                 fileURL: htmlURL,
                 modelContext: modelContext
+            )
+            _ = try? fullTextSearchService.rebuild(
+                paper: paper,
+                attachments: [htmlAttachment]
             )
 
             onProgress?(.finalizing())
@@ -262,7 +270,7 @@ final class PaperImporter {
         if insertPaper {
             modelContext.insert(paper)
         }
-        try upsertWebPageAttachment(
+        _ = try upsertWebPageAttachment(
             for: paper,
             kind: .pdf,
             fileURL: pdfFile,
@@ -309,21 +317,24 @@ final class PaperImporter {
         kind: AttachmentKind,
         fileURL: URL,
         modelContext: ModelContext
-    ) throws {
+    ) throws -> PaperAttachment {
         let attachments = try modelContext.fetch(FetchDescriptor<PaperAttachment>())
         if let attachment = attachments.first(where: {
             $0.paperID == paper.id && $0.source == .webPage && $0.kind == kind
         }) {
             attachment.filename = fileURL.lastPathComponent
             attachment.filePath = fileURL.path
+            return attachment
         } else {
-            modelContext.insert(PaperAttachment(
+            let attachment = PaperAttachment(
                 paperID: paper.id,
                 kind: kind,
                 source: .webPage,
                 filename: fileURL.lastPathComponent,
                 filePath: fileURL.path
-            ))
+            )
+            modelContext.insert(attachment)
+            return attachment
         }
     }
 
@@ -358,13 +369,18 @@ final class PaperImporter {
                     resourcesDirectory: resourcesDirectory
                 )
                 paper.htmlURLString = candidate.1.absoluteString
-                modelContext.insert(PaperAttachment(
+                let htmlAttachment = PaperAttachment(
                     paperID: paper.id,
                     kind: .html,
                     source: .arxivHTML,
                     filename: htmlURL.lastPathComponent,
                     filePath: htmlURL.path
-                ))
+                )
+                modelContext.insert(htmlAttachment)
+                _ = try? fullTextSearchService.rebuild(
+                    paper: paper,
+                    attachments: [htmlAttachment]
+                )
                 try? modelContext.save()
                 return true
             } catch {

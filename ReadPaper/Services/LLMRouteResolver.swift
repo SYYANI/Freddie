@@ -4,6 +4,7 @@ import SwiftData
 enum LLMRouteError: LocalizedError, Equatable {
     case htmlModelNotSelected
     case pdfModelNotSelected
+    case assistantModelNotSelected
     case modelNotFound
     case providerNotFound
     case modelDisabled(String)
@@ -17,6 +18,8 @@ enum LLMRouteError: LocalizedError, Equatable {
             return AppLocalization.localized("Choose an HTML translation model in Settings first.")
         case .pdfModelNotSelected:
             return AppLocalization.localized("Choose a PDF translation model in Settings first.")
+        case .assistantModelNotSelected:
+            return AppLocalization.localized("Choose a reading assistant model in Settings first.")
         case .modelNotFound:
             return AppLocalization.localized("The selected translation model could not be found.")
         case .providerNotFound:
@@ -37,13 +40,16 @@ enum LLMRouteError: LocalizedError, Equatable {
 struct LLMRouteResolver {
     let keychainStore: KeychainStore
     let apiStyleStore: LLMProviderAPIStyleStore
+    let userDefaults: UserDefaults
 
     init(
         keychainStore: KeychainStore = KeychainStore(),
-        apiStyleStore: LLMProviderAPIStyleStore = LLMProviderAPIStyleStore()
+        apiStyleStore: LLMProviderAPIStyleStore = LLMProviderAPIStyleStore(),
+        userDefaults: UserDefaults = .standard
     ) {
         self.keychainStore = keychainStore
         self.apiStyleStore = apiStyleStore
+        self.userDefaults = userDefaults
     }
 
     func resolveHTMLRoute(
@@ -64,6 +70,22 @@ struct LLMRouteResolver {
         try resolve(
             selectedModelID: settings.selectedPDFModelProfileID,
             missingSelectionError: .pdfModelNotSelected,
+            modelContext: modelContext
+        )
+    }
+
+    func resolveAssistantRoute(
+        settings: AppSettings,
+        modelContext: ModelContext
+    ) throws -> ResolvedLLMModelRoute {
+        let storedValue = userDefaults.string(
+            forKey: SelectionAssistantPreferences.selectedModelProfileIDKey
+        )
+        let selectedModelID = storedValue.flatMap(UUID.init(uuidString:))
+            ?? settings.selectedHTMLModelProfileID
+        return try resolve(
+            selectedModelID: selectedModelID,
+            missingSelectionError: .assistantModelNotSelected,
             modelContext: modelContext
         )
     }

@@ -92,6 +92,9 @@ struct ReaderPaneView: View {
     @State private var selectionAssistantSelection: NoteSelectionContext?
     @State private var isSelectionAssistantPinned = false
     @State private var selectionAssistantDismissTask: Task<Void, Never>?
+    @State private var selectionAssistantProgress: SelectionAssistantProgress?
+    @State private var selectionAssistantPartialAnswer = ""
+    @State private var selectionAssistantInitialConversation: SelectionAssistantConversationSnapshot?
     @State private var htmlSelectionHighlightResetToken = 0
     @State private var htmlNativeSelectionClearToken = 0
 
@@ -1224,8 +1227,13 @@ struct ReaderPaneView: View {
                paper != nil {
                 SelectionAssistantOverlay(
                     selection: selection,
+                    progress: selectionAssistantProgress,
+                    partialAnswer: selectionAssistantPartialAnswer,
+                    initialConversation: selectionAssistantInitialConversation,
                     perform: performSelectionAssistantRequest,
                     saveAsNote: onSaveSelectionAssistantNote,
+                    onSourceActivated: activateSelectionAssistantSource,
+                    onConversationChanged: persistSelectionAssistantConversation,
                     onInteractionBegan: pinSelectionAssistant,
                     onDismiss: clearSelectionAssistant
                 )
@@ -1239,22 +1247,56 @@ struct ReaderPaneView: View {
     @MainActor
     private func performSelectionAssistantRequest(
         _ request: SelectionAssistantRequest
-    ) async throws -> String {
+    ) async throws -> SelectionAssistantResult {
         guard let paper, let settings else {
             throw LLMProviderError.invalidConfiguration(
                 String(localized: "Translation settings are unavailable.", bundle: bundle)
             )
         }
-        let route = try LLMRouteResolver().resolveHTMLRoute(
+        let route = try LLMRouteResolver().resolveAssistantRoute(
             settings: settings,
             modelContext: modelContext
         )
-        return try await SelectionAssistantService().perform(
+        selectionAssistantProgress = .collectingPaperContext
+        selectionAssistantPartialAnswer = ""
+        defer {
+            selectionAssistantProgress = nil
+            selectionAssistantPartialAnswer = ""
+        }
+        guard let selection = selectionAssistantSelection else {
+            throw LLMProviderError.invalidConfiguration(
+                String(localized: "Select some text before using the reading assistant.", bundle: bundle)
+            )
+        }
+        return try await SelectionAssistantOrchestrator().perform(
             request,
-            paperTitle: paper.title,
+            selection: selection,
+            paper: paper,
+            attachments: attachments,
+            notes: notes,
             targetLanguage: settings.targetLanguage,
-            route: route
+            route: route,
+            onProgress: { progress in
+                selectionAssistantProgress = progress
+            },
+            onPartialAnswer: { partialAnswer in
+                await MainActor.run {
+                    selectionAssistantPartialAnswer = partialAnswer
+                }
+            }
         )
+    }
+
+    @MainActor
+    private func activateSelectionAssistantSource(_ source: AssistantSource) {
+        pinSelectionAssistant()
+        if let request = source.navigationRequest {
+            noteNavigationRequest = request
+            return
+        }
+        guard let urlString = source.urlString,
+              let url = URL(string: urlString) else { return }
+        NSWorkspace.shared.open(url)
     }
 
     private var statusRow: some View {
@@ -2245,6 +2287,15 @@ struct ReaderPaneView: View {
 
         if let selection {
             isSelectionAssistantPinned = false
+            if let paper {
+                selectionAssistantInitialConversation = try? SelectionAssistantConversationStore()
+                    .conversation(
+                        paperID: paper.id,
+                        selectionIdentity: selection.selectionAssistantIdentity
+                    )
+            } else {
+                selectionAssistantInitialConversation = nil
+            }
             selectionAssistantSelection = selection
             return
         }
@@ -2255,6 +2306,7 @@ struct ReaderPaneView: View {
             guard Task.isCancelled == false,
                   isSelectionAssistantPinned == false else { return }
             selectionAssistantSelection = nil
+            selectionAssistantInitialConversation = nil
             selectionAssistantDismissTask = nil
         }
     }
@@ -2273,9 +2325,20 @@ struct ReaderPaneView: View {
         clearSelectionAssistant()
     }
 
+    @MainActor
+    private func persistSelectionAssistantConversation(
+        _ snapshot: SelectionAssistantConversationSnapshot
+    ) {
+        guard let paper else { return }
+        try? SelectionAssistantConversationStore().save(snapshot, paperID: paper.id)
+    }
+
     private func clearSelectionAssistant() {
         selectionAssistantDismissTask?.cancel()
         selectionAssistantDismissTask = nil
+        selectionAssistantProgress = nil
+        selectionAssistantPartialAnswer = ""
+        selectionAssistantInitialConversation = nil
         isSelectionAssistantPinned = false
         selectionAssistantSelection = nil
         htmlSelectionHighlightResetToken &+= 1

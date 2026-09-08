@@ -281,6 +281,125 @@ final class OpenAICompatibleLLMProviderTests: XCTestCase {
         XCTAssertEqual(MockURLProtocol.requestPaths, ["/responses", "/v1/responses"])
     }
 
+    func testChatCompletionsStreamingEmitsAccumulatedText() async throws {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [MockURLProtocol.self]
+        MockURLProtocol.requestHandler = { request in
+            let body = """
+            data: {"choices":[{"delta":{"content":"Evidence "}}]}
+
+            data: {"choices":[{"delta":{"content":"found."}}]}
+
+            data: [DONE]
+
+            """
+            return (
+                HTTPURLResponse(
+                    url: try XCTUnwrap(request.url),
+                    statusCode: 200,
+                    httpVersion: nil,
+                    headerFields: ["Content-Type": "text/event-stream"]
+                )!,
+                Data(body.utf8)
+            )
+        }
+        let recorder = StreamingTextRecorder()
+        let provider = OpenAICompatibleLLMProvider(sessionConfigurationOverride: configuration)
+
+        let response = try await provider.completeStreaming(
+            request: LLMCompletionRequest(
+                baseURL: URL(string: "https://api.example.com/v1")!,
+                apiKey: "sk-test",
+                model: "test-model",
+                messages: [LLMCompletionMessage(role: "user", content: "Find evidence")]
+            ),
+            onPartialText: { await recorder.append($0) }
+        )
+
+        XCTAssertEqual(response.text, "Evidence found.")
+        let partialValues = await recorder.values()
+        XCTAssertEqual(partialValues, ["Evidence ", "Evidence found."])
+        let requestBody = try XCTUnwrap(MockURLProtocol.requestBodies.last)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: requestBody) as? [String: Any])
+        XCTAssertEqual(json["stream"] as? Bool, true)
+    }
+
+    func testResponsesStreamingDecodesOutputTextDeltaEvents() async throws {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [MockURLProtocol.self]
+        MockURLProtocol.requestHandler = { request in
+            let body = """
+            event: response.output_text.delta
+            data: {"type":"response.output_text.delta","delta":"One"}
+
+            event: response.output_text.delta
+            data: {"type":"response.output_text.delta","delta":" two"}
+
+            event: response.completed
+            data: {"type":"response.completed"}
+
+            """
+            return (
+                HTTPURLResponse(
+                    url: try XCTUnwrap(request.url),
+                    statusCode: 200,
+                    httpVersion: nil,
+                    headerFields: ["Content-Type": "text/event-stream"]
+                )!,
+                Data(body.utf8)
+            )
+        }
+        let recorder = StreamingTextRecorder()
+        let provider = OpenAICompatibleLLMProvider(sessionConfigurationOverride: configuration)
+
+        let response = try await provider.completeStreaming(
+            request: LLMCompletionRequest(
+                baseURL: URL(string: "https://api.example.com/v1")!,
+                apiStyle: .responses,
+                apiKey: "sk-test",
+                model: "test-model",
+                messages: [LLMCompletionMessage(role: "user", content: "Explain")]
+            ),
+            onPartialText: { await recorder.append($0) }
+        )
+
+        XCTAssertEqual(response.text, "One two")
+        let partialValues = await recorder.values()
+        XCTAssertEqual(partialValues, ["One", "One two"])
+    }
+
+    func testStreamingFallsBackWhenCompatibleProviderReturnsRegularJSON() async throws {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [MockURLProtocol.self]
+        MockURLProtocol.requestHandler = { request in
+            (
+                HTTPURLResponse(
+                    url: try XCTUnwrap(request.url),
+                    statusCode: 200,
+                    httpVersion: nil,
+                    headerFields: ["Content-Type": "application/json"]
+                )!,
+                Data(Self.chatCompletionSuccessBody.utf8)
+            )
+        }
+        let recorder = StreamingTextRecorder()
+        let provider = OpenAICompatibleLLMProvider(sessionConfigurationOverride: configuration)
+
+        let response = try await provider.completeStreaming(
+            request: LLMCompletionRequest(
+                baseURL: URL(string: "https://compatible.example/v1")!,
+                apiKey: "sk-test",
+                model: "test-model",
+                messages: [LLMCompletionMessage(role: "user", content: "Hello")]
+            ),
+            onPartialText: { await recorder.append($0) }
+        )
+
+        XCTAssertEqual(response.text, "ok")
+        let partialValues = await recorder.values()
+        XCTAssertEqual(partialValues, ["ok"])
+    }
+
     private static let chatCompletionSuccessBody = """
     {
       "id": "chatcmpl-test",
@@ -327,6 +446,18 @@ final class OpenAICompatibleLLMProviderTests: XCTestCase {
       ]
     }
     """
+}
+
+private actor StreamingTextRecorder {
+    private var recordedValues: [String] = []
+
+    func append(_ value: String) {
+        recordedValues.append(value)
+    }
+
+    func values() -> [String] {
+        recordedValues
+    }
 }
 
 private final class MockURLProtocol: URLProtocol {
