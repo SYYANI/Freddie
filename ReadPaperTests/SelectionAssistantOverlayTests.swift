@@ -13,6 +13,19 @@ final class SelectionAssistantOverlayTests: XCTestCase {
         XCTAssertEqual(Target.resolve(turnIndex: 3, turnHeight: 400, viewportHeight: 300), .turn(3))
     }
 
+    func testStreamingAlwaysTargetsBottomForAnAnswerTallerThanViewport() {
+        typealias Target = SelectionAssistantConversationScrollTarget
+        XCTAssertEqual(
+            Target.resolve(
+                turnIndex: 2,
+                turnHeight: 800,
+                viewportHeight: 480,
+                followsStreamingBottom: true
+            ),
+            .bottom
+        )
+    }
+
     @MainActor
     func testShortFollowUpIsFullyVisibleAfterLongExplanation() async throws {
         let fixture = ConversationFixture()
@@ -102,6 +115,44 @@ final class SelectionAssistantOverlayTests: XCTestCase {
         try assertLatestTurnAtTop(fixture, reference: reference)
     }
 
+    @MainActor
+    func testStreamingAnswerStaysAtBottomWithStableViewportHeight() async throws {
+        let fixture = ConversationFixture()
+        defer { fixture.window.close() }
+        let request = SelectionAssistantConversationScrollRequest(turnIndex: 0)
+
+        fixture.show(
+            [],
+            pending: "Explain this.",
+            partialAnswer: String(repeating: "Streaming answer text. ", count: 80),
+            scrollRequest: request
+        )
+        try await fixture.settle()
+        let scroll = try fixture.scrollView()
+        let initialViewportHeight = scroll.contentView.bounds.height
+        XCTAssertGreaterThan(initialViewportHeight, 0)
+        XCTAssertLessThanOrEqual(initialViewportHeight, 480)
+        XCTAssertEqual(
+            scroll.contentView.bounds.maxY,
+            try XCTUnwrap(scroll.documentView).bounds.height,
+            accuracy: 1
+        )
+
+        fixture.show(
+            [],
+            pending: "Explain this.",
+            partialAnswer: String(repeating: "Streaming answer text. ", count: 120),
+            scrollRequest: request
+        )
+        try await fixture.settle()
+        XCTAssertEqual(scroll.contentView.bounds.height, initialViewportHeight, accuracy: 1)
+        XCTAssertEqual(
+            scroll.contentView.bounds.maxY,
+            try XCTUnwrap(scroll.documentView).bounds.height,
+            accuracy: 1
+        )
+    }
+
     private static let longAnswer = (1...45).map { "Explanation line \($0)." }.joined(separator: "\n")
 
     private func turn(question: String = "A question.", answer: String) -> SelectionAssistantConversationTurn {
@@ -145,7 +196,9 @@ private final class ConversationFixture {
         _ turns: [SelectionAssistantConversationTurn],
         pending: String? = nil,
         error: String? = nil,
-        showsInitialQuestion: Bool = false
+        partialAnswer: String = "",
+        showsInitialQuestion: Bool = false,
+        scrollRequest: SelectionAssistantConversationScrollRequest? = nil
     ) {
         let index = pending == nil ? turns.count - 1 : turns.count
         withAnimation(.smooth(duration: 0.34, extraBounce: 0)) {
@@ -158,9 +211,10 @@ private final class ConversationFixture {
                         isWorking: pending != nil && error == nil,
                         errorText: error,
                         loadingText: "Generating an answer...",
+                        partialAnswer: partialAnswer,
                         showsInitialQuestion: showsInitialQuestion,
                         conversationMaximumHeight: 480,
-                        conversationScrollRequest: .init(turnIndex: index)
+                        conversationScrollRequest: scrollRequest ?? .init(turnIndex: index)
                     )
                     Text("Follow-up input").frame(height: 34)
                 }

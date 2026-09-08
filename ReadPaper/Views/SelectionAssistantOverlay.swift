@@ -639,6 +639,7 @@ struct SelectionAssistantConversationView: View {
     var onSourceActivated: (AssistantSource) -> Void
 
     @State private var conversationHeights: [SelectionAssistantConversationGeometry: CGFloat] = [:]
+    @State private var streamingAnswerRequestID: UUID?
 
     init(
         conversation: [SelectionAssistantConversationTurn],
@@ -704,20 +705,46 @@ struct SelectionAssistantConversationView: View {
             .measureConversationHeight(.viewport)
             .opacity(hasConversationAreaContent ? 1 : 0)
             .onPreferenceChange(SelectionAssistantConversationHeightPreferenceKey.self) { height in
-                conversationHeights = height
+                let normalizedHeights = height.mapValues { ceil(max(0, $0)) }
+                guard normalizedHeights != conversationHeights else { return }
+
+                // Streaming updates arrive much faster than a layout animation can
+                // finish. Keep geometry bookkeeping out of the surrounding card's
+                // animation transaction so successive tokens cannot make it pulse.
+                var transaction = Transaction()
+                transaction.animation = nil
+                withTransaction(transaction) {
+                    conversationHeights = normalizedHeights
+                }
             }
             .task(id: conversationScrollUpdate) {
-                guard let target = conversationScrollUpdate.target else { return }
+                let update = conversationScrollUpdate
+                guard let target = update.target else { return }
                 // Geometry changes restart this task. Scroll after the measured
                 // layout is installed, including loading -> answer and resizing.
                 await Task.yield()
                 guard Task.isCancelled == false else { return }
-                withAnimation(.easeOut(duration: 0.22)) {
-                    proxy.scrollTo(target, anchor: target == .bottom ? .bottom : .top)
+
+                if update.followsStreamingBottom {
+                    // Do not stack an animation for every streamed token. Immediate
+                    // scrolling keeps the newest text attached to the bottom edge.
+                    var transaction = Transaction()
+                    transaction.animation = nil
+                    withTransaction(transaction) {
+                        proxy.scrollTo(target, anchor: .bottom)
+                    }
+                } else {
+                    withAnimation(.easeOut(duration: 0.22)) {
+                        proxy.scrollTo(target, anchor: target == .bottom ? .bottom : .top)
+                    }
                 }
             }
         }
         .allowsHitTesting(hasConversationAreaContent)
+        .onChange(of: partialAnswer.isEmpty) { _, isEmpty in
+            guard isEmpty == false else { return }
+            streamingAnswerRequestID = conversationScrollRequest?.id
+        }
     }
 
     @ViewBuilder
@@ -831,14 +858,28 @@ struct SelectionAssistantConversationView: View {
     }
 
     private var conversationViewportHeight: CGFloat {
-        min(ceil(conversationHeights[.content] ?? 0), conversationMaximumHeight)
+        if followsStreamingBottom {
+            // Reserve the final scrolling viewport once text starts arriving. The
+            // card then grows once instead of changing height for every wrapped line.
+            return conversationMaximumHeight
+        }
+        return min(ceil(conversationHeights[.content] ?? 0), conversationMaximumHeight)
     }
 
     private var conversationScrollUpdate: SelectionAssistantConversationScrollUpdate {
         SelectionAssistantConversationScrollUpdate(
             request: conversationScrollRequest,
-            heights: conversationHeights
+            heights: conversationHeights,
+            followsStreamingBottom: followsStreamingBottom
         )
+    }
+
+    private var followsStreamingBottom: Bool {
+        guard isWorking else { return false }
+        guard let requestID = conversationScrollRequest?.id else {
+            return partialAnswer.isEmpty == false
+        }
+        return partialAnswer.isEmpty == false || streamingAnswerRequestID == requestID
     }
 
     private var hasConversationAreaContent: Bool {
@@ -855,9 +896,17 @@ enum SelectionAssistantConversationScrollTarget: Hashable {
 
     static let bottomInset: CGFloat = 10
 
-    static func resolve(turnIndex: Int, turnHeight: CGFloat, viewportHeight: CGFloat) -> Self {
+    static func resolve(
+        turnIndex: Int,
+        turnHeight: CGFloat,
+        viewportHeight: CGFloat,
+        followsStreamingBottom: Bool = false
+    ) -> Self {
+        if followsStreamingBottom {
+            return .bottom
+        }
         // Never advance past the latest question just to reveal the answer's tail.
-        turnHeight + bottomInset <= viewportHeight ? .bottom : .turn(turnIndex)
+        return turnHeight + bottomInset <= viewportHeight ? .bottom : .turn(turnIndex)
     }
 }
 
@@ -875,12 +924,18 @@ struct SelectionAssistantConversationScrollRequest: Equatable {
 private struct SelectionAssistantConversationScrollUpdate: Equatable {
     let request: SelectionAssistantConversationScrollRequest?
     let heights: [SelectionAssistantConversationGeometry: CGFloat]
+    let followsStreamingBottom: Bool
 
     var target: SelectionAssistantConversationScrollTarget? {
         guard let request,
               let turnHeight = heights[.turn(request.turnIndex)],
               let viewportHeight = heights[.viewport], viewportHeight > 0 else { return nil }
-        return .resolve(turnIndex: request.turnIndex, turnHeight: turnHeight, viewportHeight: viewportHeight)
+        return .resolve(
+            turnIndex: request.turnIndex,
+            turnHeight: turnHeight,
+            viewportHeight: viewportHeight,
+            followsStreamingBottom: followsStreamingBottom
+        )
     }
 }
 
