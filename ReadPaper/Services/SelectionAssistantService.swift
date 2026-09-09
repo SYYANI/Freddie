@@ -190,8 +190,13 @@ struct SelectionAssistantService: Sendable {
                 at: resultSources.index(after: liveSearchIndex)
             )
         }
+        let answer = SelectionAssistantCitationFormatter.finalize(
+            text,
+            originalSources: effectiveSources,
+            webResultSources: webResultSources
+        )
         return SelectionAssistantResult(
-            answer: text,
+            answer: answer,
             sources: resultSources,
             scope: request.scope,
             warnings: warnings
@@ -228,6 +233,108 @@ struct SelectionAssistantService: Sendable {
             excerpt: excerpt,
             urlString: source.urlString
         )
+    }
+}
+
+enum SelectionAssistantCitationFormatter {
+    private static let webBundleToken = "<<RP_WEB_CITATION_BUNDLE>>"
+
+    static func finalize(
+        _ answer: String,
+        originalSources: [AssistantSource],
+        webResultSources: [AssistantSource]
+    ) -> String {
+        guard webResultSources.isEmpty == false,
+              let placeholderIndex = originalSources.firstIndex(where: {
+                  $0.id == AssistantSource.liveWebSearchID
+              }) else {
+            return answer
+        }
+
+        struct CitationReplacement {
+            let token: String
+            let citation: String
+            let urlString: String
+        }
+        let replacements = webResultSources.enumerated().compactMap { index, source -> CitationReplacement? in
+            guard let urlString = source.urlString, urlString.isEmpty == false else { return nil }
+            let label = placeholderIndex + index + 1
+            return CitationReplacement(
+                token: "<<RP_WEB_CITATION_\(index)>>",
+                citation: "[S\(label)](\(urlString))",
+                urlString: urlString
+            )
+        }
+
+        var output = answer
+        // Replace complete Markdown links before replacing raw URL text so a
+        // link destination cannot become nested Markdown when labels are
+        // remapped below.
+        for replacement in replacements.sorted(by: { $0.urlString.count > $1.urlString.count }) {
+            let escapedURL = NSRegularExpression.escapedPattern(for: replacement.urlString)
+            let markdownLinkPattern = #"\[[^\]\n]+\]\(\s*<?"#
+                + escapedURL
+                + #">?\s*\)"#
+            output = replacingMatches(in: output, pattern: markdownLinkPattern) { _, _ in
+                replacement.token
+            }
+            let autolinkPattern = "<" + escapedURL + ">"
+            output = replacingMatches(in: output, pattern: autolinkPattern) { _, _ in
+                replacement.token
+            }
+            output = output.replacingOccurrences(of: replacement.urlString, with: replacement.token)
+        }
+
+        let placeholderLabel = placeholderIndex + 1
+        let labelPattern = #"\[S(\d+)\]"#
+        output = replacingMatches(in: output, pattern: labelPattern) { match, source in
+            guard match.numberOfRanges > 1 else { return nil }
+            let value = source.substring(with: match.range(at: 1))
+            guard let oldLabel = Int(value) else { return nil }
+            if oldLabel == placeholderLabel {
+                return webBundleToken
+            }
+            if oldLabel > placeholderLabel {
+                return "[S\(oldLabel + webResultSources.count - 1)]"
+            }
+            return nil
+        }
+
+        for replacement in replacements {
+            let adjacentBundlePattern = NSRegularExpression.escapedPattern(for: webBundleToken)
+                + #"\s*[:：\-]?\s*"#
+                + NSRegularExpression.escapedPattern(for: replacement.token)
+            output = replacingMatches(in: output, pattern: adjacentBundlePattern) { _, _ in
+                replacement.token
+            }
+        }
+
+        let allWebCitations = replacements.map(\.citation).joined(separator: " ")
+        output = output.replacingOccurrences(of: webBundleToken, with: allWebCitations)
+        for replacement in replacements {
+            output = output.replacingOccurrences(of: replacement.token, with: replacement.citation)
+        }
+        return output.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func replacingMatches(
+        in text: String,
+        pattern: String,
+        replacement: (NSTextCheckingResult, NSString) -> String?
+    ) -> String {
+        guard let expression = try? NSRegularExpression(pattern: pattern) else { return text }
+        let source = text as NSString
+        let matches = expression.matches(
+            in: text,
+            range: NSRange(location: 0, length: source.length)
+        )
+        guard matches.isEmpty == false else { return text }
+        let mutable = NSMutableString(string: text)
+        for match in matches.reversed() {
+            guard let value = replacement(match, source) else { continue }
+            mutable.replaceCharacters(in: match.range, with: value)
+        }
+        return mutable as String
     }
 }
 
@@ -317,10 +424,17 @@ enum SelectionAssistantPrompt {
             """
         }
 
+        let provisionalWebSourceLabel = sources.firstIndex(where: {
+            $0.id == AssistantSource.liveWebSearchID
+        }).map { "[S\($0 + 1)]" }
+        let provisionalWebSourceGuidance = provisionalWebSourceLabel.map {
+            "The \($0) Live web search entry is only a provisional tool placeholder; "
+                + "do not cite that placeholder in the final answer."
+        } ?? ""
         let webSearchGuidance = webSearchEnabled
             ? """
 
-            Live web search is enabled for this request. Use the provider's web search tool whenever the question needs current, project-page, repository, or other external information. The provider restores the search results before you answer; base paper-external claims on those results and cite every claim that relies on them as [S1]. Include the concrete URL each relied-on result provides in the citation itself or in a short source list at the end of the answer, for example "... [S1] https://example.com/path". Never invent, guess, or reformat a URL; if the restored results do not expose a URL for a claim, cite [S1] and explicitly say the URL is unavailable. If the search results do not cover part of the question, say so explicitly.
+            Live web search is enabled for this request. Use the provider's web search tool whenever the question needs current, project-page, repository, broader background, or other external information. The provider restores the search results before you answer; base paper-external claims on those results. \(provisionalWebSourceGuidance) For every claim that relies on a web result, include the exact concrete URL supplied by that result directly after the claim. The app will replace each exact URL with its own final sequential source label such as [S1], [S2], and [S3]. Never invent, guess, shorten, or reformat a URL. If a result does not expose a URL for a claim, explicitly say that its URL is unavailable. If the search results do not cover part of the question, say so explicitly.
             """
             : ""
 

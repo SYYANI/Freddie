@@ -593,20 +593,13 @@ struct SelectionAssistantOverlay: View {
             }
             sections.append(turn.answer)
             if turn.result.sources.isEmpty == false {
-                let hasWebResults = turn.result.sources.contains(where: \.isLiveWebSearchResult)
-                let sourceLines: [String] = turn.result.sources.enumerated().compactMap {
-                    sourceIndex, source -> String? in
-                    if source.id == AssistantSource.liveWebSearchID, hasWebResults {
-                        return nil
-                    }
+                let sourceLines: [String] = turn.result.citationSources.enumerated().map {
+                    sourceIndex, source in
                     var location = source.title
                     if let pageIndex = source.pageIndex {
                         location += " (\(AppLocalization.format("Page %d", bundle: bundle, pageIndex + 1)))"
                     }
-                    let evidenceIndex = turn.result.sources.prefix(sourceIndex + 1).filter {
-                        $0.isLiveWebSearchResult == false
-                    }.count
-                    let citationLabel = source.isLiveWebSearchResult ? "S1" : "S\(evidenceIndex)"
+                    let citationLabel = "S\(sourceIndex + 1)"
                     if let urlString = source.urlString, urlString.isEmpty == false {
                         return "- [\(citationLabel)] [\(location)](\(urlString))"
                     }
@@ -836,12 +829,12 @@ struct SelectionAssistantConversationView: View {
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 6) {
-                    ForEach(displayedSources(for: turn.result), id: \.element.id) { sourceIndex, source in
+                    ForEach(Array(turn.result.citationSources.enumerated()), id: \.element.id) { sourceIndex, source in
                         Button {
                             onSourceActivated(source)
                         } label: {
                             Label(
-                                "\(citationLabel(for: source, sourceIndex: sourceIndex, result: turn.result)) · \(source.title)",
+                                "S\(sourceIndex + 1) · \(source.title)",
                                 systemImage: sourceIcon(source)
                             )
                                 .font(.caption)
@@ -869,29 +862,6 @@ struct SelectionAssistantConversationView: View {
         }
     }
 
-    private func displayedSources(
-        for result: SelectionAssistantResult
-    ) -> [(offset: Int, element: AssistantSource)] {
-        let hasWebResults = result.sources.contains(where: \.isLiveWebSearchResult)
-        return Array(result.sources.enumerated()).filter { _, source in
-            source.id != AssistantSource.liveWebSearchID || hasWebResults == false
-        }
-    }
-
-    private func citationLabel(
-        for source: AssistantSource,
-        sourceIndex: Int,
-        result: SelectionAssistantResult
-    ) -> String {
-        if source.isLiveWebSearchResult {
-            return "S1"
-        }
-        let evidenceIndex = result.sources.prefix(sourceIndex + 1).filter {
-            $0.isLiveWebSearchResult == false
-        }.count
-        return "S\(evidenceIndex)"
-    }
-
     private func shouldShowQuestion(at index: Int) -> Bool {
         index > 0 || showsInitialQuestion
     }
@@ -907,7 +877,9 @@ struct SelectionAssistantConversationView: View {
             return AppLocalization.format("Based on %d full-paper passages", bundle: bundle, count)
         case .external:
             let count = result.sources.filter { $0.kind == .external }.count
-            if result.sources.contains(where: { $0.id == AssistantSource.liveWebSearchID }) {
+            if result.sources.contains(where: {
+                $0.id == AssistantSource.liveWebSearchID || $0.isLiveWebSearchResult
+            }) {
                 return String(localized: "Based on paper context and live web search", bundle: bundle)
             }
             return AppLocalization.format("Based on paper context and %d external sources", bundle: bundle, count)

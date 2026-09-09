@@ -11,6 +11,13 @@ struct SelectionAssistantScopeResolver {
         if containsAny(question, terms: externalIntentTerms) {
             return .external
         }
+        if containsAny(question, terms: genericSearchIntentTerms),
+           containsAny(question, terms: currentPaperSearchTerms) {
+            return .fullPaper
+        }
+        if containsAny(question, terms: genericSearchIntentTerms) {
+            return .external
+        }
         if containsAny(question, terms: fullPaperIntentTerms) {
             return .fullPaper
         }
@@ -27,6 +34,18 @@ struct SelectionAssistantScopeResolver {
         "openalex", "semantic scholar", "search the web", "search online", "external source",
         "outside the paper", "other papers", "related papers", "latest research", "latest work",
         "project page", "code repository", "citation network", "publication information"
+    ]
+
+    private static let genericSearchIntentTerms = [
+        "搜索一下", "搜一下", "查一下", "查找一下", "检索一下", "帮我搜索", "帮我搜",
+        "帮我查", "帮我找", "再了解", "进一步了解", "了解更多",
+        "search for", "search this", "look up", "find out more", "learn more",
+        "research this"
+    ]
+
+    private static let currentPaperSearchTerms = [
+        "全文", "本文", "本论文", "这篇论文", "论文中", "文中", "原文中",
+        "full text", "this paper", "in the paper", "within the paper", "in this article"
     ]
 
     private static let fullPaperIntentTerms = [

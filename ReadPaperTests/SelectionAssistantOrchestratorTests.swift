@@ -51,6 +51,39 @@ final class SelectionAssistantOrchestratorTests: XCTestCase {
         )
         XCTAssertEqual(
             SelectionAssistantScopeResolver.resolve(
+                SelectionAssistantRequest(
+                    action: .ask,
+                    selection: "A method",
+                    question: "搜索一下再了解这部分内容",
+                    scope: .automatic
+                )
+            ),
+            .external
+        )
+        XCTAssertEqual(
+            SelectionAssistantScopeResolver.resolve(
+                SelectionAssistantRequest(
+                    action: .ask,
+                    selection: "A method",
+                    question: "在全文中搜索一下这部分的定义",
+                    scope: .automatic
+                )
+            ),
+            .fullPaper
+        )
+        XCTAssertEqual(
+            SelectionAssistantScopeResolver.resolve(
+                SelectionAssistantRequest(
+                    action: .ask,
+                    selection: "A method",
+                    question: "请联网搜索一下其他论文中的解释",
+                    scope: .automatic
+                )
+            ),
+            .external
+        )
+        XCTAssertEqual(
+            SelectionAssistantScopeResolver.resolve(
                 SelectionAssistantRequest(action: .ask, selection: "A claim", scope: .nearby)
             ),
             .nearby
@@ -232,8 +265,9 @@ final class SelectionAssistantOrchestratorTests: XCTestCase {
         let prompt = providerRequest.messages.map(\.content).joined(separator: "\n")
         XCTAssertTrue(prompt.contains("Live web search is enabled for this request"))
         XCTAssertTrue(prompt.contains("[S1] \(AppLocalization.localized("Live web search"))"))
-        XCTAssertTrue(prompt.contains("cite every claim that relies on them as [S1]"))
-        XCTAssertTrue(prompt.contains("Never invent, guess, or reformat a URL"))
+        XCTAssertTrue(prompt.contains("[S1] Live web search entry is only a provisional tool placeholder"))
+        XCTAssertTrue(prompt.contains("include the exact concrete URL"))
+        XCTAssertTrue(prompt.contains("Never invent, guess, shorten, or reformat a URL"))
     }
 
     @MainActor

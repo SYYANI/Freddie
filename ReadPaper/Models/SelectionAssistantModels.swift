@@ -89,6 +89,15 @@ struct SelectionAssistantResult: Codable, Equatable, Sendable {
         self.scope = scope
         self.warnings = warnings
     }
+
+    /// Sources that participate in the citation namespace shown to the user.
+    /// Once concrete web results are available, the provisional live-search
+    /// placeholder is hidden and each URL receives its own sequential label.
+    var citationSources: [AssistantSource] {
+        let hasConcreteWebResults = sources.contains(where: \.isLiveWebSearchResult)
+        guard hasConcreteWebResults else { return sources }
+        return sources.filter { $0.id != AssistantSource.liveWebSearchID }
+    }
 }
 
 struct SelectionAssistantConversationSnapshot: Codable, Equatable, Sendable {

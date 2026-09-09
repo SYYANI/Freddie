@@ -937,7 +937,7 @@ nonisolated struct OpenAICompatibleLLMProvider: Sendable {
     }
 
     private static let defaultWebSearchContinuationPrompt = """
-    The requested web search has completed. Answer the user's original request now based on the search results that were restored above. Cite claims from those results as [S1] and include the concrete URL each relied-on result provides; never invent URLs or sources that are not present in the restored results.
+    The requested web search has completed. Answer the user's original request now based on the search results that were restored above. For every claim that relies on a web result, include that result's exact concrete URL directly after the claim. Do not assign source numbers yourself; the app will replace each URL with its final sequential source label. Never invent, shorten, or reformat URLs or sources that are not present in the restored results.
     """
 
     private static let maximumWebSearchContinuations = 3

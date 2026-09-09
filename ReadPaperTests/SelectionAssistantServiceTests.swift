@@ -83,7 +83,7 @@ final class SelectionAssistantServiceTests: XCTestCase {
         XCTAssertTrue(captured.messages[1].content.contains("SECTION_PATH: 3 Method > 3.2 Decoder"))
     }
 
-    func testWebSearchGuidanceRequiresS1CitationsWithConcreteURLs() {
+    func testWebSearchGuidanceRequiresExactURLsForFinalCitationMapping() {
         let messages = SelectionAssistantPrompt.messages(
             for: SelectionAssistantRequest(
                 action: .ask,
@@ -98,22 +98,32 @@ final class SelectionAssistantServiceTests: XCTestCase {
 
         let system = messages[0].content
         XCTAssertTrue(system.contains("Live web search is enabled for this request"))
-        XCTAssertTrue(system.contains("cite every claim that relies on them as [S1]"))
-        XCTAssertTrue(system.contains("Include the concrete URL each relied-on result provides"))
-        XCTAssertTrue(system.contains("Never invent, guess, or reformat a URL"))
+        XCTAssertTrue(system.contains("include the exact concrete URL"))
+        XCTAssertTrue(system.contains("final sequential source label"))
+        XCTAssertTrue(system.contains("Never invent, guess, shorten, or reformat a URL"))
     }
 
-    func testWebSearchResultsBecomeClickableS1SourceTags() async throws {
+    func testWebSearchResultsReceiveDistinctLabelsAndRemapPaperCitations() async throws {
         let provider = SelectionAssistantProviderSpy(
-            response: "Current information [S1] https://docs.example.test/current",
+            response: "Web A [S1](https://docs.example.test/current). Paper evidence [S2]. Web B: https://news.example.test/details",
             webSearchSources: [
                 LLMWebSearchSource(
                     urlString: "https://docs.example.test/current",
                     title: "Current documentation"
+                )!,
+                LLMWebSearchSource(
+                    urlString: "https://news.example.test/details",
+                    title: "Current news"
                 )!
             ]
         )
         let service = SelectionAssistantService(provider: provider)
+        let paperSource = AssistantSource(
+            id: "paper-source",
+            kind: .paperHTML,
+            title: "Paper section",
+            excerpt: "Paper evidence"
+        )
 
         let result = try await service.perform(
             SelectionAssistantRequest(
@@ -125,14 +135,20 @@ final class SelectionAssistantServiceTests: XCTestCase {
             paperTitle: "Paper",
             targetLanguage: "EN",
             route: makeRoute(),
+            sources: [paperSource],
             webSearchEnabled: true
         )
 
         XCTAssertEqual(result.sources.first?.id, AssistantSource.liveWebSearchID)
-        let webResult = try XCTUnwrap(result.sources.first(where: \.isLiveWebSearchResult))
-        XCTAssertEqual(webResult.title, "docs.example.test")
-        XCTAssertEqual(webResult.excerpt, "Current documentation\nhttps://docs.example.test/current")
-        XCTAssertEqual(webResult.urlString, "https://docs.example.test/current")
+        XCTAssertEqual(result.citationSources.map(\.title), [
+            "docs.example.test",
+            "news.example.test",
+            "Paper section"
+        ])
+        XCTAssertEqual(
+            result.answer,
+            "Web A [S1](https://docs.example.test/current). Paper evidence [S3]. Web B: [S2](https://news.example.test/details)"
+        )
     }
 
     func testQuestionIsRequiredForAskAction() async {
