@@ -127,6 +127,14 @@ final class SelectionAssistantOrchestratorTests: XCTestCase {
             $0.kind == .paperHTML && $0.htmlSelector?.contains("data-rp-assistant-block-id") == true
         }))
         XCTAssertTrue(result.sources.contains(where: { $0.kind == .userNote }))
+        let selectionSource = try XCTUnwrap(result.sources.first(where: { $0.kind == .currentSelection }))
+        XCTAssertEqual(selectionSource.navigationRequest?.quote, "this conclusion")
+        let paperSource = try XCTUnwrap(result.sources.first(where: { $0.kind == .paperHTML }))
+        XCTAssertEqual(paperSource.navigationRequest?.quote, "We validate the conclusion on a held-out benchmark.")
+        XCTAssertTrue(paperSource.excerpt.contains("The setup uses a standard training split."))
+        XCTAssertTrue(paperSource.excerpt.contains("The ablation confirms the same trend."))
+        let noteSource = try XCTUnwrap(result.sources.first(where: { $0.kind == .userNote }))
+        XCTAssertEqual(noteSource.navigationRequest?.quote, "held-out benchmark")
         XCTAssertTrue(progress.contains(.searchingFullText))
         XCTAssertTrue(progress.contains(.generatingAnswer))
 

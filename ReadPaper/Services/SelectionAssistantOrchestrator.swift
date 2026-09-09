@@ -199,7 +199,8 @@ struct SelectionAssistantOrchestrator {
                 excerpt: excerpt,
                 attachmentID: note.attachmentID,
                 pageIndex: note.pageIndex,
-                htmlSelector: note.normalizedHTMLSelector
+                htmlSelector: note.normalizedHTMLSelector,
+                navigationQuote: note.trimmedQuote
             )
         })
         return RetrievedPaperSources(
@@ -223,7 +224,8 @@ struct SelectionAssistantOrchestrator {
                 .joined(separator: "\n\n"),
             attachmentID: selection.attachmentID,
             pageIndex: selection.pageIndex,
-            htmlSelector: selection.htmlSelector
+            htmlSelector: selection.htmlSelector,
+            navigationQuote: selection.trimmedQuote
         )
     }
 
@@ -245,6 +247,7 @@ struct SelectionAssistantOrchestrator {
             attachmentID: hit.block.attachmentID,
             pageIndex: hit.block.pageIndex,
             htmlSelector: hit.block.htmlSelector,
+            navigationQuote: hit.block.text,
             isLowConfidence: hit.block.kind == .pdfPage
         )
     }

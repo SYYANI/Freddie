@@ -53,6 +53,43 @@ final class NoteAnchorTests: XCTestCase {
         XCTAssertNil(PDFNoteNavigationTextMatcher.range(of: "Missing", in: "Page text"))
     }
 
+    func testAssistantSourceUsesDedicatedNavigationQuoteInsteadOfContextExcerpt() throws {
+        let source = AssistantSource(
+            id: "paper-page-2",
+            kind: .paperPDF,
+            title: "Page 2",
+            excerpt: "Previous page context\n\nExact target passage\n\nNext page context",
+            attachmentID: UUID(),
+            pageIndex: 1,
+            navigationQuote: "Exact target passage"
+        )
+
+        let request = try XCTUnwrap(source.navigationRequest)
+        XCTAssertEqual(request.quote, "Exact target passage")
+        XCTAssertNotNil(PDFNoteNavigationTextMatcher.range(
+            of: try XCTUnwrap(request.quote),
+            in: "Heading\nExact target passage\nFooter"
+        ))
+    }
+
+    func testAssistantSourceDecodesLegacyPayloadWithoutNavigationQuote() throws {
+        let data = Data(#"""
+        {
+          "id": "legacy-source",
+          "kind": "paperPDF",
+          "title": "Page 1",
+          "excerpt": "Legacy page excerpt",
+          "sectionPath": [],
+          "pageIndex": 0,
+          "isLowConfidence": true
+        }
+        """#.utf8)
+
+        let source = try JSONDecoder().decode(AssistantSource.self, from: data)
+        XCTAssertNil(source.navigationQuote)
+        XCTAssertEqual(source.navigationRequest?.quote, "Legacy page excerpt")
+    }
+
     func testNoteWithoutAnchorDoesNotProduceNavigationRequest() {
         let note = Note(
             paperID: UUID(),

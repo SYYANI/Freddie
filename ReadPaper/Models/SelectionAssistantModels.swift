@@ -30,6 +30,9 @@ struct AssistantSource: Codable, Equatable, Hashable, Sendable, Identifiable {
     var attachmentID: UUID?
     var pageIndex: Int?
     var htmlSelector: String?
+    /// Exact source text used to locate a transient reader highlight.
+    /// `excerpt` may include neighboring context and is reserved for the model/UI.
+    var navigationQuote: String?
     var urlString: String?
     var isLowConfidence: Bool
 
@@ -42,6 +45,7 @@ struct AssistantSource: Codable, Equatable, Hashable, Sendable, Identifiable {
         attachmentID: UUID? = nil,
         pageIndex: Int? = nil,
         htmlSelector: String? = nil,
+        navigationQuote: String? = nil,
         urlString: String? = nil,
         isLowConfidence: Bool = false
     ) {
@@ -53,6 +57,7 @@ struct AssistantSource: Codable, Equatable, Hashable, Sendable, Identifiable {
         self.attachmentID = attachmentID
         self.pageIndex = pageIndex.map { max(0, $0) }
         self.htmlSelector = htmlSelector?.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.navigationQuote = Self.normalizedOptionalText(navigationQuote)
         self.urlString = urlString?.trimmingCharacters(in: .whitespacesAndNewlines)
         self.isLowConfidence = isLowConfidence
     }
@@ -63,12 +68,21 @@ struct AssistantSource: Codable, Equatable, Hashable, Sendable, Identifiable {
             attachmentID: attachmentID,
             pageIndex: pageIndex,
             htmlSelector: htmlSelector,
-            quote: excerpt
+            quote: navigationQuote ?? excerpt
         )
     }
 
     var isLiveWebSearchResult: Bool {
         id.hasPrefix(Self.liveWebSearchResultIDPrefix)
+    }
+
+    private static func normalizedOptionalText(_ value: String?) -> String? {
+        guard let value else { return nil }
+        let normalized = value
+            .components(separatedBy: .whitespacesAndNewlines)
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+        return normalized.isEmpty ? nil : normalized
     }
 }
 
