@@ -590,16 +590,6 @@
         }
       }
     },
-    "arXiv search failed: %@" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "arXiv 搜索失败：%1$@"
-          }
-        }
-      }
-    },
     "arXiv: %@" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -921,6 +911,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "依据论文上下文和 %d 条外部资料"
+          }
+        }
+      }
+    },
+    "Based on paper context and live web search" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "依据论文上下文和实时联网搜索结果"
           }
         }
       }
@@ -1249,12 +1250,12 @@
         }
       }
     },
-    "Choose separate saved model profiles for translation and reading assistance. External search sends the question and paper identifiers to arXiv, Crossref, OpenAlex, and Semantic Scholar only when you explicitly choose the external scope." : {
+    "Choose separate saved model profiles for translation and reading assistance. When enabled, external questions are answered through the selected model's server-side web search (Responses API), instead of calling academic search services directly." : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "可分别为翻译与阅读助手选择已保存的模型配置。只有在你明确选择外部资料范围时，外部检索才会把问题和论文标识发送给 arXiv、Crossref、OpenAlex 与 Semantic Scholar。"
+            "value" : "可分别为翻译与阅读助手选择已保存的模型配置。启用后，外部资料问题会通过所选模型的 Responses API 服务端联网搜索来回答，不再直接调用学术检索服务。"
           }
         }
       }
@@ -1396,6 +1397,17 @@
         }
       }
     },
+    "Complete Web Search Trace" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "完整联网搜索 Trace"
+          }
+        }
+      }
+    },
     "Configuration" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1467,6 +1479,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "复制链接"
+          }
+        }
+      }
+    },
+    "Copy Trace" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "复制 Trace"
           }
         }
       }
@@ -1580,16 +1603,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "致谢"
-          }
-        }
-      }
-    },
-    "Crossref lookup failed: %@" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Crossref 查找失败：%1$@"
           }
         }
       }
@@ -3217,6 +3230,26 @@
         }
       }
     },
+    "Live web search" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "联网搜索"
+          }
+        }
+      }
+    },
+    "Live web search requires the selected assistant model to use the Responses API." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "当前阅读助手模型不支持实时联网搜索，请选择使用 Responses API 的模型（例如 DeepSeek V4 Flash）。"
+          }
+        }
+      }
+    },
     "Loading title, authors, abstract, and links for %@." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -3549,16 +3582,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Provider “%1$@” 没有保存 API key。"
-          }
-        }
-      }
-    },
-    "No external source was found for this question." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "没有为这个问题找到外部资料。"
           }
         }
       }
@@ -3903,16 +3926,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "保存 API 密钥后即可使用 OpenAI 和 DeepSeek。你也可以添加自定义 Provider，并选择 Responses API 或 Chat Completions。"
-          }
-        }
-      }
-    },
-    "OpenAlex lookup failed: %@" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "OpenAlex 查找失败：%1$@"
           }
         }
       }
@@ -4897,17 +4910,6 @@
         }
       }
     },
-    "Searching external sources..." : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "正在查找外部资料..."
-          }
-        }
-      }
-    },
     "Searching the full paper..." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -4915,6 +4917,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在搜索全文..."
+          }
+        }
+      }
+    },
+    "Searching the web..." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在联网搜索..."
           }
         }
       }
@@ -5041,16 +5054,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "选择"
-          }
-        }
-      }
-    },
-    "Semantic Scholar search failed: %@" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Semantic Scholar 搜索失败：%1$@"
           }
         }
       }
@@ -5365,6 +5368,28 @@
         }
       }
     },
+    "Test server-side web search and capture its complete trace." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "测试服务端联网搜索并记录完整 Trace。"
+          }
+        }
+      }
+    },
+    "Test Web Search" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "测试联网搜索"
+          }
+        }
+      }
+    },
     "Testing model..." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -5383,6 +5408,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在测试 provider..."
+          }
+        }
+      }
+    },
+    "Testing web search..." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在测试联网搜索..."
           }
         }
       }
@@ -5511,6 +5547,16 @@
         }
       }
     },
+    "The model answered, but no web search source URL was returned." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "模型已回答，但没有返回联网搜索来源 URL。"
+          }
+        }
+      }
+    },
     "The model returned an invalid LaTeX translation." : {
       "localizations" : {
         "zh-Hans" : {
@@ -5591,6 +5637,36 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Provider 返回了空响应。"
+          }
+        }
+      }
+    },
+    "The provider returned an incomplete response: %@" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "服务提供方返回了不完整的响应：%1$@"
+          }
+        }
+      }
+    },
+    "The provider returned an incomplete response." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "服务提供方返回了不完整的响应。"
+          }
+        }
+      }
+    },
+    "The web search completed, but the provider did not generate an answer." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "网页搜索已完成，但服务提供方没有生成答案。"
           }
         }
       }
@@ -6440,6 +6516,27 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "网页 URL"
+          }
+        }
+      }
+    },
+    "Web search test passed in %d ms with %d source URLs." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "联网搜索测试通过，耗时 %1$d 毫秒，返回 %2$d 个来源 URL。"
+          }
+        }
+      }
+    },
+    "Web search testing requires the Responses API." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "联网搜索测试要求使用 Responses API。"
           }
         }
       }

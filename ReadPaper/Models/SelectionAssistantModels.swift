@@ -19,6 +19,9 @@ enum AssistantSourceKind: String, Codable, Equatable, Sendable {
 }
 
 struct AssistantSource: Codable, Equatable, Hashable, Sendable, Identifiable {
+    static let liveWebSearchID = "live-web-search"
+    static let liveWebSearchResultIDPrefix = "live-web-search-result-"
+
     var id: String
     var kind: AssistantSourceKind
     var title: String
@@ -62,6 +65,10 @@ struct AssistantSource: Codable, Equatable, Hashable, Sendable, Identifiable {
             htmlSelector: htmlSelector,
             quote: excerpt
         )
+    }
+
+    var isLiveWebSearchResult: Bool {
+        id.hasPrefix(Self.liveWebSearchResultIDPrefix)
     }
 }
 

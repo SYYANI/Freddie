@@ -136,6 +136,12 @@ private struct SettingsForm: View {
     @State private var providerStatusMessage: String?
     @State private var providerOutputPreview: String?
     @State private var isTestingProvider = false
+    @State private var providerWebSearchStatusMessage: String?
+    @State private var providerWebSearchOutputPreview: String?
+    @State private var providerWebSearchSources: [LLMWebSearchSource] = []
+    @State private var providerWebSearchTrace = ""
+    @State private var showsProviderWebSearchTrace = false
+    @State private var isTestingProviderWebSearch = false
 
     @State private var selectedModelID: UUID?
     @State private var modelProviderID: UUID?
@@ -634,7 +640,7 @@ private struct SettingsForm: View {
                         isOn: $externalAssistantSearchEnabled
                     )
 
-                    Text("Choose separate saved model profiles for translation and reading assistance. External search sends the question and paper identifiers to arXiv, Crossref, OpenAlex, and Semantic Scholar only when you explicitly choose the external scope.", bundle: bundle)
+                    Text("Choose separate saved model profiles for translation and reading assistance. When enabled, external questions are answered through the selected model's server-side web search (Responses API), instead of calling academic search services directly.", bundle: bundle)
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
@@ -998,7 +1004,25 @@ private struct SettingsForm: View {
                     ) {
                         testProvider()
                     }
-                    .disabled(isTestingProvider)
+                    .disabled(isTestingProvider || isTestingProviderWebSearch)
+
+                    Button(
+                        isTestingProviderWebSearch
+                            ? String(localized: "Testing web search...", bundle: bundle)
+                            : String(localized: "Test Web Search", bundle: bundle)
+                    ) {
+                        testProviderWebSearch()
+                    }
+                    .disabled(
+                        isTestingProvider
+                            || isTestingProviderWebSearch
+                            || providerAPIStyle != .responses
+                    )
+                    .help(
+                        providerAPIStyle == .responses
+                            ? String(localized: "Test server-side web search and capture its complete trace.", bundle: bundle)
+                            : String(localized: "Web search testing requires the Responses API.", bundle: bundle)
+                    )
                 }
 
                 if let providerStatusMessage {
@@ -1011,6 +1035,70 @@ private struct SettingsForm: View {
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                         .textSelection(.enabled)
+                }
+
+                if let providerWebSearchStatusMessage {
+                    statusLabel(providerWebSearchStatusMessage)
+                }
+
+                if let providerWebSearchOutputPreview,
+                   providerWebSearchOutputPreview.isEmpty == false {
+                    Text(providerWebSearchOutputPreview)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .textSelection(.enabled)
+                }
+
+                if providerWebSearchSources.isEmpty == false {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 6) {
+                            ForEach(providerWebSearchSources, id: \.urlString) { source in
+                                Button {
+                                    guard let url = URL(string: source.urlString) else { return }
+                                    NSWorkspace.shared.open(url)
+                                } label: {
+                                    Label(
+                                        URL(string: source.urlString)?.host ?? source.urlString,
+                                        systemImage: "network"
+                                    )
+                                    .font(.caption)
+                                    .lineLimit(1)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 5)
+                                    .background(Color.primary.opacity(0.06), in: Capsule())
+                                }
+                                .buttonStyle(.plain)
+                                .help(source.title ?? source.urlString)
+                            }
+                        }
+                    }
+                }
+
+                if providerWebSearchTrace.isEmpty == false {
+                    DisclosureGroup(
+                        String(localized: "Complete Web Search Trace", bundle: bundle),
+                        isExpanded: $showsProviderWebSearchTrace
+                    ) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            ScrollView([.horizontal, .vertical]) {
+                                Text(providerWebSearchTrace)
+                                    .font(.system(.caption, design: .monospaced))
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .textSelection(.enabled)
+                            }
+                            .frame(minHeight: 100, maxHeight: 280)
+
+                            Button(String(localized: "Copy Trace", bundle: bundle)) {
+                                NSPasteboard.general.clearContents()
+                                NSPasteboard.general.setString(
+                                    providerWebSearchTrace,
+                                    forType: .string
+                                )
+                            }
+                        }
+                        .padding(.top, 6)
+                    }
                 }
             }
         }
@@ -1540,6 +1628,7 @@ private struct SettingsForm: View {
         providerHasStoredAPIKey = hasStoredAPIKey(ref: provider.apiKeyRef)
         providerStatusMessage = nil
         providerOutputPreview = nil
+        resetProviderWebSearchTestState()
     }
 
     private func applySelectedModel() {
@@ -1576,6 +1665,7 @@ private struct SettingsForm: View {
         providerHasStoredAPIKey = false
         providerStatusMessage = nil
         providerOutputPreview = nil
+        resetProviderWebSearchTestState()
     }
 
     private func resetModelForm() {
@@ -1656,6 +1746,7 @@ private struct SettingsForm: View {
             providerIDsWithStoredAPIKeys.insert(provider.id)
             providerStatusMessage = String(localized: "Provider saved.", bundle: bundle)
             providerOutputPreview = nil
+            resetProviderWebSearchTestState()
         } catch {
             providerStatusMessage = AppLocalization.errorMessage(error, bundle: bundle)
         }
@@ -1742,6 +1833,65 @@ private struct SettingsForm: View {
                 providerOutputPreview = nil
             }
         }
+    }
+
+    private func testProviderWebSearch() {
+        isTestingProviderWebSearch = true
+        providerWebSearchStatusMessage = String(localized: "Testing web search...", bundle: bundle)
+        providerWebSearchOutputPreview = nil
+        providerWebSearchSources = []
+        providerWebSearchTrace = ""
+        showsProviderWebSearchTrace = true
+
+        Task { @MainActor in
+            defer { isTestingProviderWebSearch = false }
+
+            do {
+                let apiKey: String
+                let trimmedAPIKey = providerAPIKey.trimmingCharacters(in: .whitespacesAndNewlines)
+                if trimmedAPIKey.isEmpty == false {
+                    apiKey = trimmedAPIKey
+                } else if let selectedProvider {
+                    apiKey = try loadStoredAPIKey(ref: selectedProvider.apiKeyRef)
+                } else {
+                    throw LLMProviderValidationError.emptyAPIKey
+                }
+
+                let result = try await validator.testWebSearch(
+                    baseURL: providerBaseURL,
+                    apiStyle: providerAPIStyle,
+                    apiKey: apiKey,
+                    model: providerTestModel,
+                    onTraceUpdated: { trace in
+                        await MainActor.run {
+                            providerWebSearchTrace = trace
+                        }
+                    }
+                )
+
+                providerWebSearchStatusMessage = AppLocalization.format(
+                    "Web search test passed in %d ms with %d source URLs.",
+                    bundle: bundle,
+                    result.latencyMs,
+                    result.sources.count
+                )
+                providerWebSearchOutputPreview = result.outputPreview
+                providerWebSearchSources = result.sources
+                providerWebSearchTrace = result.trace
+            } catch {
+                providerWebSearchStatusMessage = AppLocalization.errorMessage(error, bundle: bundle)
+                providerWebSearchOutputPreview = nil
+                providerWebSearchSources = []
+            }
+        }
+    }
+
+    private func resetProviderWebSearchTestState() {
+        providerWebSearchStatusMessage = nil
+        providerWebSearchOutputPreview = nil
+        providerWebSearchSources = []
+        providerWebSearchTrace = ""
+        showsProviderWebSearchTrace = false
     }
 
     private func saveModel() {

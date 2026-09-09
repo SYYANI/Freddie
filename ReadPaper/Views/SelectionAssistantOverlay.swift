@@ -1,14 +1,24 @@
 import AppKit
 import SwiftUI
 
+private enum SelectionAssistantLayout {
+    static let overlayMaximumWidth: CGFloat = 620
+    static let resultCardMaximumWidth: CGFloat = 600
+    static let questionFieldWidth: CGFloat = 360
+    static let singleTurnConversationMaximumHeight: CGFloat = 360
+    static let multiTurnConversationMaximumHeight: CGFloat = 600
+}
+
 struct SelectionAssistantOverlay: View {
     @Environment(\.localizationBundle) private var bundle
 
     let selection: NoteSelectionContext
     let progress: SelectionAssistantProgress?
-    let partialAnswer: String
     let initialConversation: SelectionAssistantConversationSnapshot?
-    let perform: @MainActor (SelectionAssistantRequest) async throws -> SelectionAssistantResult
+    let perform: @MainActor (
+        SelectionAssistantRequest,
+        @escaping @MainActor (String) -> Void
+    ) async throws -> SelectionAssistantResult
     let saveAsNote: @MainActor (NoteSelectionContext, String, UUID?) throws -> UUID
     let onSourceActivated: @MainActor (AssistantSource) -> Void
     let onConversationChanged: @MainActor (SelectionAssistantConversationSnapshot) -> Void
@@ -29,6 +39,7 @@ struct SelectionAssistantOverlay: View {
     @State private var conversationScrollRequest: SelectionAssistantConversationScrollRequest?
     @State private var task: Task<Void, Never>?
     @State private var completedRequests: [SelectionAssistantRequest] = []
+    @State private var partialAnswer = ""
     @FocusState private var isQuestionFieldFocused: Bool
     @FocusState private var isFollowUpFieldFocused: Bool
 
@@ -41,6 +52,12 @@ struct SelectionAssistantOverlay: View {
             if activeAction != nil {
                 resultCard
                     .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .bottom)))
+                    .simultaneousGesture(
+                        DragGesture(minimumDistance: 0)
+                            .onChanged { _ in
+                                onInteractionBegan()
+                            }
+                    )
             }
 
             actionCapsule
@@ -51,7 +68,7 @@ struct SelectionAssistantOverlay: View {
                         }
                 )
         }
-        .frame(maxWidth: 390)
+        .frame(maxWidth: SelectionAssistantLayout.overlayMaximumWidth)
         .padding(.horizontal, 18)
         .padding(.bottom, 18)
         .animation(layoutAnimation, value: activeAction)
@@ -97,7 +114,7 @@ struct SelectionAssistantOverlay: View {
             .padding(.leading, 14)
             .padding(.trailing, 6)
             .padding(.vertical, 6)
-            .frame(width: 270)
+            .frame(width: SelectionAssistantLayout.questionFieldWidth)
             .selectionAssistantMaterial(cornerRadius: 24)
         } else {
             HStack(spacing: 4) {
@@ -235,7 +252,7 @@ struct SelectionAssistantOverlay: View {
         .font(.system(size: 14))
         .lineSpacing(3)
         .padding(16)
-        .frame(maxWidth: 370, alignment: .leading)
+        .frame(maxWidth: SelectionAssistantLayout.resultCardMaximumWidth, alignment: .leading)
         .selectionAssistantMaterial(cornerRadius: 14)
     }
 
@@ -302,6 +319,7 @@ struct SelectionAssistantOverlay: View {
             saveErrorText = nil
             isSavedAsNote = false
             savedNoteID = nil
+            partialAnswer = ""
             isWorking = true
         }
 
@@ -314,7 +332,9 @@ struct SelectionAssistantOverlay: View {
         )
         task = Task { @MainActor in
             do {
-                let result = try await perform(request)
+                let result = try await perform(request) { partialAnswer in
+                    self.partialAnswer = partialAnswer
+                }
                 guard Task.isCancelled == false else { return }
                 withAnimation(layoutAnimation) {
                     conversation = [SelectionAssistantConversationTurn(
@@ -355,6 +375,7 @@ struct SelectionAssistantOverlay: View {
             errorText = nil
             saveErrorText = nil
             isSavedAsNote = false
+            partialAnswer = ""
             isWorking = true
         }
 
@@ -369,7 +390,9 @@ struct SelectionAssistantOverlay: View {
         )
         task = Task { @MainActor in
             do {
-                let result = try await perform(request)
+                let result = try await perform(request) { partialAnswer in
+                    self.partialAnswer = partialAnswer
+                }
                 guard Task.isCancelled == false else { return }
                 withAnimation(layoutAnimation) {
                     conversation.append(SelectionAssistantConversationTurn(
@@ -414,6 +437,7 @@ struct SelectionAssistantOverlay: View {
             saveErrorText = nil
             isSavedAsNote = false
             savedNoteID = nil
+            partialAnswer = ""
         }
     }
 
@@ -429,6 +453,7 @@ struct SelectionAssistantOverlay: View {
             pendingQuestion = nil
             isWorking = false
             errorText = String(localized: "Generation stopped.", bundle: bundle)
+            partialAnswer = ""
         }
     }
 
@@ -454,12 +479,15 @@ struct SelectionAssistantOverlay: View {
             errorText = nil
             saveErrorText = nil
             isSavedAsNote = false
+            partialAnswer = ""
             isWorking = true
         }
 
         task = Task { @MainActor in
             do {
-                let result = try await perform(request)
+                let result = try await perform(request) { partialAnswer in
+                    self.partialAnswer = partialAnswer
+                }
                 guard Task.isCancelled == false else { return }
                 withAnimation(layoutAnimation) {
                     conversation.append(SelectionAssistantConversationTurn(
@@ -495,6 +523,7 @@ struct SelectionAssistantOverlay: View {
         completedRequests = []
         pendingQuestion = nil
         errorText = nil
+        partialAnswer = ""
         conversationScrollRequest = .init(turnIndex: max(0, conversation.count - 1))
     }
 
@@ -540,7 +569,9 @@ struct SelectionAssistantOverlay: View {
     }
 
     private var conversationMaximumHeight: CGFloat {
-        isMultiTurnConversation ? 480 : 260
+        isMultiTurnConversation
+            ? SelectionAssistantLayout.multiTurnConversationMaximumHeight
+            : SelectionAssistantLayout.singleTurnConversationMaximumHeight
     }
 
     private func initialInstruction(for action: SelectionAssistantAction) -> String {
@@ -562,15 +593,24 @@ struct SelectionAssistantOverlay: View {
             }
             sections.append(turn.answer)
             if turn.result.sources.isEmpty == false {
-                let sourceLines = turn.result.sources.enumerated().map { sourceIndex, source in
+                let hasWebResults = turn.result.sources.contains(where: \.isLiveWebSearchResult)
+                let sourceLines: [String] = turn.result.sources.enumerated().compactMap {
+                    sourceIndex, source -> String? in
+                    if source.id == AssistantSource.liveWebSearchID, hasWebResults {
+                        return nil
+                    }
                     var location = source.title
                     if let pageIndex = source.pageIndex {
                         location += " (\(AppLocalization.format("Page %d", bundle: bundle, pageIndex + 1)))"
                     }
+                    let evidenceIndex = turn.result.sources.prefix(sourceIndex + 1).filter {
+                        $0.isLiveWebSearchResult == false
+                    }.count
+                    let citationLabel = source.isLiveWebSearchResult ? "S1" : "S\(evidenceIndex)"
                     if let urlString = source.urlString, urlString.isEmpty == false {
-                        return "- [S\(sourceIndex + 1)] [\(location)](\(urlString))"
+                        return "- [\(citationLabel)] [\(location)](\(urlString))"
                     }
-                    return "- [S\(sourceIndex + 1)] \(location)"
+                    return "- [\(citationLabel)] \(location)"
                 }
                 sections.append("### \(String(localized: "Sources", bundle: bundle))\n\(sourceLines.joined(separator: "\n"))")
             }
@@ -603,7 +643,7 @@ struct SelectionAssistantOverlay: View {
         case .foundPaperSources(let count):
             return AppLocalization.format("Found %d relevant passages.", bundle: bundle, count)
         case .searchingExternalSources:
-            return String(localized: "Searching external sources...", bundle: bundle)
+            return String(localized: "Searching the web...", bundle: bundle)
         case .generatingAnswer, nil:
             break
         }
@@ -734,6 +774,11 @@ struct SelectionAssistantConversationView: View {
                         proxy.scrollTo(target, anchor: .bottom)
                     }
                 } else {
+                    // Static Markdown rendering updates asynchronously and can
+                    // produce a few sequential geometry changes. Wait for those
+                    // updates to settle before animating to the requested target.
+                    try? await Task.sleep(for: .milliseconds(50))
+                    guard Task.isCancelled == false else { return }
                     withAnimation(.easeOut(duration: 0.22)) {
                         proxy.scrollTo(target, anchor: target == .bottom ? .bottom : .top)
                     }
@@ -759,9 +804,8 @@ struct SelectionAssistantConversationView: View {
                 }
                 .transition(.opacity)
             } else {
-                Text(partialAnswer)
+                ReadPaperMarkdownView(markdown: partialAnswer)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .textSelection(.enabled)
             }
         } else if let errorText {
             Text(errorText)
@@ -782,9 +826,8 @@ struct SelectionAssistantConversationView: View {
                 .foregroundStyle(.secondary)
         }
 
-        Text(turn.answer)
+        ReadPaperMarkdownView(markdown: turn.answer)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .textSelection(.enabled)
 
         if turn.result.sources.isEmpty == false {
             Text(sourceSummary(for: turn.result))
@@ -793,11 +836,14 @@ struct SelectionAssistantConversationView: View {
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 6) {
-                    ForEach(Array(turn.result.sources.enumerated()), id: \.element.id) { sourceIndex, source in
+                    ForEach(displayedSources(for: turn.result), id: \.element.id) { sourceIndex, source in
                         Button {
                             onSourceActivated(source)
                         } label: {
-                            Label("S\(sourceIndex + 1) · \(source.title)", systemImage: sourceIcon(source))
+                            Label(
+                                "\(citationLabel(for: source, sourceIndex: sourceIndex, result: turn.result)) · \(source.title)",
+                                systemImage: sourceIcon(source)
+                            )
                                 .font(.caption)
                                 .lineLimit(1)
                                 .padding(.horizontal, 8)
@@ -823,6 +869,29 @@ struct SelectionAssistantConversationView: View {
         }
     }
 
+    private func displayedSources(
+        for result: SelectionAssistantResult
+    ) -> [(offset: Int, element: AssistantSource)] {
+        let hasWebResults = result.sources.contains(where: \.isLiveWebSearchResult)
+        return Array(result.sources.enumerated()).filter { _, source in
+            source.id != AssistantSource.liveWebSearchID || hasWebResults == false
+        }
+    }
+
+    private func citationLabel(
+        for source: AssistantSource,
+        sourceIndex: Int,
+        result: SelectionAssistantResult
+    ) -> String {
+        if source.isLiveWebSearchResult {
+            return "S1"
+        }
+        let evidenceIndex = result.sources.prefix(sourceIndex + 1).filter {
+            $0.isLiveWebSearchResult == false
+        }.count
+        return "S\(evidenceIndex)"
+    }
+
     private func shouldShowQuestion(at index: Int) -> Bool {
         index > 0 || showsInitialQuestion
     }
@@ -838,6 +907,9 @@ struct SelectionAssistantConversationView: View {
             return AppLocalization.format("Based on %d full-paper passages", bundle: bundle, count)
         case .external:
             let count = result.sources.filter { $0.kind == .external }.count
+            if result.sources.contains(where: { $0.id == AssistantSource.liveWebSearchID }) {
+                return String(localized: "Based on paper context and live web search", bundle: bundle)
+            }
             return AppLocalization.format("Based on paper context and %d external sources", bundle: bundle, count)
         }
     }

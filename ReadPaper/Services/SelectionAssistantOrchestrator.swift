@@ -11,7 +11,7 @@ struct SelectionAssistantScopeResolver {
         if containsAny(question, terms: externalIntentTerms) {
             return .external
         }
-        if request.action == .ask || containsAny(question, terms: fullPaperIntentTerms) {
+        if containsAny(question, terms: fullPaperIntentTerms) {
             return .fullPaper
         }
         return .nearby
@@ -41,18 +41,15 @@ struct SelectionAssistantScopeResolver {
 struct SelectionAssistantOrchestrator {
     private let assistantService: SelectionAssistantService
     private let fullTextSearchService: PaperFullTextSearchService
-    private let externalSearchService: any SelectionAssistantExternalSearching
     private let userDefaults: UserDefaults
 
     init(
         assistantService: SelectionAssistantService = SelectionAssistantService(),
         fullTextSearchService: PaperFullTextSearchService = PaperFullTextSearchService(),
-        externalSearchService: any SelectionAssistantExternalSearching = SelectionAssistantExternalSearchService.shared,
         userDefaults: UserDefaults = .standard
     ) {
         self.assistantService = assistantService
         self.fullTextSearchService = fullTextSearchService
-        self.externalSearchService = externalSearchService
         self.userDefaults = userDefaults
     }
 
@@ -76,72 +73,56 @@ struct SelectionAssistantOrchestrator {
         let userNotes = Self.userNotes(notes)
         var sources = [Self.selectionSource(selection)]
         var warnings: [String] = []
+        var webSearchEnabled = false
         let query = resolvedRequest.question ?? resolvedRequest.selection
 
         if resolvedRequest.scope == .fullPaper || resolvedRequest.scope == .external {
             try Task.checkCancellation()
             onProgress?(.searchingFullText)
-            let paperSources = try retrievePaperSources(
+            let retrievedPaperSources = try retrievePaperSources(
                 query: query,
                 paper: paper,
                 attachments: attachments,
                 notes: notes
             )
+            let paperSources = retrievedPaperSources.sources
             sources.append(contentsOf: paperSources)
             onProgress?(.foundPaperSources(paperSources.filter {
                 $0.kind == .paperHTML || $0.kind == .paperPDF
             }.count))
             await Task.yield()
 
-            if paperSources.contains(where: { $0.kind == .paperHTML || $0.kind == .paperPDF }) == false {
+            if resolvedRequest.scope == .fullPaper,
+               retrievedPaperSources.didAttemptFullTextSearch,
+               paperSources.contains(where: { $0.kind == .paperHTML || $0.kind == .paperPDF }) == false {
                 warnings.append(AppLocalization.localized("No supporting passage was found in this paper."))
             }
         }
 
         if resolvedRequest.scope == .external {
             try Task.checkCancellation()
-            guard userDefaults.bool(forKey: SelectionAssistantPreferences.externalSearchEnabledKey) else {
+            if userDefaults.bool(forKey: SelectionAssistantPreferences.externalSearchEnabledKey) == false {
                 warnings.append(AppLocalization.localized("External search is disabled in Settings."))
-                onProgress?(.generatingAnswer)
+            } else {
+                onProgress?(.searchingExternalSources)
                 await Task.yield()
-                return try await assistantService.perform(
-                    resolvedRequest,
-                    paperTitle: paper.title,
-                    targetLanguage: targetLanguage,
-                    route: route,
-                    paperMetadata: paperMetadata,
-                    userNotes: userNotes,
-                    sources: sources,
-                    warnings: warnings,
-                    onPartialAnswer: onPartialAnswer
-                )
-            }
-
-            onProgress?(.searchingExternalSources)
-            await Task.yield()
-            let externalResult = await externalSearchService.search(
-                query: query,
-                paper: SelectionAssistantPaperContext(
-                    id: paper.id,
-                    title: paper.title,
-                    abstractText: paper.abstractText,
-                    authors: paper.authors,
-                    arxivID: paper.arxivID,
-                    arxivVersion: paper.arxivVersion,
-                    doi: paper.doi
-                ),
-                limit: 6
-            )
-            try Task.checkCancellation()
-            sources.append(contentsOf: externalResult.sources)
-            warnings.append(contentsOf: externalResult.warnings)
-            if externalResult.sources.isEmpty {
-                warnings.append(AppLocalization.localized("No external source was found for this question."))
+                if route.snapshot.apiStyle == .responses {
+                    webSearchEnabled = true
+                } else {
+                    warnings.append(AppLocalization.localized(
+                        "Live web search requires the selected assistant model to use the Responses API."
+                    ))
+                }
             }
         }
 
         try Task.checkCancellation()
-        onProgress?(.generatingAnswer)
+        // With server-side web search the progress stage above stays active
+        // until output text starts; marking this request as "generating" would
+        // hide the search stage behind the final answer spinner.
+        if webSearchEnabled == false {
+            onProgress?(.generatingAnswer)
+        }
         await Task.yield()
         return try await assistantService.perform(
             resolvedRequest,
@@ -152,6 +133,7 @@ struct SelectionAssistantOrchestrator {
             userNotes: userNotes,
             sources: Self.uniqueSources(sources),
             warnings: Self.uniqueWarnings(warnings),
+            webSearchEnabled: webSearchEnabled,
             onPartialAnswer: onPartialAnswer
         )
     }
@@ -161,11 +143,18 @@ struct SelectionAssistantOrchestrator {
         paper: Paper,
         attachments: [PaperAttachment],
         notes: [Note]
-    ) throws -> [AssistantSource] {
+    ) throws -> RetrievedPaperSources {
         var sources: [AssistantSource] = []
+        var didAttemptFullTextSearch = false
         if let index = try fullTextSearchService.loadOrRebuild(paper: paper, attachments: attachments) {
-            let hits = fullTextSearchService.search(query: query, in: index, topK: 4, adjacentBlockCount: 1)
-            sources.append(contentsOf: hits.map(Self.source(from:)))
+            didAttemptFullTextSearch = PaperFullTextSearchService.canKeywordMatch(
+                query: query,
+                in: index
+            )
+            if didAttemptFullTextSearch {
+                let hits = fullTextSearchService.search(query: query, in: index, topK: 4, adjacentBlockCount: 1)
+                sources.append(contentsOf: hits.map(Self.source(from:)))
+            }
         }
 
         let rankedNotes = notes.compactMap { note -> (Note, Double)? in
@@ -194,7 +183,15 @@ struct SelectionAssistantOrchestrator {
                 htmlSelector: note.normalizedHTMLSelector
             )
         })
-        return sources
+        return RetrievedPaperSources(
+            sources: sources,
+            didAttemptFullTextSearch: didAttemptFullTextSearch
+        )
+    }
+
+    private struct RetrievedPaperSources {
+        var sources: [AssistantSource]
+        var didAttemptFullTextSearch: Bool
     }
 
     private static func selectionSource(_ selection: NoteSelectionContext) -> AssistantSource {

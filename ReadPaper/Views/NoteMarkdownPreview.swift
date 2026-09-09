@@ -323,91 +323,9 @@ struct NoteMarkdownPreviewView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 10) {
-                ForEach(Array(NoteMarkdownRenderer.blocks(for: markdown).enumerated()), id: \.offset) { _, block in
-                    blockView(block)
-                }
-            }
+            ReadPaperMarkdownView(markdown: markdown)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(10)
-        }
-        .textSelection(.enabled)
-    }
-
-    @ViewBuilder
-    private func blockView(_ block: NoteMarkdownRenderer.Block) -> some View {
-        switch block {
-        case let .heading(level, text):
-            inlineText(text)
-                .font(headingFont(for: level))
-                .fontWeight(.semibold)
-                .fixedSize(horizontal: false, vertical: true)
-
-        case let .paragraph(text):
-            inlineText(text)
-                .fixedSize(horizontal: false, vertical: true)
-
-        case let .list(items):
-            VStack(alignment: .leading, spacing: 6) {
-                ForEach(Array(items.enumerated()), id: \.offset) { _, item in
-                    HStack(alignment: .top, spacing: 8) {
-                        Text("\u{2022}")
-                            .font(.body.weight(.semibold))
-                        inlineText(item)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-            }
-
-        case let .quote(lines):
-            HStack(alignment: .top, spacing: 10) {
-                RoundedRectangle(cornerRadius: 999, style: .continuous)
-                    .fill(Color.secondary.opacity(0.28))
-                    .frame(width: 4)
-
-                VStack(alignment: .leading, spacing: 4) {
-                    ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
-                        inlineText(line)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-
-        case let .code(text):
-            ScrollView(.horizontal) {
-                Text(verbatim: text)
-                    .font(.system(.callout, design: .monospaced))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(10)
-            }
-            .background(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(Color(nsColor: .controlBackgroundColor))
-            )
-        }
-    }
-
-    private func inlineText(_ text: String) -> Text {
-        if let attributed = NoteMarkdownRenderer.inlineAttributedString(text) {
-            return Text(attributed)
-        }
-
-        return Text(verbatim: text)
-    }
-
-    private func headingFont(for level: Int) -> Font {
-        switch level {
-        case 1:
-            return .title3
-        case 2:
-            return .headline
-        case 3:
-            return .subheadline
-        default:
-            return .body
         }
     }
 }

@@ -83,6 +83,58 @@ final class SelectionAssistantServiceTests: XCTestCase {
         XCTAssertTrue(captured.messages[1].content.contains("SECTION_PATH: 3 Method > 3.2 Decoder"))
     }
 
+    func testWebSearchGuidanceRequiresS1CitationsWithConcreteURLs() {
+        let messages = SelectionAssistantPrompt.messages(
+            for: SelectionAssistantRequest(
+                action: .ask,
+                selection: "a claim",
+                question: "Find the project page and repository.",
+                scope: .external
+            ),
+            paperTitle: "Paper",
+            targetLanguage: "EN",
+            webSearchEnabled: true
+        )
+
+        let system = messages[0].content
+        XCTAssertTrue(system.contains("Live web search is enabled for this request"))
+        XCTAssertTrue(system.contains("cite every claim that relies on them as [S1]"))
+        XCTAssertTrue(system.contains("Include the concrete URL each relied-on result provides"))
+        XCTAssertTrue(system.contains("Never invent, guess, or reformat a URL"))
+    }
+
+    func testWebSearchResultsBecomeClickableS1SourceTags() async throws {
+        let provider = SelectionAssistantProviderSpy(
+            response: "Current information [S1] https://docs.example.test/current",
+            webSearchSources: [
+                LLMWebSearchSource(
+                    urlString: "https://docs.example.test/current",
+                    title: "Current documentation"
+                )!
+            ]
+        )
+        let service = SelectionAssistantService(provider: provider)
+
+        let result = try await service.perform(
+            SelectionAssistantRequest(
+                action: .ask,
+                selection: "a claim",
+                question: "Search for current documentation.",
+                scope: .external
+            ),
+            paperTitle: "Paper",
+            targetLanguage: "EN",
+            route: makeRoute(),
+            webSearchEnabled: true
+        )
+
+        XCTAssertEqual(result.sources.first?.id, AssistantSource.liveWebSearchID)
+        let webResult = try XCTUnwrap(result.sources.first(where: \.isLiveWebSearchResult))
+        XCTAssertEqual(webResult.title, "docs.example.test")
+        XCTAssertEqual(webResult.excerpt, "Current documentation\nhttps://docs.example.test/current")
+        XCTAssertEqual(webResult.urlString, "https://docs.example.test/current")
+    }
+
     func testQuestionIsRequiredForAskAction() async {
         let provider = SelectionAssistantProviderSpy(response: "unused")
         let service = SelectionAssistantService(provider: provider)
@@ -167,15 +219,21 @@ final class SelectionAssistantServiceTests: XCTestCase {
 
 private actor SelectionAssistantProviderSpy: SelectionAssistantLLMCompleting {
     private let response: String
+    private let webSearchSources: [LLMWebSearchSource]
     private var requests: [LLMCompletionRequest] = []
 
-    init(response: String) {
+    init(response: String, webSearchSources: [LLMWebSearchSource] = []) {
         self.response = response
+        self.webSearchSources = webSearchSources
     }
 
     func complete(request: LLMCompletionRequest) async throws -> LLMCompletionResponse {
         requests.append(request)
-        return LLMCompletionResponse(text: response, resolvedEndpoint: nil)
+        return LLMCompletionResponse(
+            text: response,
+            resolvedEndpoint: nil,
+            webSearchSources: webSearchSources
+        )
     }
 
     func lastRequest() -> LLMCompletionRequest? {

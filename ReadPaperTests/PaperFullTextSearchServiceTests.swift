@@ -67,6 +67,35 @@ final class PaperFullTextSearchServiceTests: XCTestCase {
         XCTAssertTrue(rebuilt.blocks.contains(where: { $0.text.contains("new external dataset") }))
     }
 
+    @MainActor
+    func testKeywordMatchPotentialRecognizesCrossLanguageMismatch() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("PaperFullTextSearchServiceTests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let fileStore = PaperFileStore(applicationSupportDirectory: root)
+        let paper = Paper(title: "Structured Paper")
+        paper.localDirectoryPath = try fileStore.directory(for: paper.id).path
+        let htmlURL = try fileStore.write(Data(Self.sampleHTML.utf8), named: "paper.html", for: paper.id)
+        let attachment = PaperAttachment(
+            paperID: paper.id,
+            kind: .html,
+            source: .webPage,
+            filename: "paper.html",
+            filePath: htmlURL.path
+        )
+        let service = PaperFullTextSearchService(fileStore: fileStore)
+        let index = try XCTUnwrap(service.rebuild(paper: paper, attachments: [attachment]))
+
+        XCTAssertTrue(PaperFullTextSearchService.canKeywordMatch(
+            query: "held-out benchmark validation",
+            in: index
+        ))
+        XCTAssertFalse(PaperFullTextSearchService.canKeywordMatch(
+            query: "作者使用了什么方法",
+            in: index
+        ))
+    }
+
     private static let sampleHTML = """
     <!doctype html>
     <html><head><meta charset="UTF-8"></head><body>

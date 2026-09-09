@@ -93,7 +93,6 @@ struct ReaderPaneView: View {
     @State private var isSelectionAssistantPinned = false
     @State private var selectionAssistantDismissTask: Task<Void, Never>?
     @State private var selectionAssistantProgress: SelectionAssistantProgress?
-    @State private var selectionAssistantPartialAnswer = ""
     @State private var selectionAssistantInitialConversation: SelectionAssistantConversationSnapshot?
     @State private var selectionAssistantHistoryAnchors: [SelectionAssistantHistoryAnchor] = []
     @State private var htmlSelectionHighlightResetToken = 0
@@ -1233,7 +1232,6 @@ struct ReaderPaneView: View {
                 SelectionAssistantOverlay(
                     selection: selection,
                     progress: selectionAssistantProgress,
-                    partialAnswer: selectionAssistantPartialAnswer,
                     initialConversation: selectionAssistantInitialConversation,
                     perform: performSelectionAssistantRequest,
                     saveAsNote: onSaveSelectionAssistantNote,
@@ -1251,7 +1249,8 @@ struct ReaderPaneView: View {
 
     @MainActor
     private func performSelectionAssistantRequest(
-        _ request: SelectionAssistantRequest
+        _ request: SelectionAssistantRequest,
+        onPartialAnswer: @escaping @MainActor (String) -> Void
     ) async throws -> SelectionAssistantResult {
         guard let paper, let settings else {
             throw LLMProviderError.invalidConfiguration(
@@ -1263,10 +1262,8 @@ struct ReaderPaneView: View {
             modelContext: modelContext
         )
         selectionAssistantProgress = .collectingPaperContext
-        selectionAssistantPartialAnswer = ""
         defer {
             selectionAssistantProgress = nil
-            selectionAssistantPartialAnswer = ""
         }
         guard let selection = selectionAssistantSelection else {
             throw LLMProviderError.invalidConfiguration(
@@ -1285,9 +1282,7 @@ struct ReaderPaneView: View {
                 selectionAssistantProgress = progress
             },
             onPartialAnswer: { partialAnswer in
-                await MainActor.run {
-                    selectionAssistantPartialAnswer = partialAnswer
-                }
+                await onPartialAnswer(partialAnswer)
             }
         )
     }
@@ -2354,7 +2349,6 @@ struct ReaderPaneView: View {
         selectionAssistantDismissTask?.cancel()
         selectionAssistantDismissTask = nil
         selectionAssistantProgress = nil
-        selectionAssistantPartialAnswer = ""
         selectionAssistantInitialConversation = nil
         isSelectionAssistantPinned = false
         selectionAssistantSelection = nil

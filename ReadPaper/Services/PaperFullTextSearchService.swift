@@ -181,6 +181,20 @@ struct PaperFullTextSearchService {
         }
     }
 
+    static func canKeywordMatch(query: String, in index: PaperFullTextIndex) -> Bool {
+        let terms = searchTerms(in: query)
+        guard terms.isEmpty == false, index.blocks.isEmpty == false else { return false }
+
+        let queryIsOnlyCJK = terms.allSatisfy { term in
+            term.unicodeScalars.allSatisfy(isCJKScalar)
+        }
+        guard queryIsOnlyCJK else { return true }
+
+        return index.blocks.contains { block in
+            normalized(block.text).unicodeScalars.contains(where: isCJKScalar)
+        }
+    }
+
     static func relevanceScore(query: String, text: String, title: String = "") -> Double {
         let terms = searchTerms(in: query)
         guard terms.isEmpty == false else { return 0 }
@@ -399,5 +413,10 @@ struct PaperFullTextSearchService {
             searchRange = range.upperBound..<haystack.endIndex
         }
         return count
+    }
+
+    private static func isCJKScalar(_ scalar: Unicode.Scalar) -> Bool {
+        (0x3400...0x4DBF).contains(scalar.value) ||
+            (0x4E00...0x9FFF).contains(scalar.value)
     }
 }

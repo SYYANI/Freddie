@@ -3,11 +3,6 @@ import XCTest
 @testable import ReadPaper
 
 final class SelectionAssistantOrchestratorTests: XCTestCase {
-    override func tearDown() {
-        AssistantExternalURLProtocol.reset()
-        super.tearDown()
-    }
-
     func testAutomaticScopeUsesPrivacyAwareLocalFirstPolicy() {
         XCTAssertEqual(
             SelectionAssistantScopeResolver.resolve(
@@ -18,6 +13,17 @@ final class SelectionAssistantOrchestratorTests: XCTestCase {
         XCTAssertEqual(
             SelectionAssistantScopeResolver.resolve(
                 SelectionAssistantRequest(action: .explain, selection: "A term", scope: .automatic)
+            ),
+            .nearby
+        )
+        XCTAssertEqual(
+            SelectionAssistantScopeResolver.resolve(
+                SelectionAssistantRequest(
+                    action: .ask,
+                    selection: "Joint Multimodal Reinforcement Learning (RL)",
+                    question: "这是什么意思",
+                    scope: .automatic
+                )
             ),
             .nearby
         )
@@ -56,12 +62,10 @@ final class SelectionAssistantOrchestratorTests: XCTestCase {
         let fixture = try makeFixture()
         defer { fixture.cleanup() }
         let provider = OrchestratorProviderSpy(response: "The held-out benchmark supports the claim [S1].")
-        let external = OrchestratorExternalSearchSpy()
         var progress: [SelectionAssistantProgress] = []
         let orchestrator = SelectionAssistantOrchestrator(
             assistantService: SelectionAssistantService(provider: provider),
             fullTextSearchService: PaperFullTextSearchService(fileStore: fixture.fileStore),
-            externalSearchService: external,
             userDefaults: fixture.userDefaults
         )
 
@@ -92,11 +96,10 @@ final class SelectionAssistantOrchestratorTests: XCTestCase {
         XCTAssertTrue(result.sources.contains(where: { $0.kind == .userNote }))
         XCTAssertTrue(progress.contains(.searchingFullText))
         XCTAssertTrue(progress.contains(.generatingAnswer))
-        let externalCallCount = await external.callCount()
-        XCTAssertEqual(externalCallCount, 0)
 
         let capturedProviderRequest = await provider.lastRequest()
         let providerRequest = try XCTUnwrap(capturedProviderRequest)
+        XCTAssertFalse(providerRequest.webSearchEnabled)
         let prompt = providerRequest.messages.map(\.content).joined(separator: "\n")
         XCTAssertTrue(prompt.contains("Authors: Ada Author"))
         XCTAssertTrue(prompt.contains("Abstract: A test abstract."))
@@ -105,16 +108,50 @@ final class SelectionAssistantOrchestratorTests: XCTestCase {
     }
 
     @MainActor
+    func testFullPaperCrossLanguageQueryDoesNotEmitMisleadingNoSupportWarning() async throws {
+        let fixture = try makeFixture()
+        defer { fixture.cleanup() }
+        let provider = OrchestratorProviderSpy(response: "The paper discusses the method in its Evaluation section.")
+        let orchestrator = SelectionAssistantOrchestrator(
+            assistantService: SelectionAssistantService(provider: provider),
+            fullTextSearchService: PaperFullTextSearchService(fileStore: fixture.fileStore),
+            userDefaults: fixture.userDefaults
+        )
+
+        let result = try await orchestrator.perform(
+            SelectionAssistantRequest(
+                action: .ask,
+                selection: "this conclusion",
+                question: "论文中作者使用了什么方法？",
+                scope: .automatic
+            ),
+            selection: NoteSelectionContext(
+                attachmentID: fixture.attachment.id,
+                quote: "this conclusion",
+                htmlSelector: "rp-anchor:1"
+            ),
+            paper: fixture.paper,
+            attachments: [fixture.attachment],
+            notes: [],
+            targetLanguage: "zh-Hans",
+            route: makeRoute()
+        )
+
+        XCTAssertEqual(result.scope, .fullPaper)
+        XCTAssertFalse(result.warnings.contains(AppLocalization.localized(
+            "No supporting passage was found in this paper."
+        )))
+    }
+
+    @MainActor
     func testExternalScopeDoesNotNetworkWhenPrivacyToggleIsOff() async throws {
         let fixture = try makeFixture()
         defer { fixture.cleanup() }
         fixture.userDefaults.set(false, forKey: SelectionAssistantPreferences.externalSearchEnabledKey)
         let provider = OrchestratorProviderSpy(response: "Only paper evidence is available.")
-        let external = OrchestratorExternalSearchSpy()
         let orchestrator = SelectionAssistantOrchestrator(
             assistantService: SelectionAssistantService(provider: provider),
             fullTextSearchService: PaperFullTextSearchService(fileStore: fixture.fileStore),
-            externalSearchService: external,
             userDefaults: fixture.userDefaults
         )
 
@@ -137,69 +174,133 @@ final class SelectionAssistantOrchestratorTests: XCTestCase {
             route: makeRoute()
         )
 
-        let externalCallCount = await external.callCount()
-        XCTAssertEqual(externalCallCount, 0)
         XCTAssertTrue(result.warnings.contains(AppLocalization.localized("External search is disabled in Settings.")))
+        XCTAssertFalse(result.sources.contains(where: { $0.id == "live-web-search" }))
+        let capturedProviderRequest = await provider.lastRequest()
+        XCTAssertEqual(capturedProviderRequest?.webSearchEnabled, false)
     }
 
-    func testExternalSearchAggregatesAcademicSourcesAndCachesResults() async throws {
-        let configuration = URLSessionConfiguration.ephemeral
-        configuration.protocolClasses = [AssistantExternalURLProtocol.self]
-        let session = URLSession(configuration: configuration)
-        AssistantExternalURLProtocol.requestHandler = { request in
-            let url = try XCTUnwrap(request.url)
-            let body: String
-            switch url.host {
-            case "api.crossref.org":
-                body = """
-                {"message":{"title":["Evidence Paper"],"container-title":["Journal"],"published":{"date-parts":[[2026]]},"is-referenced-by-count":12,"reference-count":34,"URL":"https://doi.org/10.1234/example"}}
-                """
-            case "api.openalex.org":
-                body = """
-                {"id":"https://openalex.org/W123","display_name":"Evidence Paper","publication_year":2026,"cited_by_count":15,"primary_location":{"source":{"display_name":"Journal"}},"doi":"https://doi.org/10.1234/example"}
-                """
-            case "api.semanticscholar.org":
-                body = """
-                {"data":[{"paperId":"s2-related","title":"Related Evidence","abstract":"A related study.","url":"https://www.semanticscholar.org/paper/s2-related","year":2025,"authors":[{"name":"Grace Author"}],"citationCount":7}]}
-                """
-            case "export.arxiv.org":
-                body = """
-                <?xml version="1.0" encoding="UTF-8"?>
-                <feed xmlns="http://www.w3.org/2005/Atom"></feed>
-                """
-            default:
-                XCTFail("Unexpected external URL: \(url.absoluteString)")
-                throw URLError(.badURL)
+    @MainActor
+    func testExternalScopeRequestsResponsesWebSearchWhenToggleIsOn() async throws {
+        let fixture = try makeFixture()
+        defer { fixture.cleanup() }
+        fixture.userDefaults.set(true, forKey: SelectionAssistantPreferences.externalSearchEnabledKey)
+        let provider = OrchestratorProviderSpy(
+            response: "The project page and repository are covered by the current web search results."
+        )
+        var progress: [SelectionAssistantProgress] = []
+        let orchestrator = SelectionAssistantOrchestrator(
+            assistantService: SelectionAssistantService(provider: provider),
+            fullTextSearchService: PaperFullTextSearchService(fileStore: fixture.fileStore),
+            userDefaults: fixture.userDefaults
+        )
+
+        let result = try await orchestrator.perform(
+            SelectionAssistantRequest(
+                action: .ask,
+                selection: "this conclusion",
+                question: "请联网查找该项目的主页和代码仓库。",
+                scope: .external
+            ),
+            selection: NoteSelectionContext(
+                attachmentID: fixture.attachment.id,
+                quote: "this conclusion",
+                htmlSelector: "rp-anchor:1"
+            ),
+            paper: fixture.paper,
+            attachments: [fixture.attachment],
+            notes: [],
+            targetLanguage: "EN",
+            route: makeRoute(apiStyle: .responses, baseURL: "https://api.deepseek.com"),
+            onProgress: { progress.append($0) }
+        )
+
+        XCTAssertEqual(result.scope, .external)
+        XCTAssertTrue(progress.contains(.searchingExternalSources))
+        XCTAssertFalse(result.warnings.contains(AppLocalization.localized(
+            "No supporting passage was found in this paper."
+        )))
+        let webSource = try XCTUnwrap(result.sources.first)
+        XCTAssertEqual(webSource.kind, .external)
+        XCTAssertEqual(webSource.id, "live-web-search")
+        XCTAssertEqual(webSource.title, AppLocalization.localized("Live web search"))
+
+        let capturedProviderRequest = await provider.lastRequest()
+        let providerRequest = try XCTUnwrap(capturedProviderRequest)
+        XCTAssertEqual(providerRequest.apiStyle, .responses)
+        XCTAssertTrue(providerRequest.webSearchEnabled)
+        let prompt = providerRequest.messages.map(\.content).joined(separator: "\n")
+        XCTAssertTrue(prompt.contains("Live web search is enabled for this request"))
+        XCTAssertTrue(prompt.contains("[S1] \(AppLocalization.localized("Live web search"))"))
+        XCTAssertTrue(prompt.contains("cite every claim that relies on them as [S1]"))
+        XCTAssertTrue(prompt.contains("Never invent, guess, or reformat a URL"))
+    }
+
+    @MainActor
+    func testExternalScopeWithoutResponsesRouteAddsWarningAndDoesNotEnableWebSearch() async throws {
+        let fixture = try makeFixture()
+        defer { fixture.cleanup() }
+        fixture.userDefaults.set(true, forKey: SelectionAssistantPreferences.externalSearchEnabledKey)
+        let provider = OrchestratorProviderSpy(response: "Only paper evidence is available.")
+        let orchestrator = SelectionAssistantOrchestrator(
+            assistantService: SelectionAssistantService(provider: provider),
+            fullTextSearchService: PaperFullTextSearchService(fileStore: fixture.fileStore),
+            userDefaults: fixture.userDefaults
+        )
+
+        let result = try await orchestrator.perform(
+            SelectionAssistantRequest(
+                action: .ask,
+                selection: "this conclusion",
+                question: "Find related work.",
+                scope: .external
+            ),
+            selection: NoteSelectionContext(
+                attachmentID: fixture.attachment.id,
+                quote: "this conclusion",
+                htmlSelector: "rp-anchor:1"
+            ),
+            paper: fixture.paper,
+            attachments: [fixture.attachment],
+            notes: [],
+            targetLanguage: "EN",
+            route: makeRoute()
+        )
+
+        XCTAssertTrue(result.warnings.contains(AppLocalization.localized(
+            "Live web search requires the selected assistant model to use the Responses API."
+        )))
+        XCTAssertFalse(result.sources.contains(where: { $0.id == "live-web-search" }))
+        let capturedProviderRequest = await provider.lastRequest()
+        XCTAssertEqual(capturedProviderRequest?.webSearchEnabled, false)
+    }
+
+    func testStreamingPartialAnswersAreCoalescedBeforeReachingTheUI() async throws {
+        let provider = BurstStreamingProviderSpy(chunkCount: 240)
+        let service = SelectionAssistantService(
+            provider: provider,
+            partialAnswerThrottleInterval: .milliseconds(5)
+        )
+        let collector = PartialAnswerCollector()
+        let expectedAnswer = (1...240).map(String.init).joined(separator: " ")
+
+        let result = try await service.perform(
+            SelectionAssistantRequest(action: .explain, selection: "A selected passage."),
+            paperTitle: "Test Paper",
+            targetLanguage: "EN",
+            route: makeRoute(),
+            onPartialAnswer: { partialAnswer in
+                await collector.append(partialAnswer)
             }
-            return (
-                HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!,
-                Data(body.utf8)
-            )
-        }
-        let service = SelectionAssistantExternalSearchService(
-            session: session,
-            arxivClient: ArxivClient(session: session, minimumRequestInterval: 0)
-        )
-        let paper = SelectionAssistantPaperContext(
-            id: UUID(),
-            title: "Evidence Paper",
-            abstractText: "Abstract",
-            authors: ["Ada Author"],
-            arxivID: nil,
-            arxivVersion: nil,
-            doi: "10.1234/example"
         )
 
-        let first = await service.search(query: "related validation evidence", paper: paper, limit: 6)
-        let requestCount = AssistantExternalURLProtocol.requestCount
-        let second = await service.search(query: "related validation evidence", paper: paper, limit: 6)
-
-        XCTAssertEqual(first, second)
-        XCTAssertEqual(first.sources.count, 3)
-        XCTAssertTrue(first.sources.contains(where: { $0.title.hasPrefix("Crossref") }))
-        XCTAssertTrue(first.sources.contains(where: { $0.title.hasPrefix("OpenAlex") }))
-        XCTAssertTrue(first.sources.contains(where: { $0.title.hasPrefix("Semantic Scholar") }))
-        XCTAssertEqual(AssistantExternalURLProtocol.requestCount, requestCount)
+        let partialAnswers = await collector.values
+        XCTAssertEqual(result.answer, expectedAnswer)
+        XCTAssertEqual(partialAnswers.last, expectedAnswer)
+        XCTAssertLessThan(partialAnswers.count, 240)
+        XCTAssertEqual(partialAnswers, partialAnswers.sorted {
+            $0.count < $1.count
+        })
     }
 
     @MainActor
@@ -251,14 +352,18 @@ final class SelectionAssistantOrchestratorTests: XCTestCase {
         )
     }
 
-    private func makeRoute() -> ResolvedLLMModelRoute {
+    private func makeRoute(
+        apiStyle: LLMAPIStyle = .chatCompletions,
+        baseURL: String = "https://example.test/v1"
+    ) -> ResolvedLLMModelRoute {
         ResolvedLLMModelRoute(
             snapshot: LLMModelRouteSnapshot(
                 providerProfileID: UUID(),
                 providerName: "Test Provider",
                 modelProfileID: UUID(),
                 modelProfileName: "Assistant Model",
-                baseURL: "https://example.test/v1",
+                baseURL: baseURL,
+                apiStyle: apiStyle,
                 apiKeyRef: "key-ref",
                 modelName: "assistant-model"
             ),
@@ -301,51 +406,39 @@ private actor OrchestratorProviderSpy: SelectionAssistantLLMCompleting {
     }
 }
 
-private actor OrchestratorExternalSearchSpy: SelectionAssistantExternalSearching {
-    private var calls = 0
+private actor BurstStreamingProviderSpy: SelectionAssistantLLMCompleting {
+    let chunkCount: Int
 
-    func search(
-        query: String,
-        paper: SelectionAssistantPaperContext,
-        limit: Int
-    ) async -> SelectionAssistantExternalSearchResult {
-        calls += 1
-        return SelectionAssistantExternalSearchResult(sources: [], warnings: [])
+    init(chunkCount: Int) {
+        self.chunkCount = chunkCount
     }
 
-    func callCount() -> Int {
-        calls
+    func complete(request: LLMCompletionRequest) async throws -> LLMCompletionResponse {
+        LLMCompletionResponse(text: Self.answer(chunkCount: chunkCount), resolvedEndpoint: nil)
+    }
+
+    func completeStreaming(
+        request: LLMCompletionRequest,
+        onPartialText: @escaping @Sendable (String) async -> Void
+    ) async throws -> LLMCompletionResponse {
+        var accumulated = ""
+        for index in 1...chunkCount {
+            let token = String(index)
+            accumulated += accumulated.isEmpty ? token : " \(token)"
+            await onPartialText(accumulated)
+        }
+        return LLMCompletionResponse(text: accumulated, resolvedEndpoint: nil)
+    }
+
+    private static func answer(chunkCount: Int) -> String {
+        (1...chunkCount).map(String.init).joined(separator: " ")
     }
 }
 
-private final class AssistantExternalURLProtocol: URLProtocol {
-    nonisolated(unsafe) static var requestHandler: ((URLRequest) throws -> (HTTPURLResponse, Data))?
-    nonisolated(unsafe) static private(set) var requestCount = 0
+private actor PartialAnswerCollector {
+    private(set) var values: [String] = []
 
-    static func reset() {
-        requestHandler = nil
-        requestCount = 0
+    func append(_ value: String) {
+        values.append(value)
     }
-
-    override class func canInit(with request: URLRequest) -> Bool { true }
-
-    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
-
-    override func startLoading() {
-        guard let requestHandler = Self.requestHandler else {
-            client?.urlProtocol(self, didFailWithError: URLError(.badServerResponse))
-            return
-        }
-        do {
-            Self.requestCount += 1
-            let (response, data) = try requestHandler(request)
-            client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
-            client?.urlProtocol(self, didLoad: data)
-            client?.urlProtocolDidFinishLoading(self)
-        } catch {
-            client?.urlProtocol(self, didFailWithError: error)
-        }
-    }
-
-    override func stopLoading() {}
 }

@@ -85,7 +85,7 @@ struct SelectionAssistantConversationStore {
                 question: String(turn.question.prefix(1_000)),
                 result: SelectionAssistantResult(
                     answer: String(turn.answer.prefix(8_000)),
-                    sources: turn.result.sources.prefix(8).map { source in
+                    sources: turn.result.sources.prefix(16).map { source in
                         AssistantSource(
                             id: source.id,
                             kind: source.kind,

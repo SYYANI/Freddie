@@ -7,11 +7,22 @@ struct LLMProviderConnectionTestResult: Equatable, Sendable {
     let outputPreview: String
 }
 
+struct LLMProviderWebSearchTestResult: Equatable, Sendable {
+    let model: String
+    let baseURL: String
+    let latencyMs: Int
+    let outputPreview: String
+    let sources: [LLMWebSearchSource]
+    let trace: String
+}
+
 enum LLMProviderValidationError: LocalizedError, Equatable {
     case invalidBaseURL
     case unsupportedBaseURLScheme
     case emptyModel
     case emptyAPIKey
+    case webSearchRequiresResponsesAPI
+    case webSearchReturnedNoSources
 
     var errorDescription: String? {
         switch self {
@@ -23,6 +34,10 @@ enum LLMProviderValidationError: LocalizedError, Equatable {
             return AppLocalization.localized("Model name cannot be empty.")
         case .emptyAPIKey:
             return AppLocalization.localized("API key cannot be empty.")
+        case .webSearchRequiresResponsesAPI:
+            return AppLocalization.localized("Web search testing requires the Responses API.")
+        case .webSearchReturnedNoSources:
+            return AppLocalization.localized("The model answered, but no web search source URL was returned.")
         }
     }
 }
@@ -98,6 +113,90 @@ struct LLMProviderValidationUseCase {
         )
     }
 
+    func testWebSearch(
+        baseURL: String,
+        apiStyle: LLMAPIStyle,
+        apiKey: String,
+        model: String,
+        timeoutSeconds: TimeInterval = 60,
+        onTraceUpdated: (@Sendable (String) async -> Void)? = nil
+    ) async throws -> LLMProviderWebSearchTestResult {
+        guard apiStyle == .responses else {
+            throw LLMProviderValidationError.webSearchRequiresResponsesAPI
+        }
+        let normalizedBaseURL = try normalizedBaseURL(baseURL)
+        let validatedModel = try validateModelName(model)
+        let validatedAPIKey = try validateAPIKey(apiKey)
+        let recorder = LLMProviderWebSearchTraceRecorder(apiKey: validatedAPIKey)
+        let traceHandler: @Sendable (String) async -> Void = { entry in
+            let update = await recorder.append(entry)
+            if update.shouldPublish, let onTraceUpdated {
+                await onTraceUpdated(update.trace)
+            }
+        }
+
+        await traceHandler("""
+        WEB SEARCH CAPABILITY TEST
+        Model: \(validatedModel)
+        Base URL: \(normalizedBaseURL)
+        Protocol: Responses API
+        """)
+
+        let request = LLMCompletionRequest(
+            baseURL: try validateBaseURLAsURL(baseURL),
+            apiStyle: .responses,
+            apiKey: validatedAPIKey,
+            model: validatedModel,
+            messages: [
+                LLMCompletionMessage(
+                    role: "system",
+                    content: "Use web search and answer concisely. Include the concrete source URL."
+                ),
+                LLMCompletionMessage(
+                    role: "user",
+                    content: "Find the official IANA Example Domains page and return its current URL."
+                )
+            ],
+            timeoutProfile: .validation(timeoutSeconds: timeoutSeconds),
+            webSearchEnabled: true,
+            traceHandler: traceHandler
+        )
+
+        let start = ContinuousClock.now
+        let response: LLMCompletionResponse
+        do {
+            response = try await provider.completeStreaming(
+                request: request,
+                onPartialText: { _ in }
+            )
+        } catch {
+            if let onTraceUpdated {
+                await onTraceUpdated(await recorder.value())
+            }
+            throw error
+        }
+        let latencyMs = Self.elapsedMilliseconds(from: start.duration(to: .now))
+        await traceHandler("""
+        RESULT
+        Output characters: \(response.text.count)
+        Source URLs: \(response.webSearchSources.count)
+        Latency: \(latencyMs) ms
+        """)
+        let trace = await recorder.value()
+
+        guard response.webSearchSources.isEmpty == false else {
+            throw LLMProviderValidationError.webSearchReturnedNoSources
+        }
+        return LLMProviderWebSearchTestResult(
+            model: validatedModel,
+            baseURL: normalizedBaseURL,
+            latencyMs: latencyMs,
+            outputPreview: sanitizeOutputPreview(response.text),
+            sources: response.webSearchSources,
+            trace: trace
+        )
+    }
+
     private func validateBaseURLAsURL(_ rawValue: String) throws -> URL {
         let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let url = URL(string: trimmed) else {
@@ -139,5 +238,42 @@ struct LLMProviderValidationUseCase {
         }
         let idx = compact.index(compact.startIndex, offsetBy: 80)
         return String(compact[..<idx]) + "..."
+    }
+
+    private static func elapsedMilliseconds(from duration: Duration) -> Int {
+        max(
+            1,
+            Int(duration.components.seconds) * 1_000
+                + Int(duration.components.attoseconds / 1_000_000_000_000_000)
+        )
+    }
+}
+
+private actor LLMProviderWebSearchTraceRecorder {
+    struct Update: Sendable {
+        let trace: String
+        let shouldPublish: Bool
+    }
+
+    private let apiKey: String
+    private var entries: [String] = []
+
+    init(apiKey: String) {
+        self.apiKey = apiKey
+    }
+
+    func append(_ entry: String) -> Update {
+        let sanitized = entry.replacingOccurrences(of: apiKey, with: "<redacted>")
+        entries.append("[\(entries.count + 1)] \(sanitized)")
+        let shouldPublish = sanitized.contains(".delta") == false
+            || entries.count.isMultiple(of: 25)
+        return Update(
+            trace: shouldPublish ? entries.joined(separator: "\n\n") : "",
+            shouldPublish: shouldPublish
+        )
+    }
+
+    func value() -> String {
+        entries.joined(separator: "\n\n")
     }
 }

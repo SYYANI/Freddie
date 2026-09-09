@@ -28,6 +28,8 @@ jobs:
       LOCAL_READABILITY_REF: 5fabfd7dbb75c3a26cf459d6bc5a3b6897a319f4
       LOCAL_BABELDOC_REPO: https://github.com/SYYANI/BabelDOC.git
       LOCAL_BABELDOC_REF: ${{ inputs.babeldoc_ref || vars.BABELDOC_REF }}
+      LOCAL_STREAMING_MARKDOWN_REPO: https://github.com/SYYANI/SwiftStreamingMarkdown.git
+      LOCAL_STREAMING_MARKDOWN_REF: 03549cb3256a7db99571c8bf0bd236420071e66e
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -48,6 +50,10 @@ jobs:
           fi
           if [[ ! "$LOCAL_BABELDOC_REF" =~ ^[0-9a-f]{40}$ ]]; then
             echo "Provide a full reWriteBabelDoc commit through workflow input babeldoc_ref or repository variable BABELDOC_REF." >&2
+            exit 2
+          fi
+          if [[ ! "$LOCAL_STREAMING_MARKDOWN_REF" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "LOCAL_STREAMING_MARKDOWN_REF must be a full Git commit." >&2
             exit 2
           fi
 
@@ -78,6 +84,20 @@ jobs:
           actual_babeldoc_ref="$(git -C ../reWriteBabelDoc rev-parse HEAD)"
           if [ "$actual_babeldoc_ref" != "$LOCAL_BABELDOC_REF" ]; then
             echo "reWriteBabelDoc checkout mismatch: expected $LOCAL_BABELDOC_REF, got $actual_babeldoc_ref" >&2
+            exit 1
+          fi
+
+          if [ -e ../SwiftStreamingMarkdown ]; then
+            echo "Unexpected pre-existing sibling path: ../SwiftStreamingMarkdown" >&2
+            exit 2
+          fi
+          git init ../SwiftStreamingMarkdown
+          git -C ../SwiftStreamingMarkdown remote add origin "$LOCAL_STREAMING_MARKDOWN_REPO"
+          git -C ../SwiftStreamingMarkdown fetch --depth 1 origin "$LOCAL_STREAMING_MARKDOWN_REF"
+          git -C ../SwiftStreamingMarkdown checkout --detach FETCH_HEAD
+          actual_streaming_markdown_ref="$(git -C ../SwiftStreamingMarkdown rev-parse HEAD)"
+          if [ "$actual_streaming_markdown_ref" != "$LOCAL_STREAMING_MARKDOWN_REF" ]; then
+            echo "SwiftStreamingMarkdown checkout mismatch: expected $LOCAL_STREAMING_MARKDOWN_REF, got $actual_streaming_markdown_ref" >&2
             exit 1
           fi
 
@@ -151,6 +171,7 @@ jobs:
             echo "read-paper=$GITHUB_SHA"
             echo "swift-readability=$LOCAL_READABILITY_REF"
             echo "reWriteBabelDoc=$LOCAL_BABELDOC_REF"
+            echo "SwiftStreamingMarkdown=$LOCAL_STREAMING_MARKDOWN_REF"
             echo "runtime-manifest-sha256=$(shasum -a 256 "$runtime_manifest" | awk '{print $1}')"
             echo "app-version=$APP_VERSION"
             echo "app-build=$APP_BUILD"

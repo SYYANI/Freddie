@@ -17,6 +17,8 @@ packages:
     path: ../reWriteBabelDoc
   LaTeXTransSwift:
     path: ../arxivLatex
+  SwiftStreamingMarkdown:
+    path: ../SwiftStreamingMarkdown
 targets:
   BabelDocHelper:
     type: tool
@@ -50,6 +52,7 @@ targets:
         product: BabelDocKit
       - package: LaTeXTransSwift
         product: LaTeXTransKit
+      - package: SwiftStreamingMarkdown
       - target: BabelDocHelper
         link: false
         embed: false
@@ -102,8 +105,8 @@ targets:
         ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS: NO
         SWIFT_VERSION: 6.0
         CODE_SIGN_STYLE: Automatic
-        CURRENT_PROJECT_VERSION: 53
-        MARKETING_VERSION: 0.4.12
+        CURRENT_PROJECT_VERSION: 54
+        MARKETING_VERSION: 0.4.13
       configs:
         Debug:
           ENABLE_TESTABILITY: YES
@@ -157,8 +160,8 @@ targets:
         ENABLE_TESTABILITY: YES
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: 3VM5RUH8V5
-        CURRENT_PROJECT_VERSION: 53
-        MARKETING_VERSION: 0.4.12
+        CURRENT_PROJECT_VERSION: 54
+        MARKETING_VERSION: 0.4.13
         SUPPORTED_PLATFORMS: iphoneos iphonesimulator
         SUPPORTS_MACCATALYST: NO
         SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD: NO
