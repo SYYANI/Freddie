@@ -4,6 +4,42 @@ import XCTest
 @testable import ReadPaper
 
 final class SelectionAssistantOverlayTests: XCTestCase {
+    func testResizableCardRemainsHorizontallyCenteredBottomAlignedAndClamped() {
+        let availableSize = CGSize(width: 1_000, height: 700)
+        let startingSize = CGSize(width: 600, height: 360)
+        let expectedSize = CGSize(width: 680, height: 390)
+        let translations: [(SelectionAssistantResizeCorner, CGSize)] = [
+            (.topLeading, CGSize(width: -40, height: -30)),
+            (.topTrailing, CGSize(width: 40, height: -30)),
+            (.bottomLeading, CGSize(width: -40, height: 30)),
+            (.bottomTrailing, CGSize(width: 40, height: 30))
+        ]
+        for (corner, translation) in translations {
+            XCTAssertEqual(
+                SelectionAssistantResizeGeometry.proposedCardSize(
+                    startingSize: startingSize,
+                    dragTranslation: translation,
+                    corner: corner
+                ),
+                expectedSize
+            )
+        }
+
+        let maximumSize = SelectionAssistantResizeGeometry.clampedCardSize(
+            CGSize(width: 2_000, height: 2_000),
+            availableSize: availableSize,
+            minimumSize: CGSize(width: 340, height: 160)
+        )
+        XCTAssertEqual(maximumSize, CGSize(width: 964, height: 600))
+
+        let minimumSize = SelectionAssistantResizeGeometry.clampedCardSize(
+            CGSize(width: 20, height: 20),
+            availableSize: availableSize,
+            minimumSize: CGSize(width: 340, height: 160)
+        )
+        XCTAssertEqual(minimumSize, CGSize(width: 340, height: 160))
+    }
+
     func testScrollTargetIncludesQuestionAnswerAndBottomInset() {
         typealias Target = SelectionAssistantConversationScrollTarget
         XCTAssertEqual(Target.resolve(turnIndex: 3, turnHeight: 200, viewportHeight: 480), .bottom)
@@ -146,6 +182,29 @@ final class SelectionAssistantOverlayTests: XCTestCase {
         )
         try await fixture.settle()
         XCTAssertEqual(scroll.contentView.bounds.height, initialViewportHeight, accuracy: 1)
+        XCTAssertEqual(
+            scroll.contentView.bounds.maxY,
+            try XCTUnwrap(scroll.documentView).bounds.height,
+            accuracy: 1
+        )
+    }
+
+    @MainActor
+    func testShortInitialStreamingAnswerUsesItsContentHeight() async throws {
+        let fixture = ConversationFixture()
+        defer { fixture.window.close() }
+
+        fixture.show(
+            [],
+            pending: "Explain this.",
+            partialAnswer: "A short explanation.",
+            scrollRequest: .init(turnIndex: 0)
+        )
+        try await fixture.settle()
+
+        let scroll = try fixture.scrollView()
+        XCTAssertGreaterThan(scroll.contentView.bounds.height, 0)
+        XCTAssertLessThan(scroll.contentView.bounds.height, 120)
         XCTAssertEqual(
             scroll.contentView.bounds.maxY,
             try XCTUnwrap(scroll.documentView).bounds.height,

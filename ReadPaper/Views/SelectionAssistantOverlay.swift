@@ -2,11 +2,75 @@ import AppKit
 import SwiftUI
 
 private enum SelectionAssistantLayout {
-    static let overlayMaximumWidth: CGFloat = 620
     static let resultCardMaximumWidth: CGFloat = 600
+    static let resultCardMinimumWidth: CGFloat = 340
+    static let resultCardMinimumHeight: CGFloat = 160
+    static let resultCardAvailableWidthInset: CGFloat = 36
+    static let resultCardAvailableHeightInset: CGFloat = 100
+    static let resizedCardChromeHeight: CGFloat = 128
     static let questionFieldWidth: CGFloat = 360
     static let singleTurnConversationMaximumHeight: CGFloat = 360
     static let multiTurnConversationMaximumHeight: CGFloat = 600
+}
+
+enum SelectionAssistantResizeCorner: CaseIterable {
+    case topLeading
+    case topTrailing
+    case bottomLeading
+    case bottomTrailing
+
+    fileprivate var horizontalMultiplier: CGFloat {
+        switch self {
+        case .topLeading, .bottomLeading: -2
+        case .topTrailing, .bottomTrailing: 2
+        }
+    }
+
+    fileprivate var verticalMultiplier: CGFloat {
+        switch self {
+        case .topLeading, .topTrailing: -1
+        case .bottomLeading, .bottomTrailing: 1
+        }
+    }
+}
+
+enum SelectionAssistantResizeGeometry {
+    static func proposedCardSize(
+        startingSize: CGSize,
+        dragTranslation: CGSize,
+        corner: SelectionAssistantResizeCorner
+    ) -> CGSize {
+        CGSize(
+            width: startingSize.width + dragTranslation.width * corner.horizontalMultiplier,
+            height: startingSize.height + dragTranslation.height * corner.verticalMultiplier
+        )
+    }
+
+    static func clampedCardSize(
+        _ proposedSize: CGSize,
+        availableSize: CGSize,
+        minimumSize: CGSize
+    ) -> CGSize {
+        let maximumWidth = max(0, availableSize.width - SelectionAssistantLayout.resultCardAvailableWidthInset)
+        let maximumHeight = max(0, availableSize.height - SelectionAssistantLayout.resultCardAvailableHeightInset)
+        let effectiveMinimumWidth = min(minimumSize.width, maximumWidth)
+        let effectiveMinimumHeight = min(minimumSize.height, maximumHeight)
+        return CGSize(
+            width: min(max(proposedSize.width, effectiveMinimumWidth), maximumWidth),
+            height: min(max(proposedSize.height, effectiveMinimumHeight), maximumHeight)
+        )
+    }
+}
+
+private struct SelectionAssistantResultCardSizePreferenceKey: PreferenceKey {
+    static var defaultValue: CGSize { .zero }
+
+    static func reduce(value: inout CGSize, nextValue: () -> CGSize) {
+        let next = nextValue()
+        if next.width > 0, next.height > 0 {
+            value = next
+        }
+    }
 }
 
 struct SelectionAssistantOverlay: View {
@@ -40,6 +104,9 @@ struct SelectionAssistantOverlay: View {
     @State private var task: Task<Void, Never>?
     @State private var completedRequests: [SelectionAssistantRequest] = []
     @State private var partialAnswer = ""
+    @State private var userResultCardSize: CGSize?
+    @State private var measuredResultCardSize: CGSize = .zero
+    @State private var resizeStartSize: CGSize?
     @FocusState private var isQuestionFieldFocused: Bool
     @FocusState private var isFollowUpFieldFocused: Bool
 
@@ -48,10 +115,33 @@ struct SelectionAssistantOverlay: View {
     }
 
     var body: some View {
-        VStack(spacing: 10) {
-            if activeAction != nil {
-                resultCard
-                    .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .bottom)))
+        GeometryReader { geometry in
+            let availableSize = geometry.size
+            let cardSize = resolvedResultCardSize(in: availableSize)
+
+            VStack(spacing: 10) {
+                if activeAction != nil {
+                    resultCard
+                        .frame(
+                            width: cardSize.width,
+                            height: userResultCardSize == nil ? nil : cardSize.height,
+                            alignment: .topLeading
+                        )
+                        .selectionAssistantMaterial(cornerRadius: 14)
+                        .measureSelectionAssistantResultCardSize()
+                        .overlay {
+                            resizeCornerHitAreas(cardSize: cardSize, availableSize: availableSize)
+                        }
+                        .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .bottom)))
+                        .simultaneousGesture(
+                            DragGesture(minimumDistance: 0)
+                                .onChanged { _ in
+                                    onInteractionBegan()
+                                }
+                        )
+                }
+
+                actionCapsule
                     .simultaneousGesture(
                         DragGesture(minimumDistance: 0)
                             .onChanged { _ in
@@ -59,18 +149,14 @@ struct SelectionAssistantOverlay: View {
                             }
                     )
             }
-
-            actionCapsule
-                .simultaneousGesture(
-                    DragGesture(minimumDistance: 0)
-                        .onChanged { _ in
-                            onInteractionBegan()
-                        }
-                )
+            .padding(.horizontal, 18)
+            .padding(.bottom, 18)
+            .frame(width: availableSize.width, height: availableSize.height, alignment: .bottom)
+            .onPreferenceChange(SelectionAssistantResultCardSizePreferenceKey.self) { size in
+                guard size.width > 0, size.height > 0, measuredResultCardSize != size else { return }
+                measuredResultCardSize = size
+            }
         }
-        .frame(maxWidth: SelectionAssistantLayout.overlayMaximumWidth)
-        .padding(.horizontal, 18)
-        .padding(.bottom, 18)
         .animation(layoutAnimation, value: activeAction)
         .animation(layoutAnimation, value: isEnteringQuestion)
         .onAppear(perform: restoreInitialConversation)
@@ -252,8 +338,54 @@ struct SelectionAssistantOverlay: View {
         .font(.system(size: 14))
         .lineSpacing(3)
         .padding(16)
-        .frame(maxWidth: SelectionAssistantLayout.resultCardMaximumWidth, alignment: .leading)
-        .selectionAssistantMaterial(cornerRadius: 14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func resizeCornerHitAreas(cardSize: CGSize, availableSize: CGSize) -> some View {
+        ZStack {
+            resizeCornerHitArea(.topLeading, cardSize: cardSize, availableSize: availableSize)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            resizeCornerHitArea(.topTrailing, cardSize: cardSize, availableSize: availableSize)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+            resizeCornerHitArea(.bottomLeading, cardSize: cardSize, availableSize: availableSize)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+            resizeCornerHitArea(.bottomTrailing, cardSize: cardSize, availableSize: availableSize)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+        }
+    }
+
+    private func resizeCornerHitArea(
+        _ corner: SelectionAssistantResizeCorner,
+        cardSize: CGSize,
+        availableSize: CGSize
+    ) -> some View {
+        Color.clear
+            .frame(width: 16, height: 16)
+            .contentShape(Rectangle())
+            .help(String(localized: "Resize AI window", bundle: bundle))
+            .accessibilityLabel(String(localized: "Resize AI window", bundle: bundle))
+            .highPriorityGesture(
+                DragGesture(minimumDistance: 1, coordinateSpace: .global)
+                    .onChanged { value in
+                        onInteractionBegan()
+                        let startingSize = resizeStartSize ?? CGSize(
+                            width: cardSize.width,
+                            height: max(measuredResultCardSize.height, SelectionAssistantLayout.resultCardMinimumHeight)
+                        )
+                        if resizeStartSize == nil {
+                            resizeStartSize = startingSize
+                        }
+                        let proposedSize = SelectionAssistantResizeGeometry.proposedCardSize(
+                            startingSize: startingSize,
+                            dragTranslation: value.translation,
+                            corner: corner
+                        )
+                        userResultCardSize = clampedResultCardSize(proposedSize, in: availableSize)
+                    }
+                    .onEnded { _ in
+                        resizeStartSize = nil
+                    }
+            )
     }
 
     private var conversationArea: some View {
@@ -438,6 +570,9 @@ struct SelectionAssistantOverlay: View {
             isSavedAsNote = false
             savedNoteID = nil
             partialAnswer = ""
+            userResultCardSize = nil
+            measuredResultCardSize = .zero
+            resizeStartSize = nil
         }
     }
 
@@ -569,9 +704,32 @@ struct SelectionAssistantOverlay: View {
     }
 
     private var conversationMaximumHeight: CGFloat {
-        isMultiTurnConversation
+        if let userResultCardSize {
+            return max(0, userResultCardSize.height - SelectionAssistantLayout.resizedCardChromeHeight)
+        }
+        return isMultiTurnConversation
             ? SelectionAssistantLayout.multiTurnConversationMaximumHeight
             : SelectionAssistantLayout.singleTurnConversationMaximumHeight
+    }
+
+    private func resolvedResultCardSize(in availableSize: CGSize) -> CGSize {
+        let defaultHeight = max(measuredResultCardSize.height, SelectionAssistantLayout.resultCardMinimumHeight)
+        let proposedSize = userResultCardSize ?? CGSize(
+            width: SelectionAssistantLayout.resultCardMaximumWidth,
+            height: defaultHeight
+        )
+        return clampedResultCardSize(proposedSize, in: availableSize)
+    }
+
+    private func clampedResultCardSize(_ proposedSize: CGSize, in availableSize: CGSize) -> CGSize {
+        SelectionAssistantResizeGeometry.clampedCardSize(
+            proposedSize,
+            availableSize: availableSize,
+            minimumSize: CGSize(
+                width: SelectionAssistantLayout.resultCardMinimumWidth,
+                height: SelectionAssistantLayout.resultCardMinimumHeight
+            )
+        )
     }
 
     private func initialInstruction(for action: SelectionAssistantAction) -> String {
@@ -731,8 +889,9 @@ struct SelectionAssistantConversationView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .measureConversationHeight(.content)
             }
-            // A flexible height lets the card shrink to the reader's available
-            // space, including its header, follow-up field, and action capsule.
+            // Keep the viewport tied to the measured content height. Streaming
+            // still follows the bottom, but a short first answer must not reserve
+            // the entire maximum height and leave a large empty card behind.
             .frame(minHeight: 0, idealHeight: conversationViewportHeight, maxHeight: conversationViewportHeight)
             .clipped()
             .measureConversationHeight(.viewport)
@@ -902,11 +1061,6 @@ struct SelectionAssistantConversationView: View {
     }
 
     private var conversationViewportHeight: CGFloat {
-        if followsStreamingBottom {
-            // Reserve the final scrolling viewport once text starts arriving. The
-            // card then grows once instead of changing height for every wrapped line.
-            return conversationMaximumHeight
-        }
         return min(ceil(conversationHeights[.content] ?? 0), conversationMaximumHeight)
     }
 
@@ -1011,6 +1165,17 @@ private struct SelectionAssistantCircleButtonStyle: ButtonStyle {
 }
 
 private extension View {
+    func measureSelectionAssistantResultCardSize() -> some View {
+        background {
+            GeometryReader { geometry in
+                Color.clear.preference(
+                    key: SelectionAssistantResultCardSizePreferenceKey.self,
+                    value: geometry.size
+                )
+            }
+        }
+    }
+
     func measureConversationHeight(_ element: SelectionAssistantConversationGeometry) -> some View {
         background {
             GeometryReader { geometry in

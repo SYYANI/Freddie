@@ -4716,6 +4716,17 @@
         }
       }
     },
+    "Resize AI window" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "调整 AI 浮窗大小"
+          }
+        }
+      }
+    },
     "Responses API" : {
       "localizations" : {
         "zh-Hans" : {
@@ -5661,16 +5672,6 @@
         }
       }
     },
-    "The web search completed, but the provider did not generate an answer." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "网页搜索已完成，但服务提供方没有生成答案。"
-          }
-        }
-      }
-    },
     "The request was cancelled." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -5766,6 +5767,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "无法打开译文 PDF 以导出调试信息。"
+          }
+        }
+      }
+    },
+    "The web search completed, but the provider did not generate an answer." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "网页搜索已完成，但服务提供方没有生成答案。"
           }
         }
       }
