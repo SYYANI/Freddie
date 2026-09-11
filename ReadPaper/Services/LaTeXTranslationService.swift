@@ -649,6 +649,24 @@ struct ReadPaperLaTeXEngineCompatibilityPreamblePolicy: LaTeXPreambleTransformin
 
     static func normalizeEngineSpecificSource(_ source: String) -> String {
         var result = source
+        // Repair translated projects produced by the short-lived buggy rewrite that
+        // emitted a literal "n" where the command separator should have been.
+        result = replacingLines(
+            matching: #"(?m)^([ \t]*)\\providecommand\{\\chinese\}\{\}n\\renewcommand\{\\chinese\}([^\r\n]*)$"#,
+            with: #"$1\\providecommand{\\chinese}{}"#
+                + "\n"
+                + #"$1\\renewcommand{\\chinese}$2"#,
+            in: result
+        )
+        // ctex owns \chinese as a numeral command. Legacy projects sometimes use the
+        // same name as a CJK text wrapper, so make their definition safe to override.
+        result = replacingLines(
+            matching: #"(?m)^([ \t]*)\\newcommand[ \t]*(?:\{[ \t]*\\chinese[ \t]*\}|\\chinese)([^\r\n]*)$"#,
+            with: #"$1\\providecommand{\\chinese}{}"#
+                + "\n"
+                + #"$1\\renewcommand{\\chinese}$2"#,
+            in: result
+        )
         result = replacingLines(
             matching: #"(?m)^([ \t]*)\\(pdfoutput|pdfsuppresswarningpagegroup|pdfminorversion|pdfcompresslevel|pdfobjcompresslevel|pdfinclusioncopyfonts|pdfgentounicode)[ \t]*=[ \t]*([+-]?\d+)([ \t]*(?:%[^\r\n]*)?)$"#,
             with: #"$1\\ifdefined\\$2\\$2=$3\\fi$4"#,

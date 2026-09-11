@@ -421,6 +421,52 @@ final class LaTeXTranslationServiceTests: XCTestCase {
         XCTAssertEqual(transformedTwice, transformed)
     }
 
+    func testLaTeXPreambleSafelyRedefinesLegacyChineseTextHelperAfterCTeXLoads() throws {
+        let source = #"""
+        \documentclass{article}
+        \usepackage{CJKutf8}
+        \newcommand{\chinese}[1]{\begin{CJK*}{UTF8}{gbsn}{#1}\end{CJK*}}
+        \begin{document}\chinese{中文}\end{document}
+        """#
+        let policy = ReadPaperLaTeXEngineCompatibilityPreamblePolicy()
+
+        let transformed = try policy.transform(
+            source,
+            targetLanguage: .simplifiedChinese
+        )
+        let transformedTwice = try policy.transform(
+            transformed,
+            targetLanguage: .simplifiedChinese
+        )
+
+        XCTAssertTrue(transformed.contains(#"\usepackage[UTF8,fontset=fandol]{ctex}"#))
+        XCTAssertTrue(transformed.contains(#"""
+        \providecommand{\chinese}{}
+        \renewcommand{\chinese}[1]{{#1}}
+        """#))
+        XCTAssertFalse(transformed.contains(#"\providecommand{\chinese}{}n\renewcommand"#))
+        XCTAssertFalse(transformed.contains(#"\newcommand{\chinese}"#))
+        XCTAssertEqual(transformedTwice, transformed)
+    }
+
+    func testLaTeXNormalizerRepairsLiteralNewlineArtifactFromPreviousRewrite() {
+        let malformed = #"\providecommand{\chinese}{}n\renewcommand{\chinese}[1]{{#1}}"#
+        let expected = #"""
+        \providecommand{\chinese}{}
+        \renewcommand{\chinese}[1]{{#1}}
+        """#
+
+        let repaired = ReadPaperLaTeXEngineCompatibilityPreamblePolicy
+            .normalizeEngineSpecificSource(malformed)
+
+        XCTAssertEqual(repaired, expected)
+        XCTAssertEqual(
+            ReadPaperLaTeXEngineCompatibilityPreamblePolicy
+                .normalizeEngineSpecificSource(repaired),
+            repaired
+        )
+    }
+
     func testLaTeXProjectCompatibilityNormalizerRewritesNestedSupportFilesIdempotently() throws {
         let temporary = try TemporaryTestDirectory()
         defer { temporary.remove() }

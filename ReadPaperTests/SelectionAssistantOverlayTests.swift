@@ -212,6 +212,37 @@ final class SelectionAssistantOverlayTests: XCTestCase {
         )
     }
 
+    @MainActor
+    func testCompletingStreamDoesNotShrinkConversationViewport() async throws {
+        let fixture = ConversationFixture()
+        defer { fixture.window.close() }
+        let request = SelectionAssistantConversationScrollRequest(turnIndex: 0)
+
+        fixture.show(
+            [],
+            pending: "Explain this.",
+            partialAnswer: String(repeating: "Streaming answer text. ", count: 100),
+            scrollRequest: request
+        )
+        try await fixture.settle()
+
+        let scroll = try fixture.scrollView()
+        let streamingViewportHeight = scroll.contentView.bounds.height
+        XCTAssertGreaterThan(streamingViewportHeight, 0)
+
+        // Finalization replaces the streaming Markdown node. The finalized text
+        // can be shorter after trimming or citation normalization, but the card
+        // must retain the height the user was already reading at.
+        fixture.show(
+            [turn(answer: "A concise final answer.")],
+            scrollRequest: .init(turnIndex: 0)
+        )
+        try await fixture.settle()
+
+        let completedScroll = try fixture.scrollView()
+        XCTAssertEqual(completedScroll.contentView.bounds.height, streamingViewportHeight, accuracy: 1)
+    }
+
     private static let longAnswer = (1...45).map { "Explanation line \($0)." }.joined(separator: "\n")
 
     private func turn(question: String = "A question.", answer: String) -> SelectionAssistantConversationTurn {

@@ -897,7 +897,15 @@ struct SelectionAssistantConversationView: View {
             .measureConversationHeight(.viewport)
             .opacity(hasConversationAreaContent ? 1 : 0)
             .onPreferenceChange(SelectionAssistantConversationHeightPreferenceKey.self) { height in
-                let normalizedHeights = height.mapValues { ceil(max(0, $0)) }
+                var normalizedHeights = height.mapValues { ceil(max(0, $0)) }
+                // Finalization replaces the streamed Markdown node and can report
+                // a shorter content height after trimming/citation normalization.
+                // Retain the largest content measurement already presented so the
+                // card never collapses at the end of generation.
+                normalizedHeights[.content] = max(
+                    normalizedHeights[.content] ?? 0,
+                    conversationHeights[.content] ?? 0
+                )
                 guard normalizedHeights != conversationHeights else { return }
 
                 // Streaming updates arrive much faster than a layout animation can
