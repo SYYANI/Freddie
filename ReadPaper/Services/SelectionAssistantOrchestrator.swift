@@ -11,17 +11,27 @@ struct SelectionAssistantScopeResolver {
         if containsAny(question, terms: externalIntentTerms) {
             return .external
         }
-        if containsAny(question, terms: genericSearchIntentTerms),
-           containsAny(question, terms: currentPaperSearchTerms) {
-            return .fullPaper
-        }
-        if containsAny(question, terms: genericSearchIntentTerms) {
+        if hasGenericSearchIntent(in: question) {
+            if containsAny(question, terms: currentPaperSearchTerms) {
+                return .fullPaper
+            }
             return .external
         }
         if containsAny(question, terms: fullPaperIntentTerms) {
             return .fullPaper
         }
         return .nearby
+    }
+
+    /// Detects a "look this up" intent. Explicit command phrasings count on
+    /// their own. Ambiguous search words only count when they are not part of
+    /// a domain noun phrase such as "搜索空间" or "数据库查询".
+    private static func hasGenericSearchIntent(in question: String) -> Bool {
+        if containsAny(question, terms: genericSearchIntentTerms) {
+            return true
+        }
+        guard containsAny(question, terms: ambiguousSearchVerbTerms) else { return false }
+        return containsAny(question, terms: searchNounPhraseTerms) == false
     }
 
     private static func containsAny(_ text: String, terms: [String]) -> Bool {
@@ -37,10 +47,28 @@ struct SelectionAssistantScopeResolver {
     ]
 
     private static let genericSearchIntentTerms = [
-        "搜索一下", "搜一下", "查一下", "查找一下", "检索一下", "帮我搜索", "帮我搜",
-        "帮我查", "帮我找", "再了解", "进一步了解", "了解更多",
-        "search for", "search this", "look up", "find out more", "learn more",
-        "research this"
+        "搜索一下", "搜一下", "搜下", "搜搜", "查询一下", "查一下", "查查",
+        "查找一下", "查阅一下", "检索一下", "请搜索", "请查询", "请检索",
+        "帮我搜索", "帮我查询", "帮我检索", "帮我搜", "帮我查", "帮我找",
+        "再了解", "进一步了解", "了解更多",
+        "search for", "search this", "look up", "look it up", "find out more", "learn more",
+        "research this", "web search"
+    ]
+
+    private static let ambiguousSearchVerbTerms = [
+        "搜索", "查询", "检索"
+    ]
+
+    /// Noun usages that merely name something inside the paper, so an
+    /// ambiguous search word should not turn them into a web-search request.
+    private static let searchNounPhraseTerms = [
+        "搜索空间", "搜索算法", "搜索策略", "搜索树", "搜索过程", "搜索效率", "搜索范围",
+        "搜索路径", "搜索方法", "搜索宽度", "搜索深度",
+        "数据库查询", "查询语句", "查询计划", "查询优化", "查询语言", "查询下推", "这个查询", "该查询",
+        "信息检索", "文献检索", "全文检索", "向量检索", "检索算法", "检索模型", "检索系统", "检索任务",
+        "检索增强",
+        "search space", "search algorithm", "search strategy", "search tree",
+        "search process", "beam search", "greedy search"
     ]
 
     private static let currentPaperSearchTerms = [

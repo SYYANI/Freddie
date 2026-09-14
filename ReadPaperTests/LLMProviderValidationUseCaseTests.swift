@@ -88,8 +88,8 @@ final class LLMProviderValidationUseCaseTests: XCTestCase {
             apiStyle: .responses,
             apiKey: "sk-secret-value",
             model: "test-model",
-            onTraceUpdated: { trace in
-                await traceRecorder.set(trace)
+            onTraceUpdated: { appendedEntries in
+                await traceRecorder.append(appendedEntries)
             }
         )
 
@@ -103,18 +103,30 @@ final class LLMProviderValidationUseCaseTests: XCTestCase {
         XCTAssertFalse(result.trace.contains("sk-secret-value"))
         let latestTrace = await traceRecorder.value()
         XCTAssertEqual(latestTrace, result.trace)
+        // Incremental batches are the whole point: the UI must never be handed
+        // the growing trace as one string on every update.
+        let batchCount = await traceRecorder.batchCount
+        let entryCount = await traceRecorder.entryCount
+        XCTAssertGreaterThan(batchCount, 1)
+        XCTAssertGreaterThan(entryCount, 1)
     }
 }
 
 private actor WebSearchTraceSnapshotRecorder {
-    private var trace = ""
+    private var appendedEntries: [String] = []
+    private(set) var batchCount = 0
 
-    func set(_ value: String) {
-        trace = value
+    var entryCount: Int {
+        appendedEntries.count
+    }
+
+    func append(_ entries: [String]) {
+        batchCount += 1
+        appendedEntries.append(contentsOf: entries)
     }
 
     func value() -> String {
-        trace
+        appendedEntries.joined(separator: "\n\n")
     }
 }
 

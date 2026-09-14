@@ -52,8 +52,18 @@ struct ReadPaperApp: App {
             SettingsView()
                 .environment(\.localizationBundle, bundle)
                 .modelContainer(sharedModelContainer)
-                .frame(width: 920, height: 720)
+                .frame(
+                    minWidth: SettingsWindowMetrics.minWidth,
+                    idealWidth: SettingsWindowMetrics.defaultWidth,
+                    minHeight: SettingsWindowMetrics.minHeight,
+                    idealHeight: SettingsWindowMetrics.defaultHeight
+                )
         }
+        .defaultSize(
+            width: SettingsWindowMetrics.defaultWidth,
+            height: SettingsWindowMetrics.defaultHeight
+        )
+        .windowResizability(.contentMinSize)
     }
 }
 

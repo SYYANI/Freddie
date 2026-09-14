@@ -139,7 +139,7 @@ private struct SettingsForm: View {
     @State private var providerWebSearchStatusMessage: String?
     @State private var providerWebSearchOutputPreview: String?
     @State private var providerWebSearchSources: [LLMWebSearchSource] = []
-    @State private var providerWebSearchTrace = ""
+    @State private var webSearchTrace = WebSearchTraceStore()
     @State private var showsProviderWebSearchTrace = false
     @State private var isTestingProviderWebSearch = false
 
@@ -1075,31 +1075,10 @@ private struct SettingsForm: View {
                     }
                 }
 
-                if providerWebSearchTrace.isEmpty == false {
-                    DisclosureGroup(
-                        String(localized: "Complete Web Search Trace", bundle: bundle),
-                        isExpanded: $showsProviderWebSearchTrace
-                    ) {
-                        VStack(alignment: .leading, spacing: 8) {
-                            ScrollView([.horizontal, .vertical]) {
-                                Text(providerWebSearchTrace)
-                                    .font(.system(.caption, design: .monospaced))
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .textSelection(.enabled)
-                            }
-                            .frame(minHeight: 100, maxHeight: 280)
-
-                            Button(String(localized: "Copy Trace", bundle: bundle)) {
-                                NSPasteboard.general.clearContents()
-                                NSPasteboard.general.setString(
-                                    providerWebSearchTrace,
-                                    forType: .string
-                                )
-                            }
-                        }
-                        .padding(.top, 6)
-                    }
-                }
+                WebSearchTracePanel(
+                    store: webSearchTrace,
+                    isExpanded: $showsProviderWebSearchTrace
+                )
             }
         }
         .formStyle(.grouped)
@@ -1840,7 +1819,7 @@ private struct SettingsForm: View {
         providerWebSearchStatusMessage = String(localized: "Testing web search...", bundle: bundle)
         providerWebSearchOutputPreview = nil
         providerWebSearchSources = []
-        providerWebSearchTrace = ""
+        webSearchTrace.reset()
         showsProviderWebSearchTrace = true
 
         Task { @MainActor in
@@ -1862,10 +1841,8 @@ private struct SettingsForm: View {
                     apiStyle: providerAPIStyle,
                     apiKey: apiKey,
                     model: providerTestModel,
-                    onTraceUpdated: { trace in
-                        await MainActor.run {
-                            providerWebSearchTrace = trace
-                        }
+                    onTraceUpdated: { appendedEntries in
+                        await webSearchTrace.append(appendedEntries)
                     }
                 )
 
@@ -1877,7 +1854,6 @@ private struct SettingsForm: View {
                 )
                 providerWebSearchOutputPreview = result.outputPreview
                 providerWebSearchSources = result.sources
-                providerWebSearchTrace = result.trace
             } catch {
                 providerWebSearchStatusMessage = AppLocalization.errorMessage(error, bundle: bundle)
                 providerWebSearchOutputPreview = nil
@@ -1890,7 +1866,7 @@ private struct SettingsForm: View {
         providerWebSearchStatusMessage = nil
         providerWebSearchOutputPreview = nil
         providerWebSearchSources = []
-        providerWebSearchTrace = ""
+        webSearchTrace.reset()
         showsProviderWebSearchTrace = false
     }
 

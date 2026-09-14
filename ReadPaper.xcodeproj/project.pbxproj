@@ -156,6 +156,7 @@
 		C30A50E23BD5205861D15950 /* AuthorExtractionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 302B63A40C9C12372F265892 /* AuthorExtractionService.swift */; };
 		C32A09DCBB8F25B74FEA92B3 /* BabelDocProgressUpdate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D0129BA774AA8C88DA3C2CE /* BabelDocProgressUpdate.swift */; };
 		C3E00F31D932241E84BD653F /* InfoPlist.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 3CE3EE5D0C12AA18DC15558F /* InfoPlist.xcstrings */; };
+		C611684A3A40F5CF7D1BD635 /* WebSearchTraceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6073F034126CB06F70029D2F /* WebSearchTraceView.swift */; };
 		C62F739AE4156E66737497FD /* LaTeXTransKit in Frameworks */ = {isa = PBXBuildFile; productRef = 92414CE9428CA4380C920377 /* LaTeXTransKit */; };
 		C6BD46E8C689253081DF1D9E /* InProcessBabelDocRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = E12451762B0019509E09BADD /* InProcessBabelDocRunner.swift */; };
 		C845278B8BCCC2402E86732D /* IPadSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99D1D151FD3AF4BFBBE5C55C /* IPadSettingsView.swift */; };
@@ -183,6 +184,7 @@
 		E7542A5BAFC829257053498A /* IPadInspectorPaneView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A986762144D055B297DEC92 /* IPadInspectorPaneView.swift */; };
 		E848AA1C4D13F435EF6B0C1C /* PaperFullTextSearchServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2FB56A153DC953B4828392D /* PaperFullTextSearchServiceTests.swift */; };
 		E84EF6C6B757E7331F99BCB9 /* LLMModelProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78A4FD40176F3BF293CF2AD5 /* LLMModelProfile.swift */; };
+		E94871B1283D2B98AB226259 /* WebSearchTraceStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8426A3004A6ED1C2D0480A50 /* WebSearchTraceStoreTests.swift */; };
 		EB4126227490742F7C28AAF1 /* SelectionAssistantServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47A2A8F5AD477567E1240F28 /* SelectionAssistantServiceTests.swift */; };
 		EBD68891314DD0B0035E0C16 /* PaperImporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61B39EE919BF400C2E3155C6 /* PaperImporter.swift */; };
 		EDC74DFF3F1F12EFED1038D1 /* PaperDigestExportPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A5CE9583FC6BBC3FBA18158 /* PaperDigestExportPolicy.swift */; };
@@ -193,6 +195,7 @@
 		F5549045CAFC36D43776C228 /* PaperFullTextSearchService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96C1B29067F9D656464A8ADD /* PaperFullTextSearchService.swift */; };
 		F58BF1CACEBE2065B792874B /* TranslationLLMClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B99DBBAB3B54CC7AB7DEF2F /* TranslationLLMClient.swift */; };
 		F72717940014D21DF24FC04D /* HTMLTranslationPipelineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40C65F7E1559275AA3A5AA9F /* HTMLTranslationPipelineTests.swift */; };
+		F7AB37315E2C1CD4159F1DBF /* SettingsWindowMetricsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82E77B54F15A9A3FEE8F1733 /* SettingsWindowMetricsTests.swift */; };
 		FA4B946715F0FB50611825BD /* TranslationPreferencesSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90F28004ABD616B1A38ED52A /* TranslationPreferencesSnapshot.swift */; };
 		FAF78845B72289DB46617CF8 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 756B3F8A255940BE24DE7FD6 /* AppSettings.swift */; };
 		FCF84C51FFF1218DAA111C54 /* BabelDocKit in Frameworks */ = {isa = PBXBuildFile; productRef = BAFDD8F8E234BC26852B46CF /* BabelDocKit */; };
@@ -268,6 +271,7 @@
 		585E60D2D3441D8A764523FD /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		594B6C9B9B5DF6796E6B048B /* PDFMergerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PDFMergerTests.swift; sourceTree = "<group>"; };
 		5AE04037B749D64F46B8231B /* ArxivClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArxivClient.swift; sourceTree = "<group>"; };
+		6073F034126CB06F70029D2F /* WebSearchTraceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebSearchTraceView.swift; sourceTree = "<group>"; };
 		61B39EE919BF400C2E3155C6 /* PaperImporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaperImporter.swift; sourceTree = "<group>"; };
 		6430BCDDD5126C2478477D4B /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		6BF28DC82B3404FEF1D9A022 /* NoteAnchorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteAnchorTests.swift; sourceTree = "<group>"; };
@@ -294,6 +298,8 @@
 		817802100CC82AF9E893032F /* ToolInstallState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolInstallState.swift; sourceTree = "<group>"; };
 		81D379C5A3B056970FE8B41C /* ReadPaperTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ReadPaperTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		828C0B603F44CECCA3F7B1A1 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		82E77B54F15A9A3FEE8F1733 /* SettingsWindowMetricsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsWindowMetricsTests.swift; sourceTree = "<group>"; };
+		8426A3004A6ED1C2D0480A50 /* WebSearchTraceStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebSearchTraceStoreTests.swift; sourceTree = "<group>"; };
 		86A0B3222D26D3E011AC790A /* LiquidGlassStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiquidGlassStyle.swift; sourceTree = "<group>"; };
 		86C925A200F45FCD09BF39B6 /* TranslationJob.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslationJob.swift; sourceTree = "<group>"; };
 		873608C4E855A8AC35CB5ABB /* NoteAnchor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteAnchor.swift; sourceTree = "<group>"; };
@@ -486,6 +492,7 @@
 				79F764730530AC64846F716F /* SelectionAssistantOverlay.swift */,
 				585E60D2D3441D8A764523FD /* SettingsView.swift */,
 				D1066FFD97CD0FAFC6EBB7A6 /* StableNavigationSplitDividerHandle.swift */,
+				6073F034126CB06F70029D2F /* WebSearchTraceView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -557,6 +564,8 @@
 				530B5C69AD3FCA0AFBBB8D69 /* SelectionAssistantOverlayTests.swift */,
 				47A2A8F5AD477567E1240F28 /* SelectionAssistantServiceTests.swift */,
 				AC93E8D9F0A4BAC6F2F383D3 /* SettingsGeneralStatusTests.swift */,
+				82E77B54F15A9A3FEE8F1733 /* SettingsWindowMetricsTests.swift */,
+				8426A3004A6ED1C2D0480A50 /* WebSearchTraceStoreTests.swift */,
 			);
 			path = ReadPaperTests;
 			sourceTree = "<group>";
@@ -934,6 +943,8 @@
 				55BD46855D3DDECA2DE801B1 /* SelectionAssistantOverlayTests.swift in Sources */,
 				EB4126227490742F7C28AAF1 /* SelectionAssistantServiceTests.swift in Sources */,
 				5B6BE9E4CC22893DFF9846AE /* SettingsGeneralStatusTests.swift in Sources */,
+				F7AB37315E2C1CD4159F1DBF /* SettingsWindowMetricsTests.swift in Sources */,
+				E94871B1283D2B98AB226259 /* WebSearchTraceStoreTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1091,6 +1102,7 @@
 				8F01D2A7FAEBECCA4498C1F6 /* TranslationPreferencesSnapshot.swift in Sources */,
 				1FF14251FBD20C1F8E9BD9BC /* TranslationSegment.swift in Sources */,
 				1F7C10DF37D34AA5B9FFD984 /* TranslationTargetLanguage.swift in Sources */,
+				C611684A3A40F5CF7D1BD635 /* WebSearchTraceView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1174,7 +1186,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 60;
+				CURRENT_PROJECT_VERSION = 61;
 				DEVELOPMENT_LANGUAGE = en;
 				ENABLE_TESTABILITY = NO;
 				INFOPLIST_FILE = ReadPaper/Info.plist;
@@ -1185,7 +1197,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 0.4.19;
+				MARKETING_VERSION = 0.4.20;
 				PRODUCT_BUNDLE_IDENTIFIER = com.yiyan.ReadPaper;
 				PRODUCT_MODULE_NAME = ReadPaper;
 				PRODUCT_NAME = Freddie;
@@ -1341,7 +1353,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 60;
+				CURRENT_PROJECT_VERSION = 61;
 				DEVELOPMENT_LANGUAGE = en;
 				DEVELOPMENT_TEAM = 3VM5RUH8V5;
 				ENABLE_TESTABILITY = YES;
@@ -1351,7 +1363,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.4.19;
+				MARKETING_VERSION = 0.4.20;
 				PRODUCT_BUNDLE_IDENTIFIER = com.yiyan.ReadPaper.iPad;
 				PRODUCT_MODULE_NAME = ReadPaperiPad;
 				PRODUCT_NAME = Freddie;
@@ -1394,7 +1406,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 60;
+				CURRENT_PROJECT_VERSION = 61;
 				DEVELOPMENT_LANGUAGE = en;
 				DEVELOPMENT_TEAM = 3VM5RUH8V5;
 				ENABLE_TESTABILITY = YES;
@@ -1404,7 +1416,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.4.19;
+				MARKETING_VERSION = 0.4.20;
 				PRODUCT_BUNDLE_IDENTIFIER = com.yiyan.ReadPaper.iPad;
 				PRODUCT_MODULE_NAME = ReadPaperiPad;
 				PRODUCT_NAME = Freddie;
@@ -1425,7 +1437,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 60;
+				CURRENT_PROJECT_VERSION = 61;
 				DEVELOPMENT_LANGUAGE = en;
 				ENABLE_TESTABILITY = YES;
 				INFOPLIST_FILE = ReadPaper/Info.plist;
@@ -1436,7 +1448,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 0.4.19;
+				MARKETING_VERSION = 0.4.20;
 				PRODUCT_BUNDLE_IDENTIFIER = com.yiyan.ReadPaper;
 				PRODUCT_MODULE_NAME = ReadPaper;
 				PRODUCT_NAME = Freddie;

@@ -82,6 +82,68 @@ final class SelectionAssistantOrchestratorTests: XCTestCase {
             ),
             .external
         )
+        // Search phrasings that only differ from "搜索一下" by a following
+        // word used to fall through to a nearby-only answer, so no web search
+        // was attempted at all.
+        for question in [
+            "搜索了解一下",
+            "搜索了解下背景知识",
+            "搜索相关信息告诉我",
+            "查询下最新版本是什么"
+        ] {
+            XCTAssertEqual(
+                SelectionAssistantScopeResolver.resolve(
+                    SelectionAssistantRequest(
+                        action: .ask,
+                        selection: "A method",
+                        question: question,
+                        scope: .automatic
+                    )
+                ),
+                .external,
+                question
+            )
+        }
+        XCTAssertEqual(
+            SelectionAssistantScopeResolver.resolve(
+                SelectionAssistantRequest(
+                    action: .ask,
+                    selection: "A method",
+                    question: "这个搜索空间有多大",
+                    scope: .automatic
+                )
+            ),
+            .nearby
+        )
+        XCTAssertEqual(
+            SelectionAssistantScopeResolver.resolve(
+                SelectionAssistantRequest(
+                    action: .ask,
+                    selection: "A method",
+                    question: "论文中的搜索算法如何工作",
+                    scope: .automatic
+                )
+            ),
+            .fullPaper
+        )
+        for question in [
+            "我想了解一下这个公式",
+            "解释一下检索增强生成",
+            "这个数据库查询为什么这么慢"
+        ] {
+            XCTAssertEqual(
+                SelectionAssistantScopeResolver.resolve(
+                    SelectionAssistantRequest(
+                        action: .ask,
+                        selection: "A method",
+                        question: question,
+                        scope: .automatic
+                    )
+                ),
+                .nearby,
+                question
+            )
+        }
         XCTAssertEqual(
             SelectionAssistantScopeResolver.resolve(
                 SelectionAssistantRequest(action: .ask, selection: "A claim", scope: .nearby)

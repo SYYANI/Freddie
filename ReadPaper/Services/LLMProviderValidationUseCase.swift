@@ -119,7 +119,7 @@ struct LLMProviderValidationUseCase {
         apiKey: String,
         model: String,
         timeoutSeconds: TimeInterval = 60,
-        onTraceUpdated: (@Sendable (String) async -> Void)? = nil
+        onTraceUpdated: (@Sendable ([String]) async -> Void)? = nil
     ) async throws -> LLMProviderWebSearchTestResult {
         guard apiStyle == .responses else {
             throw LLMProviderValidationError.webSearchRequiresResponsesAPI
@@ -129,9 +129,9 @@ struct LLMProviderValidationUseCase {
         let validatedAPIKey = try validateAPIKey(apiKey)
         let recorder = LLMProviderWebSearchTraceRecorder(apiKey: validatedAPIKey)
         let traceHandler: @Sendable (String) async -> Void = { entry in
-            let update = await recorder.append(entry)
-            if update.shouldPublish, let onTraceUpdated {
-                await onTraceUpdated(update.trace)
+            let appendedEntries = await recorder.append(entry)
+            if appendedEntries.isEmpty == false, let onTraceUpdated {
+                await onTraceUpdated(appendedEntries)
             }
         }
 
@@ -170,9 +170,7 @@ struct LLMProviderValidationUseCase {
                 onPartialText: { _ in }
             )
         } catch {
-            if let onTraceUpdated {
-                await onTraceUpdated(await recorder.value())
-            }
+            await publishPendingTraceEntries(from: recorder, to: onTraceUpdated)
             throw error
         }
         let latencyMs = Self.elapsedMilliseconds(from: start.duration(to: .now))
@@ -182,6 +180,7 @@ struct LLMProviderValidationUseCase {
         Source URLs: \(response.webSearchSources.count)
         Latency: \(latencyMs) ms
         """)
+        await publishPendingTraceEntries(from: recorder, to: onTraceUpdated)
         let trace = await recorder.value()
 
         guard response.webSearchSources.isEmpty == false else {
@@ -195,6 +194,21 @@ struct LLMProviderValidationUseCase {
             sources: response.webSearchSources,
             trace: trace
         )
+    }
+
+    /// Delivers trace entries that the streaming throttle has not published yet.
+    ///
+    /// The caller receives incremental batches so it never has to re-render the
+    /// whole trace on every update; this final flush keeps the delivered entries
+    /// identical to `LLMProviderWebSearchTestResult.trace`.
+    private func publishPendingTraceEntries(
+        from recorder: LLMProviderWebSearchTraceRecorder,
+        to onTraceUpdated: (@Sendable ([String]) async -> Void)?
+    ) async {
+        guard let onTraceUpdated else { return }
+        let appendedEntries = await recorder.flushPendingEntries()
+        guard appendedEntries.isEmpty == false else { return }
+        await onTraceUpdated(appendedEntries)
     }
 
     private func validateBaseURLAsURL(_ rawValue: String) throws -> URL {
@@ -250,30 +264,40 @@ struct LLMProviderValidationUseCase {
 }
 
 private actor LLMProviderWebSearchTraceRecorder {
-    struct Update: Sendable {
-        let trace: String
-        let shouldPublish: Bool
-    }
-
     private let apiKey: String
     private var entries: [String] = []
+    private var pendingEntries: [String] = []
 
     init(apiKey: String) {
         self.apiKey = apiKey
     }
 
-    func append(_ entry: String) -> Update {
+    /// Appends one redacted entry and returns the entries that are ready to publish.
+    func append(_ entry: String) -> [String] {
         let sanitized = entry.replacingOccurrences(of: apiKey, with: "<redacted>")
-        entries.append("[\(entries.count + 1)] \(sanitized)")
-        let shouldPublish = sanitized.contains(".delta") == false
+        let numberedEntry = "[\(entries.count + 1)] \(sanitized)"
+        entries.append(numberedEntry)
+        pendingEntries.append(numberedEntry)
+
+        // Streaming deltas arrive in tight bursts, so only publish them periodically.
+        let shouldPublish = numberedEntry.contains(".delta") == false
             || entries.count.isMultiple(of: 25)
-        return Update(
-            trace: shouldPublish ? entries.joined(separator: "\n\n") : "",
-            shouldPublish: shouldPublish
-        )
+        return drainPendingEntries(if: shouldPublish)
+    }
+
+    /// Returns the entries that are still waiting for the periodic stream flush.
+    func flushPendingEntries() -> [String] {
+        drainPendingEntries(if: true)
     }
 
     func value() -> String {
         entries.joined(separator: "\n\n")
+    }
+
+    private func drainPendingEntries(if shouldPublish: Bool) -> [String] {
+        guard shouldPublish, pendingEntries.isEmpty == false else { return [] }
+        let drainedEntries = pendingEntries
+        pendingEntries.removeAll(keepingCapacity: true)
+        return drainedEntries
     }
 }

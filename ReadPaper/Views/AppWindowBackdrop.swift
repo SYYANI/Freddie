@@ -6,6 +6,53 @@ enum AppWindowBackdropRole {
     case settings
 }
 
+enum SettingsWindowMetrics {
+    static let defaultWidth: CGFloat = 920
+    static let defaultHeight: CGFloat = 720
+    /// The Providers/Models tabs lay out a fixed 310pt list column plus a
+    /// 420pt minimum detail column, so the window keeps room for that pair.
+    static let minWidth: CGFloat = 840
+    static let minHeight: CGFloat = 520
+
+    static let defaultContentSize = NSSize(width: defaultWidth, height: defaultHeight)
+    static let minContentSize = NSSize(width: minWidth, height: minHeight)
+
+    /// Keeps the settings window a little away from the screen edges, so the
+    /// traffic lights and the tab bar stay inside the menu bar / Dock area.
+    static let screenMargin: CGFloat = 12
+
+    /// Largest content size that still keeps the whole window inside
+    /// `visibleFrame`, once the title bar chrome is accounted for.
+    static func maximumContentSize(
+        fitting visibleFrame: NSSize,
+        chromeSize: NSSize,
+        margin: CGFloat = screenMargin
+    ) -> NSSize {
+        NSSize(
+            width: max(0, visibleFrame.width - chromeSize.width - margin * 2),
+            height: max(0, visibleFrame.height - chromeSize.height - margin * 2)
+        )
+    }
+
+    /// Shrinks `contentSize` only when it would not fit on the screen. This runs
+    /// on small displays where the default 920x720 window is taller than the
+    /// visible frame (menu bar + Dock), which used to push part of the settings
+    /// content off screen.
+    static func contentSizeFittedToScreen(
+        _ contentSize: NSSize,
+        visibleFrame: NSSize,
+        chromeSize: NSSize,
+        margin: CGFloat = screenMargin
+    ) -> NSSize {
+        let maximum = maximumContentSize(fitting: visibleFrame, chromeSize: chromeSize, margin: margin)
+
+        return NSSize(
+            width: min(contentSize.width, maximum.width),
+            height: min(contentSize.height, maximum.height)
+        )
+    }
+}
+
 struct AppWindowBackdrop: NSViewRepresentable {
     let role: AppWindowBackdropRole
 
@@ -106,11 +153,14 @@ final class AppWindowConfigurationProbe: NSView {
 
         // Keep these constraints outside the one-time appearance setup. SwiftUI
         // may restore `.resizable` while reconciling a Window scene on macOS 15.
-        window.styleMask.remove([.miniaturizable, .resizable])
+        window.styleMask.remove(.miniaturizable)
         window.standardWindowButton(.miniaturizeButton)?.isEnabled = false
-        window.standardWindowButton(.zoomButton)?.isEnabled = false
 
-        if case .about = role {
+        switch role {
+        case .about:
+            window.styleMask.remove(.resizable)
+            window.standardWindowButton(.zoomButton)?.isEnabled = false
+
             let contentSize = AboutWindowMetrics.contentSize
             window.contentMinSize = contentSize
             window.contentMaxSize = contentSize
@@ -118,6 +168,18 @@ final class AppWindowConfigurationProbe: NSView {
             if window.contentLayoutRect.size != contentSize {
                 window.setContentSize(contentSize)
             }
+
+        case .settings:
+            // The settings tabs are scrollable, so the window can be resized down
+            // to fit displays that are smaller than the default 920x720 window.
+            window.styleMask.insert(.resizable)
+            window.contentMinSize = SettingsWindowMetrics.minContentSize
+            window.standardWindowButton(.zoomButton)?.isEnabled = true
+
+            // Re-checked on every pass, because SwiftUI can resize the window
+            // after its hosted view has already joined it. The fit is a no-op as
+            // long as the window is not taller or wider than the screen.
+            fitContentSizeToScreenIfNeeded(window)
         }
 
         centerWindowIfNeeded(window)
@@ -210,5 +272,25 @@ final class AppWindowConfigurationProbe: NSView {
 
         styledWindow.setFrame(frame, display: false)
         didCenterConfiguredWindow = true
+    }
+
+    private func fitContentSizeToScreenIfNeeded(_ styledWindow: NSWindow) {
+        let screen = styledWindow.screen ?? NSScreen.main
+        guard let visibleFrame = screen?.visibleFrame else { return }
+
+        let contentRect = styledWindow.contentRect(forFrameRect: styledWindow.frame)
+        let chromeSize = NSSize(
+            width: styledWindow.frame.width - contentRect.width,
+            height: styledWindow.frame.height - contentRect.height
+        )
+        let fittedSize = SettingsWindowMetrics.contentSizeFittedToScreen(
+            contentRect.size,
+            visibleFrame: visibleFrame.size,
+            chromeSize: chromeSize
+        )
+
+        guard fittedSize != contentRect.size else { return }
+
+        styledWindow.setContentSize(fittedSize)
     }
 }
