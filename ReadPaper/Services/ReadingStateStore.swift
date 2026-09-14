@@ -20,12 +20,22 @@ struct ReadingStateStore {
         scrollRatio: Double,
         zoomScale: Double = 1,
         htmlAnchor: String? = nil,
+        knownStatesByDescendingModificationDate: [ReadingState]? = nil,
         in modelContext: ModelContext
     ) throws {
-        let descriptor = FetchDescriptor<ReadingState>(
-            predicate: #Predicate<ReadingState> { $0.paperID == paperID }
-        )
-        let states = try modelContext.fetch(descriptor).sorted { $0.modifiedAt > $1.modifiedAt }
+        let knownStates = knownStatesByDescendingModificationDate?.filter {
+            $0.paperID == paperID
+        } ?? []
+        let states: [ReadingState]
+        if knownStates.isEmpty {
+            let descriptor = FetchDescriptor<ReadingState>(
+                predicate: #Predicate<ReadingState> { $0.paperID == paperID },
+                sortBy: [SortDescriptor(\ReadingState.modifiedAt, order: .reverse)]
+            )
+            states = try modelContext.fetch(descriptor)
+        } else {
+            states = knownStates
+        }
         let readingState = states.first ?? ReadingState(paperID: paperID)
 
         if states.isEmpty {

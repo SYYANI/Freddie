@@ -1,4 +1,5 @@
 import AppKit
+import CoreGraphics
 import OSLog
 import PDFKit
 import SwiftData
@@ -6,6 +7,11 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct ReaderPaneView: View {
+    private struct PDFPageCountRequest: Hashable, Sendable {
+        var attachmentID: UUID
+        var fileURL: URL
+    }
+
     private struct ReadingStatePersistenceSnapshot: Equatable {
         var paperID: UUID
         var attachmentID: UUID?
@@ -114,6 +120,7 @@ struct ReaderPaneView: View {
     @State private var selectionAssistantHistoryAnchors: [SelectionAssistantHistoryAnchor] = []
     @State private var htmlSelectionHighlightResetToken = 0
     @State private var htmlNativeSelectionClearToken = 0
+    @State private var originalPDFPageCount: Int?
 
     private var pdfAttachment: PaperAttachment? {
         attachments.first { $0.kind == .pdf }
@@ -135,9 +142,12 @@ struct ReaderPaneView: View {
             .max { $0.createdAt < $1.createdAt }
     }
 
-    private var originalPDFPageCount: Int? {
-        guard let url = pdfAttachment?.fileURL else { return nil }
-        return PDFDocument(url: url)?.pageCount
+    private var originalPDFPageCountRequest: PDFPageCountRequest? {
+        guard let attachment = pdfAttachment else { return nil }
+        return PDFPageCountRequest(
+            attachmentID: attachment.id,
+            fileURL: attachment.fileURL
+        )
     }
 
     private var isPartialPDFTranslation: Bool {
@@ -261,6 +271,9 @@ struct ReaderPaneView: View {
                 restoreReadingStateForCurrentPaper()
                 restorePDFTranslationDiagnostics()
                 refreshSelectionAssistantHistoryAnchors()
+            }
+            .task(id: originalPDFPageCountRequest) {
+                await refreshOriginalPDFPageCount(for: originalPDFPageCountRequest)
             }
             .onChange(of: paper?.id) { _, _ in
                 flushPendingReadingStatePersistence()
@@ -2450,6 +2463,19 @@ struct ReaderPaneView: View {
         }
     }
 
+    private func refreshOriginalPDFPageCount(for request: PDFPageCountRequest?) async {
+        guard let request else {
+            originalPDFPageCount = nil
+            return
+        }
+
+        let pageCount = await Task.detached(priority: .utility) {
+            CGPDFDocument(request.fileURL as CFURL)?.numberOfPages
+        }.value
+        guard originalPDFPageCountRequest == request else { return }
+        originalPDFPageCount = pageCount
+    }
+
     private func readingStatePersistenceSnapshot() -> ReadingStatePersistenceSnapshot? {
         guard !suspendReadingStatePersistence, let paper else { return nil }
         guard htmlAttachment != nil || pdfAttachment != nil || translatedPDFAttachment != nil else {
@@ -2541,6 +2567,7 @@ struct ReaderPaneView: View {
                 readerMode: snapshot.readerMode,
                 pageIndex: snapshot.pageIndex,
                 scrollRatio: snapshot.scrollRatio,
+                knownStatesByDescendingModificationDate: readingStates,
                 in: modelContext
             )
         } catch {

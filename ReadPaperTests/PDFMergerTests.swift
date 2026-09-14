@@ -469,6 +469,21 @@ final class PDFMergerTests: XCTestCase {
         )
     }
 
+    func testDualPDFSplitDragUpdatesAreLimitedToDisplayCadence() {
+        XCTAssertTrue(DualPDFSplitLayout.shouldEmitDragUpdate(
+            lastTimestamp: nil,
+            currentTimestamp: 1
+        ))
+        XCTAssertFalse(DualPDFSplitLayout.shouldEmitDragUpdate(
+            lastTimestamp: 1,
+            currentTimestamp: 1 + (1.0 / 120.0)
+        ))
+        XCTAssertTrue(DualPDFSplitLayout.shouldEmitDragUpdate(
+            lastTimestamp: 1,
+            currentTimestamp: 1 + (1.0 / 60.0)
+        ))
+    }
+
     func testAutomaticScalingRestoresOnlyWhenCurrentScaleIsNearFit() {
         XCTAssertTrue(PDFAutomaticScalingPolicy.shouldRestore(
             currentScale: 0.55,
@@ -486,8 +501,35 @@ final class PDFMergerTests: XCTestCase {
 
     func testPDFDisplayAppearanceOnlyCompositesWhenAnOverlayNeedsBlending() {
         XCTAssertFalse(PDFDisplayAppearance.defaultMode.requiresOverlayCompositing)
+        #if os(macOS)
+        XCTAssertFalse(PDFDisplayAppearance.dark.requiresOverlayCompositing)
+        XCTAssertFalse(PDFDisplayAppearance.paper.requiresOverlayCompositing)
+        XCTAssertFalse(PDFDisplayAppearance.defaultMode.usesNativeContentFilter)
+        XCTAssertTrue(PDFDisplayAppearance.dark.usesNativeContentFilter)
+        XCTAssertTrue(PDFDisplayAppearance.paper.usesNativeContentFilter)
+        #else
         XCTAssertTrue(PDFDisplayAppearance.dark.requiresOverlayCompositing)
         XCTAssertTrue(PDFDisplayAppearance.paper.requiresOverlayCompositing)
+        #endif
+    }
+
+    @MainActor
+    func testPDFDisplayAppearanceUsesNativeMacOSContentFilters() {
+        let pdfView = PDFView()
+        let coordinator = PDFReaderView.Coordinator(
+            attachmentID: nil,
+            pageIndex: .constant(0),
+            onNoteSelectionChanged: nil
+        )
+
+        coordinator.applyDisplayAppearance(.dark, to: pdfView)
+        XCTAssertEqual(pdfView.contentFilters.first?.name, "CIColorInvert")
+
+        coordinator.applyDisplayAppearance(.paper, to: pdfView)
+        XCTAssertEqual(pdfView.contentFilters.first?.name, "CIColorMatrix")
+
+        coordinator.applyDisplayAppearance(.defaultMode, to: pdfView)
+        XCTAssertTrue(pdfView.contentFilters.isEmpty)
     }
 
     func testDualPDFSelectionOwnershipClearsPreviousSideWhenSelectionSwitches() {

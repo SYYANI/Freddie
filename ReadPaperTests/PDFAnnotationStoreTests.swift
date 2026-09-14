@@ -1,4 +1,5 @@
 import AppKit
+import CoreText
 import PDFKit
 import SwiftUI
 import XCTest
@@ -274,6 +275,95 @@ final class PDFAnnotationStoreTests: XCTestCase {
     }
 
     @MainActor
+    func testDarkAppearanceCapturesSourceAnnotationColorsNearVisiblePageLazily() async throws {
+        let document = makePDFDocument(pageCount: 5)
+        let firstPage = try XCTUnwrap(document.page(at: 0))
+        let lastPage = try XCTUnwrap(document.page(at: 4))
+        let originalColor = NSColor(calibratedRed: 0.2, green: 0.7, blue: 0.3, alpha: 0.5)
+        let firstAnnotation = PDFAnnotation(
+            bounds: CGRect(x: 20, y: 20, width: 80, height: 14),
+            forType: .highlight,
+            withProperties: nil
+        )
+        let lastAnnotation = PDFAnnotation(
+            bounds: CGRect(x: 20, y: 20, width: 80, height: 14),
+            forType: .highlight,
+            withProperties: nil
+        )
+        firstAnnotation.color = originalColor
+        lastAnnotation.color = originalColor
+        firstPage.addAnnotation(firstAnnotation)
+        lastPage.addAnnotation(lastAnnotation)
+
+        let pdfView = PDFView()
+        pdfView.document = document
+        let coordinator = PDFReaderView.Coordinator(
+            attachmentID: nil,
+            pageIndex: .constant(0),
+            onNoteSelectionChanged: nil
+        )
+        coordinator.attach(to: pdfView)
+        coordinator.loadAnnotations(in: pdfView)
+        coordinator.updateAnnotationAppearance(.dark)
+
+        XCTAssertNotEqual(firstAnnotation.color, originalColor)
+        XCTAssertEqual(lastAnnotation.color, originalColor)
+
+        pdfView.go(to: lastPage)
+        try? await Task.sleep(for: .milliseconds(120))
+        XCTAssertNotEqual(lastAnnotation.color, originalColor)
+
+        coordinator.updateAnnotationAppearance(.defaultMode)
+        XCTAssertEqual(firstAnnotation.color, originalColor)
+        XCTAssertEqual(lastAnnotation.color, originalColor)
+    }
+
+    @MainActor
+    func testSelectionAssistantHistoryAnchorsRenderOnlyNearVisiblePage() async throws {
+        let document = makePDFDocument(pageCount: 5)
+        let firstPage = try XCTUnwrap(document.page(at: 0))
+        let lastPage = try XCTUnwrap(document.page(at: 4))
+        let pdfView = PDFView()
+        pdfView.document = document
+        let coordinator = PDFReaderView.Coordinator(
+            attachmentID: attachmentID,
+            pageIndex: .constant(0),
+            onNoteSelectionChanged: nil
+        )
+        coordinator.attach(to: pdfView)
+        coordinator.applySelectionAssistantHistoryAnchors(
+            [
+                SelectionAssistantHistoryAnchor(
+                    selectionIdentity: "first-page-anchor",
+                    attachmentID: attachmentID,
+                    quote: "Page 1",
+                    pageIndex: 0,
+                    htmlSelector: nil
+                ),
+                SelectionAssistantHistoryAnchor(
+                    selectionIdentity: "last-page-anchor",
+                    attachmentID: attachmentID,
+                    quote: "Page 5",
+                    pageIndex: 4,
+                    htmlSelector: nil
+                ),
+            ],
+            in: pdfView
+        )
+
+        XCTAssertTrue(firstPage.string?.contains("Page 1") == true)
+        XCTAssertEqual(document.index(for: try XCTUnwrap(pdfView.currentPage)), 0)
+        try? await Task.sleep(for: .milliseconds(160))
+        XCTAssertEqual(firstPage.annotations.count, 1)
+        XCTAssertEqual(lastPage.annotations.count, 0)
+
+        pdfView.go(to: lastPage)
+        try? await Task.sleep(for: .milliseconds(160))
+        XCTAssertEqual(firstPage.annotations.count, 1)
+        XCTAssertEqual(lastPage.annotations.count, 1)
+    }
+
+    @MainActor
     func testDebugInteractionExclusivelyForcesBrowseMode() {
         let session = PDFAnnotationSession()
         session.selectInteractionMode(.ink)
@@ -329,20 +419,34 @@ final class PDFAnnotationStoreTests: XCTestCase {
 
     @MainActor
     private func makePDFDocument(pageCount: Int) -> PDFDocument {
-        let document = PDFDocument()
+        let data = NSMutableData()
+        var mediaBox = CGRect(x: 0, y: 0, width: 200, height: 120)
+        guard let consumer = CGDataConsumer(data: data as CFMutableData),
+              let context = CGContext(consumer: consumer, mediaBox: &mediaBox, nil) else {
+            XCTFail("Unable to create in-memory PDF context")
+            return PDFDocument()
+        }
+
         for index in 0..<pageCount {
-            let image = NSImage(size: NSSize(width: 200, height: 120))
-            image.lockFocus()
-            NSColor.white.setFill()
-            NSRect(x: 0, y: 0, width: 200, height: 120).fill()
-            "Page \(index + 1)".draw(
-                at: NSPoint(x: 20, y: 50),
-                withAttributes: [.foregroundColor: NSColor.black]
+            context.beginPDFPage(nil)
+            context.setFillColor(NSColor.white.cgColor)
+            context.fill(mediaBox)
+            let text = NSAttributedString(
+                string: "Page \(index + 1)",
+                attributes: [
+                    .font: NSFont.systemFont(ofSize: 14),
+                    .foregroundColor: NSColor.black,
+                ]
             )
-            image.unlockFocus()
-            if let page = PDFPage(image: image) {
-                document.insert(page, at: document.pageCount)
-            }
+            let line = CTLineCreateWithAttributedString(text as CFAttributedString)
+            context.textPosition = CGPoint(x: 20, y: 50)
+            CTLineDraw(line, context)
+            context.endPDFPage()
+        }
+        context.closePDF()
+        guard let document = PDFDocument(data: data as Data) else {
+            XCTFail("Unable to load in-memory PDF document")
+            return PDFDocument()
         }
         return document
     }

@@ -228,6 +228,16 @@ struct DualPDFReaderView: View {
 struct DualPDFSplitLayout {
     static let dividerWidth: CGFloat = 8
     static let minimumPaneWidth: CGFloat = 180
+    static let minimumDragUpdateInterval: TimeInterval = 1.0 / 60.0
+
+    static func shouldEmitDragUpdate(
+        lastTimestamp: TimeInterval?,
+        currentTimestamp: TimeInterval
+    ) -> Bool {
+        guard let lastTimestamp else { return true }
+        let timestampTolerance: TimeInterval = 0.000_001
+        return currentTimestamp - lastTimestamp + timestampTolerance >= minimumDragUpdateInterval
+    }
 
     static func leadingWidth(totalWidth: CGFloat, fraction: CGFloat) -> CGFloat {
         let availableWidth = max(0, totalWidth - dividerWidth)
@@ -323,6 +333,8 @@ private struct StablePDFSplitDivider: NSViewRepresentable {
         var onDragBegan: (() -> Void)?
         var onDrag: ((CGFloat) -> Void)?
         private var lastDragLocationX: CGFloat?
+        private var pendingDragDelta: CGFloat = 0
+        private var lastDragUpdateTimestamp: TimeInterval?
 
         override var acceptsFirstResponder: Bool { true }
 
@@ -347,6 +359,8 @@ private struct StablePDFSplitDivider: NSViewRepresentable {
 
         override func mouseDown(with event: NSEvent) {
             lastDragLocationX = event.locationInWindow.x
+            pendingDragDelta = 0
+            lastDragUpdateTimestamp = nil
             onDragBegan?()
             NSCursor.resizeLeftRight.set()
         }
@@ -354,15 +368,31 @@ private struct StablePDFSplitDivider: NSViewRepresentable {
         override func mouseDragged(with event: NSEvent) {
             let locationX = event.locationInWindow.x
             if let lastDragLocationX {
-                onDrag?(locationX - lastDragLocationX)
+                pendingDragDelta += locationX - lastDragLocationX
             }
             self.lastDragLocationX = locationX
+            if DualPDFSplitLayout.shouldEmitDragUpdate(
+                lastTimestamp: lastDragUpdateTimestamp,
+                currentTimestamp: event.timestamp
+            ) {
+                flushPendingDrag(at: event.timestamp)
+            }
             NSCursor.resizeLeftRight.set()
         }
 
         override func mouseUp(with event: NSEvent) {
+            flushPendingDrag(at: event.timestamp)
             lastDragLocationX = nil
+            lastDragUpdateTimestamp = nil
             NSCursor.resizeLeftRight.set()
+        }
+
+        private func flushPendingDrag(at timestamp: TimeInterval) {
+            guard pendingDragDelta != 0 else { return }
+            let delta = pendingDragDelta
+            pendingDragDelta = 0
+            lastDragUpdateTimestamp = timestamp
+            onDrag?(delta)
         }
 
         override func updateTrackingAreas() {

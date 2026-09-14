@@ -4,6 +4,7 @@ import SwiftUI
 
 #if os(macOS)
 import AppKit
+import CoreImage
 private typealias PlatformPDFColor = NSColor
 private typealias PlatformPDFViewRepresentable = NSViewRepresentable
 #else
@@ -50,7 +51,19 @@ enum PDFDisplayAppearance: String, CaseIterable, Identifiable {
     }
 
     var requiresOverlayCompositing: Bool {
+        #if os(macOS)
+        false
+        #else
         self != .defaultMode
+        #endif
+    }
+
+    var usesNativeContentFilter: Bool {
+        #if os(macOS)
+        self != .defaultMode
+        #else
+        false
+        #endif
     }
 }
 
@@ -64,16 +77,18 @@ extension PDFDisplayAppearance {
             return .systemBackground
             #endif
         case .dark:
-            // Keep the PDFView background light so the difference blend can invert
-            // both the page and the surrounding canvas into a dark reading surface.
             #if os(macOS)
+            // The native color-invert filter turns this into the same near-black
+            // tone used by the surrounding reader surface.
             return NSColor(calibratedWhite: 0.96, alpha: 1)
             #else
+            // Keep the PDFView background light so the difference blend can invert
+            // both the page and the surrounding canvas into a dark reading surface.
             return UIColor(white: 0.96, alpha: 1)
             #endif
         case .paper:
             #if os(macOS)
-            return NSColor(calibratedRed: 0.96, green: 0.93, blue: 0.86, alpha: 1)
+            return .white
             #else
             return UIColor(red: 0.96, green: 0.93, blue: 0.86, alpha: 1)
             #endif
@@ -82,11 +97,36 @@ extension PDFDisplayAppearance {
 
     var surfaceColor: Color {
         #if os(macOS)
-        Color(nsColor: pdfBackgroundColor)
+        switch self {
+        case .defaultMode:
+            Color(nsColor: pdfBackgroundColor)
+        case .dark:
+            Color(nsColor: NSColor(calibratedWhite: 0.04, alpha: 1))
+        case .paper:
+            Color(red: 0.96, green: 0.93, blue: 0.86)
+        }
         #else
         Color(uiColor: pdfBackgroundColor)
         #endif
     }
+
+    #if os(macOS)
+    fileprivate func makeNativeContentFilters() -> [CIFilter] {
+        switch self {
+        case .defaultMode:
+            return []
+        case .dark:
+            return [CIFilter(name: "CIColorInvert")].compactMap { $0 }
+        case .paper:
+            guard let filter = CIFilter(name: "CIColorMatrix") else { return [] }
+            filter.setValue(CIVector(x: 0.96, y: 0, z: 0, w: 0), forKey: "inputRVector")
+            filter.setValue(CIVector(x: 0, y: 0.93, z: 0, w: 0), forKey: "inputGVector")
+            filter.setValue(CIVector(x: 0, y: 0, z: 0.86, w: 0), forKey: "inputBVector")
+            filter.setValue(CIVector(x: 0, y: 0, z: 0, w: 1), forKey: "inputAVector")
+            return [filter]
+        }
+    }
+    #endif
 }
 
 struct PDFDisplaySurface<Content: View>: View {
@@ -449,6 +489,8 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
         private var annotationRecords: [PDFAnnotationRecord] = []
         private var renderedAnnotations: [UUID: PDFAnnotation] = [:]
         private var sourceAnnotationColors: [ObjectIdentifier: (PDFAnnotation, PlatformPDFColor)] = [:]
+        private var scannedSourceAnnotationPageIndexes: Set<Int> = []
+        private var sourceAnnotationColorCaptureTask: Task<Void, Never>?
         private var undoAnnotationHistory: [AnnotationHistoryEntry] = []
         private var redoAnnotationHistory: [AnnotationHistoryEntry] = []
         private var annotationColorsAreInverted = false
@@ -468,8 +510,10 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
         private var lastAppliedNoteNavigationID: UUID?
         private var noteNavigationHighlightAnnotations: [PDFAnnotation] = []
         private var noteNavigationHighlightTask: Task<Void, Never>?
+        private var selectionAssistantHistoryRenderTask: Task<Void, Never>?
         private var receivedSelectionAssistantHistoryAnchors: [SelectionAssistantHistoryAnchor] = []
         private var appliedSelectionAssistantHistoryAnchors: [SelectionAssistantHistoryAnchor] = []
+        private var renderedSelectionAssistantHistoryAnchorIDs: Set<String> = []
         private var selectionAssistantHistoryAnnotations: [(SelectionAssistantHistoryAnchor, PDFAnnotation)] = []
 
         init(
@@ -544,6 +588,9 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
             guard appliedDisplayAppearance != appearance else { return }
             appliedDisplayAppearance = appearance
             pdfView.backgroundColor = appearance.pdfBackgroundColor
+            #if os(macOS)
+            pdfView.contentFilters = appearance.makeNativeContentFilters()
+            #endif
             updateAnnotationAppearance(appearance)
         }
 
@@ -600,9 +647,12 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
             self.annotationSession = annotationSession
 
             if scopeChanged {
+                sourceAnnotationColorCaptureTask?.cancel()
+                sourceAnnotationColorCaptureTask = nil
                 annotationRecords = []
                 renderedAnnotations = [:]
                 sourceAnnotationColors = [:]
+                scannedSourceAnnotationPageIndexes = []
                 undoAnnotationHistory = []
                 redoAnnotationHistory = []
             }
@@ -676,6 +726,8 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
         func detach() {
             clearNoteNavigationHighlight()
             clearSelectionAssistantHistoryAnnotations()
+            sourceAnnotationColorCaptureTask?.cancel()
+            sourceAnnotationColorCaptureTask = nil
             if let pdfView {
                 NotificationCenter.default.removeObserver(
                     self,
@@ -794,12 +846,46 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
             clearSelectionAssistantHistoryAnnotations()
             receivedSelectionAssistantHistoryAnchors = anchors
             appliedSelectionAssistantHistoryAnchors = matchingAnchors
-            guard let document = pdfView.document else { return }
+            scheduleSelectionAssistantHistoryRendering(in: pdfView)
+        }
 
-            for anchor in matchingAnchors {
+        private func scheduleSelectionAssistantHistoryRendering(in pdfView: PDFView) {
+            selectionAssistantHistoryRenderTask?.cancel()
+            guard !appliedSelectionAssistantHistoryAnchors.isEmpty else { return }
+
+            selectionAssistantHistoryRenderTask = Task { @MainActor [weak self, weak pdfView] in
+                do {
+                    try await Task.sleep(for: .milliseconds(120))
+                } catch {
+                    return
+                }
+                guard Task.isCancelled == false, let self, let pdfView else { return }
+                self.renderSelectionAssistantHistoryAnchorsNearCurrentPage(in: pdfView)
+                self.selectionAssistantHistoryRenderTask = nil
+            }
+        }
+
+        private func renderSelectionAssistantHistoryAnchorsNearCurrentPage(in pdfView: PDFView) {
+            guard let document = pdfView.document,
+                  document.pageCount > 0,
+                  let currentPage = pdfView.currentPage else {
+                return
+            }
+            let currentPageIndex = document.index(for: currentPage)
+            guard currentPageIndex != NSNotFound else { return }
+            let nearbyPageIndexes = max(0, currentPageIndex - 1)...min(
+                document.pageCount - 1,
+                currentPageIndex + 1
+            )
+
+            for anchor in appliedSelectionAssistantHistoryAnchors {
                 guard let pageIndex = anchor.pageIndex,
-                      document.pageCount > 0,
-                      let page = document.page(at: min(max(0, pageIndex), document.pageCount - 1)),
+                      renderedSelectionAssistantHistoryAnchorIDs.contains(anchor.id) == false else {
+                    continue
+                }
+                let clampedPageIndex = min(max(0, pageIndex), document.pageCount - 1)
+                guard nearbyPageIndexes.contains(clampedPageIndex) else { continue }
+                guard let page = document.page(at: clampedPageIndex),
                       let pageText = page.string,
                       let range = PDFNoteNavigationTextMatcher.range(of: anchor.quote, in: pageText),
                       let selection = page.selection(for: range) else {
@@ -808,6 +894,7 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
 
                 let lineSelections = selection.selectionsByLine()
                 let selections = lineSelections.isEmpty ? [selection] : lineSelections
+                var didRenderAnchor = false
                 for line in selections {
                     let bounds = line.bounds(for: page)
                         .intersection(page.bounds(for: .cropBox))
@@ -824,17 +911,24 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
                     annotation.border = border
                     page.addAnnotation(annotation)
                     selectionAssistantHistoryAnnotations.append((anchor, annotation))
+                    didRenderAnchor = true
+                }
+                if didRenderAnchor {
+                    renderedSelectionAssistantHistoryAnchorIDs.insert(anchor.id)
                 }
             }
         }
 
         func clearSelectionAssistantHistoryAnnotations() {
+            selectionAssistantHistoryRenderTask?.cancel()
+            selectionAssistantHistoryRenderTask = nil
             for (_, annotation) in selectionAssistantHistoryAnnotations {
                 annotation.page?.removeAnnotation(annotation)
             }
             selectionAssistantHistoryAnnotations = []
             receivedSelectionAssistantHistoryAnchors = []
             appliedSelectionAssistantHistoryAnchors = []
+            renderedSelectionAssistantHistoryAnchorIDs = []
         }
 
         private var selectionAssistantHistoryColor: PlatformPDFColor {
@@ -879,7 +973,11 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
 
         func loadAnnotations(in pdfView: PDFView) {
             renderedAnnotations = [:]
-            captureSourceAnnotationColors(in: pdfView.document)
+            sourceAnnotationColors = [:]
+            scannedSourceAnnotationPageIndexes = []
+            if annotationColorsAreInverted {
+                scheduleSourceAnnotationColorCapture(in: pdfView)
+            }
             guard let paperID, let attachmentID else {
                 annotationRecords = []
                 publishAnnotationCapabilities()
@@ -916,6 +1014,12 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
             }
             for (_, annotation) in selectionAssistantHistoryAnnotations {
                 annotation.color = selectionAssistantHistoryColor
+            }
+            if shouldInvert, let pdfView {
+                captureSourceAnnotationColorsNearCurrentPage(in: pdfView)
+            } else {
+                sourceAnnotationColorCaptureTask?.cancel()
+                sourceAnnotationColorCaptureTask = nil
             }
         }
 
@@ -1155,12 +1259,47 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
             }
         }
 
-        private func captureSourceAnnotationColors(in document: PDFDocument?) {
-            sourceAnnotationColors = [:]
-            guard let document else { return }
-            for pageIndex in 0..<document.pageCount {
+        private func scheduleSourceAnnotationColorCapture(in pdfView: PDFView) {
+            sourceAnnotationColorCaptureTask?.cancel()
+            sourceAnnotationColorCaptureTask = Task { @MainActor [weak self, weak pdfView] in
+                do {
+                    try await Task.sleep(for: .milliseconds(80))
+                } catch {
+                    return
+                }
+                guard Task.isCancelled == false,
+                      let self,
+                      let pdfView,
+                      self.annotationColorsAreInverted else {
+                    return
+                }
+                self.captureSourceAnnotationColorsNearCurrentPage(in: pdfView)
+                self.sourceAnnotationColorCaptureTask = nil
+            }
+        }
+
+        private func captureSourceAnnotationColorsNearCurrentPage(in pdfView: PDFView) {
+            guard let document = pdfView.document,
+                  document.pageCount > 0,
+                  let currentPage = pdfView.currentPage else {
+                return
+            }
+            let currentPageIndex = document.index(for: currentPage)
+            guard currentPageIndex != NSNotFound else { return }
+            let managedAnnotationIDs = Set(
+                renderedAnnotations.values.map(ObjectIdentifier.init) +
+                    selectionAssistantHistoryAnnotations.map { ObjectIdentifier($0.1) } +
+                    noteNavigationHighlightAnnotations.map(ObjectIdentifier.init)
+            )
+            let nearbyPageIndexes = max(0, currentPageIndex - 1)...min(
+                document.pageCount - 1,
+                currentPageIndex + 1
+            )
+            for pageIndex in nearbyPageIndexes
+            where scannedSourceAnnotationPageIndexes.insert(pageIndex).inserted {
                 guard let page = document.page(at: pageIndex) else { continue }
                 for annotation in page.annotations {
+                    guard !managedAnnotationIDs.contains(ObjectIdentifier(annotation)) else { continue }
                     sourceAnnotationColors[ObjectIdentifier(annotation)] = (annotation, annotation.color)
                     annotation.color = displayAdjustedAnnotationColor(
                         annotation.color,
@@ -1189,9 +1328,12 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
 
         func clearLoadedAnnotations() {
             clearSelectionAssistantHistoryAnnotations()
+            sourceAnnotationColorCaptureTask?.cancel()
+            sourceAnnotationColorCaptureTask = nil
             annotationRecords = []
             renderedAnnotations = [:]
             sourceAnnotationColors = [:]
+            scannedSourceAnnotationPageIndexes = []
             undoAnnotationHistory = []
             redoAnnotationHistory = []
             publishAnnotationCapabilities()
@@ -1374,6 +1516,12 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
         private func handlePageChanged(_ notification: Notification) {
             os_signpost(.event, log: Self.performanceLog, name: "PDF Page Changed")
             scheduleCurrentPageIndexUpdate()
+            if let pdfView {
+                scheduleSelectionAssistantHistoryRendering(in: pdfView)
+                if annotationColorsAreInverted {
+                    scheduleSourceAnnotationColorCapture(in: pdfView)
+                }
+            }
         }
 
         @objc
