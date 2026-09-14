@@ -20,22 +20,9 @@ struct DualPDFPageIndexSync {
 
     static func originalPageIndex(
         forTranslatedPageIndex translatedPageIndex: Int,
-        translatedPageCount: Int,
-        pendingProgrammaticTargets: inout Set<Int>
+        translatedPageCount: Int
     ) -> Int? {
-        guard translatedPageCount > 0 else {
-            pendingProgrammaticTargets.removeAll()
-            return nil
-        }
-
-        if pendingProgrammaticTargets.remove(translatedPageIndex) != nil {
-            return nil
-        }
-
-        if !pendingProgrammaticTargets.isEmpty {
-            pendingProgrammaticTargets.removeAll()
-        }
-
+        guard translatedPageCount > 0 else { return nil }
         guard translatedPageIndex <= maxTranslatedPage(translatedPageCount) else {
             return nil
         }

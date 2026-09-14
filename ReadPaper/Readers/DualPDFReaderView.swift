@@ -1,5 +1,4 @@
 import AppKit
-import PDFKit
 import SwiftUI
 
 enum DualPDFSelectionSource: Equatable {
@@ -45,13 +44,11 @@ struct DualPDFReaderView: View {
     var onDebugRegionSelected: ((PDFDebugRegionSelection) -> Void)? = nil
     var onNoteSelectionChanged: ((NoteSelectionContext?) -> Void)? = nil
     var onArxivLinkActivated: ((URL) -> Void)? = nil
-    @State private var translatedPageIndex = 0
     @State private var translatedPageCount: Int = 0
     @State private var originalPageCount: Int = 0
     @State private var selectionOwnership = DualPDFSelectionOwnership()
     @State private var originalSelectionResetToken = 0
     @State private var translatedSelectionResetToken = 0
-    @State private var pendingProgrammaticTranslatedPageTargets: Set<Int> = []
     @State private var automaticScalingRestoreToken = 0
 
     private var isPartialTranslation: Bool {
@@ -69,38 +66,15 @@ struct DualPDFReaderView: View {
         } trailing: {
             translatedReader
         }
-        .onAppear {
-            updatePageCounts()
-            syncTranslatedPageFromOriginal(pageIndex)
-        }
-        .onChange(of: pageIndex) { _, newValue in
-            syncTranslatedPageFromOriginal(newValue)
-        }
-        .onChange(of: translatedPageIndex) { _, newValue in
-            let target = DualPDFPageIndexSync.originalPageIndex(
-                forTranslatedPageIndex: newValue,
-                translatedPageCount: translatedPageCount,
-                pendingProgrammaticTargets: &pendingProgrammaticTranslatedPageTargets
-            )
-            guard let target, pageIndex != target else { return }
-            pageIndex = target
-        }
-        .onChange(of: reloadToken) { _, _ in
-            updatePageCounts()
-        }
         .onChange(of: originalURL) { _, _ in
-            updateOriginalPageCount()
+            originalPageCount = 0
             selectionOwnership.reset()
             onNoteSelectionChanged?(nil)
         }
         .onChange(of: translatedURL) { _, _ in
-            updateTranslatedPageCount()
+            translatedPageCount = 0
             selectionOwnership.reset()
             onNoteSelectionChanged?(nil)
-        }
-        .onChange(of: translatedPageCount) { _, newCount in
-            guard newCount > 0 else { return }
-            syncTranslatedPageFromOriginal(pageIndex)
         }
     }
 
@@ -111,7 +85,11 @@ struct DualPDFReaderView: View {
             pageIndex: $pageIndex,
             selectionResetToken: originalSelectionResetToken,
             noteNavigationRequest: originalNoteNavigationRequest,
-            debugRegionSelectionEnabled: false
+            debugRegionSelectionEnabled: false,
+            onDocumentPageCountChanged: { pageCount in
+                guard originalPageCount != pageCount else { return }
+                originalPageCount = pageCount
+            }
         ) { selection in
             handleSelectionChange(selection, source: .original)
         }
@@ -124,11 +102,15 @@ struct DualPDFReaderView: View {
         themedPDFReader(
             fileURL: translatedURL,
             attachmentID: translatedAttachmentID,
-            pageIndex: $translatedPageIndex,
+            pageIndex: translatedPageIndexBinding,
             reloadToken: reloadToken,
             selectionResetToken: translatedSelectionResetToken,
             noteNavigationRequest: translatedNoteNavigationRequest,
-            debugRegionSelectionEnabled: debugRegionSelectionEnabled
+            debugRegionSelectionEnabled: debugRegionSelectionEnabled,
+            onDocumentPageCountChanged: { pageCount in
+                guard translatedPageCount != pageCount else { return }
+                translatedPageCount = pageCount
+            }
         ) { selection in
             handleSelectionChange(selection, source: .translated)
         }
@@ -141,8 +123,24 @@ struct DualPDFReaderView: View {
         }
     }
 
-    private var maxTranslatedPage: Int {
-        max(translatedPageCount - 1, 0)
+    private var translatedPageIndexBinding: Binding<Int> {
+        Binding(
+            get: {
+                DualPDFPageIndexSync.translatedPageIndex(
+                    forOriginalPageIndex: pageIndex,
+                    translatedPageCount: translatedPageCount
+                )
+            },
+            set: { translatedPageIndex in
+                guard let target = DualPDFPageIndexSync.originalPageIndex(
+                    forTranslatedPageIndex: translatedPageIndex,
+                    translatedPageCount: translatedPageCount
+                ), pageIndex != target else {
+                    return
+                }
+                pageIndex = target
+            }
+        )
     }
 
     private var originalNoteNavigationRequest: NoteNavigationRequest? {
@@ -162,30 +160,6 @@ struct DualPDFReaderView: View {
         return request
     }
 
-    private func updatePageCounts() {
-        updateOriginalPageCount()
-        updateTranslatedPageCount()
-    }
-
-    private func updateOriginalPageCount() {
-        originalPageCount = originalURL.flatMap { PDFDocument(url: $0)?.pageCount } ?? 0
-    }
-
-    private func updateTranslatedPageCount() {
-        translatedPageCount = translatedURL.flatMap { PDFDocument(url: $0)?.pageCount } ?? 0
-    }
-
-    private func syncTranslatedPageFromOriginal(_ originalPageIndex: Int) {
-        guard translatedPageCount > 0 else { return }
-        let target = DualPDFPageIndexSync.translatedPageIndex(
-            forOriginalPageIndex: originalPageIndex,
-            translatedPageCount: translatedPageCount
-        )
-        guard translatedPageIndex != target else { return }
-        pendingProgrammaticTranslatedPageTargets.insert(target)
-        translatedPageIndex = target
-    }
-
     private func themedPDFReader(
         fileURL: URL?,
         attachmentID: UUID?,
@@ -194,6 +168,7 @@ struct DualPDFReaderView: View {
         selectionResetToken: Int,
         noteNavigationRequest: NoteNavigationRequest?,
         debugRegionSelectionEnabled: Bool,
+        onDocumentPageCountChanged: @escaping (Int) -> Void,
         onSelectionChanged: @escaping (NoteSelectionContext?) -> Void
     ) -> some View {
         PDFDisplaySurface(appearance: displayAppearance) {
@@ -212,6 +187,7 @@ struct DualPDFReaderView: View {
                 annotationSession: annotationSession,
                 onNoteSelectionChanged: onSelectionChanged,
                 onArxivLinkActivated: onArxivLinkActivated,
+                onDocumentPageCountChanged: onDocumentPageCountChanged,
                 debugRegionSelectionEnabled: debugRegionSelectionEnabled,
                 onDebugRegionSelected: onDebugRegionSelected
             )

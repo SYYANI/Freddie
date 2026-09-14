@@ -1,10 +1,25 @@
 import AppKit
+import OSLog
 import PDFKit
 import SwiftData
 import SwiftUI
 import UniformTypeIdentifiers
 
 struct ReaderPaneView: View {
+    private struct ReadingStatePersistenceSnapshot: Equatable {
+        var paperID: UUID
+        var attachmentID: UUID?
+        var readerMode: ReaderMode
+        var pageIndex: Int
+        var scrollRatio: Double
+    }
+
+    private static let readingStatePersistenceDelay: Duration = .milliseconds(600)
+    private static let performanceLog = OSLog(
+        subsystem: "com.yiyan.ReadPaper",
+        category: .pointsOfInterest
+    )
+
     private enum PrimaryReaderMode: String, CaseIterable, Identifiable {
         case html
         case pdf
@@ -77,6 +92,8 @@ struct ReaderPaneView: View {
     @State private var latexTranslationErrorLogURL: URL?
     @State private var lastPDFReaderMode: ReaderMode = .pdf
     @State private var suspendReadingStatePersistence = false
+    @State private var pendingReadingStatePersistence: ReadingStatePersistenceSnapshot?
+    @State private var readingStatePersistenceTask: Task<Void, Never>?
     @State private var showPDFTranslationScopeDialog = false
     @State private var pdfTranslationTotalPages: Int = 0
     @State private var digestNoticeMessage: String?
@@ -246,6 +263,7 @@ struct ReaderPaneView: View {
                 refreshSelectionAssistantHistoryAnchors()
             }
             .onChange(of: paper?.id) { _, _ in
+                flushPendingReadingStatePersistence()
                 deactivatePDFTranslationDebugMode()
                 pdfAnnotationSession.resetForDocumentChange()
                 noteSelectionContext = nil
@@ -263,16 +281,16 @@ struct ReaderPaneView: View {
                 if newValue != .html {
                     lastPDFReaderMode = normalizedPDFReaderMode(newValue)
                 }
-                persistReadingStateIfNeeded()
+                persistReadingStateImmediatelyIfNeeded()
             }
             .onChange(of: pdfPageIndex) { _, _ in
-                persistReadingStateIfNeeded()
+                scheduleReadingStatePersistence()
             }
             .onChange(of: noteNavigationRequest?.id) { _, _ in
                 revealNoteAnchorIfNeeded()
             }
             .onChange(of: htmlScrollRatio) { _, _ in
-                persistReadingStateIfNeeded()
+                scheduleReadingStatePersistence()
             }
             .onChange(of: pdfAnnotationSession.pendingTextNote?.id) { _, newValue in
                 if newValue != nil {
@@ -280,7 +298,7 @@ struct ReaderPaneView: View {
                 }
             }
             .onDisappear {
-                persistReadingStateIfNeeded()
+                flushReadingStatePersistence()
                 deactivatePDFTranslationDebugMode()
                 clearSelectionAssistant()
                 dismissCopyToast()
@@ -2432,9 +2450,11 @@ struct ReaderPaneView: View {
         }
     }
 
-    private func persistReadingStateIfNeeded() {
-        guard !suspendReadingStatePersistence, let paper else { return }
-        guard htmlAttachment != nil || pdfAttachment != nil || translatedPDFAttachment != nil else { return }
+    private func readingStatePersistenceSnapshot() -> ReadingStatePersistenceSnapshot? {
+        guard !suspendReadingStatePersistence, let paper else { return nil }
+        guard htmlAttachment != nil || pdfAttachment != nil || translatedPDFAttachment != nil else {
+            return nil
+        }
 
         let resolvedMode = ReadingStateStore.resolvedReaderMode(
             preferredMode: readerMode,
@@ -2442,15 +2462,85 @@ struct ReaderPaneView: View {
             hasPDF: pdfAttachment != nil,
             hasTranslatedPDF: translatedPDFAttachment != nil
         )
-        let attachmentID = attachmentID(for: resolvedMode)
+        return ReadingStatePersistenceSnapshot(
+            paperID: paper.id,
+            attachmentID: attachmentID(for: resolvedMode),
+            readerMode: resolvedMode,
+            pageIndex: pdfPageIndex,
+            scrollRatio: resolvedMode == .html ? htmlScrollRatio : 0
+        )
+    }
+
+    private func scheduleReadingStatePersistence() {
+        guard let snapshot = readingStatePersistenceSnapshot() else { return }
+        guard pendingReadingStatePersistence != snapshot else { return }
+
+        readingStatePersistenceTask?.cancel()
+        pendingReadingStatePersistence = snapshot
+        readingStatePersistenceTask = Task { @MainActor in
+            do {
+                try await Task.sleep(for: Self.readingStatePersistenceDelay)
+            } catch {
+                return
+            }
+            guard Task.isCancelled == false,
+                  pendingReadingStatePersistence == snapshot else {
+                return
+            }
+            pendingReadingStatePersistence = nil
+            readingStatePersistenceTask = nil
+            persistReadingState(snapshot)
+        }
+    }
+
+    private func persistReadingStateImmediatelyIfNeeded() {
+        readingStatePersistenceTask?.cancel()
+        readingStatePersistenceTask = nil
+        pendingReadingStatePersistence = nil
+        guard let snapshot = readingStatePersistenceSnapshot() else { return }
+        persistReadingState(snapshot)
+    }
+
+    private func flushPendingReadingStatePersistence() {
+        readingStatePersistenceTask?.cancel()
+        readingStatePersistenceTask = nil
+        guard let snapshot = pendingReadingStatePersistence else { return }
+        pendingReadingStatePersistence = nil
+        persistReadingState(snapshot)
+    }
+
+    private func flushReadingStatePersistence() {
+        if pendingReadingStatePersistence != nil {
+            flushPendingReadingStatePersistence()
+        } else {
+            persistReadingStateImmediatelyIfNeeded()
+        }
+    }
+
+    private func persistReadingState(_ snapshot: ReadingStatePersistenceSnapshot) {
+        let signpostID = OSSignpostID(log: Self.performanceLog)
+        os_signpost(
+            .begin,
+            log: Self.performanceLog,
+            name: "Persist Reading State",
+            signpostID: signpostID
+        )
+        defer {
+            os_signpost(
+                .end,
+                log: Self.performanceLog,
+                name: "Persist Reading State",
+                signpostID: signpostID
+            )
+        }
 
         do {
             try ReadingStateStore().upsertState(
-                for: paper.id,
-                attachmentID: attachmentID,
-                readerMode: resolvedMode,
-                pageIndex: pdfPageIndex,
-                scrollRatio: resolvedMode == .html ? htmlScrollRatio : 0,
+                for: snapshot.paperID,
+                attachmentID: snapshot.attachmentID,
+                readerMode: snapshot.readerMode,
+                pageIndex: snapshot.pageIndex,
+                scrollRatio: snapshot.scrollRatio,
                 in: modelContext
             )
         } catch {

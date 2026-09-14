@@ -310,31 +310,115 @@ final class PDFMergerTests: XCTestCase {
         XCTAssertNotNil(position.point)
     }
 
-    func testDualPDFPageSyncDoesNotPropagateProgrammaticPartialClampToOriginal() {
-        var pendingProgrammaticTargets: Set<Int> = []
+    func testDualPDFPageSyncClampsTranslatedPageWithoutProducingInvalidOriginalPage() {
         let translatedTarget = DualPDFPageIndexSync.translatedPageIndex(
             forOriginalPageIndex: 14,
             translatedPageCount: 10
         )
 
         XCTAssertEqual(translatedTarget, 9)
-
-        pendingProgrammaticTargets.insert(translatedTarget)
-        let propagatedOriginalPage = DualPDFPageIndexSync.originalPageIndex(
-            forTranslatedPageIndex: translatedTarget,
-            translatedPageCount: 10,
-            pendingProgrammaticTargets: &pendingProgrammaticTargets
-        )
-
-        XCTAssertNil(propagatedOriginalPage)
-        XCTAssertTrue(pendingProgrammaticTargets.isEmpty)
-
-        let userDrivenOriginalPage = DualPDFPageIndexSync.originalPageIndex(
+        XCTAssertEqual(DualPDFPageIndexSync.originalPageIndex(
             forTranslatedPageIndex: 8,
-            translatedPageCount: 10,
-            pendingProgrammaticTargets: &pendingProgrammaticTargets
+            translatedPageCount: 10
+        ), 8)
+        XCTAssertNil(DualPDFPageIndexSync.originalPageIndex(
+            forTranslatedPageIndex: 10,
+            translatedPageCount: 10
+        ))
+    }
+
+    @MainActor
+    func testTranslatedPDFCoordinatorDoesNotPushPartialClampBackToOriginalBinding() throws {
+        let document = createPDFDocument(withPageCount: 10)
+        let pdfView = PDFView()
+        pdfView.document = document
+
+        var originalPageIndex = 14
+        var originalBindingWriteCount = 0
+        let translatedPageCount = 10
+        let translatedPageBinding = Binding(
+            get: {
+                DualPDFPageIndexSync.translatedPageIndex(
+                    forOriginalPageIndex: originalPageIndex,
+                    translatedPageCount: translatedPageCount
+                )
+            },
+            set: { translatedPageIndex in
+                if let target = DualPDFPageIndexSync.originalPageIndex(
+                    forTranslatedPageIndex: translatedPageIndex,
+                    translatedPageCount: translatedPageCount
+                ) {
+                    originalBindingWriteCount += 1
+                    originalPageIndex = target
+                }
+            }
         )
-        XCTAssertEqual(userDrivenOriginalPage, 8)
+        let coordinator = PDFReaderView.Coordinator(
+            attachmentID: nil,
+            pageIndex: translatedPageBinding,
+            onNoteSelectionChanged: nil
+        )
+        coordinator.attach(to: pdfView)
+
+        let clampedPageIndex = translatedPageBinding.wrappedValue
+        coordinator.prepareForProgrammaticPageRestore(
+            to: PDFReadingPosition(pageIndex: clampedPageIndex)
+        )
+        pdfView.go(to: try XCTUnwrap(document.page(at: clampedPageIndex)))
+        coordinator.updateCurrentPageIndexIfNeeded()
+
+        XCTAssertEqual(originalPageIndex, 14)
+        XCTAssertEqual(originalBindingWriteCount, 0)
+
+        pdfView.go(to: try XCTUnwrap(document.page(at: 8)))
+        coordinator.updateCurrentPageIndexIfNeeded()
+        XCTAssertEqual(originalPageIndex, 8)
+        XCTAssertEqual(originalBindingWriteCount, 1)
+    }
+
+    @MainActor
+    func testPDFReaderCoordinatorCoalescesDocumentPageCountCallbacks() async {
+        var publishedPageCounts: [Int] = []
+        let callbackExpectation = expectation(description: "Publishes the latest page count")
+        let coordinator = PDFReaderView.Coordinator(
+            attachmentID: nil,
+            pageIndex: .constant(0),
+            onNoteSelectionChanged: nil
+        )
+        coordinator.onDocumentPageCountChanged = {
+            publishedPageCounts.append($0)
+            callbackExpectation.fulfill()
+        }
+
+        coordinator.scheduleDocumentPageCountUpdate(4)
+        coordinator.scheduleDocumentPageCountUpdate(12)
+        await fulfillment(of: [callbackExpectation], timeout: 1)
+
+        XCTAssertEqual(publishedPageCounts, [12])
+
+        coordinator.scheduleDocumentPageCountUpdate(12)
+        try? await Task.sleep(for: .milliseconds(20))
+        XCTAssertEqual(publishedPageCounts, [12])
+    }
+
+    @MainActor
+    func testPDFReaderCoordinatorRestoresOnlyWhenRequestedPageDiffers() throws {
+        let document = createPDFDocument(withPageCount: 10)
+        let pdfView = PDFView()
+        pdfView.document = document
+        pdfView.go(to: try XCTUnwrap(document.page(at: 4)))
+
+        let coordinator = PDFReaderView.Coordinator(
+            attachmentID: nil,
+            pageIndex: .constant(4),
+            onNoteSelectionChanged: nil
+        )
+
+        XCTAssertFalse(coordinator.shouldRestorePageIndex(4, in: pdfView))
+        XCTAssertTrue(coordinator.shouldRestorePageIndex(5, in: pdfView))
+
+        pdfView.go(to: try XCTUnwrap(document.page(at: 9)))
+        XCTAssertFalse(coordinator.shouldRestorePageIndex(99, in: pdfView))
     }
 
     func testPDFTranslationCoverageRequiresExplicitPartialPageMetadata() {
@@ -398,6 +482,12 @@ final class PDFMergerTests: XCTestCase {
             currentScale: 1,
             fittedScale: 0
         ))
+    }
+
+    func testPDFDisplayAppearanceOnlyCompositesWhenAnOverlayNeedsBlending() {
+        XCTAssertFalse(PDFDisplayAppearance.defaultMode.requiresOverlayCompositing)
+        XCTAssertTrue(PDFDisplayAppearance.dark.requiresOverlayCompositing)
+        XCTAssertTrue(PDFDisplayAppearance.paper.requiresOverlayCompositing)
     }
 
     func testDualPDFSelectionOwnershipClearsPreviousSideWhenSelectionSwitches() {

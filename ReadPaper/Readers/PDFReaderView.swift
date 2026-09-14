@@ -1,4 +1,5 @@
 import PDFKit
+import OSLog
 import SwiftUI
 
 #if os(macOS)
@@ -47,6 +48,10 @@ enum PDFDisplayAppearance: String, CaseIterable, Identifiable {
     static func resolve(rawValue: String) -> Self {
         Self(rawValue: rawValue) ?? defaultValue
     }
+
+    var requiresOverlayCompositing: Bool {
+        self != .defaultMode
+    }
 }
 
 extension PDFDisplayAppearance {
@@ -88,16 +93,25 @@ struct PDFDisplaySurface<Content: View>: View {
     var appearance: PDFDisplayAppearance
     @ViewBuilder var content: () -> Content
 
+    @ViewBuilder
     var body: some View {
-        content()
-            .background(appearance.surfaceColor)
-            .overlay {
-                overlay
-            }
-            // Keep difference/multiply blending local to the reader. Otherwise
-            // the overlay can blend with macOS 26's floating sidebar backdrop.
-            .compositingGroup()
-            .clipped()
+        if appearance.requiresOverlayCompositing {
+            content()
+                .background(appearance.surfaceColor)
+                .overlay {
+                    overlay
+                }
+                // Keep difference/multiply blending local to the reader. Otherwise
+                // the overlay can blend with macOS 26's floating sidebar backdrop.
+                .compositingGroup()
+                .clipped()
+        } else {
+            // Avoid forcing a continuously scrolling PDFView through an offscreen
+            // compositing pass when no appearance overlay needs one.
+            content()
+                .background(appearance.surfaceColor)
+                .clipped()
+        }
     }
 
     @ViewBuilder
@@ -241,6 +255,7 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
     var annotationSession: PDFAnnotationSession? = nil
     var onNoteSelectionChanged: ((NoteSelectionContext?) -> Void)? = nil
     var onArxivLinkActivated: ((URL) -> Void)? = nil
+    var onDocumentPageCountChanged: ((Int) -> Void)? = nil
     var debugRegionSelectionEnabled = false
     var onDebugRegionSelected: ((PDFDebugRegionSelection) -> Void)? = nil
 
@@ -280,18 +295,23 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
         view.displayMode = .singlePageContinuous
         view.displayDirection = .vertical
         view.displaysPageBreaks = true
-        applyDisplayAppearance(displayAppearance, to: view)
+        context.coordinator.applyDisplayAppearance(displayAppearance, to: view)
         context.coordinator.attach(to: view)
         return view
     }
 
     private func updateView(_ view: PDFView, context: Context) {
+        let updateSignpostID = context.coordinator.beginViewUpdateSignpost()
+        defer {
+            context.coordinator.endViewUpdateSignpost(updateSignpostID)
+        }
+
         context.coordinator.applyScalingPreference(usesAutomaticScaling, to: view)
         if context.coordinator.lastAutomaticScalingRestoreToken != automaticScalingRestoreToken {
             context.coordinator.lastAutomaticScalingRestoreToken = automaticScalingRestoreToken
             context.coordinator.restoreAutomaticScalingIfNearFit(in: view)
         }
-        applyDisplayAppearance(displayAppearance, to: view)
+        context.coordinator.applyDisplayAppearance(displayAppearance, to: view)
         context.coordinator.configure(
             paperID: paperID,
             attachmentID: attachmentID,
@@ -299,6 +319,7 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
         )
         context.coordinator.onNoteSelectionChanged = onNoteSelectionChanged
         context.coordinator.onArxivLinkActivated = onArxivLinkActivated
+        context.coordinator.onDocumentPageCountChanged = onDocumentPageCountChanged
         if context.coordinator.lastSelectionResetToken != selectionResetToken {
             context.coordinator.lastSelectionResetToken = selectionResetToken
             view.clearSelection()
@@ -306,62 +327,74 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
         }
         #if os(macOS)
         if let interactiveView = view as? InteractivePDFView {
-            interactiveView.interactionMode = debugRegionSelectionEnabled
-                ? .debugRegion
-                : annotationSession?.interactionMode ?? .browse
+            context.coordinator.applyInteractionConfiguration(
+                debugRegionSelectionEnabled: debugRegionSelectionEnabled,
+                annotationSession: annotationSession,
+                displayAppearance: displayAppearance,
+                to: interactiveView
+            )
             interactiveView.onDebugRegionSelected = onDebugRegionSelected
-            interactiveView.inkPreviewColor = (annotationSession?.colorPreset ?? .yellow)
-                .color(for: .ink)
-                .platformColor(inverted: displayAppearance == .dark)
-            interactiveView.inkPreviewLineWidth = annotationSession?.lineWidth ?? 2
         }
         #endif
-        context.coordinator.updateAnnotationAppearance(displayAppearance)
 
         guard let fileURL else {
-            view.document = nil
+            let hadLoadedDocument = view.document != nil || context.coordinator.loadedURL != nil
+            if hadLoadedDocument {
+                view.document = nil
+                context.coordinator.clearLoadedAnnotations()
+                context.coordinator.clearProgrammaticPageRestore()
+                context.coordinator.publishSelection(nil)
+            }
             context.coordinator.loadedURL = nil
             context.coordinator.loadedPaperID = paperID
             context.coordinator.loadedAttachmentID = attachmentID
             context.coordinator.lastReloadToken = reloadToken
-            context.coordinator.clearLoadedAnnotations()
-            context.coordinator.clearProgrammaticPageRestore()
-            context.coordinator.publishSelection(nil)
-            context.coordinator.scheduleCurrentPageIndexUpdate()
+            context.coordinator.scheduleDocumentPageCountUpdate(0)
             return
         }
         let shouldReloadDocument = context.coordinator.loadedURL != fileURL ||
             context.coordinator.lastReloadToken != reloadToken ||
             context.coordinator.loadedPaperID != paperID ||
             context.coordinator.loadedAttachmentID != attachmentID
-        let restorePosition = context.coordinator.readingPosition(
-            fallbackPageIndex: pageIndex,
-            in: view
-        )
         if shouldReloadDocument {
+            let restorePosition = context.coordinator.readingPosition(
+                fallbackPageIndex: pageIndex,
+                in: view
+            )
             context.coordinator.prepareForProgrammaticPageRestore(to: restorePosition)
             context.coordinator.clearSelectionAssistantHistoryAnnotations()
-            view.document = PDFDocument(url: fileURL)
+            let document = PDFDocument(url: fileURL)
+            view.document = document
             context.coordinator.loadedURL = fileURL
             context.coordinator.loadedPaperID = paperID
             context.coordinator.loadedAttachmentID = attachmentID
             context.coordinator.lastReloadToken = reloadToken
+            context.coordinator.scheduleDocumentPageCountUpdate(
+                document?.pageCount ?? 0,
+                force: true
+            )
             context.coordinator.loadAnnotations(in: view)
             context.coordinator.publishSelection(nil)
+            context.coordinator.restoreReadingPosition(
+                restorePosition,
+                in: view,
+                suppressIntermediateUpdates: true
+            )
+            context.coordinator.scheduleCurrentPageIndexUpdate()
+        } else if context.coordinator.shouldRestorePageIndex(pageIndex, in: view) {
+            context.coordinator.restoreReadingPosition(
+                PDFReadingPosition(pageIndex: pageIndex),
+                in: view,
+                suppressIntermediateUpdates: false
+            )
+            context.coordinator.scheduleCurrentPageIndexUpdate()
         }
-        context.coordinator.restoreReadingPosition(
-            shouldReloadDocument ? restorePosition : PDFReadingPosition(pageIndex: pageIndex),
-            in: view,
-            suppressIntermediateUpdates: shouldReloadDocument
-        )
         context.coordinator.applySelectionAssistantHistoryAnchors(
             selectionAssistantHistoryAnchors,
             in: view,
             force: shouldReloadDocument
         )
         context.coordinator.applyNoteNavigationIfNeeded(noteNavigationRequest, in: view)
-        context.coordinator.scheduleCurrentPageIndexUpdate()
-        context.coordinator.scheduleSelectionUpdate()
     }
 
     func makeCoordinator() -> Coordinator {
@@ -375,12 +408,22 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
         )
     }
 
-    private func applyDisplayAppearance(_ appearance: PDFDisplayAppearance, to view: PDFView) {
-        view.backgroundColor = appearance.pdfBackgroundColor
-    }
-
     @MainActor
     final class Coordinator: NSObject, PDFAnnotationSessionHandler {
+        #if os(macOS)
+        private struct InteractionConfiguration: Equatable {
+            var mode: PDFInteractionMode
+            var colorPreset: PDFAnnotationColorPreset
+            var lineWidth: Double
+            var displayAppearance: PDFDisplayAppearance
+        }
+        #endif
+
+        private static let performanceLog = OSLog(
+            subsystem: "com.yiyan.ReadPaper",
+            category: .pointsOfInterest
+        )
+
         private enum AnnotationHistoryEntry {
             case add([PDFAnnotationRecord])
             case remove([PDFAnnotationRecord])
@@ -398,6 +441,7 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
         var pageIndex: Binding<Int>
         var onNoteSelectionChanged: ((NoteSelectionContext?) -> Void)?
         var onArxivLinkActivated: ((URL) -> Void)?
+        var onDocumentPageCountChanged: ((Int) -> Void)?
         private weak var annotationSession: PDFAnnotationSession?
         private weak var registeredAnnotationSession: PDFAnnotationSession?
         private var registeredAnnotationAttachmentID: UUID?
@@ -413,9 +457,18 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
         private var lastPublishedSelection: NoteSelectionContext?
         private var pendingProgrammaticPosition: PDFReadingPosition?
         private var appliedAutomaticScaling: Bool?
+        private var appliedDisplayAppearance: PDFDisplayAppearance?
+        #if os(macOS)
+        private var appliedInteractionConfiguration: InteractionConfiguration?
+        #endif
+        private var pendingDocumentPageCount: Int?
+        private var pendingDocumentPageCountForce = false
+        private var lastPublishedDocumentPageCount: Int?
+        private var isDocumentPageCountUpdateScheduled = false
         private var lastAppliedNoteNavigationID: UUID?
         private var noteNavigationHighlightAnnotations: [PDFAnnotation] = []
         private var noteNavigationHighlightTask: Task<Void, Never>?
+        private var receivedSelectionAssistantHistoryAnchors: [SelectionAssistantHistoryAnchor] = []
         private var appliedSelectionAssistantHistoryAnchors: [SelectionAssistantHistoryAnchor] = []
         private var selectionAssistantHistoryAnnotations: [(SelectionAssistantHistoryAnchor, PDFAnnotation)] = []
 
@@ -447,6 +500,26 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
         var canRedoPDFAnnotation: Bool { redoAnnotationHistory.isEmpty == false }
         var hasPDFAnnotations: Bool { annotationRecords.isEmpty == false }
 
+        func beginViewUpdateSignpost() -> OSSignpostID {
+            let signpostID = OSSignpostID(log: Self.performanceLog)
+            os_signpost(
+                .begin,
+                log: Self.performanceLog,
+                name: "PDF View Update",
+                signpostID: signpostID
+            )
+            return signpostID
+        }
+
+        func endViewUpdateSignpost(_ signpostID: OSSignpostID) {
+            os_signpost(
+                .end,
+                log: Self.performanceLog,
+                name: "PDF View Update",
+                signpostID: signpostID
+            )
+        }
+
         func applyScalingPreference(_ usesAutomaticScaling: Bool, to pdfView: PDFView) {
             guard appliedAutomaticScaling != usesAutomaticScaling else { return }
             appliedAutomaticScaling = usesAutomaticScaling
@@ -466,6 +539,38 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
             }
             pdfView.autoScales = true
         }
+
+        func applyDisplayAppearance(_ appearance: PDFDisplayAppearance, to pdfView: PDFView) {
+            guard appliedDisplayAppearance != appearance else { return }
+            appliedDisplayAppearance = appearance
+            pdfView.backgroundColor = appearance.pdfBackgroundColor
+            updateAnnotationAppearance(appearance)
+        }
+
+        #if os(macOS)
+        fileprivate func applyInteractionConfiguration(
+            debugRegionSelectionEnabled: Bool,
+            annotationSession: PDFAnnotationSession?,
+            displayAppearance: PDFDisplayAppearance,
+            to pdfView: InteractivePDFView
+        ) {
+            let configuration = InteractionConfiguration(
+                mode: debugRegionSelectionEnabled
+                    ? .debugRegion
+                    : annotationSession?.interactionMode ?? .browse,
+                colorPreset: annotationSession?.colorPreset ?? .yellow,
+                lineWidth: annotationSession?.lineWidth ?? 2,
+                displayAppearance: displayAppearance
+            )
+            guard appliedInteractionConfiguration != configuration else { return }
+            appliedInteractionConfiguration = configuration
+            pdfView.interactionMode = configuration.mode
+            pdfView.inkPreviewColor = configuration.colorPreset
+                .color(for: .ink)
+                .platformColor(inverted: configuration.displayAppearance == .dark)
+            pdfView.inkPreviewLineWidth = configuration.lineWidth
+        }
+        #endif
 
         func configure(
             paperID: UUID?,
@@ -594,6 +699,10 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
             }
             registeredAnnotationAttachmentID = nil
             registeredAnnotationSession = nil
+            pendingDocumentPageCount = nil
+            pendingDocumentPageCountForce = false
+            isDocumentPageCountUpdateScheduled = false
+            onDocumentPageCountChanged = nil
             self.pdfView = nil
         }
 
@@ -673,12 +782,17 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
             in pdfView: PDFView,
             force: Bool = false
         ) {
+            guard force || anchors != receivedSelectionAssistantHistoryAnchors else { return }
             let matchingAnchors = anchors.filter {
                 $0.attachmentID == nil || $0.attachmentID == attachmentID
             }
-            guard force || matchingAnchors != appliedSelectionAssistantHistoryAnchors else { return }
+            if !force, matchingAnchors == appliedSelectionAssistantHistoryAnchors {
+                receivedSelectionAssistantHistoryAnchors = anchors
+                return
+            }
 
             clearSelectionAssistantHistoryAnnotations()
+            receivedSelectionAssistantHistoryAnchors = anchors
             appliedSelectionAssistantHistoryAnchors = matchingAnchors
             guard let document = pdfView.document else { return }
 
@@ -719,6 +833,7 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
                 annotation.page?.removeAnnotation(annotation)
             }
             selectionAssistantHistoryAnnotations = []
+            receivedSelectionAssistantHistoryAnchors = []
             appliedSelectionAssistantHistoryAnchors = []
         }
 
@@ -1093,6 +1208,34 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
             }
         }
 
+        func scheduleDocumentPageCountUpdate(_ pageCount: Int, force: Bool = false) {
+            pendingDocumentPageCount = max(0, pageCount)
+            pendingDocumentPageCountForce = pendingDocumentPageCountForce || force
+            guard !isDocumentPageCountUpdateScheduled else { return }
+            isDocumentPageCountUpdateScheduled = true
+
+            Task { @MainActor [weak self] in
+                await Task.yield()
+                guard let self else { return }
+                self.isDocumentPageCountUpdateScheduled = false
+                guard let pageCount = self.pendingDocumentPageCount else { return }
+                let force = self.pendingDocumentPageCountForce
+                self.pendingDocumentPageCount = nil
+                self.pendingDocumentPageCountForce = false
+                guard force || self.lastPublishedDocumentPageCount != pageCount else { return }
+                self.lastPublishedDocumentPageCount = pageCount
+                self.onDocumentPageCountChanged?(pageCount)
+            }
+        }
+
+        func shouldRestorePageIndex(_ requestedPageIndex: Int, in pdfView: PDFView) -> Bool {
+            guard let document = pdfView.document, document.pageCount > 0 else { return false }
+            let targetPageIndex = min(max(0, requestedPageIndex), document.pageCount - 1)
+            guard let currentPage = pdfView.currentPage else { return true }
+            let currentPageIndex = document.index(for: currentPage)
+            return currentPageIndex == NSNotFound || currentPageIndex != targetPageIndex
+        }
+
         func readingPosition(fallbackPageIndex: Int, in pdfView: PDFView) -> PDFReadingPosition {
             if let document = pdfView.document,
                let destination = pdfView.currentDestination,
@@ -1136,9 +1279,35 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
             }
 
             if let point = targetPosition.point {
+                let signpostID = OSSignpostID(log: Self.performanceLog)
+                os_signpost(
+                    .begin,
+                    log: Self.performanceLog,
+                    name: "PDF Programmatic Navigation",
+                    signpostID: signpostID
+                )
                 pdfView.go(to: PDFDestination(page: page, at: point))
+                os_signpost(
+                    .end,
+                    log: Self.performanceLog,
+                    name: "PDF Programmatic Navigation",
+                    signpostID: signpostID
+                )
             } else if pdfView.currentPage != page {
+                let signpostID = OSSignpostID(log: Self.performanceLog)
+                os_signpost(
+                    .begin,
+                    log: Self.performanceLog,
+                    name: "PDF Programmatic Navigation",
+                    signpostID: signpostID
+                )
                 pdfView.go(to: page)
+                os_signpost(
+                    .end,
+                    log: Self.performanceLog,
+                    name: "PDF Programmatic Navigation",
+                    signpostID: signpostID
+                )
             }
 
             guard suppressIntermediateUpdates else { return }
@@ -1203,6 +1372,7 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
 
         @objc
         private func handlePageChanged(_ notification: Notification) {
+            os_signpost(.event, log: Self.performanceLog, name: "PDF Page Changed")
             scheduleCurrentPageIndexUpdate()
         }
 
