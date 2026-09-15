@@ -242,6 +242,60 @@ final class LaTeXTranslationServiceTests: XCTestCase {
         ))
     }
 
+    func testFrozenMintedCacheFailureRetriesInDraftModeWithoutCorruptingCode() async throws {
+        let temporary = try TemporaryTestDirectory()
+        defer { temporary.remove() }
+        let project = temporary.url.appendingPathComponent("input", isDirectory: true)
+        try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
+        try #"""
+        \documentclass{article}
+        \usepackage[frozencache,cachedir=_minted]{minted}
+        \begin{document}
+        \section{Implementation}
+        This deterministic section contains enough academic prose to exercise the translation pipeline while a frozen minted cache reports that its generated highlighting is stale.
+        \begin{minted}{python}
+        if layer_number % (block_size // 2) == 0:
+            print("boundary")
+        \end{minted}
+        \end{document}
+        """#.write(
+            to: project.appendingPathComponent("main.tex"),
+            atomically: true,
+            encoding: .utf8
+        )
+        let compiler = FrozenMintedCacheThenSuccessCompiler()
+        let service = ReadPaperLaTeXTranslationService(
+            fileStore: PaperFileStore(
+                applicationSupportDirectory: temporary.url.appendingPathComponent("support")
+            ),
+            acquirer: StaticArXivAcquirer(source: .localDirectory(project)),
+            provider: EchoLLMProvider(),
+            compiler: compiler
+        )
+
+        let output = try await service.translate(ReadPaperLaTeXTranslationRequest(
+            paperID: UUID(),
+            arxivIdentifier: "2401.00003v1",
+            targetLanguage: "zh-CN",
+            maximumConcurrency: 1,
+            glossary: "",
+            documentSummary: "A frozen minted cache fixture.",
+            route: makeRoute(),
+            apiKey: "sk-in-memory-only"
+        ))
+
+        XCTAssertFalse(output.pdfCompilationFailed)
+        XCTAssertNotNil(output.artifact.pdfURL)
+        let compilerInvocationCount = await compiler.invocationCount()
+        XCTAssertEqual(compilerInvocationCount, 2)
+        let translatedMain = try String(
+            contentsOf: output.artifact.projectDirectory.appendingPathComponent("main.tex"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(translatedMain.contains(#"\usepackage[draft,cachedir=_minted]{minted}"#))
+        XCTAssertTrue(translatedMain.contains("layer_number % (block_size // 2)"))
+    }
+
     func testToolchainDetectionFindsLatexmkOnProvidedPath() throws {
         let temporary = try TemporaryTestDirectory()
         defer { temporary.remove() }
@@ -516,6 +570,50 @@ final class LaTeXTranslationServiceTests: XCTestCase {
         XCTAssertEqual(try String(contentsOf: styleURL, encoding: .utf8), normalizedStyle)
     }
 
+    func testLaTeXParserPreservesLiteralPercentInsideMintedEnvironment() async throws {
+        let temporary = try TemporaryTestDirectory()
+        defer { temporary.remove() }
+        let mainURL = temporary.url.appendingPathComponent("main.tex")
+        let original = #"""
+        \documentclass{article}
+        % This ordinary TeX comment should still be removed by the parser.
+        \begin{document}
+        \begin{figure}
+        \begin{minted}{python}
+        if layer_number % (block_size // 2) == 0:
+            print("100% boundary")
+        \end{minted}
+        \caption{Code sample.}
+        \end{figure}
+        \end{document}
+        """#
+        try original.write(to: mainURL, atomically: true, encoding: .utf8)
+        let marker = "READPAPERLITERALPERCENTTEST"
+        let parser = ReadPaperLiteralPercentPreservingLaTeXParser(marker: marker)
+
+        let parsed = try await parser.parse(PreparedProject(
+            identifier: "minted-percent",
+            sourceDirectory: temporary.url,
+            workspaceDirectory: temporary.url
+        ))
+
+        let figure = try XCTUnwrap(parsed.environments.first { $0.name == "figure" })
+        XCTAssertTrue(figure.content.contains("layer_number \(marker) (block_size // 2)"))
+        XCTAssertTrue(figure.content.contains("100\(marker) boundary"))
+        XCTAssertFalse(figure.content.contains("ordinary TeX comment"))
+        XCTAssertEqual(try String(contentsOf: mainURL, encoding: .utf8), original)
+
+        let reconstructedURL = temporary.url.appendingPathComponent("reconstructed.tex")
+        try figure.content.write(to: reconstructedURL, atomically: true, encoding: .utf8)
+        try ReadPaperLaTeXProjectCompatibilityNormalizer.normalizeProject(
+            at: temporary.url,
+            literalPercentMarker: marker
+        )
+        let reconstructed = try String(contentsOf: reconstructedURL, encoding: .utf8)
+        XCTAssertTrue(reconstructed.contains("layer_number % (block_size // 2)"))
+        XCTAssertTrue(reconstructed.contains("100% boundary"))
+    }
+
     func testArXivIdentifierResolutionDoesNotDuplicateVersions() {
         XCTAssertEqual(
             ReadPaperArXivIdentifier.resolving(id: "2401.00001", version: "v2"),
@@ -669,6 +767,43 @@ private struct FailingLaTeXCompiler: LaTeXProjectCompiling {
         configuration: TranslationConfiguration
     ) async throws -> CompilationArtifact {
         throw LaTeXCompilationError.allAttemptsFailed(attempts)
+    }
+}
+
+private actor FrozenMintedCacheThenSuccessCompiler: LaTeXProjectCompiling {
+    private var invocations = 0
+
+    func compile(
+        projectDirectory: URL,
+        configuration: TranslationConfiguration
+    ) async throws -> CompilationArtifact {
+        invocations += 1
+        let mainURL = projectDirectory.appendingPathComponent("main.tex")
+        let source = try String(contentsOf: mainURL, encoding: .utf8)
+        if source.contains("frozencache") {
+            let logURL = projectDirectory.appendingPathComponent("frozen-minted.log")
+            try "Package minted Error: Cannot highlight code (frozencache\n=true)"
+                .write(to: logURL, atomically: true, encoding: .utf8)
+            throw LaTeXCompilationError.allAttemptsFailed([
+                CompilationAttempt(
+                    engine: .luaLaTeX,
+                    exitCode: 1,
+                    succeeded: false,
+                    durationMilliseconds: 1,
+                    logURLs: [logURL]
+                ),
+            ])
+        }
+        guard source.contains(#"\usepackage[draft,cachedir=_minted]{minted}"#) else {
+            throw CocoaError(.fileReadCorruptFile)
+        }
+        let pdfURL = projectDirectory.appendingPathComponent("main.pdf")
+        try Data("%PDF-1.7\n".utf8).write(to: pdfURL)
+        return CompilationArtifact(pdfURL: pdfURL)
+    }
+
+    func invocationCount() -> Int {
+        invocations
     }
 }
 

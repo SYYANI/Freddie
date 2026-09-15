@@ -306,6 +306,21 @@ enum ReadPaperLaTeXCompilationDiagnostics {
             }
     }
 
+    static func indicatesFrozenMintedCacheFailure(_ attempts: [CompilationAttempt]) -> Bool {
+        attempts
+            .flatMap(\.logURLs)
+            .contains { url in
+                guard let data = try? Data(contentsOf: url), data.count <= 2 * 1_024 * 1_024,
+                      let contents = String(data: data, encoding: .utf8) else {
+                    return false
+                }
+                return contents.range(
+                    of: #"Cannot\s+highlight\s+code\s*\(\s*frozencache\s*=\s*true\s*\)"#,
+                    options: [.regularExpression, .caseInsensitive]
+                ) != nil
+            }
+    }
+
     static func failureStatusMessage(for attempts: [CompilationAttempt], bundle: Bundle) -> String {
         if indicatesMissingLatexmk(attempts) {
             return AppLocalization.localized(
@@ -709,6 +724,7 @@ enum ReadPaperLaTeXProjectCompatibilityNormalizer {
 
     static func normalizeProject(
         at projectDirectory: URL,
+        literalPercentMarker: String? = nil,
         fileManager: FileManager = .default
     ) throws {
         let resourceKeys: [URLResourceKey] = [
@@ -735,12 +751,199 @@ enum ReadPaperLaTeXProjectCompatibilityNormalizer {
             guard let source = try? String(contentsOf: fileURL, encoding: .utf8) else {
                 continue
             }
-            let normalized = ReadPaperLaTeXEngineCompatibilityPreamblePolicy
+            var normalized = ReadPaperLaTeXEngineCompatibilityPreamblePolicy
                 .normalizeEngineSpecificSource(source)
+            if let literalPercentMarker {
+                normalized = normalized.replacingOccurrences(
+                    of: literalPercentMarker,
+                    with: "%"
+                )
+            }
             if normalized != source {
                 try normalized.write(to: fileURL, atomically: true, encoding: .utf8)
             }
         }
+    }
+
+    @discardableResult
+    static func enableDraftModeForFrozenMintedCaches(
+        at projectDirectory: URL,
+        fileManager: FileManager = .default
+    ) throws -> Bool {
+        let resourceKeys: [URLResourceKey] = [.isRegularFileKey, .isSymbolicLinkKey]
+        guard let enumerator = fileManager.enumerator(
+            at: projectDirectory,
+            includingPropertiesForKeys: resourceKeys,
+            options: [.skipsHiddenFiles, .skipsPackageDescendants]
+        ) else {
+            throw CocoaError(.fileReadUnknown)
+        }
+
+        var changed = false
+        for case let fileURL as URL in enumerator {
+            try Task.checkCancellation()
+            guard sourceExtensions.contains(fileURL.pathExtension.lowercased()) else {
+                continue
+            }
+            let values = try fileURL.resourceValues(forKeys: Set(resourceKeys))
+            guard values.isRegularFile == true, values.isSymbolicLink != true,
+                  let source = try? String(contentsOf: fileURL, encoding: .utf8) else {
+                continue
+            }
+            let normalized = replacingFrozenMintedCacheOption(in: source)
+            guard normalized != source else { continue }
+            try normalized.write(to: fileURL, atomically: true, encoding: .utf8)
+            changed = true
+        }
+        return changed
+    }
+
+    private static func replacingFrozenMintedCacheOption(in source: String) -> String {
+        let pattern = #"(?m)(\\(?:usepackage|RequirePackage)\s*\[)([^\]\r\n]*)(\]\s*\{minted\})"#
+        guard let expression = try? NSRegularExpression(pattern: pattern) else {
+            return source
+        }
+        var result = source
+        let matches = expression.matches(
+            in: source,
+            range: NSRange(source.startIndex..<source.endIndex, in: source)
+        )
+        for match in matches.reversed() {
+            guard let wholeRange = Range(match.range, in: result),
+                  let optionsRange = Range(match.range(at: 2), in: result) else {
+                continue
+            }
+            let options = result[optionsRange]
+                .split(separator: ",", omittingEmptySubsequences: false)
+                .map(String.init)
+            guard options.contains(where: {
+                $0.trimmingCharacters(in: .whitespacesAndNewlines)
+                    .caseInsensitiveCompare("frozencache") == .orderedSame
+            }) else {
+                continue
+            }
+            let replacementOptions = options.map { option in
+                if option.trimmingCharacters(in: .whitespacesAndNewlines)
+                    .caseInsensitiveCompare("frozencache") == .orderedSame {
+                    return "draft"
+                }
+                return option
+            }.joined(separator: ",")
+            let whole = String(result[wholeRange])
+            let originalOptions = String(result[optionsRange])
+            result.replaceSubrange(
+                wholeRange,
+                with: whole.replacingOccurrences(of: originalOptions, with: replacementOptions)
+            )
+        }
+        return result
+    }
+}
+
+/// `StructuredLaTeXParser` removes TeX comments before it discovers protected
+/// environments. A literal percent sign inside `minted`, `lstlisting`, or
+/// `verbatim` is data rather than a TeX comment, so protect it while parsing and
+/// restore it in the reconstructed project before compilation.
+struct ReadPaperLiteralPercentPreservingLaTeXParser: LaTeXProjectParsing {
+    private static let sourceExtensions: Set<String> = [
+        "tex", "cls", "sty", "ltx", "def", "cfg",
+    ]
+    private static let verbatimEnvironmentPattern =
+        #"(?s)\\begin\s*\{(minted\*?|lstlisting\*?|verbatim\*?)\}.*?\\end\s*\{\1\}"#
+
+    private let marker: String
+    private let base: any LaTeXProjectParsing
+
+    init(
+        marker: String,
+        base: any LaTeXProjectParsing = StructuredLaTeXParser()
+    ) {
+        self.marker = marker
+        self.base = base
+    }
+
+    func parse(_ project: PreparedProject) async throws -> ParsedLaTeXProject {
+        let snapshots = try protectLiteralPercents(in: project.sourceDirectory)
+        do {
+            let parsed = try await base.parse(project)
+            try restore(snapshots)
+            return parsed
+        } catch {
+            try? restore(snapshots)
+            throw error
+        }
+    }
+
+    private func protectLiteralPercents(in projectDirectory: URL) throws -> [SourceSnapshot] {
+        let fileManager = FileManager.default
+        let resourceKeys: [URLResourceKey] = [.isRegularFileKey, .isSymbolicLinkKey]
+        guard let enumerator = fileManager.enumerator(
+            at: projectDirectory,
+            includingPropertiesForKeys: resourceKeys,
+            options: [.skipsHiddenFiles, .skipsPackageDescendants]
+        ) else {
+            throw CocoaError(.fileReadUnknown)
+        }
+
+        var snapshots: [SourceSnapshot] = []
+        do {
+            for case let fileURL as URL in enumerator {
+                try Task.checkCancellation()
+                guard Self.sourceExtensions.contains(fileURL.pathExtension.lowercased()) else {
+                    continue
+                }
+                let values = try fileURL.resourceValues(forKeys: Set(resourceKeys))
+                guard values.isRegularFile == true, values.isSymbolicLink != true else {
+                    continue
+                }
+                guard let source = try? String(contentsOf: fileURL, encoding: .utf8) else {
+                    continue
+                }
+                let protected = Self.protectingLiteralPercents(in: source, marker: marker)
+                guard protected != source else { continue }
+                snapshots.append(SourceSnapshot(fileURL: fileURL, source: source))
+                try protected.write(to: fileURL, atomically: true, encoding: .utf8)
+            }
+            return snapshots
+        } catch {
+            try? restore(snapshots)
+            throw error
+        }
+    }
+
+    private func restore(_ snapshots: [SourceSnapshot]) throws {
+        for snapshot in snapshots {
+            try snapshot.source.write(
+                to: snapshot.fileURL,
+                atomically: true,
+                encoding: .utf8
+            )
+        }
+    }
+
+    private static func protectingLiteralPercents(in source: String, marker: String) -> String {
+        guard source.contains("%"),
+              let expression = try? NSRegularExpression(
+                  pattern: verbatimEnvironmentPattern
+              ) else {
+            return source
+        }
+        var result = source
+        let matches = expression.matches(
+            in: source,
+            range: NSRange(source.startIndex..<source.endIndex, in: source)
+        )
+        for match in matches.reversed() {
+            guard let range = Range(match.range, in: result) else { continue }
+            let environment = result[range].replacingOccurrences(of: "%", with: marker)
+            result.replaceSubrange(range, with: environment)
+        }
+        return result
+    }
+
+    private struct SourceSnapshot {
+        let fileURL: URL
+        let source: String
     }
 }
 
@@ -799,9 +1002,13 @@ actor ReadPaperLaTeXTranslationService {
             acquirer: acquirer,
             archiveReader: archiveReader
         ))
+        let markerID = UUID().uuidString.replacingOccurrences(of: "-", with: "")
+        let literalPercentMarker = "READPAPERLITERALPERCENT\(markerID)"
         let pipeline = LaTeXTranslationPipeline(
             preparer: preparer,
-            parser: StructuredLaTeXParser(),
+            parser: ReadPaperLiteralPercentPreservingLaTeXParser(
+                marker: literalPercentMarker
+            ),
             translator: translator,
             validator: StructuralLaTeXValidator(),
             reconstructor: StructuredLaTeXReconstructor(
@@ -829,7 +1036,8 @@ actor ReadPaperLaTeXTranslationService {
             }
         }
         try ReadPaperLaTeXProjectCompatibilityNormalizer.normalizeProject(
-            at: artifact.projectDirectory
+            at: artifact.projectDirectory,
+            literalPercentMarker: literalPercentMarker
         )
 
         guard let compiler else {
@@ -862,6 +1070,43 @@ actor ReadPaperLaTeXTranslationService {
         } catch is CancellationError {
             throw CancellationError()
         } catch let LaTeXCompilationError.allAttemptsFailed(attempts) {
+            if ReadPaperLaTeXCompilationDiagnostics.indicatesFrozenMintedCacheFailure(attempts),
+               (try? ReadPaperLaTeXProjectCompatibilityNormalizer
+                   .enableDraftModeForFrozenMintedCaches(at: artifact.projectDirectory)) == true {
+                do {
+                    let compilation = try await compiler.compile(
+                        projectDirectory: artifact.projectDirectory,
+                        configuration: configuration
+                    )
+                    onProgress(ReadPaperLaTeXProgressMapper.update(
+                        for: PipelineEvent(stage: .finished)
+                    ))
+                    return ReadPaperLaTeXTranslationOutput(
+                        artifact: TranslationArtifact(
+                            projectDirectory: artifact.projectDirectory,
+                            pdfURL: compilation.pdfURL,
+                            compilation: compilation,
+                            units: artifact.units,
+                            validationIssues: artifact.validationIssues
+                        ),
+                        pdfCompilationFailed: false,
+                        failedCompilationAttempts: []
+                    )
+                } catch is CancellationError {
+                    throw CancellationError()
+                } catch let LaTeXCompilationError.allAttemptsFailed(retryAttempts) {
+                    onProgress(ReadPaperLaTeXProgressMapper.update(
+                        for: PipelineEvent(stage: .finished)
+                    ))
+                    return ReadPaperLaTeXTranslationOutput(
+                        artifact: artifact,
+                        pdfCompilationFailed: true,
+                        failedCompilationAttempts: attempts + retryAttempts
+                    )
+                } catch {
+                    // Fall through to the original structured failure below.
+                }
+            }
             onProgress(ReadPaperLaTeXProgressMapper.update(for: PipelineEvent(stage: .finished)))
             return ReadPaperLaTeXTranslationOutput(
                 artifact: artifact,
