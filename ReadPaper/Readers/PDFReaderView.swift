@@ -72,7 +72,9 @@ extension PDFDisplayAppearance {
         switch self {
         case .defaultMode:
             #if os(macOS)
-            return .textBackgroundColor
+            // Let the reader column's native glass material show through around
+            // the PDF pages. PDFKit still renders each page on its own paper.
+            return .clear
             #else
             return .systemBackground
             #endif
@@ -585,16 +587,41 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
         }
 
         func applyDisplayAppearance(_ appearance: PDFDisplayAppearance, to pdfView: PDFView) {
-            guard appliedDisplayAppearance != appearance else { return }
-            appliedDisplayAppearance = appearance
-            pdfView.backgroundColor = appearance.pdfBackgroundColor
+            let appearanceChanged = appliedDisplayAppearance != appearance
+            if appearanceChanged {
+                appliedDisplayAppearance = appearance
+                pdfView.backgroundColor = appearance.pdfBackgroundColor
+            }
             #if os(macOS)
-            pdfView.contentFilters = appearance.makeNativeContentFilters()
+            if appearanceChanged {
+                pdfView.contentFilters = appearance.makeNativeContentFilters()
+            }
+            configureCanvasBackground(appearance, in: pdfView)
             #endif
-            updateAnnotationAppearance(appearance)
+            if appearanceChanged {
+                updateAnnotationAppearance(appearance)
+            }
         }
 
         #if os(macOS)
+        private func configureCanvasBackground(
+            _ appearance: PDFDisplayAppearance,
+            in pdfView: PDFView
+        ) {
+            let isTransparent = appearance == .defaultMode
+
+            // PDFKit owns a nested PDFScrollView/PDFClipView pair which keeps
+            // painting its own canvas even when PDFView.backgroundColor is clear.
+            // Disable those public AppKit background layers so the reader's glass
+            // material is visible around the document pages.
+            for scrollView in pdfView.subviews.compactMap({ $0 as? NSScrollView }) {
+                scrollView.drawsBackground = !isTransparent
+                scrollView.backgroundColor = appearance.pdfBackgroundColor
+                scrollView.contentView.drawsBackground = !isTransparent
+                scrollView.contentView.backgroundColor = appearance.pdfBackgroundColor
+            }
+        }
+
         fileprivate func applyInteractionConfiguration(
             debugRegionSelectionEnabled: Bool,
             annotationSession: PDFAnnotationSession?,

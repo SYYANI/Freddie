@@ -97,7 +97,7 @@ struct ReadPaperAppearanceSurface: View {
         if PDFDisplayAppearance.resolve(rawValue: displayAppearanceRawValue) == .paper {
             ReadPaperSurface(role: role, textureOpacity: textureOpacity)
         } else {
-            Color(nsColor: .windowBackgroundColor)
+            Color.clear
                 .accessibilityHidden(true)
                 .allowsHitTesting(false)
         }
@@ -158,7 +158,7 @@ struct ReadPaperAppearanceHeaderSurface: View {
         if PDFDisplayAppearance.resolve(rawValue: displayAppearanceRawValue) == .paper {
             ReadPaperHeaderSurface(role: role)
         } else {
-            Color(nsColor: .windowBackgroundColor)
+            Color.clear
                 .accessibilityHidden(true)
                 .allowsHitTesting(false)
         }
@@ -200,6 +200,46 @@ private struct ReadPaperGrain: View {
             }
         }
         .opacity(opacity)
+    }
+}
+
+/// Gives the reader column its own native panel material, parallel to the
+/// system-owned sidebar and inspector materials on macOS 26.
+struct ReadPaperReaderMaterialSurface: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView {
+        if #available(macOS 26.0, *) {
+            let view = NSGlassEffectView()
+            configureGlass(view)
+            return view
+        }
+
+        let view = NSVisualEffectView()
+        configureLegacyMaterial(view)
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        if #available(macOS 26.0, *), let view = nsView as? NSGlassEffectView {
+            configureGlass(view)
+        } else if let view = nsView as? NSVisualEffectView {
+            configureLegacyMaterial(view)
+        }
+    }
+
+    @available(macOS 26.0, *)
+    private func configureGlass(_ view: NSGlassEffectView) {
+        view.style = .regular
+        // System-owned sidebars and inspectors receive extra container tinting
+        // that a standalone public glass view does not. Add a restrained,
+        // appearance-adaptive tint so the reader keeps its translucency while
+        // matching the surrounding panels more closely.
+        view.tintColor = NSColor.windowBackgroundColor.withAlphaComponent(0.78)
+    }
+
+    private func configureLegacyMaterial(_ view: NSVisualEffectView) {
+        view.blendingMode = .behindWindow
+        view.material = .underWindowBackground
+        view.state = .followsWindowActiveState
     }
 }
 
@@ -276,11 +316,6 @@ final class PaperWindowChromeView: NSView {
     private func updateWindowChrome() {
         guard let window else { return }
 
-        guard isPaperEnabled else {
-            restoreWindowChrome()
-            return
-        }
-
         if configuredWindow !== window || originalWindowChrome == nil {
             restoreWindowChrome()
             configuredWindow = window
@@ -295,11 +330,19 @@ final class PaperWindowChromeView: NSView {
 
         window.styleMask.insert(.fullSizeContentView)
         window.titlebarAppearsTransparent = true
-        window.titlebarSeparatorStyle = .none
-        window.backgroundColor = NSColor(
-            ReadPaperTheme.surfaceColor(.reader, scheme: colorScheme)
-        )
-        window.isOpaque = true
+        if isPaperEnabled {
+            window.titlebarSeparatorStyle = .none
+            window.backgroundColor = NSColor(
+                ReadPaperTheme.surfaceColor(.reader, scheme: colorScheme)
+            )
+            window.isOpaque = true
+        } else {
+            // The full-size transparent titlebar does not reliably render the
+            // AppKit separator. ReaderPaneView draws the boundary explicitly.
+            window.titlebarSeparatorStyle = .none
+            window.backgroundColor = .clear
+            window.isOpaque = false
+        }
     }
 
     func restoreWindowChrome() {

@@ -48,7 +48,36 @@ private extension PDFDisplayAppearance {
     var htmlReaderCSS: String {
         switch self {
         case .defaultMode:
-            return ""
+            return """
+            html,
+            body,
+            body.rp-readability-body,
+            body.rp-readability-body .rp-readability-shell,
+            body.rp-readability-body .rp-readability-header,
+            body.rp-readability-body .rp-readability-content,
+            body:not(.rp-readability-body) {
+                background: transparent !important;
+                background-color: transparent !important;
+            }
+            @media (prefers-color-scheme: dark) {
+                body,
+                body.rp-readability-body .rp-readability-shell,
+                body.rp-readability-body .rp-readability-header,
+                body.rp-readability-body .rp-readability-content,
+                body:not(.rp-readability-body) {
+                    color: #e8e3d7 !important;
+                }
+                body.rp-readability-body .rp-readability-title,
+                body.rp-readability-body .rp-readability-content h1,
+                body.rp-readability-body .rp-readability-content h2,
+                body.rp-readability-body .rp-readability-content h3,
+                body.rp-readability-body .rp-readability-content h4,
+                body.rp-readability-body .rp-readability-content h5,
+                body.rp-readability-body .rp-readability-content h6 {
+                    color: #f5efe4 !important;
+                }
+            }
+            """
         case .dark:
             return """
             :root { color-scheme: dark; }
@@ -367,22 +396,22 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
     private func applyHostDisplayAppearance(_ appearance: PDFDisplayAppearance, to webView: WKWebView) {
         #if os(macOS)
         webView.wantsLayer = true
-        let usesTransparentPaper = appearance == .paper
-        webView.setValue(!usesTransparentPaper, forKey: "drawsBackground")
-        webView.layer?.backgroundColor = usesTransparentPaper
+        let usesTransparentBackground = appearance != .dark
+        webView.setValue(!usesTransparentBackground, forKey: "drawsBackground")
+        webView.layer?.backgroundColor = usesTransparentBackground
             ? NSColor.clear.cgColor
             : appearance.htmlReaderBackgroundColor.cgColor
         if #available(macOS 12.0, *) {
-            webView.underPageBackgroundColor = usesTransparentPaper
+            webView.underPageBackgroundColor = usesTransparentBackground
                 ? .clear
                 : appearance.htmlReaderBackgroundColor
         }
-        webView.enclosingScrollView?.drawsBackground = !usesTransparentPaper
+        webView.enclosingScrollView?.drawsBackground = !usesTransparentBackground
         #else
-        let usesTransparentPaper = appearance == .paper
-        webView.isOpaque = !usesTransparentPaper
-        webView.backgroundColor = usesTransparentPaper ? .clear : appearance.htmlReaderBackgroundColor
-        webView.scrollView.backgroundColor = usesTransparentPaper ? .clear : appearance.htmlReaderBackgroundColor
+        let usesTransparentBackground = appearance != .dark
+        webView.isOpaque = !usesTransparentBackground
+        webView.backgroundColor = usesTransparentBackground ? .clear : appearance.htmlReaderBackgroundColor
+        webView.scrollView.backgroundColor = usesTransparentBackground ? .clear : appearance.htmlReaderBackgroundColor
         #endif
     }
 

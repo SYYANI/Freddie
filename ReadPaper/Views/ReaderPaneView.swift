@@ -421,6 +421,7 @@ struct ReaderPaneView: View {
     private var readerSurface: some View {
         VStack(spacing: 0) {
             if paper != nil {
+                Divider()
                 paneHeader
                 Divider()
             }

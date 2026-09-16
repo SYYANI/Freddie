@@ -107,6 +107,12 @@ struct ContentView: View {
             onArxivLinkActivated: handleArxivLinkActivation
         )
         .navigationSplitViewColumnWidth(min: 520, ideal: 760)
+        .background {
+            if !isPaperAppearance {
+                ReadPaperReaderMaterialSurface()
+                    .ignoresSafeArea()
+            }
+        }
     }
 
     private func inspectorColumn(isCollapsed: Bool) -> some View {
@@ -153,7 +159,11 @@ struct ContentView: View {
         mainNavigation
         .background {
             ZStack {
-                ReadPaperAppearanceSurface(role: .reader)
+                if isPaperAppearance {
+                    ReadPaperSurface(role: .reader)
+                } else {
+                    Color.clear
+                }
                 ReadPaperWindowChrome(
                     colorScheme: colorScheme,
                     isPaperEnabled: isPaperAppearance
