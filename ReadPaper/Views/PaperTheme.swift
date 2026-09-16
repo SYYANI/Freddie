@@ -229,11 +229,19 @@ struct ReadPaperReaderMaterialSurface: NSViewRepresentable {
     @available(macOS 26.0, *)
     private func configureGlass(_ view: NSGlassEffectView) {
         view.style = .regular
-        // System-owned sidebars and inspectors receive extra container tinting
-        // that a standalone public glass view does not. Add a restrained,
-        // appearance-adaptive tint so the reader keeps its translucency while
-        // matching the surrounding panels more closely.
-        view.tintColor = NSColor.windowBackgroundColor.withAlphaComponent(0.78)
+        if #available(macOS 27.0, *) {
+            // macOS 27 applies the user's system-wide Liquid Glass tint to
+            // custom glass views. Adding our macOS 26 compensation tint here
+            // makes the reader canvas look opaque, so let AppKit provide the
+            // native material without an additional app-owned tint.
+            view.tintColor = nil
+        } else {
+            // System-owned sidebars and inspectors receive extra container
+            // tinting on macOS 26 that a standalone public glass view does not.
+            // Add a restrained, appearance-adaptive tint so the reader keeps
+            // its translucency while matching the surrounding panels.
+            view.tintColor = NSColor.windowBackgroundColor.withAlphaComponent(0.78)
+        }
     }
 
     private func configureLegacyMaterial(_ view: NSVisualEffectView) {
