@@ -1,3 +1,4 @@
+import AppKit
 import CoreGraphics
 import XCTest
 @testable import ReadPaper
@@ -5,6 +6,55 @@ import XCTest
 final class PaperThemeTests: XCTestCase {
     func testSystemRenderingRemainsTheDefaultReaderAppearance() {
         XCTAssertEqual(PDFDisplayAppearance.defaultValue, .defaultMode)
+    }
+
+    func testReaderAppearanceFollowsSystemAppearance() {
+        XCTAssertEqual(
+            PDFDisplayAppearance.synchronized(isSystemDarkMode: false),
+            .defaultMode
+        )
+        XCTAssertEqual(
+            PDFDisplayAppearance.synchronized(isSystemDarkMode: true),
+            .paper
+        )
+        XCTAssertEqual(PDFDisplayAppearance.allCases, [.defaultMode, .paper])
+    }
+
+    func testManualPreferenceOverridesUntilSystemAppearanceChangesAgain() throws {
+        let suiteName = "PaperThemeTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        defaults.set(PDFDisplayAppearance.defaultMode.rawValue, forKey: PDFDisplayAppearance.userDefaultsKey)
+        PDFDisplayAppearance.synchronizeStoredPreference(in: defaults, isSystemDarkMode: true)
+        XCTAssertEqual(defaults.string(forKey: PDFDisplayAppearance.userDefaultsKey), "paper")
+
+        defaults.set(PDFDisplayAppearance.defaultMode.rawValue, forKey: PDFDisplayAppearance.userDefaultsKey)
+        PDFDisplayAppearance.synchronizeStoredPreference(in: defaults, isSystemDarkMode: true)
+        XCTAssertEqual(defaults.string(forKey: PDFDisplayAppearance.userDefaultsKey), "default")
+
+        PDFDisplayAppearance.synchronizeStoredPreference(in: defaults, isSystemDarkMode: false)
+        XCTAssertEqual(defaults.string(forKey: PDFDisplayAppearance.userDefaultsKey), "default")
+
+        defaults.set(PDFDisplayAppearance.paper.rawValue, forKey: PDFDisplayAppearance.userDefaultsKey)
+        PDFDisplayAppearance.synchronizeStoredPreference(in: defaults, isSystemDarkMode: false)
+        XCTAssertEqual(defaults.string(forKey: PDFDisplayAppearance.userDefaultsKey), "paper")
+    }
+
+    func testRemovedDarkPreferenceFallsBackToDefaultBehavior() {
+        XCTAssertEqual(PDFDisplayAppearance.resolve(rawValue: "dark"), .defaultMode)
+    }
+
+    @MainActor
+    func testSystemAppearanceMonitorMapsAquaToDefaultAndDarkAquaToPaper() {
+        XCTAssertEqual(
+            SystemAppearanceMonitor.readerAppearance(for: NSAppearance(named: .aqua)!),
+            .defaultMode
+        )
+        XCTAssertEqual(
+            SystemAppearanceMonitor.readerAppearance(for: NSAppearance(named: .darkAqua)!),
+            .paper
+        )
     }
 
     func testTextureDotCountIsBoundedAndScalesWithArea() {

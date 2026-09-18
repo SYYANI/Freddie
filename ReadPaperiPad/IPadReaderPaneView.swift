@@ -23,8 +23,7 @@ struct IPadReaderPaneView: View {
 
     @Environment(\.modelContext) private var modelContext
     @Environment(\.localizationBundle) private var bundle
-    @AppStorage(PDFDisplayAppearance.userDefaultsKey)
-    private var appearanceRawValue = PDFDisplayAppearance.defaultValue.rawValue
+    @Environment(\.pdfDisplayAppearance) private var appearance
     @AppStorage(HTMLReaderTypography.fontSizeUserDefaultsKey)
     private var htmlFontSize = HTMLReaderTypography.defaultFontSize
     @AppStorage(PDFTranslationBatchPreference.userDefaultsKey)
@@ -101,10 +100,6 @@ struct IPadReaderPaneView: View {
 
     private var pdfTranslationBatchSize: Int {
         PDFTranslationBatchPreference.normalized(pdfTranslationBatchSizeRawValue)
-    }
-
-    private var appearance: PDFDisplayAppearance {
-        PDFDisplayAppearance.resolve(rawValue: appearanceRawValue)
     }
 
     private var primaryReaderMode: Binding<PrimaryReaderMode> {

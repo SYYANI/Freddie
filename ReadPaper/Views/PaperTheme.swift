@@ -7,23 +7,40 @@ enum ReadPaperSurfaceRole {
     case inspector
 }
 
+/// Observes the system appearance independently from any light appearance
+/// applied to an individual Freddie window.
+@MainActor
+final class SystemAppearanceMonitor: ObservableObject {
+    @Published private(set) var readerAppearance: PDFDisplayAppearance
+
+    private var appearanceObservation: NSKeyValueObservation?
+
+    init(application: NSApplication = .shared) {
+        readerAppearance = Self.readerAppearance(for: application.effectiveAppearance)
+        appearanceObservation = application.observe(\.effectiveAppearance, options: [.new]) {
+            [weak self] application, _ in
+            MainActor.assumeIsolated {
+                let readerAppearance = Self.readerAppearance(for: application.effectiveAppearance)
+                self?.readerAppearance = readerAppearance
+            }
+        }
+    }
+
+    static func readerAppearance(for appearance: NSAppearance) -> PDFDisplayAppearance {
+        let isDarkMode = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        return .synchronized(isSystemDarkMode: isDarkMode)
+    }
+}
+
 enum ReadPaperTheme {
-    static func surfaceColor(_ role: ReadPaperSurfaceRole, scheme: ColorScheme) -> Color {
-        switch (role, scheme) {
-        case (.library, .light):
+    static func surfaceColor(_ role: ReadPaperSurfaceRole, scheme _: ColorScheme) -> Color {
+        switch role {
+        case .library:
             Color(red: 0.918, green: 0.910, blue: 0.884)
-        case (.reader, .light):
+        case .reader:
             Color(red: 0.965, green: 0.949, blue: 0.906)
-        case (.inspector, .light):
+        case .inspector:
             Color(red: 0.944, green: 0.931, blue: 0.895)
-        case (.library, .dark):
-            Color(red: 0.138, green: 0.133, blue: 0.120)
-        case (.reader, .dark):
-            Color(red: 0.105, green: 0.102, blue: 0.092)
-        case (.inspector, .dark):
-            Color(red: 0.122, green: 0.118, blue: 0.106)
-        @unknown default:
-            Color(nsColor: .windowBackgroundColor)
         }
     }
 
@@ -31,26 +48,20 @@ enum ReadPaperTheme {
         Color(nsColor: .controlAccentColor)
     }
 
-    static func cardColor(scheme: ColorScheme) -> Color {
-        scheme == .dark
-            ? Color(red: 0.157, green: 0.153, blue: 0.140)
-            : Color(red: 0.982, green: 0.971, blue: 0.941)
+    static func cardColor(scheme _: ColorScheme) -> Color {
+        Color(red: 0.982, green: 0.971, blue: 0.941)
     }
 
-    static func cardBorderColor(scheme: ColorScheme) -> Color {
-        scheme == .dark
-            ? Color.white.opacity(0.075)
-            : Color(red: 0.333, green: 0.294, blue: 0.231).opacity(0.11)
+    static func cardBorderColor(scheme _: ColorScheme) -> Color {
+        Color(red: 0.333, green: 0.294, blue: 0.231).opacity(0.11)
     }
 
-    static func grainColor(scheme: ColorScheme) -> Color {
-        scheme == .dark ? .white.opacity(0.028) : .black.opacity(0.026)
+    static func grainColor(scheme _: ColorScheme) -> Color {
+        .black.opacity(0.026)
     }
 
-    static func fiberColor(scheme: ColorScheme) -> Color {
-        scheme == .dark
-            ? Color(red: 0.72, green: 0.68, blue: 0.58).opacity(0.032)
-            : Color(red: 0.42, green: 0.36, blue: 0.26).opacity(0.035)
+    static func fiberColor(scheme _: ColorScheme) -> Color {
+        Color(red: 0.42, green: 0.36, blue: 0.26).opacity(0.035)
     }
 }
 
@@ -89,12 +100,11 @@ struct ReadPaperAppearanceSurface: View {
     var role: ReadPaperSurfaceRole
     var textureOpacity = 1.0
 
-    @AppStorage(PDFDisplayAppearance.userDefaultsKey)
-    private var displayAppearanceRawValue = PDFDisplayAppearance.defaultValue.rawValue
+    @Environment(\.pdfDisplayAppearance) private var displayAppearance
 
     @ViewBuilder
     var body: some View {
-        if PDFDisplayAppearance.resolve(rawValue: displayAppearanceRawValue) == .paper {
+        if displayAppearance == .paper {
             ReadPaperSurface(role: role, textureOpacity: textureOpacity)
         } else {
             Color.clear
@@ -113,13 +123,11 @@ struct ReadPaperTextureOverlay: View {
     var body: some View {
         ZStack {
             LinearGradient(
-                colors: colorScheme == .dark
-                    ? [.white.opacity(0.018), .clear, .black.opacity(0.035)]
-                    : [
-                        .white.opacity(role == .reader ? 0.22 : 0.14),
-                        .clear,
-                        Color(red: 0.64, green: 0.34, blue: 0.24).opacity(0.018)
-                    ],
+                colors: [
+                    .white.opacity(role == .reader ? 0.22 : 0.14),
+                    .clear,
+                    Color(red: 0.64, green: 0.34, blue: 0.24).opacity(0.018)
+                ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
@@ -139,7 +147,7 @@ struct ReadPaperHeaderSurface: View {
         ZStack {
             Rectangle().fill(.ultraThinMaterial)
             ReadPaperTheme.surfaceColor(role, scheme: colorScheme)
-                .opacity(colorScheme == .dark ? 0.80 : 0.86)
+                .opacity(0.86)
             ReadPaperGrain(opacity: 0.42)
         }
         .accessibilityHidden(true)
@@ -150,12 +158,11 @@ struct ReadPaperHeaderSurface: View {
 struct ReadPaperAppearanceHeaderSurface: View {
     var role: ReadPaperSurfaceRole
 
-    @AppStorage(PDFDisplayAppearance.userDefaultsKey)
-    private var displayAppearanceRawValue = PDFDisplayAppearance.defaultValue.rawValue
+    @Environment(\.pdfDisplayAppearance) private var displayAppearance
 
     @ViewBuilder
     var body: some View {
-        if PDFDisplayAppearance.resolve(rawValue: displayAppearanceRawValue) == .paper {
+        if displayAppearance == .paper {
             ReadPaperHeaderSurface(role: role)
         } else {
             Color.clear

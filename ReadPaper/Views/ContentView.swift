@@ -6,12 +6,11 @@ struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.localizationBundle) private var bundle
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.pdfDisplayAppearance) private var displayAppearance
     @Query(sort: \Paper.modifiedAt, order: .reverse) private var papers: [Paper]
     @Query(sort: \PaperAttachment.createdAt) private var attachments: [PaperAttachment]
     @Query(sort: \Note.modifiedAt, order: .reverse) private var notes: [Note]
     @Query private var settingsRows: [AppSettings]
-    @AppStorage(PDFDisplayAppearance.userDefaultsKey)
-    private var displayAppearanceRawValue = PDFDisplayAppearance.defaultValue.rawValue
 
     @State private var selectedPaperID: UUID?
     @State private var readerMode: ReaderMode = .pdf
@@ -34,7 +33,7 @@ struct ContentView: View {
     }
 
     private var isPaperAppearance: Bool {
-        PDFDisplayAppearance.resolve(rawValue: displayAppearanceRawValue) == .paper
+        displayAppearance == .paper
     }
 
     private var selectedPaper: Paper? {

@@ -59,11 +59,10 @@ extension View {
 }
 
 private struct ReadPaperInspectorBackgroundModifier: ViewModifier {
-    @AppStorage(PDFDisplayAppearance.userDefaultsKey)
-    private var displayAppearanceRawValue = PDFDisplayAppearance.defaultValue.rawValue
+    @Environment(\.pdfDisplayAppearance) private var displayAppearance
 
     private var isPaperAppearance: Bool {
-        PDFDisplayAppearance.resolve(rawValue: displayAppearanceRawValue) == .paper
+        displayAppearance == .paper
     }
 
     @ViewBuilder

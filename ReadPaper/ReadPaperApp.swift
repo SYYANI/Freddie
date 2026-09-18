@@ -6,6 +6,9 @@ import SwiftUI
 struct ReadPaperApp: App {
     @NSApplicationDelegateAdaptor(ReadPaperApplicationDelegate.self)
     private var applicationDelegate
+    @StateObject private var systemAppearance = SystemAppearanceMonitor()
+    @AppStorage(PDFDisplayAppearance.userDefaultsKey)
+    private var displayAppearancePreference = PDFDisplayAppearance.defaultValue.rawValue
 
     private let sharedModelContainer: ModelContainer
 
@@ -19,10 +22,19 @@ struct ReadPaperApp: App {
 
     var body: some Scene {
         let bundle = LanguageManager.shared.bundle
+        let displayAppearance = PDFDisplayAppearance.resolve(
+            rawValue: displayAppearancePreference
+        )
 
         WindowGroup {
             ContentView()
                 .environment(\.localizationBundle, bundle)
+                .environment(\.pdfDisplayAppearance, displayAppearance)
+                .preferredColorScheme(.light)
+                .onChange(of: systemAppearance.readerAppearance, initial: true) {
+                    _, appearance in
+                    synchronizeAppearancePreference(with: appearance)
+                }
                 .frame(
                     minWidth: MainWindowMetrics.minWidth,
                     minHeight: MainWindowMetrics.minHeight
@@ -41,6 +53,7 @@ struct ReadPaperApp: App {
         Window("About Freddie", id: AboutFreddieCommands.windowID) {
             AboutView()
                 .environment(\.localizationBundle, bundle)
+                .preferredColorScheme(.light)
         }
         .defaultSize(
             width: AboutWindowMetrics.width,
@@ -51,6 +64,12 @@ struct ReadPaperApp: App {
         Settings {
             SettingsView()
                 .environment(\.localizationBundle, bundle)
+                .environment(\.pdfDisplayAppearance, displayAppearance)
+                .preferredColorScheme(.light)
+                .onChange(of: systemAppearance.readerAppearance, initial: true) {
+                    _, appearance in
+                    synchronizeAppearancePreference(with: appearance)
+                }
                 .modelContainer(sharedModelContainer)
                 .frame(
                     minWidth: SettingsWindowMetrics.minWidth,
@@ -64,6 +83,12 @@ struct ReadPaperApp: App {
             height: SettingsWindowMetrics.defaultHeight
         )
         .windowResizability(.contentMinSize)
+    }
+
+    private func synchronizeAppearancePreference(with appearance: PDFDisplayAppearance) {
+        PDFDisplayAppearance.synchronizeStoredPreference(
+            isSystemDarkMode: appearance == .paper
+        )
     }
 }
 

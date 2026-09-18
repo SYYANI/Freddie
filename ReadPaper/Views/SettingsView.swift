@@ -587,14 +587,16 @@ private struct SettingsForm: View {
                 }
 
                 Section(String(localized: "Reader Appearance", bundle: bundle)) {
-                    Picker(String(localized: "Reader Appearance", bundle: bundle), selection: pdfDisplayAppearanceBinding) {
+                    Picker(
+                        String(localized: "Reader Appearance", bundle: bundle),
+                        selection: pdfDisplayAppearanceBinding
+                    ) {
                         Text("Default", bundle: bundle).tag(PDFDisplayAppearance.defaultMode)
-                        Text("Dark", bundle: bundle).tag(PDFDisplayAppearance.dark)
                         Text("Paper Tone", bundle: bundle).tag(PDFDisplayAppearance.paper)
                     }
                     .pickerStyle(.segmented)
 
-                    Text("Choose the default look for reading. Default keeps the original rendering, Dark uses a low-light reading surface, and Paper Tone adds a warm paper-like tint to PDF and HTML content.", bundle: bundle)
+                    Text("System appearance changes automatically select Default for Light Mode and Paper Tone for Dark Mode. You can switch either option manually afterward.", bundle: bundle)
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)

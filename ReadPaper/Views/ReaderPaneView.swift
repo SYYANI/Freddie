@@ -54,9 +54,8 @@ struct ReaderPaneView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.localizationBundle) private var bundle
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.pdfDisplayAppearance) private var pdfDisplayAppearance
     @Query(sort: \ReadingState.modifiedAt, order: .reverse) private var readingStates: [ReadingState]
-    @AppStorage(PDFDisplayAppearance.userDefaultsKey)
-    private var pdfDisplayAppearanceRawValue = PDFDisplayAppearance.defaultValue.rawValue
     @AppStorage(PDFTranslationBatchPreference.userDefaultsKey)
     private var pdfTranslationBatchSizeRawValue = PDFTranslationBatchPreference.defaultValue
     @AppStorage(HTMLReaderTypography.fontSizeUserDefaultsKey)
@@ -206,10 +205,6 @@ struct ReaderPaneView: View {
 
     private var restoredHTMLScrollRatio: Double {
         ReadingStateStore.clampedScrollRatio(readingState?.scrollRatio ?? 0)
-    }
-
-    private var pdfDisplayAppearance: PDFDisplayAppearance {
-        PDFDisplayAppearance.resolve(rawValue: pdfDisplayAppearanceRawValue)
     }
 
     private var pdfTranslationBatchSize: Int {
@@ -2265,7 +2260,7 @@ struct ReaderPaneView: View {
                 .background {
                     if pdfDisplayAppearance == .paper {
                         ReadPaperTheme.accentColor
-                            .opacity(colorScheme == .dark ? 0.16 : 0.10)
+                            .opacity(0.10)
                             .clipShape(RoundedRectangle(cornerRadius: 12))
                     } else {
                         RoundedRectangle(cornerRadius: 12)

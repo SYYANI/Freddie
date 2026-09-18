@@ -13,57 +13,70 @@ private typealias PlatformPDFColor = UIColor
 private typealias PlatformPDFViewRepresentable = UIViewRepresentable
 #endif
 
-private func displayAdjustedAnnotationColor(
-    _ color: PlatformPDFColor,
-    inverted: Bool
-) -> PlatformPDFColor {
-    guard inverted else { return color }
-    #if os(macOS)
-    guard let rgbColor = color.usingColorSpace(.deviceRGB) else { return color }
-    return NSColor(
-        calibratedRed: 1 - rgbColor.redComponent,
-        green: 1 - rgbColor.greenComponent,
-        blue: 1 - rgbColor.blueComponent,
-        alpha: rgbColor.alphaComponent
-    )
-    #else
-    var red: CGFloat = 0
-    var green: CGFloat = 0
-    var blue: CGFloat = 0
-    var alpha: CGFloat = 0
-    guard color.getRed(&red, green: &green, blue: &blue, alpha: &alpha) else { return color }
-    return UIColor(red: 1 - red, green: 1 - green, blue: 1 - blue, alpha: alpha)
-    #endif
-}
-
 enum PDFDisplayAppearance: String, CaseIterable, Identifiable {
     case defaultMode = "default"
-    case dark
     case paper
 
     static let userDefaultsKey = "ReadPaper.Reader.PDFDisplayAppearance"
+    static let lastSynchronizedSystemDarkModeKey =
+        "ReadPaper.Reader.LastSynchronizedSystemDarkMode"
     static let defaultValue: Self = .defaultMode
 
     var id: String { rawValue }
 
+    static func synchronized(isSystemDarkMode: Bool) -> Self {
+        isSystemDarkMode ? .paper : .defaultMode
+    }
+
     static func resolve(rawValue: String) -> Self {
         Self(rawValue: rawValue) ?? defaultValue
+    }
+
+    static func synchronizeStoredPreference(
+        in defaults: UserDefaults = .standard,
+        isSystemDarkMode: Bool
+    ) {
+        let previousSystemDarkMode = defaults.object(
+            forKey: lastSynchronizedSystemDarkModeKey
+        ) as? Bool
+        let storedPreference = defaults.string(forKey: userDefaultsKey)
+        let shouldSynchronize = previousSystemDarkMode.map { $0 != isSystemDarkMode }
+            ?? (storedPreference != Self.paper.rawValue)
+
+        if shouldSynchronize {
+            defaults.set(
+                synchronized(isSystemDarkMode: isSystemDarkMode).rawValue,
+                forKey: userDefaultsKey
+            )
+        }
+        defaults.set(isSystemDarkMode, forKey: lastSynchronizedSystemDarkModeKey)
     }
 
     var requiresOverlayCompositing: Bool {
         #if os(macOS)
         false
         #else
-        self != .defaultMode
+        self == .paper
         #endif
     }
 
     var usesNativeContentFilter: Bool {
         #if os(macOS)
-        self != .defaultMode
+        self == .paper
         #else
         false
         #endif
+    }
+}
+
+private struct PDFDisplayAppearanceEnvironmentKey: EnvironmentKey {
+    static let defaultValue = PDFDisplayAppearance.defaultValue
+}
+
+extension EnvironmentValues {
+    var pdfDisplayAppearance: PDFDisplayAppearance {
+        get { self[PDFDisplayAppearanceEnvironmentKey.self] }
+        set { self[PDFDisplayAppearanceEnvironmentKey.self] = newValue }
     }
 }
 
@@ -77,16 +90,6 @@ extension PDFDisplayAppearance {
             return .clear
             #else
             return .systemBackground
-            #endif
-        case .dark:
-            #if os(macOS)
-            // The native color-invert filter turns this into the same near-black
-            // tone used by the surrounding reader surface.
-            return NSColor(calibratedWhite: 0.96, alpha: 1)
-            #else
-            // Keep the PDFView background light so the difference blend can invert
-            // both the page and the surrounding canvas into a dark reading surface.
-            return UIColor(white: 0.96, alpha: 1)
             #endif
         case .paper:
             #if os(macOS)
@@ -102,8 +105,6 @@ extension PDFDisplayAppearance {
         switch self {
         case .defaultMode:
             Color(nsColor: pdfBackgroundColor)
-        case .dark:
-            Color(nsColor: NSColor(calibratedWhite: 0.04, alpha: 1))
         case .paper:
             Color(red: 0.96, green: 0.93, blue: 0.86)
         }
@@ -117,8 +118,6 @@ extension PDFDisplayAppearance {
         switch self {
         case .defaultMode:
             return []
-        case .dark:
-            return [CIFilter(name: "CIColorInvert")].compactMap { $0 }
         case .paper:
             guard let filter = CIFilter(name: "CIColorMatrix") else { return [] }
             filter.setValue(CIVector(x: 0.96, y: 0, z: 0, w: 0), forKey: "inputRVector")
@@ -161,11 +160,6 @@ struct PDFDisplaySurface<Content: View>: View {
         switch appearance {
         case .defaultMode:
             EmptyView()
-        case .dark:
-            Rectangle()
-                .fill(Color.white)
-                .blendMode(.difference)
-                .allowsHitTesting(false)
         case .paper:
             LinearGradient(
                 colors: [
@@ -490,12 +484,8 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
         private var annotationStore: PDFAnnotationStore
         private var annotationRecords: [PDFAnnotationRecord] = []
         private var renderedAnnotations: [UUID: PDFAnnotation] = [:]
-        private var sourceAnnotationColors: [ObjectIdentifier: (PDFAnnotation, PlatformPDFColor)] = [:]
-        private var scannedSourceAnnotationPageIndexes: Set<Int> = []
-        private var sourceAnnotationColorCaptureTask: Task<Void, Never>?
         private var undoAnnotationHistory: [AnnotationHistoryEntry] = []
         private var redoAnnotationHistory: [AnnotationHistoryEntry] = []
-        private var annotationColorsAreInverted = false
         private var isPageIndexUpdateScheduled = false
         private var isSelectionUpdateScheduled = false
         private var lastPublishedSelection: NoteSelectionContext?
@@ -598,9 +588,6 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
             }
             configureCanvasBackground(appearance, in: pdfView)
             #endif
-            if appearanceChanged {
-                updateAnnotationAppearance(appearance)
-            }
         }
 
         #if os(macOS)
@@ -641,7 +628,7 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
             pdfView.interactionMode = configuration.mode
             pdfView.inkPreviewColor = configuration.colorPreset
                 .color(for: .ink)
-                .platformColor(inverted: configuration.displayAppearance == .dark)
+                .platformColor(inverted: false)
             pdfView.inkPreviewLineWidth = configuration.lineWidth
         }
         #endif
@@ -674,12 +661,8 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
             self.annotationSession = annotationSession
 
             if scopeChanged {
-                sourceAnnotationColorCaptureTask?.cancel()
-                sourceAnnotationColorCaptureTask = nil
                 annotationRecords = []
                 renderedAnnotations = [:]
-                sourceAnnotationColors = [:]
-                scannedSourceAnnotationPageIndexes = []
                 undoAnnotationHistory = []
                 redoAnnotationHistory = []
             }
@@ -753,8 +736,6 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
         func detach() {
             clearNoteNavigationHighlight()
             clearSelectionAssistantHistoryAnnotations()
-            sourceAnnotationColorCaptureTask?.cancel()
-            sourceAnnotationColorCaptureTask = nil
             if let pdfView {
                 NotificationCenter.default.removeObserver(
                     self,
@@ -832,10 +813,7 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
                 #else
                 let highlightColor = UIColor.systemYellow.withAlphaComponent(0.55)
                 #endif
-                annotation.color = displayAdjustedAnnotationColor(
-                    highlightColor,
-                    inverted: annotationColorsAreInverted
-                )
+                annotation.color = highlightColor
                 page.addAnnotation(annotation)
                 return annotation
             }
@@ -964,10 +942,7 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
             #else
             let color = UIColor.systemBlue.withAlphaComponent(0.58)
             #endif
-            return displayAdjustedAnnotationColor(
-                color,
-                inverted: annotationColorsAreInverted
-            )
+            return color
         }
 
         private func handleSelectionAssistantHistoryClick(
@@ -1000,11 +975,6 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
 
         func loadAnnotations(in pdfView: PDFView) {
             renderedAnnotations = [:]
-            sourceAnnotationColors = [:]
-            scannedSourceAnnotationPageIndexes = []
-            if annotationColorsAreInverted {
-                scheduleSourceAnnotationColorCapture(in: pdfView)
-            }
             guard let paperID, let attachmentID else {
                 annotationRecords = []
                 publishAnnotationCapabilities()
@@ -1022,32 +992,6 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
                 reportAnnotationError(error)
             }
             publishAnnotationCapabilities()
-        }
-
-        func updateAnnotationAppearance(_ appearance: PDFDisplayAppearance) {
-            let shouldInvert = appearance == .dark
-            guard annotationColorsAreInverted != shouldInvert else { return }
-            annotationColorsAreInverted = shouldInvert
-            for (_, (annotation, originalColor)) in sourceAnnotationColors {
-                annotation.color = displayAdjustedAnnotationColor(
-                    originalColor,
-                    inverted: shouldInvert
-                )
-            }
-            for record in annotationRecords {
-                renderedAnnotations[record.id]?.color = record.color.platformColor(
-                    inverted: shouldInvert
-                )
-            }
-            for (_, annotation) in selectionAssistantHistoryAnnotations {
-                annotation.color = selectionAssistantHistoryColor
-            }
-            if shouldInvert, let pdfView {
-                captureSourceAnnotationColorsNearCurrentPage(in: pdfView)
-            } else {
-                sourceAnnotationColorCaptureTask?.cancel()
-                sourceAnnotationColorCaptureTask = nil
-            }
         }
 
         func applyTextMarkup(_ kind: PDFTextMarkupKind, preset: PDFAnnotationColorPreset) {
@@ -1279,60 +1223,10 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
                 guard let page = document.page(at: record.pageIndex) else { continue }
                 let annotation = PDFAnnotationRenderer.makeAnnotation(
                     from: record,
-                    invertedColor: annotationColorsAreInverted
+                    invertedColor: false
                 )
                 page.addAnnotation(annotation)
                 renderedAnnotations[record.id] = annotation
-            }
-        }
-
-        private func scheduleSourceAnnotationColorCapture(in pdfView: PDFView) {
-            sourceAnnotationColorCaptureTask?.cancel()
-            sourceAnnotationColorCaptureTask = Task { @MainActor [weak self, weak pdfView] in
-                do {
-                    try await Task.sleep(for: .milliseconds(80))
-                } catch {
-                    return
-                }
-                guard Task.isCancelled == false,
-                      let self,
-                      let pdfView,
-                      self.annotationColorsAreInverted else {
-                    return
-                }
-                self.captureSourceAnnotationColorsNearCurrentPage(in: pdfView)
-                self.sourceAnnotationColorCaptureTask = nil
-            }
-        }
-
-        private func captureSourceAnnotationColorsNearCurrentPage(in pdfView: PDFView) {
-            guard let document = pdfView.document,
-                  document.pageCount > 0,
-                  let currentPage = pdfView.currentPage else {
-                return
-            }
-            let currentPageIndex = document.index(for: currentPage)
-            guard currentPageIndex != NSNotFound else { return }
-            let managedAnnotationIDs = Set(
-                renderedAnnotations.values.map(ObjectIdentifier.init) +
-                    selectionAssistantHistoryAnnotations.map { ObjectIdentifier($0.1) } +
-                    noteNavigationHighlightAnnotations.map(ObjectIdentifier.init)
-            )
-            let nearbyPageIndexes = max(0, currentPageIndex - 1)...min(
-                document.pageCount - 1,
-                currentPageIndex + 1
-            )
-            for pageIndex in nearbyPageIndexes
-            where scannedSourceAnnotationPageIndexes.insert(pageIndex).inserted {
-                guard let page = document.page(at: pageIndex) else { continue }
-                for annotation in page.annotations {
-                    guard !managedAnnotationIDs.contains(ObjectIdentifier(annotation)) else { continue }
-                    sourceAnnotationColors[ObjectIdentifier(annotation)] = (annotation, annotation.color)
-                    annotation.color = displayAdjustedAnnotationColor(
-                        annotation.color,
-                        inverted: annotationColorsAreInverted
-                    )
-                }
             }
         }
 
@@ -1355,12 +1249,8 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
 
         func clearLoadedAnnotations() {
             clearSelectionAssistantHistoryAnnotations()
-            sourceAnnotationColorCaptureTask?.cancel()
-            sourceAnnotationColorCaptureTask = nil
             annotationRecords = []
             renderedAnnotations = [:]
-            sourceAnnotationColors = [:]
-            scannedSourceAnnotationPageIndexes = []
             undoAnnotationHistory = []
             redoAnnotationHistory = []
             publishAnnotationCapabilities()
@@ -1545,9 +1435,6 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
             scheduleCurrentPageIndexUpdate()
             if let pdfView {
                 scheduleSelectionAssistantHistoryRendering(in: pdfView)
-                if annotationColorsAreInverted {
-                    scheduleSourceAnnotationColorCapture(in: pdfView)
-                }
             }
         }
 

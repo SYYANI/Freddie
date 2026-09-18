@@ -1260,27 +1260,6 @@
         }
       }
     },
-    "Choose the default look for PDF reading. Default keeps the original rendering, Dark inverts the PDF canvas for low-light reading, and Paper Tone adds a warm paper-like tint." : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "选择 PDF 阅读的默认外观。默认保留原始渲染，深色会反相 PDF 画面以便低光环境阅读，纸质会加入温暖的纸张色调。"
-          }
-        }
-      }
-    },
-    "Choose the default look for reading. Default keeps the original rendering, Dark uses a low-light reading surface, and Paper Tone adds a warm paper-like tint to PDF and HTML content." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "选择阅读器的默认外观。默认保留原始渲染，深色使用适合低光环境的阅读底色，纸质会为 PDF 和 HTML 内容加入温暖的纸张色调。"
-          }
-        }
-      }
-    },
     "Choose the directory that contains latexmk and your TeX engines." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1635,16 +1614,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "当前段落"
-          }
-        }
-      }
-    },
-    "Dark" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "深色"
           }
         }
       }
@@ -4554,7 +4523,6 @@
       }
     },
     "Reader Appearance" : {
-      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -5309,6 +5277,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "在本地化 HTML、原始 PDF、翻译 PDF，以及左右并排 PDF 对照之间切换。"
+          }
+        }
+      }
+    },
+    "System appearance changes automatically select Default for Light Mode and Paper Tone for Dark Mode. You can switch either option manually afterward." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "系统外观变化时会自动选择对应模式：浅色模式选择默认，深色模式选择纸质。之后仍可手动切换任一选项。"
           }
         }
       }

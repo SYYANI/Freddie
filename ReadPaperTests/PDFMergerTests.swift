@@ -502,13 +502,10 @@ final class PDFMergerTests: XCTestCase {
     func testPDFDisplayAppearanceOnlyCompositesWhenAnOverlayNeedsBlending() {
         XCTAssertFalse(PDFDisplayAppearance.defaultMode.requiresOverlayCompositing)
         #if os(macOS)
-        XCTAssertFalse(PDFDisplayAppearance.dark.requiresOverlayCompositing)
         XCTAssertFalse(PDFDisplayAppearance.paper.requiresOverlayCompositing)
         XCTAssertFalse(PDFDisplayAppearance.defaultMode.usesNativeContentFilter)
-        XCTAssertTrue(PDFDisplayAppearance.dark.usesNativeContentFilter)
         XCTAssertTrue(PDFDisplayAppearance.paper.usesNativeContentFilter)
         #else
-        XCTAssertTrue(PDFDisplayAppearance.dark.requiresOverlayCompositing)
         XCTAssertTrue(PDFDisplayAppearance.paper.requiresOverlayCompositing)
         #endif
     }
@@ -521,9 +518,6 @@ final class PDFMergerTests: XCTestCase {
             pageIndex: .constant(0),
             onNoteSelectionChanged: nil
         )
-
-        coordinator.applyDisplayAppearance(.dark, to: pdfView)
-        XCTAssertEqual(pdfView.contentFilters.first?.name, "CIColorInvert")
 
         coordinator.applyDisplayAppearance(.paper, to: pdfView)
         XCTAssertEqual(pdfView.contentFilters.first?.name, "CIColorMatrix")

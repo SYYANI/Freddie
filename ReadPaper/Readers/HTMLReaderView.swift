@@ -3,11 +3,9 @@ import WebKit
 
 #if os(macOS)
 import AppKit
-private typealias PlatformHTMLColor = NSColor
 private typealias PlatformHTMLViewRepresentable = NSViewRepresentable
 #else
 import UIKit
-private typealias PlatformHTMLColor = UIColor
 private typealias PlatformHTMLViewRepresentable = UIViewRepresentable
 #endif
 
@@ -22,33 +20,11 @@ enum HTMLReaderTypography {
 }
 
 private extension PDFDisplayAppearance {
-    var htmlReaderBackgroundColor: PlatformHTMLColor {
-        switch self {
-        case .defaultMode:
-            #if os(macOS)
-            return .textBackgroundColor
-            #else
-            return .systemBackground
-            #endif
-        case .dark:
-            #if os(macOS)
-            return NSColor(calibratedWhite: 0.09, alpha: 1)
-            #else
-            return UIColor(white: 0.09, alpha: 1)
-            #endif
-        case .paper:
-            #if os(macOS)
-            return NSColor(calibratedRed: 0.95, green: 0.90, blue: 0.80, alpha: 1)
-            #else
-            return UIColor(red: 0.95, green: 0.90, blue: 0.80, alpha: 1)
-            #endif
-        }
-    }
-
     var htmlReaderCSS: String {
         switch self {
         case .defaultMode:
             return """
+            :root { color-scheme: light; }
             html,
             body,
             body.rp-readability-body,
@@ -59,95 +35,10 @@ private extension PDFDisplayAppearance {
                 background: transparent !important;
                 background-color: transparent !important;
             }
-            @media (prefers-color-scheme: dark) {
-                body,
-                body.rp-readability-body .rp-readability-shell,
-                body.rp-readability-body .rp-readability-header,
-                body.rp-readability-body .rp-readability-content,
-                body:not(.rp-readability-body) {
-                    color: #e8e3d7 !important;
-                }
-                body.rp-readability-body .rp-readability-title,
-                body.rp-readability-body .rp-readability-content h1,
-                body.rp-readability-body .rp-readability-content h2,
-                body.rp-readability-body .rp-readability-content h3,
-                body.rp-readability-body .rp-readability-content h4,
-                body.rp-readability-body .rp-readability-content h5,
-                body.rp-readability-body .rp-readability-content h6 {
-                    color: #f5efe4 !important;
-                }
-            }
-            """
-        case .dark:
-            return """
-            :root { color-scheme: dark; }
-            html,
-            body {
-                background: #171717 !important;
-            }
-            body {
-                color: #e8e3d7 !important;
-            }
-            body.rp-readability-body {
-                background: #171717 !important;
-            }
-            body.rp-readability-body .rp-readability-shell,
-            body.rp-readability-body .rp-readability-header,
-            body.rp-readability-body .rp-readability-content {
-                color: #e8e3d7 !important;
-            }
-            body.rp-readability-body .rp-readability-title,
-            body.rp-readability-body .rp-readability-content h1,
-            body.rp-readability-body .rp-readability-content h2,
-            body.rp-readability-body .rp-readability-content h3,
-            body.rp-readability-body .rp-readability-content h4,
-            body.rp-readability-body .rp-readability-content h5,
-            body.rp-readability-body .rp-readability-content h6 {
-                color: #f5efe4 !important;
-            }
-            body.rp-readability-body .rp-readability-byline,
-            body.rp-readability-body .rp-readability-excerpt {
-                color: #aaa397 !important;
-            }
-            body.rp-readability-body .rp-readability-content a,
-            body:not(.rp-readability-body) a {
-                color: #9fc9ff !important;
-            }
-            body.rp-readability-body .rp-readability-content p.rp-readability-prose-paragraph,
-            body.rp-readability-body .rp-readability-content [data-rp-source='true'] {
-                color: inherit !important;
-            }
-            body.rp-readability-body .rp-translation-block,
-            body:not(.rp-readability-body) .rp-translation-block {
-                color: #9fd3aa !important;
-            }
-            body.rp-readability-body code,
-            body.rp-readability-body pre {
-                background: rgba(255, 255, 255, 0.08) !important;
-                color: #f1eadc !important;
-            }
-            body.rp-readability-body blockquote {
-                border-color: rgba(232, 227, 215, 0.28) !important;
-                color: #d5cec2 !important;
-            }
-            body.rp-readability-body table,
-            body.rp-readability-body th,
-            body.rp-readability-body td {
-                border-color: rgba(232, 227, 215, 0.24) !important;
-            }
-            body.rp-readability-body .rp-note-anchor-target,
-            body:not(.rp-readability-body) .rp-note-anchor-target {
-                outline-color: rgba(159, 211, 170, 0.52) !important;
-                background: rgba(159, 211, 170, 0.14) !important;
-            }
-            body:not(.rp-readability-body) {
-                background: #171717 !important;
-                color: #e8e3d7 !important;
-            }
             """
         case .paper:
             return """
-            :root { color-scheme: light dark; }
+            :root { color-scheme: light; }
             html,
             body {
                 background: transparent !important;
@@ -217,55 +108,6 @@ private extension PDFDisplayAppearance {
             body:not(.rp-readability-body) {
                 background: transparent !important;
                 color: #2b261f !important;
-            }
-            @media (prefers-color-scheme: dark) {
-                body,
-                body.rp-readability-body .rp-readability-shell,
-                body.rp-readability-body .rp-readability-header,
-                body.rp-readability-body .rp-readability-content,
-                body:not(.rp-readability-body) {
-                    color: #e4ded1 !important;
-                }
-                body.rp-readability-body .rp-readability-title,
-                body.rp-readability-body .rp-readability-content h1,
-                body.rp-readability-body .rp-readability-content h2,
-                body.rp-readability-body .rp-readability-content h3,
-                body.rp-readability-body .rp-readability-content h4,
-                body.rp-readability-body .rp-readability-content h5,
-                body.rp-readability-body .rp-readability-content h6 {
-                    color: #f5efe4 !important;
-                }
-                body.rp-readability-body .rp-readability-byline,
-                body.rp-readability-body .rp-readability-excerpt {
-                    color: #aaa397 !important;
-                }
-                body.rp-readability-body .rp-readability-content a,
-                body:not(.rp-readability-body) a {
-                    color: #9fc9ff !important;
-                }
-                body.rp-readability-body .rp-translation-block,
-                body:not(.rp-readability-body) .rp-translation-block {
-                    color: #9fd3aa !important;
-                }
-                body.rp-readability-body code,
-                body.rp-readability-body pre {
-                    background: rgba(255, 255, 255, 0.08) !important;
-                    color: #f1eadc !important;
-                }
-                body.rp-readability-body blockquote {
-                    border-color: rgba(232, 227, 215, 0.28) !important;
-                    color: #d5cec2 !important;
-                }
-                body.rp-readability-body table,
-                body.rp-readability-body th,
-                body.rp-readability-body td {
-                    border-color: rgba(232, 227, 215, 0.24) !important;
-                }
-                body.rp-readability-body .rp-note-anchor-target,
-                body:not(.rp-readability-body) .rp-note-anchor-target {
-                    outline-color: rgba(159, 211, 170, 0.52) !important;
-                    background: rgba(159, 211, 170, 0.14) !important;
-                }
             }
             """
         }
@@ -393,25 +235,21 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
         )
     }
 
-    private func applyHostDisplayAppearance(_ appearance: PDFDisplayAppearance, to webView: WKWebView) {
+    private func applyHostDisplayAppearance(_: PDFDisplayAppearance, to webView: WKWebView) {
         #if os(macOS)
+        webView.appearance = NSAppearance(named: .aqua)
         webView.wantsLayer = true
-        let usesTransparentBackground = appearance != .dark
-        webView.setValue(!usesTransparentBackground, forKey: "drawsBackground")
-        webView.layer?.backgroundColor = usesTransparentBackground
-            ? NSColor.clear.cgColor
-            : appearance.htmlReaderBackgroundColor.cgColor
+        webView.setValue(false, forKey: "drawsBackground")
+        webView.layer?.backgroundColor = NSColor.clear.cgColor
         if #available(macOS 12.0, *) {
-            webView.underPageBackgroundColor = usesTransparentBackground
-                ? .clear
-                : appearance.htmlReaderBackgroundColor
+            webView.underPageBackgroundColor = .clear
         }
-        webView.enclosingScrollView?.drawsBackground = !usesTransparentBackground
+        webView.enclosingScrollView?.drawsBackground = false
         #else
-        let usesTransparentBackground = appearance != .dark
-        webView.isOpaque = !usesTransparentBackground
-        webView.backgroundColor = usesTransparentBackground ? .clear : appearance.htmlReaderBackgroundColor
-        webView.scrollView.backgroundColor = usesTransparentBackground ? .clear : appearance.htmlReaderBackgroundColor
+        webView.overrideUserInterfaceStyle = .light
+        webView.isOpaque = false
+        webView.backgroundColor = .clear
+        webView.scrollView.backgroundColor = .clear
         #endif
     }
 

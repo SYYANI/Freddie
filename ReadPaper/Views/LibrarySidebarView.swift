@@ -3,8 +3,7 @@ import SwiftUI
 struct LibrarySidebarView: View {
     @Environment(\.localizationBundle) private var bundle
     @Environment(\.colorScheme) private var colorScheme
-    @AppStorage(PDFDisplayAppearance.userDefaultsKey)
-    private var displayAppearanceRawValue = PDFDisplayAppearance.defaultValue.rawValue
+    @Environment(\.pdfDisplayAppearance) private var displayAppearance
     var papers: [Paper]
     var selectedPaper: Paper?
     @Binding var selectedPaperID: UUID?
@@ -13,7 +12,7 @@ struct LibrarySidebarView: View {
     var onDeletePaper: (Paper) -> Void
 
     private var isPaperAppearance: Bool {
-        PDFDisplayAppearance.resolve(rawValue: displayAppearanceRawValue) == .paper
+        displayAppearance == .paper
     }
 
     var body: some View {
@@ -190,11 +189,10 @@ private func emptyStateActionLabel(_ title: String, systemImage: String) -> some
 
 private struct PaperRowView: View {
     var paper: Paper
-    @AppStorage(PDFDisplayAppearance.userDefaultsKey)
-    private var displayAppearanceRawValue = PDFDisplayAppearance.defaultValue.rawValue
+    @Environment(\.pdfDisplayAppearance) private var displayAppearance
 
     private var titleDesign: Font.Design {
-        PDFDisplayAppearance.resolve(rawValue: displayAppearanceRawValue) == .paper
+        displayAppearance == .paper
             ? .serif
             : .default
     }

@@ -15,9 +15,36 @@ struct ReadPaperiPadApp: App {
 
     var body: some Scene {
         WindowGroup {
-            IPadContentView()
+            SystemSynchronizedIPadContent()
                 .environment(\.localizationBundle, LanguageManager.shared.bundle)
         }
         .modelContainer(sharedModelContainer)
+    }
+}
+
+private struct SystemSynchronizedIPadContent: View {
+    @Environment(\.colorScheme) private var systemColorScheme
+    @AppStorage(PDFDisplayAppearance.userDefaultsKey)
+    private var displayAppearancePreference = PDFDisplayAppearance.defaultValue.rawValue
+
+    var body: some View {
+        IPadContentView()
+            .environment(
+                \.pdfDisplayAppearance,
+                .resolve(rawValue: displayAppearancePreference)
+            )
+            .environment(\.colorScheme, .light)
+            .onAppear {
+                synchronizeAppearancePreference()
+            }
+            .onChange(of: systemColorScheme) { _, _ in
+                synchronizeAppearancePreference()
+            }
+    }
+
+    private func synchronizeAppearancePreference() {
+        PDFDisplayAppearance.synchronizeStoredPreference(
+            isSystemDarkMode: systemColorScheme == .dark
+        )
     }
 }
