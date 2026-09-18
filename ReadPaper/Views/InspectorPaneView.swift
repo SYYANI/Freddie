@@ -9,6 +9,7 @@ struct InspectorPaneView: View {
 
     @Environment(\.modelContext) private var modelContext
     @Environment(\.localizationBundle) private var bundle
+    @Environment(\.pdfDisplayAppearance) private var displayAppearance
     @State private var notePendingDeletion: Note?
     @State private var noteDeletionErrorMessage: String?
     @State private var authorsSaveErrorMessage: String?
@@ -104,6 +105,7 @@ struct InspectorPaneView: View {
                 }
             }
         }
+        .fontDesign(displayAppearance == .paper ? .serif : .default)
     }
 
     private func metadataSection(_ paper: Paper) -> some View {
@@ -503,6 +505,7 @@ struct InspectorPaneView: View {
             .padding(16)
         }
         .scrollIndicators(.hidden)
+        .fontDesign(displayAppearance == .paper ? .serif : .default)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
@@ -608,6 +611,7 @@ struct AbstractTranslationPresentationState {
 
 private struct NoteEditor: View {
     @Environment(\.localizationBundle) private var bundle
+    @Environment(\.pdfDisplayAppearance) private var displayAppearance
     @Bindable var note: Note
     let shouldFocus: Bool
     let onOpenAnchor: (() -> Void)?
@@ -678,7 +682,8 @@ private struct NoteEditor: View {
                     onEditingEnded: {
                         isEditorFocusPending = false
                         isEditing = false
-                    }
+                    },
+                    usesPaperTypography: displayAppearance == .paper
                 )
                     .frame(minHeight: 90)
                     .background(
@@ -790,6 +795,7 @@ private struct InsetTextView: NSViewRepresentable {
     var onFocusApplied: () -> Void
     var onEditingBegan: () -> Void = {}
     var onEditingEnded: () -> Void = {}
+    var usesPaperTypography = false
 
     func makeCoordinator() -> Coordinator {
         Coordinator(
@@ -832,7 +838,7 @@ private struct InsetTextView: NSViewRepresentable {
         if #available(macOS 15.0, *) {
             textView.writingToolsBehavior = .none
         }
-        textView.font = .preferredFont(forTextStyle: .body)
+        textView.font = editorFont()
         textView.string = text
         textView.textContainerInset = NSSize(width: 10, height: 10)
 
@@ -853,7 +859,18 @@ private struct InsetTextView: NSViewRepresentable {
             textView.string = text
         }
 
+        textView.font = editorFont()
+
         context.coordinator.applyFocusIfNeeded(to: textView, shouldFocus: shouldFocus)
+    }
+
+    private func editorFont() -> NSFont {
+        let size = NSFont.preferredFont(forTextStyle: .body).pointSize
+        guard usesPaperTypography,
+              let paperFont = NSFont(name: "New York", size: size) else {
+            return .preferredFont(forTextStyle: .body)
+        }
+        return paperFont
     }
 
     static func dismantleNSView(_ nsView: NSScrollView, coordinator: Coordinator) {

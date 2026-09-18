@@ -3,10 +3,14 @@ import SwiftUI
 import SwiftStreamingMarkdown
 
 enum ReadPaperMarkdownStyle {
-    static let config: MarkdownRenderConfig = makeConfig()
+    static let config: MarkdownRenderConfig = makeConfig(design: .default)
 
-    private static func makeConfig() -> MarkdownRenderConfig {
-        let body = textFonts(size: 14)
+    static func config(for displayAppearance: PDFDisplayAppearance) -> MarkdownRenderConfig {
+        displayAppearance == .paper ? makeConfig(design: .serif) : config
+    }
+
+    private static func makeConfig(design: Font.Design) -> MarkdownRenderConfig {
+        let body = textFonts(size: 14, design: design)
         let paragraph = MarkdownRenderConfig.MarkdownTextStyle(
             textFonts: body,
             textColor: .primary
@@ -16,12 +20,12 @@ enum ReadPaperMarkdownStyle {
             textColor: .secondary
         )
         let heading = MarkdownRenderConfig.MarkdownHeadingTextStyle(
-            h1Font: textFonts(size: 18, weight: .semibold),
-            h2Font: textFonts(size: 16, weight: .semibold),
-            h3Font: textFonts(size: 15, weight: .semibold),
-            h4Font: textFonts(size: 14, weight: .semibold),
-            h5Font: textFonts(size: 14, weight: .semibold),
-            h6Font: textFonts(size: 14, weight: .semibold),
+            h1Font: textFonts(size: 18, weight: .semibold, design: design),
+            h2Font: textFonts(size: 16, weight: .semibold, design: design),
+            h3Font: textFonts(size: 15, weight: .semibold, design: design),
+            h4Font: textFonts(size: 14, weight: .semibold, design: design),
+            h5Font: textFonts(size: 14, weight: .semibold, design: design),
+            h6Font: textFonts(size: 14, weight: .semibold, design: design),
             textColor: .primary
         )
 
@@ -37,10 +41,11 @@ enum ReadPaperMarkdownStyle {
     private static func textFonts(
         size: CGFloat,
         weight: MDFont.Weight = .regular,
-        boldWeight: MDFont.Weight = .semibold
+        boldWeight: MDFont.Weight = .semibold,
+        design: Font.Design = .default
     ) -> TextFonts {
-        let normal = MDFont.systemFont(ofSize: size, weight: weight)
-        let bold = MDFont.systemFont(ofSize: size, weight: boldWeight)
+        let normal = makeFont(size: size, weight: weight, design: design)
+        let bold = makeFont(size: size, weight: boldWeight, design: design)
         return TextFonts(
             normal: normal,
             italic: italicFont(from: normal),
@@ -51,6 +56,23 @@ enum ReadPaperMarkdownStyle {
         )
     }
 
+    private static func makeFont(
+        size: CGFloat,
+        weight: MDFont.Weight,
+        design: Font.Design
+    ) -> MDFont {
+        guard design == .serif,
+              let paperFont = MDFont(name: "New York", size: size) else {
+            return MDFont.systemFont(ofSize: size, weight: weight)
+        }
+
+        guard weight != .regular else {
+            return paperFont
+        }
+        let descriptor = paperFont.fontDescriptor.withSymbolicTraits(.bold)
+        return MDFont(descriptor: descriptor, size: size) ?? paperFont
+    }
+
     private static func italicFont(from font: MDFont) -> MDFont? {
         let descriptor = font.fontDescriptor.withSymbolicTraits(.italic)
         return MDFont(descriptor: descriptor, size: font.pointSize)
@@ -59,8 +81,12 @@ enum ReadPaperMarkdownStyle {
 
 struct ReadPaperMarkdownView: View {
     let markdown: String
+    @Environment(\.pdfDisplayAppearance) private var displayAppearance
 
     var body: some View {
-        MarkdownView(text: markdown, config: ReadPaperMarkdownStyle.config)
+        MarkdownView(
+            text: markdown,
+            config: ReadPaperMarkdownStyle.config(for: displayAppearance)
+        )
     }
 }
