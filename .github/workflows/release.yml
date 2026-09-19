@@ -65,12 +65,14 @@ jobs:
 
       - name: Prepare and verify native runtime assets
         run: |
-          "$BABELDOC_ROOT/tools/download_native_assets.sh" models
+          ./scripts/prepare-generated-babeldoc-model "$BABELDOC_ROOT"
           python3 "$BABELDOC_ROOT/tools/download_runtime_fonts.py"
           "$BABELDOC_ROOT/tools/build_native_libraries.sh" zstd
           python3 "$BABELDOC_ROOT/tools/verify_mupdf_vendor.py"
           python3 "$BABELDOC_ROOT/tools/verify_model_vendor.py"
           python3 "$BABELDOC_ROOT/tools/verify_local_runtime_assets.py"
+          chmod u+w "$BABELDOC_ROOT/Sources/BabelDocKit/Resources/runtime-manifest.json"
+          python3 "$BABELDOC_ROOT/tools/generate_native_runtime_manifest.py"
           python3 "$BABELDOC_ROOT/tools/generate_native_runtime_manifest.py" --check
 
       - name: Build unsigned app
@@ -127,6 +129,7 @@ jobs:
             for package in swift-readability BabelDOC arxivLatex SwiftStreamingMarkdown; do
               echo "$package=$(git -C "$DERIVED_DATA_PATH/SourcePackages/checkouts/$package" rev-parse HEAD)"
             done
+            echo "layout-model-sha256=$(shasum -a 256 "$BABELDOC_ROOT/Vendor/Models/doclayout_yolo_docstructbench_imgsz1024.mlmodel" | awk '{print $1}')"
             echo "runtime-manifest-sha256=$(shasum -a 256 "$runtime_manifest" | awk '{print $1}')"
             echo "app-version=$APP_VERSION"
             echo "app-build=$APP_BUILD"

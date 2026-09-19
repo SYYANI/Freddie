@@ -36,6 +36,9 @@ Xcode resolves the Swift packages from their GitHub repositories. The selected
 branches are declared in `project.yml`; no sibling repository checkouts are
 required. The `scripts/build` command also downloads or builds the
 manifest-verified BabelDOC native runtime assets in Xcode's package checkout.
+Core ML conversion checks its pinned inputs and output structure, then records
+the generated model's SHA-256 in the bundled runtime manifest. The conversion
+output does not need to match a precomputed artifact hash.
 
 `create-dmg` is only needed if you want to build a distributable DMG locally.
 
@@ -143,7 +146,8 @@ macOS DMG artifact on tag push or manual dispatch. Xcode resolves the remote
 Swift packages, then the workflow downloads/builds and verifies the native
 runtime before the app build. Unsigned artifacts are intentionally not
 published as GitHub Releases. Each artifact also includes
-`build-provenance.txt` with the resolved source commits and runtime manifest hash.
+`build-provenance.txt` with the resolved source commits, generated model hash,
+and runtime manifest hash.
 Public distribution remains gated on signing, notarization, Corresponding
 Source, and complete third-party notices.
 

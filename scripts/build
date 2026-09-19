@@ -118,6 +118,8 @@ echo "Resolving Swift packages..."
 babeldoc_root="${derived_data_path}/SourcePackages/checkouts/BabelDOC"
 [[ -f "${babeldoc_root}/Package.swift" ]] || fail "BabelDOC package checkout is missing: ${babeldoc_root}"
 
+"${REPOSITORY_ROOT}/scripts/prepare-generated-babeldoc-model" "${babeldoc_root}"
+
 if ! python3 "${babeldoc_root}/tools/verify_local_runtime_assets.py" >/dev/null 2>&1; then
     echo "Preparing BabelDOC native runtime assets..."
     "${babeldoc_root}/tools/download_native_assets.sh" models
@@ -127,6 +129,8 @@ fi
 python3 "${babeldoc_root}/tools/verify_mupdf_vendor.py"
 python3 "${babeldoc_root}/tools/verify_model_vendor.py"
 python3 "${babeldoc_root}/tools/verify_local_runtime_assets.py"
+chmod u+w "${babeldoc_root}/Sources/BabelDocKit/Resources/runtime-manifest.json"
+python3 "${babeldoc_root}/tools/generate_native_runtime_manifest.py"
 python3 "${babeldoc_root}/tools/generate_native_runtime_manifest.py" --check
 
 echo "Building Freddie.app (${configuration})..."
@@ -138,6 +142,7 @@ xcodebuild_arguments=(
     -configuration "${configuration}"
     -destination "generic/platform=macOS"
     -derivedDataPath "${derived_data_path}"
+    -disableAutomaticPackageResolution
 )
 
 if [[ "${unsigned_build}" == true ]]; then
