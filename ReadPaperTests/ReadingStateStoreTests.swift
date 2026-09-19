@@ -49,6 +49,36 @@ final class ReadingStateStoreTests: XCTestCase {
         XCTAssertEqual(states.first?.scrollRatio, 1)
     }
 
+    @MainActor
+    func testUpsertStateReusesKnownStatesAlreadyLoadedByReaderQuery() throws {
+        let container = try makeContainer()
+        let modelContext = ModelContext(container)
+        let paperID = UUID()
+        let existingState = ReadingState(
+            paperID: paperID,
+            readerMode: .pdf,
+            pageIndex: 2
+        )
+        modelContext.insert(existingState)
+        try modelContext.save()
+
+        try ReadingStateStore().upsertState(
+            for: paperID,
+            attachmentID: nil,
+            readerMode: .bilingualPDF,
+            pageIndex: 7,
+            scrollRatio: 0,
+            knownStatesByDescendingModificationDate: [existingState],
+            in: modelContext
+        )
+
+        let states = try modelContext.fetch(FetchDescriptor<ReadingState>())
+        XCTAssertEqual(states.count, 1)
+        XCTAssertTrue(states.first === existingState)
+        XCTAssertEqual(existingState.readerMode, .bilingualPDF)
+        XCTAssertEqual(existingState.pageIndex, 7)
+    }
+
     func testResolvedReaderModeDefaultsToPDFWhenNoSavedStateExists() {
         let mode = ReadingStateStore.resolvedReaderMode(
             preferredMode: nil,

@@ -1,6 +1,15 @@
 {
-  "originHash" : "78ecdc6aea7943b0e378191f1f26fe2353d58061f3546f281885ddd5d5bf5edd",
+  "originHash" : "4ec4b384ce9687267439fb28b20878150000526b88864f584904737379f25869",
   "pins" : [
+    {
+      "identity" : "arxivlatex",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/SYYANI/arxivLatex.git",
+      "state" : {
+        "branch" : "main",
+        "revision" : "84804ef0cc31e15b2504ed3fa87c99e66eb8d4aa"
+      }
+    },
     {
       "identity" : "async-http-client",
       "kind" : "remoteSourceControl",
@@ -8,6 +17,31 @@
       "state" : {
         "revision" : "3a5b74a58782c3b4c1f0bc75e9b67b10c2494e8f",
         "version" : "1.33.1"
+      }
+    },
+    {
+      "identity" : "babeldoc",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/SYYANI/BabelDOC.git",
+      "state" : {
+        "branch" : "dev_package_catal",
+        "revision" : "e60f11aeea73b53d57d11e36347e4509f6478db7"
+      }
+    },
+    {
+      "identity" : "highlightswift",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/appstefan/highlightswift",
+      "state" : {
+        "revision" : "99c431b38a1444a5fd6a4978307fbbefe3a7af53"
+      }
+    },
+    {
+      "identity" : "iosmath",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/junyan72/iosMath",
+      "state" : {
+        "revision" : "ba9ab7729b151329c54fd895a7c1859981d9484c"
       }
     },
     {
@@ -53,6 +87,15 @@
       "state" : {
         "revision" : "24ccdeeeed4dfaae7955fcac9dbf5489ed4f1a25",
         "version" : "1.18.0"
+      }
+    },
+    {
+      "identity" : "swift-cmark",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/swiftlang/swift-cmark.git",
+      "state" : {
+        "revision" : "924936d0427cb25a61169739a7660230bffa6ea6",
+        "version" : "0.8.0"
       }
     },
     {
@@ -119,6 +162,15 @@
       }
     },
     {
+      "identity" : "swift-markdown",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/swiftlang/swift-markdown.git",
+      "state" : {
+        "revision" : "7d9a5ce307528578dfa777d505496bd5f544ad94",
+        "version" : "0.7.3"
+      }
+    },
+    {
       "identity" : "swift-nio",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-nio.git",
@@ -173,6 +225,15 @@
       }
     },
     {
+      "identity" : "swift-readability",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/SYYANI/swift-readability.git",
+      "state" : {
+        "branch" : "main",
+        "revision" : "b4f50fa764f23bb61ec26693ebc2152dc46250e8"
+      }
+    },
+    {
       "identity" : "swift-service-context",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-service-context.git",
@@ -215,6 +276,24 @@
       "state" : {
         "revision" : "6c7915e16f729857aec3e99068c361e58a00ed68",
         "version" : "2.13.4"
+      }
+    },
+    {
+      "identity" : "swiftstreamingmarkdown",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/SYYANI/SwiftStreamingMarkdown.git",
+      "state" : {
+        "branch" : "main",
+        "revision" : "03549cb3256a7db99571c8bf0bd236420071e66e"
+      }
+    },
+    {
+      "identity" : "swiftui-shimmer",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/markiv/SwiftUI-Shimmer",
+      "state" : {
+        "revision" : "0226e21f9bf355d40e07e5f5e1c33679d50e167f",
+        "version" : "1.5.1"
       }
     }
   ],

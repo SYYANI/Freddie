@@ -48,6 +48,35 @@ final class PaperImporterTests: XCTestCase {
     }
 
     @MainActor
+    func testArxivLinkImportRequestRecognizesSupportedPaperLinks() throws {
+        let absRequest = try XCTUnwrap(ArxivLinkImportRequest(
+            url: XCTUnwrap(URL(string: "https://arxiv.org/abs/2303.08774v2#references"))
+        ))
+        XCTAssertEqual(absRequest.identifier.baseID, "2303.08774")
+        XCTAssertEqual(absRequest.identifier.version, "v2")
+
+        let legacyPDFRequest = try XCTUnwrap(ArxivLinkImportRequest(
+            url: XCTUnwrap(URL(string: "https://export.arxiv.org/pdf/hep-th/9901001.pdf"))
+        ))
+        XCTAssertEqual(legacyPDFRequest.importValue, "hep-th/9901001")
+
+        let ar5ivRequest = try XCTUnwrap(ArxivLinkImportRequest(
+            url: XCTUnwrap(URL(string: "https://ar5iv.labs.arxiv.org/html/2404.12365"))
+        ))
+        XCTAssertEqual(ar5ivRequest.importValue, "2404.12365")
+    }
+
+    @MainActor
+    func testArxivLinkImportRequestRejectsLookalikeAndUnrelatedHosts() throws {
+        XCTAssertNil(ArxivLinkImportRequest(
+            url: try XCTUnwrap(URL(string: "https://arxiv.org.example.com/abs/2303.08774"))
+        ))
+        XCTAssertNil(ArxivLinkImportRequest(
+            url: try XCTUnwrap(URL(string: "https://doi.org/10.1145/3731715.3733394"))
+        ))
+    }
+
+    @MainActor
     func testExtractDOIRecognizesExplicitDOI() {
         let doi = PaperImporter.extractDOI(
             from: "Published version doi:10.1145/3731715.3733394"
@@ -81,7 +110,7 @@ final class PaperImporterTests: XCTestCase {
     }
 
     @MainActor
-    func testImportArxivReportsProgressAcrossFallbackHTMLImport() async throws {
+    func testImportArxivCanIncludeHTMLWhenExplicitlyEnabled() async throws {
         let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: rootURL) }
 
@@ -154,7 +183,11 @@ final class PaperImporterTests: XCTestCase {
         let modelContext = ModelContext(try makeContainer())
         var progressEvents: [ArxivImportProgress] = []
 
-        let paper = try await importer.importArxiv("2303.08774", modelContext: modelContext) { progress in
+        let paper = try await importer.importArxiv(
+            "2303.08774",
+            modelContext: modelContext,
+            includeHTML: true
+        ) { progress in
             progressEvents.append(progress)
         }
 
@@ -184,7 +217,7 @@ final class PaperImporterTests: XCTestCase {
     }
 
     @MainActor
-    func testImportArxivFallsBackToAbsPageWhenAPIIsRateLimited() async throws {
+    func testDefaultImportArxivDownloadsPDFOnlyWhenAPIFallsBackToAbsPage() async throws {
         let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: rootURL) }
 
@@ -240,10 +273,8 @@ final class PaperImporterTests: XCTestCase {
                 )
             case ("arxiv.org", "/html/2404.12365"),
                 ("ar5iv.labs.arxiv.org", "/html/2404.12365"):
-                return (
-                    HTTPURLResponse(url: url, statusCode: 500, httpVersion: nil, headerFields: ["Content-Type": "text/html"])!,
-                    Data("Internal Error".utf8)
-                )
+                XCTFail("Default arXiv import should not request HTML: \(url.absoluteString)")
+                throw URLError(.badURL)
             default:
                 XCTFail("Unexpected request: \(url.absoluteString)")
                 throw URLError(.badURL)
@@ -271,8 +302,6 @@ final class PaperImporterTests: XCTestCase {
                 .fetchingMetadata,
                 .creatingLibraryEntry,
                 .downloadingPDF,
-                .importingHTML,
-                .importingHTML,
                 .finalizing
             ]
         )
@@ -284,7 +313,8 @@ final class PaperImporterTests: XCTestCase {
         XCTAssertTrue(paper.abstractText.contains("We present FastFit"))
         XCTAssertEqual(paper.pdfURLString, "https://arxiv.org/pdf/2404.12365")
         XCTAssertEqual(paper.htmlURLString, "https://arxiv.org/abs/2404.12365")
-        XCTAssertEqual(progressEvents.last?.detail, "Saving the paper and PDF. HTML was unavailable, so the import will finish with PDF only.")
+        XCTAssertEqual(progressEvents.last?.stepLabel, "Step 5 of 5")
+        XCTAssertEqual(progressEvents.last?.detail, "Saving the paper metadata and PDF to your library.")
 
         let attachments = try modelContext.fetch(FetchDescriptor<PaperAttachment>())
         let attachment = try XCTUnwrap(attachments.first)
@@ -377,6 +407,134 @@ final class PaperImporterTests: XCTestCase {
         let localizedHTML = try String(contentsOf: attachment.fileURL, encoding: .utf8)
         XCTAssertTrue(localizedHTML.contains("rp-readability-content"))
         XCTAssertFalse(localizedHTML.contains("Site navigation"))
+        XCTAssertTrue(localizedHTML.contains("data-rp-assistant-block-id"))
+        let generatedIndexURLs = (FileManager.default.enumerator(
+            at: rootURL,
+            includingPropertiesForKeys: nil
+        )?.allObjects as? [URL] ?? []).filter {
+            $0.lastPathComponent == "assistant-search-index-v1.json"
+        }
+        XCTAssertEqual(generatedIndexURLs.count, 1)
+    }
+
+    @MainActor
+    func testImportWebPageRendersJavaScriptAppShellBeforeReadabilityExtraction() async throws {
+        let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: rootURL) }
+
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [MockPaperImporterURLProtocol.self]
+        let session = URLSession(configuration: configuration)
+        let sourceURL = try XCTUnwrap(URL(string: "https://example.com/blog/dynamic-article"))
+        let shellHTML = """
+        <!doctype html>
+        <html>
+        <head><script type="module" src="/assets/article.js"></script></head>
+        <body><div id="root"></div></body>
+        </html>
+        """
+        let paragraph = String(repeating: "This article was rendered by the client-side application. ", count: 12)
+        let renderedHTML = """
+        <html>
+        <head><title>Rendered Research Article</title></head>
+        <body><div id="root"><article><h1>Rendered Research Article</h1><p>\(paragraph)</p></article></div></body>
+        </html>
+        """
+        let renderer = MockWebPageHTMLRenderer(renderedHTML: renderedHTML)
+
+        MockPaperImporterURLProtocol.requestHandler = { request in
+            XCTAssertEqual(request.url, sourceURL)
+            return (
+                HTTPURLResponse(url: sourceURL, statusCode: 200, httpVersion: nil, headerFields: ["Content-Type": "text/html"])!,
+                Data(shellHTML.utf8)
+            )
+        }
+
+        let importer = PaperImporter(
+            fileStore: PaperFileStore(applicationSupportDirectory: rootURL),
+            htmlLocalizer: HTMLLocalizer(session: session, fileManager: .default),
+            webPageHTMLRenderer: renderer,
+            session: session
+        )
+        let modelContext = ModelContext(try makeContainer())
+
+        let paper = try await importer.importWebPage(sourceURL.absoluteString, modelContext: modelContext)
+
+        XCTAssertEqual(renderer.renderedRequests.map(\.url), [sourceURL])
+        XCTAssertTrue(paper.title.contains("Rendered Research Article"))
+
+        let attachment = try XCTUnwrap(modelContext.fetch(FetchDescriptor<PaperAttachment>()).first)
+        let localizedHTML = try String(contentsOf: attachment.fileURL, encoding: .utf8)
+        XCTAssertTrue(localizedHTML.contains("rp-readability-content"))
+        XCTAssertTrue(localizedHTML.contains("This article was rendered by the client-side application"))
+        XCTAssertFalse(localizedHTML.contains("article.js"))
+    }
+
+    @MainActor
+    func testImportWebPageRepairsExistingBlankJavaScriptImport() async throws {
+        let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: rootURL) }
+
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [MockPaperImporterURLProtocol.self]
+        let session = URLSession(configuration: configuration)
+        let sourceURL = try XCTUnwrap(URL(string: "https://example.com/blog/dynamic-article"))
+        let shellHTML = """
+        <!doctype html>
+        <html>
+        <head><script type="module" src="/assets/article.js"></script></head>
+        <body><div id="root"></div></body>
+        </html>
+        """
+        let paragraph = String(repeating: "Recovered client-rendered article content. ", count: 16)
+        let renderedHTML = """
+        <html>
+        <head><title>Recovered Research Article</title></head>
+        <body><main><article><h1>Recovered Research Article</h1><p>\(paragraph)</p></article></main></body>
+        </html>
+        """
+        let renderer = MockWebPageHTMLRenderer(renderedHTML: renderedHTML)
+        let fileStore = PaperFileStore(applicationSupportDirectory: rootURL)
+        let modelContext = ModelContext(try makeContainer())
+
+        let existing = Paper(title: "dynamic article", htmlURLString: sourceURL.absoluteString)
+        existing.localDirectoryPath = try fileStore.directory(for: existing.id).path
+        let blankFile = try fileStore.write(Data(shellHTML.utf8), named: "paper.html", for: existing.id)
+        modelContext.insert(existing)
+        modelContext.insert(PaperAttachment(
+            paperID: existing.id,
+            kind: .html,
+            source: .webPage,
+            filename: blankFile.lastPathComponent,
+            filePath: blankFile.path
+        ))
+        try modelContext.save()
+
+        MockPaperImporterURLProtocol.requestHandler = { request in
+            XCTAssertEqual(request.url, sourceURL)
+            return (
+                HTTPURLResponse(url: sourceURL, statusCode: 200, httpVersion: nil, headerFields: ["Content-Type": "text/html"])!,
+                Data(shellHTML.utf8)
+            )
+        }
+
+        let importer = PaperImporter(
+            fileStore: fileStore,
+            htmlLocalizer: HTMLLocalizer(session: session, fileManager: .default),
+            webPageHTMLRenderer: renderer,
+            session: session
+        )
+
+        let repaired = try await importer.importWebPage(sourceURL.absoluteString, modelContext: modelContext)
+
+        XCTAssertEqual(repaired.id, existing.id)
+        XCTAssertEqual(renderer.renderedRequests.map(\.url), [sourceURL])
+        XCTAssertEqual(try modelContext.fetch(FetchDescriptor<Paper>()).count, 1)
+        let attachments = try modelContext.fetch(FetchDescriptor<PaperAttachment>())
+        XCTAssertEqual(attachments.count, 1)
+        let localizedHTML = try String(contentsOf: blankFile, encoding: .utf8)
+        XCTAssertTrue(localizedHTML.contains("Recovered client-rendered article content"))
+        XCTAssertTrue(localizedHTML.contains("rp-readability-content"))
     }
 
     @MainActor
@@ -517,6 +675,21 @@ private final class MockPaperImporterURLProtocol: URLProtocol {
     }
 
     override func stopLoading() {}
+}
+
+@MainActor
+private final class MockWebPageHTMLRenderer: WebPageHTMLRendering {
+    let renderedHTML: String
+    private(set) var renderedRequests: [URLRequest] = []
+
+    init(renderedHTML: String) {
+        self.renderedHTML = renderedHTML
+    }
+
+    func renderHTML(for request: URLRequest) async throws -> String {
+        renderedRequests.append(request)
+        return renderedHTML
+    }
 }
 
 private extension Array {

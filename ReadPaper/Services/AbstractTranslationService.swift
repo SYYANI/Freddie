@@ -6,13 +6,16 @@ import CryptoKit
 final class AbstractTranslationService {
     private let translationClient: TranslationLLMClientProtocol
     private let routeResolver: LLMRouteResolver
+    private let glossaryProvider: () -> String
     
     init(
         translationClient: TranslationLLMClientProtocol = TranslationLLMClient(),
-        routeResolver: LLMRouteResolver = LLMRouteResolver()
+        routeResolver: LLMRouteResolver = LLMRouteResolver(),
+        glossaryProvider: @escaping () -> String = { TranslationGlossaryPreference.current() }
     ) {
         self.translationClient = translationClient
         self.routeResolver = routeResolver
+        self.glossaryProvider = glossaryProvider
     }
     
     func translateAbstract(
@@ -27,6 +30,13 @@ final class AbstractTranslationService {
         }
         
         let actualTargetLanguage = targetLanguage ?? settings.targetLanguage
+        let preferences = TranslationPreferencesSnapshot(
+            targetLanguage: actualTargetLanguage,
+            htmlTranslationConcurrency: settings.htmlTranslationConcurrency,
+            babelDocQPS: settings.babelDocQPS,
+            babelDocVersion: settings.babelDocVersion,
+            translationGlossary: glossaryProvider()
+        )
         
         onProgress?("Resolving translation route...")
         
@@ -44,6 +54,7 @@ final class AbstractTranslationService {
             paper: paper,
             targetLanguage: actualTargetLanguage,
             route: route,
+            cacheIdentity: preferences.translationCacheIdentity(for: route.snapshot),
             modelContext: modelContext
         ) {
             return cached
@@ -58,7 +69,12 @@ final class AbstractTranslationService {
                 paper.abstractText,
                 targetLanguage: actualTargetLanguage,
                 route: route.snapshot,
-                apiKey: route.apiKey
+                apiKey: route.apiKey,
+                context: AcademicTranslationContext(
+                    documentTitle: paper.title,
+                    sectionTitle: "Abstract",
+                    glossary: preferences.translationGlossary
+                )
             )
         } catch {
             throw AbstractTranslationError.translationFailed(error)
@@ -74,7 +90,7 @@ final class AbstractTranslationService {
             translatedText: translatedText,
             providerProfileID: route.snapshot.providerProfileID,
             modelProfileID: route.snapshot.modelProfileID,
-            modelName: route.snapshot.modelName
+            modelName: preferences.translationCacheIdentity(for: route.snapshot)
         )
         
         modelContext.insert(segment)
@@ -87,6 +103,7 @@ final class AbstractTranslationService {
         paper: Paper,
         targetLanguage: String,
         route: ResolvedLLMModelRoute,
+        cacheIdentity: String? = nil,
         modelContext: ModelContext
     ) throws -> String? {
         guard !paper.abstractText.isEmpty else { return nil }
@@ -105,7 +122,7 @@ final class AbstractTranslationService {
             segment.targetLanguage == targetLanguage &&
             segment.providerProfileID == route.snapshot.providerProfileID &&
             segment.modelProfileID == route.snapshot.modelProfileID &&
-            segment.modelName == route.snapshot.modelName
+            segment.modelName == (cacheIdentity ?? route.snapshot.translationCacheIdentity)
         }?.translatedText
     }
     

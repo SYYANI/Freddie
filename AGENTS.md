@@ -11,7 +11,9 @@ ReadPaper 是一个 macOS SwiftUI 论文阅读应用，使用 SwiftData 做本�
 - 本地 PDF：导入 PDF，抽取 Info dictionary 和前几页文本，只用于标题、作者和 arXiv ID 等轻量识别；不要把 PDF 纯文本当成稳定全文结构。本地 PDF 里的 `arxivID` 只应在出现明确 arXiv 上下文时写入，例如 `arXiv:2303.08774` 或 `arxiv.org` / `ar5iv.labs.arxiv.org` 链接；不要把 DOI、Crossref 链接或其他编号片段误识别成 arXiv ID。若能从 PDF 正文或元信息中可靠提取 DOI，可把 DOI 作为无 arXiv 时的降级展示标识。
 - arXiv 论文：通过 arXiv API 获取元数据和 PDF，优先保存 `https://arxiv.org/html/{id}`，失败后回退到 `https://ar5iv.labs.arxiv.org/html/{id}`；获取 HTML 后优先用 `swift-readability` 提炼正文，再把 HTML、CSS、图片等资源本地化，若正文抽取失败再回退到原始 HTML。通过 arXiv ID/URL 导入时，不要只给一个不透明的 loading spinner；应尽量向用户暴露当前所处阶段，例如 ID 规范化、元数据获取、PDF 下载、HTML 获取/回退、最终入库保存。
 - 网页导入：输入任意 HTTP/HTTPS 网页 URL，通过 `normalizeWebPageURL` 规范化 URL（自动补齐 https、去除 fragment）。下载响应后先检查 HTTP `Content-Type`；若为 `application/pdf`，则自动路由到 PDF 导入路径：写入 `paper.pdf`、从 PDF 元数据和前几页文本提取标题/作者/arXiv ID/DOI 等轻量信息，并以 PDF 附件形式入库。其余 HTML 网页走原有流程：用 `HTMLLocalizer` 的 `swift-readability` 路径下载并提炼正文，同时本地化页面中的 CSS、图片等链接资源；若 title 元素可解析则使用提取的标题，否则依次回退到 URL path 组件和 host，最终回退到"Untitled Web Page"。通过 `WebPageImportProgress` 反馈分步骤进度（URL 校验 → 网页抓取 → 创建库条目 → 最终保存），与 arXiv 导入一样使用确定型进度条。HTML 网页内容以本地化 HTML 形式保存为 `paper.html`，与 arXiv HTML 共用同一套展示和翻译管线。导入时以 URL 去重（`htmlURLString`），不依赖 arXiv ID。
-- 翻译阅读：HTML 走 SwiftSoup DOM 分段翻译并插入 `.rp-translation-block`；完整 PDF 翻译交给外部 BabelDOC CLI，输出翻译 PDF 后用双栏 PDF 阅读器展示。PDF 翻译现在也支持按页增量生成与续翻，过程中译文 PDF 可能只是覆盖前 N 页的 partial 文档；进度与阅读器状态都要显式体现这一点。PDF 翻译进度也应尽量使用确定型进度条，而不是长期停留在无上下文的 spinner。
+- 翻译阅读：HTML 走 SwiftSoup DOM 分段翻译并插入 `.rp-translation-block`；完整 PDF 翻译交给 App 内嵌并签名的原生 BabelDOC helper，helper 直接使用 App Resources 中按 manifest 校验的 MuPDF、zstd、原生 Core ML layout model 与字体，输出翻译 PDF 后用双栏 PDF 阅读器展示。PDF 翻译支持按页增量生成与续翻，过程中译文 PDF 可能只是覆盖前 N 页的 partial 文档；进度与阅读器状态都要显式体现这一点。
+
+原生 BabelDOC runtime 随 App 构建，不依赖 `tools/install_readpaper_native_runtime.sh` 或 Application Support 预安装目录。修改 Xcode 构建、资源路径或发布流程时，必须保留 `Contents/Resources/BabelDOCNative`、受信 manifest 与 helper 启动前双重验证契约。
 
 `refer.md` 是当前项目 PDF/HTML/翻译架构的设计参考，涉及结构化处理、翻译流程或展示策略时先读它。
 
@@ -32,26 +34,26 @@ open ReadPaper.xcodeproj
 命令行构建：
 
 ```sh
-xcodebuild -project ReadPaper.xcodeproj -scheme ReadPaper -destination 'platform=macOS' -derivedDataPath .DerivedData build
+xcodebuild -project ReadPaper.xcodeproj -scheme ReadPaper -destination 'platform=macOS' -derivedDataPath /tmp/read-paper-derived-data build
 ```
 
 命令行测试：
 
 ```sh
-xcodebuild -project ReadPaper.xcodeproj -scheme ReadPaper -destination 'platform=macOS' -derivedDataPath .DerivedData test
+xcodebuild -project ReadPaper.xcodeproj -scheme ReadPaper -destination 'platform=macOS' -derivedDataPath /tmp/read-paper-derived-data test
 ```
 
 窄改动只跑相关测试时，可直接指定 `-only-testing`，例如验证 BabelDOC 安装/版本解析相关改动：
 
 ```sh
-xcodebuild -project ReadPaper.xcodeproj -scheme ReadPaper -destination 'platform=macOS' -derivedDataPath .DerivedData -only-testing:ReadPaperTests/BabelDocToolManagerTests test
+xcodebuild -project ReadPaper.xcodeproj -scheme ReadPaper -destination 'platform=macOS' -derivedDataPath /tmp/read-paper-derived-data -only-testing:ReadPaperTests/BabelDocToolManagerTests test
 ```
 
 GitHub Actions 构建 DMG：
 
 - 仓库已包含 [`.github/workflows/release.yml`](/Users/yiyan/Desktop/read-paper/.github/workflows/release.yml)，支持在 GitHub Actions 上构建 DMG；触发方式为手动 `workflow_dispatch` 或推送 `v*` tag。
-- 当前 workflow 运行在 `macos-26`，会先恢复本地 `swift-readability` 依赖，再安装 `xcodegen` 和 `create-dmg`，生成 Xcode 项目后执行无签名 Release 构建。
-- CI 产物当前是 unsigned 的 `Freddie.app` 和 `Freddie-unsigned.dmg`；artifact 名为 `Freddie-unsigned-dmg`。若是 tag 触发，还会创建 GitHub Release 并附带该 DMG。
+- 当前 workflow 运行在 `macos-26`，通过 Xcode 解析 `project.yml` 中的 GitHub Swift Package 分支，并从 `SourcePackages/checkouts/BabelDOC` 准备和验证模型、字体、许可证、zstd、MuPDF 与 trusted runtime manifest，再执行无签名 Release 构建。构建时的实际依赖 commit 写入 `build-provenance.txt`。
+- CI 产物当前是 unsigned 的 `Freddie.app` 和 `Freddie-<version>-unsigned.dmg`；helper 在关闭 Xcode signing 时仍做 ad-hoc 签名以满足 App 内信任契约。artifact 同时包含记录 App 与四个远程包源码 commit、runtime manifest hash 和版本号的 `build-provenance.txt`。tag 与手动触发都只上传 Actions artifact；在 Developer ID 签名、notarization、Corresponding Source 和完整第三方 notices 闭环前，不自动创建公开 GitHub Release。
 - 后续若调整 app 名称、scheme、产物路径、签名或打包方式，要同步更新 workflow 中的 `APP_NAME`、`APP_PATH`、`DMG_PATH` 和 release 上传逻辑，避免本地可构建但 CI 打包失效。
 
 如果沙箱或受限终端里 `xcodebuild` 因 Xcode/SwiftPM/clang 缓存目录权限失败，不要先判断为代码失败；换到可写 Xcode 缓存的环境或使用 Xcode 运行后再确认。
@@ -68,7 +70,7 @@ GitHub Actions 构建 DMG：
 - `ReadPaper/Localizable.xcstrings`：应用自有 UI、状态文案和错误文案的字符串目录，当前以英文 source string 为 key，并提供 `en` / `zh-Hans`。
 - `ReadPaper/InfoPlist.xcstrings`：Info.plist 对用户可见文案的字符串目录，例如 `NSDocumentsFolderUsageDescription`。
 - `project.yml`：XcodeGen 的项目源配置。调整 target、依赖、构建设置时改这里并重新生成项目。
-- `.github/workflows/release.yml`：GitHub Actions 的 DMG 打包/发布流程；负责恢复 `swift-readability`、安装 `xcodegen` 与 `create-dmg`、构建 unsigned `Freddie.app`、产出 `Freddie-unsigned.dmg`，并在 tag 发布时上传到 GitHub Release。
+- `.github/workflows/release.yml`：GitHub Actions 的 unsigned DMG 验证构建流程；负责解析远程 Swift Package、准备并验证原生 runtime、安装 `xcodegen` 与 `create-dmg`、构建 unsigned `Freddie.app` 并上传 Actions artifact。公开 Release 仍保持关闭。
 - `ReadPaper.xcodeproj/project.xcworkspace/xcuserdata/`：Xcode 用户状态。除非任务明确要求，不要编辑或整理这类文件。
 - `ReadPaper.xcodeproj/project.xcworkspace/xcuserdata/yiyan.xcuserdatad/UserInterfaceState.xcuserstate`：本地 Xcode 窗口/界面状态文件，默认视为无需处理的噪音文件；不要因为它是 dirty 而额外清理、提交或回退。
 
@@ -150,7 +152,7 @@ LLM 配置现已拆成独立 SwiftData 模型：`LLMProviderProfile` 负责 prov
 针对单个测试类做快速回归时，优先使用下面这种命令形式，避免每次都跑完整测试集：
 
 ```sh
-xcodebuild -project ReadPaper.xcodeproj -scheme ReadPaper -destination 'platform=macOS' -derivedDataPath .DerivedData -only-testing:ReadPaperTests/BabelDocToolManagerTests test
+xcodebuild -project ReadPaper.xcodeproj -scheme ReadPaper -destination 'platform=macOS' -derivedDataPath /tmp/read-paper-derived-data -only-testing:ReadPaperTests/BabelDocToolManagerTests test
 ```
 
 重点测试映射：

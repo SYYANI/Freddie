@@ -1,9 +1,31 @@
 import AppKit
+import CoreGraphics
+import OSLog
 import PDFKit
 import SwiftData
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct ReaderPaneView: View {
+    private struct PDFPageCountRequest: Hashable, Sendable {
+        var attachmentID: UUID
+        var fileURL: URL
+    }
+
+    private struct ReadingStatePersistenceSnapshot: Equatable {
+        var paperID: UUID
+        var attachmentID: UUID?
+        var readerMode: ReaderMode
+        var pageIndex: Int
+        var scrollRatio: Double
+    }
+
+    private static let readingStatePersistenceDelay: Duration = .milliseconds(600)
+    private static let performanceLog = OSLog(
+        subsystem: "com.yiyan.ReadPaper",
+        category: .pointsOfInterest
+    )
+
     private enum PrimaryReaderMode: String, CaseIterable, Identifiable {
         case html
         case pdf
@@ -31,13 +53,17 @@ struct ReaderPaneView: View {
 
     @Environment(\.modelContext) private var modelContext
     @Environment(\.localizationBundle) private var bundle
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.pdfDisplayAppearance) private var pdfDisplayAppearance
     @Query(sort: \ReadingState.modifiedAt, order: .reverse) private var readingStates: [ReadingState]
-    @AppStorage(PDFDisplayAppearance.userDefaultsKey)
-    private var pdfDisplayAppearanceRawValue = PDFDisplayAppearance.defaultValue.rawValue
     @AppStorage(PDFTranslationBatchPreference.userDefaultsKey)
     private var pdfTranslationBatchSizeRawValue = PDFTranslationBatchPreference.defaultValue
     @AppStorage(HTMLReaderTypography.fontSizeUserDefaultsKey)
     private var htmlReaderFontSize = HTMLReaderTypography.defaultFontSize
+    @AppStorage(BabelDocSemanticHintPreference.userDefaultsKey)
+    private var babelDocSemanticHintsEnabled = BabelDocSemanticHintPreference.defaultValue
+    @AppStorage(LaTeXIntegrationPreferences.translationEnabledKey)
+    private var latexTranslationEnabled = false
 
     var paper: Paper?
     var attachments: [PaperAttachment]
@@ -49,6 +75,12 @@ struct ReaderPaneView: View {
     @Binding var noteSelectionContext: NoteSelectionContext?
     @Binding var noteNavigationRequest: NoteNavigationRequest?
     var onCreateAnchoredNote: () -> Void
+    var onSaveSelectionAssistantNote: @MainActor @Sendable (
+        NoteSelectionContext,
+        String,
+        UUID?
+    ) throws -> UUID
+    var onArxivLinkActivated: (URL) -> Void
 
     @State private var pdfPageIndex = 0
     @State private var htmlScrollRatio = 0.0
@@ -61,13 +93,33 @@ struct ReaderPaneView: View {
     @State private var translationProgress: TranslationProgressStatus?
     @State private var translationTask: Task<Void, Never>?
     @State private var pdfTranslationErrorLogURL: URL?
+    @State private var pdfTranslationDiagnosticsNoticeID: String?
+    @State private var latexTranslationErrorLogURL: URL?
     @State private var lastPDFReaderMode: ReaderMode = .pdf
     @State private var suspendReadingStatePersistence = false
+    @State private var pendingReadingStatePersistence: ReadingStatePersistenceSnapshot?
+    @State private var readingStatePersistenceTask: Task<Void, Never>?
     @State private var showPDFTranslationScopeDialog = false
     @State private var pdfTranslationTotalPages: Int = 0
     @State private var digestNoticeMessage: String?
     @State private var digestNoticeTitle: String?
     @State private var digestErrorMessage: String?
+    @State private var copyToastMessage: String?
+    @State private var copyToastDismissTask: Task<Void, Never>?
+    @State private var pdfDebugModeEnabled = false
+    @State private var pdfDebugExportDirectoryURL: URL?
+    @State private var pdfDebugDirectoryHasSecurityScope = false
+    @StateObject private var pdfAnnotationSession = PDFAnnotationSession()
+    @State private var pdfAnnotationNoteText = ""
+    @State private var selectionAssistantSelection: NoteSelectionContext?
+    @State private var isSelectionAssistantPinned = false
+    @State private var selectionAssistantDismissTask: Task<Void, Never>?
+    @State private var selectionAssistantProgress: SelectionAssistantProgress?
+    @State private var selectionAssistantInitialConversation: SelectionAssistantConversationSnapshot?
+    @State private var selectionAssistantHistoryAnchors: [SelectionAssistantHistoryAnchor] = []
+    @State private var htmlSelectionHighlightResetToken = 0
+    @State private var htmlNativeSelectionClearToken = 0
+    @State private var originalPDFPageCount: Int?
 
     private var pdfAttachment: PaperAttachment? {
         attachments.first { $0.kind == .pdf }
@@ -78,20 +130,33 @@ struct ReaderPaneView: View {
     }
 
     private var translatedPDFAttachment: PaperAttachment? {
-        attachments.first { $0.kind == .translatedPDF }
+        attachments
+            .filter { $0.kind == .translatedPDF }
+            .max { $0.createdAt < $1.createdAt }
     }
 
-    private var originalPDFPageCount: Int? {
-        guard let url = pdfAttachment?.fileURL else { return nil }
-        return PDFDocument(url: url)?.pageCount
+    private var translatedLaTeXSourceAttachment: PaperAttachment? {
+        attachments
+            .filter { $0.kind == .resource && $0.source == .latexTrans }
+            .max { $0.createdAt < $1.createdAt }
+    }
+
+    private var originalPDFPageCountRequest: PDFPageCountRequest? {
+        guard let attachment = pdfAttachment else { return nil }
+        return PDFPageCountRequest(
+            attachmentID: attachment.id,
+            fileURL: attachment.fileURL
+        )
     }
 
     private var isPartialPDFTranslation: Bool {
         guard let attachment = translatedPDFAttachment,
-              let lastPage = attachment.translatedLastPage,
               let total = originalPDFPageCount
         else { return false }
-        return lastPage < total
+        return PDFTranslationCoverage.isPartial(
+            translatedLastPage: attachment.translatedLastPage,
+            originalPageCount: total
+        )
     }
 
     private var isNearTranslationEdge: Bool {
@@ -106,7 +171,11 @@ struct ReaderPaneView: View {
     }
 
     private var canTranslatePDF: Bool {
-        pdfAttachment != nil && settings != nil && !isFullPDFTranslationComplete
+        pdfAttachment != nil && settings != nil
+    }
+
+    private var canTranslateLaTeX: Bool {
+        latexTranslationEnabled && paper?.arxivID?.isEmpty == false && settings != nil
     }
 
     private var isFullPDFTranslationComplete: Bool {
@@ -117,7 +186,7 @@ struct ReaderPaneView: View {
     }
 
     private var translationControlsDisabled: Bool {
-        isWorking || (!canTranslateHTML && !canTranslatePDF)
+        isWorking || (!canTranslateHTML && !canTranslatePDF && !canTranslateLaTeX)
     }
 
     private var readerAvailability: ReaderAvailability {
@@ -136,10 +205,6 @@ struct ReaderPaneView: View {
 
     private var restoredHTMLScrollRatio: Double {
         ReadingStateStore.clampedScrollRatio(readingState?.scrollRatio ?? 0)
-    }
-
-    private var pdfDisplayAppearance: PDFDisplayAppearance {
-        PDFDisplayAppearance.resolve(rawValue: pdfDisplayAppearanceRawValue)
     }
 
     private var pdfTranslationBatchSize: Int {
@@ -178,38 +243,74 @@ struct ReaderPaneView: View {
         )
     }
 
-    var body: some View {
+    private var readerBody: some View {
         readerSurface
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .background(Color(nsColor: .windowBackgroundColor))
+            .background {
+                ReadPaperAppearanceSurface(role: .reader)
+                    .ignoresSafeArea()
+            }
+            .overlay(alignment: .bottom) {
+                if let copyToastMessage {
+                    copyToast(message: copyToastMessage)
+                        .padding(.bottom, 20)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                        .zIndex(20)
+                }
+            }
+            .animation(.easeOut(duration: 0.18), value: copyToastMessage != nil)
             .toolbar {
                 readerToolbar
             }
-            .onAppear(perform: restoreReadingStateForCurrentPaper)
-            .onChange(of: paper?.id) { _, _ in
-                noteSelectionContext = nil
+            .onAppear {
                 restoreReadingStateForCurrentPaper()
+                restorePDFTranslationDiagnostics()
+                refreshSelectionAssistantHistoryAnchors()
+            }
+            .task(id: originalPDFPageCountRequest) {
+                await refreshOriginalPDFPageCount(for: originalPDFPageCountRequest)
+            }
+            .onChange(of: paper?.id) { _, _ in
+                flushPendingReadingStatePersistence()
+                deactivatePDFTranslationDebugMode()
+                pdfAnnotationSession.resetForDocumentChange()
+                noteSelectionContext = nil
+                clearSelectionAssistant()
+                restoreReadingStateForCurrentPaper()
+                refreshSelectionAssistantHistoryAnchors()
             }
             .onChange(of: readerAvailability) { _, _ in
                 syncReaderModeWithAvailableContent()
+                restorePDFTranslationDiagnostics()
             }
             .onChange(of: readerMode) { _, newValue in
                 noteSelectionContext = nil
+                clearSelectionAssistant()
                 if newValue != .html {
                     lastPDFReaderMode = normalizedPDFReaderMode(newValue)
                 }
-                persistReadingStateIfNeeded()
+                persistReadingStateImmediatelyIfNeeded()
             }
             .onChange(of: pdfPageIndex) { _, _ in
-                persistReadingStateIfNeeded()
+                scheduleReadingStatePersistence()
             }
             .onChange(of: noteNavigationRequest?.id) { _, _ in
                 revealNoteAnchorIfNeeded()
             }
             .onChange(of: htmlScrollRatio) { _, _ in
-                persistReadingStateIfNeeded()
+                scheduleReadingStatePersistence()
             }
-            .onDisappear(perform: persistReadingStateIfNeeded)
+            .onChange(of: pdfAnnotationSession.pendingTextNote?.id) { _, newValue in
+                if newValue != nil {
+                    pdfAnnotationNoteText = ""
+                }
+            }
+            .onDisappear {
+                flushReadingStatePersistence()
+                deactivatePDFTranslationDebugMode()
+                clearSelectionAssistant()
+                dismissCopyToast()
+            }
             .confirmationDialog(
                 String(localized: "Choose Translation Scope", bundle: bundle),
                 isPresented: $showPDFTranslationScopeDialog,
@@ -263,16 +364,68 @@ struct ReaderPaneView: View {
             }
     }
 
+    var body: some View {
+        readerBody
+            .alert(
+                String(localized: "Add PDF Note", bundle: bundle),
+                isPresented: pdfTextNoteAlertPresented
+            ) {
+                TextField(String(localized: "Note", bundle: bundle), text: $pdfAnnotationNoteText)
+                Button(String(localized: "Cancel", bundle: bundle), role: .cancel) {
+                    pdfAnnotationSession.cancelPendingTextNote()
+                }
+                Button(String(localized: "Save", bundle: bundle)) {
+                    pdfAnnotationSession.commitPendingTextNote(contents: pdfAnnotationNoteText)
+                }
+                .disabled(pdfAnnotationNoteText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            } message: {
+                Text("Enter the note to attach at this PDF position.", bundle: bundle)
+            }
+            .alert(
+                String(localized: "PDF Annotation Error", bundle: bundle),
+                isPresented: pdfAnnotationErrorAlertPresented
+            ) {
+                Button(String(localized: "OK", bundle: bundle), role: .cancel) {}
+            } message: {
+                Text(pdfAnnotationSession.errorMessage ?? "")
+            }
+    }
+
+    private var pdfTextNoteAlertPresented: Binding<Bool> {
+        Binding(
+            get: { pdfAnnotationSession.pendingTextNote != nil },
+            set: { isPresented in
+                if isPresented == false {
+                    pdfAnnotationSession.cancelPendingTextNote()
+                }
+            }
+        )
+    }
+
+    private var pdfAnnotationErrorAlertPresented: Binding<Bool> {
+        Binding(
+            get: { pdfAnnotationSession.errorMessage != nil },
+            set: { isPresented in
+                if isPresented == false {
+                    pdfAnnotationSession.errorMessage = nil
+                }
+            }
+        )
+    }
+
     private var readerSurface: some View {
         VStack(spacing: 0) {
-            paneHeader
-            Divider()
+            if paper != nil {
+                Divider()
+                paneHeader
+                Divider()
+            }
 
             if isWorking || statusMessage != nil {
                 statusRow
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
-                    .background(Color(nsColor: .windowBackgroundColor))
+                    .background(ReadPaperAppearanceHeaderSurface(role: .reader))
 
                 Divider()
             }
@@ -287,22 +440,15 @@ struct ReaderPaneView: View {
     }
 
     private var paneHeader: some View {
-        HStack(spacing: 12) {
-            Text("READER", bundle: bundle)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-                .tracking(1.1)
-
+        HStack {
             if let paper {
                 Text(paper.title)
-                    .font(.subheadline.weight(.medium))
+                    .font(.system(
+                        .subheadline,
+                        design: pdfDisplayAppearance == .paper ? .serif : .default
+                    ).weight(.semibold))
                     .lineLimit(1)
                     .truncationMode(.tail)
-            } else {
-                Text("Select a paper to start reading", bundle: bundle)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
             }
 
             Spacer(minLength: 0)
@@ -310,7 +456,7 @@ struct ReaderPaneView: View {
         .frame(minHeight: 20)
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
-        .background(Color(nsColor: .windowBackgroundColor))
+        .background(ReadPaperAppearanceHeaderSurface(role: .reader))
     }
 
     @ToolbarContentBuilder
@@ -331,11 +477,17 @@ struct ReaderPaneView: View {
                 ToolbarItem(placement: .primaryAction) {
                     pdfDisplayPicker
                 }
+                ToolbarItem(placement: .primaryAction) {
+                    pdfAnnotationMenu
+                }
             }
 
             ToolbarItemGroup(placement: .primaryAction) {
                 noteSelectionButton
                 translationMenu
+                #if DEBUG
+                pdfTranslationDebugButton
+                #endif
                 exportMenu
 
                 if isWorking {
@@ -505,6 +657,158 @@ struct ReaderPaneView: View {
         .help(String(localized: "PDF Display Mode", bundle: bundle))
     }
 
+    private var pdfAnnotationMenu: some View {
+        Menu {
+            annotationModeButton(
+                .browse,
+                title: String(localized: "Browse", bundle: bundle),
+                systemImage: "cursorarrow"
+            )
+            annotationModeButton(
+                .ink,
+                title: String(localized: "Freehand Draw", bundle: bundle),
+                systemImage: "pencil.tip"
+            )
+            annotationModeButton(
+                .textNote,
+                title: String(localized: "Place PDF Note", bundle: bundle),
+                systemImage: "note.text.badge.plus"
+            )
+            annotationModeButton(
+                .erase,
+                title: String(localized: "Erase Annotation", bundle: bundle),
+                systemImage: "eraser"
+            )
+
+            Divider()
+
+            Button {
+                pdfAnnotationSession.applyTextMarkup(.highlight)
+            } label: {
+                Label(String(localized: "Highlight Selection", bundle: bundle), systemImage: "highlighter")
+            }
+            .disabled(pdfAnnotationSession.hasTextSelection == false)
+
+            Button {
+                pdfAnnotationSession.applyTextMarkup(.underline)
+            } label: {
+                Label(String(localized: "Underline Selection", bundle: bundle), systemImage: "underline")
+            }
+            .disabled(pdfAnnotationSession.hasTextSelection == false)
+
+            Button {
+                pdfAnnotationSession.applyTextMarkup(.strikeOut)
+            } label: {
+                Label(String(localized: "Strike Through Selection", bundle: bundle), systemImage: "strikethrough")
+            }
+            .disabled(pdfAnnotationSession.hasTextSelection == false)
+
+            Divider()
+
+            Menu(String(localized: "Annotation Color", bundle: bundle)) {
+                annotationColorButton(.yellow, title: String(localized: "Yellow", bundle: bundle))
+                annotationColorButton(.green, title: String(localized: "Green", bundle: bundle))
+                annotationColorButton(.blue, title: String(localized: "Blue", bundle: bundle))
+                annotationColorButton(.red, title: String(localized: "Red", bundle: bundle))
+                annotationColorButton(.purple, title: String(localized: "Purple", bundle: bundle))
+            }
+
+            Menu(String(localized: "Drawing Width", bundle: bundle)) {
+                annotationLineWidthButton(1, title: String(localized: "Thin", bundle: bundle))
+                annotationLineWidthButton(2, title: String(localized: "Medium", bundle: bundle))
+                annotationLineWidthButton(5, title: String(localized: "Thick", bundle: bundle))
+            }
+
+            Divider()
+
+            Button {
+                pdfAnnotationSession.undo()
+            } label: {
+                Label(String(localized: "Undo PDF Annotation", bundle: bundle), systemImage: "arrow.uturn.backward")
+            }
+            .keyboardShortcut("z", modifiers: .command)
+            .disabled(pdfAnnotationSession.canUndo == false)
+
+            Button {
+                pdfAnnotationSession.redo()
+            } label: {
+                Label(String(localized: "Redo PDF Annotation", bundle: bundle), systemImage: "arrow.uturn.forward")
+            }
+            .keyboardShortcut("z", modifiers: [.command, .shift])
+            .disabled(pdfAnnotationSession.canRedo == false)
+        } label: {
+            Label(
+                String(localized: "PDF Annotations", bundle: bundle),
+                systemImage: pdfAnnotationToolSystemImage
+            )
+            .labelStyle(.iconOnly)
+            .foregroundStyle(
+                pdfAnnotationSession.interactionMode == .browse
+                    ? Color.primary
+                    : Color.accentColor
+            )
+        }
+        .menuIndicator(.hidden)
+        .disabled(pdfAnnotationSession.isDebugInteractionActive)
+        .help(String(localized: "PDF Annotations", bundle: bundle))
+    }
+
+    private var pdfAnnotationToolSystemImage: String {
+        switch pdfAnnotationSession.interactionMode {
+        case .browse: return "pencil.tip.crop.circle"
+        case .ink: return "pencil.tip"
+        case .textNote: return "note.text.badge.plus"
+        case .erase: return "eraser.fill"
+        case .debugRegion: return "ladybug"
+        }
+    }
+
+    private func annotationModeButton(
+        _ mode: PDFInteractionMode,
+        title: String,
+        systemImage: String
+    ) -> some View {
+        Button {
+            pdfAnnotationSession.selectInteractionMode(mode)
+        } label: {
+            Label(
+                title,
+                systemImage: pdfAnnotationSession.interactionMode == mode
+                    ? "checkmark.circle.fill"
+                    : systemImage
+            )
+        }
+    }
+
+    private func annotationColorButton(
+        _ preset: PDFAnnotationColorPreset,
+        title: String
+    ) -> some View {
+        Button {
+            pdfAnnotationSession.colorPreset = preset
+        } label: {
+            Label(
+                title,
+                systemImage: pdfAnnotationSession.colorPreset == preset
+                    ? "checkmark.circle.fill"
+                    : "circle.fill"
+            )
+        }
+    }
+
+    private func annotationLineWidthButton(_ width: Double, title: String) -> some View {
+        Button {
+            pdfAnnotationSession.lineWidth = width
+        } label: {
+            Label(
+                title,
+                systemImage: pdfAnnotationSession.lineWidth == width
+                    ? "checkmark.circle.fill"
+                    : "line.diagonal"
+            )
+        }
+    }
+
     private var translationMenu: some View {
         Menu {
             Button {
@@ -521,12 +825,25 @@ struct ReaderPaneView: View {
                 if isPartialPDFTranslation {
                     Label(String(localized: "Translate More PDF Pages", bundle: bundle), systemImage: "doc")
                         .labelStyle(.titleAndIcon)
+                } else if isFullPDFTranslationComplete {
+                    Label(String(localized: "Retranslate PDF", bundle: bundle), systemImage: "arrow.clockwise")
+                        .labelStyle(.titleAndIcon)
                 } else {
                     Label(String(localized: "Translate PDF", bundle: bundle), systemImage: "doc")
                         .labelStyle(.titleAndIcon)
                 }
             }
             .disabled(canTranslatePDF == false)
+
+            if latexTranslationEnabled {
+                Button {
+                    translateLaTeX()
+                } label: {
+                    Label(String(localized: "Translate arXiv LaTeX", bundle: bundle), systemImage: "text.document")
+                        .labelStyle(.titleAndIcon)
+                }
+                .disabled(canTranslateLaTeX == false)
+            }
         } label: {
             Label(String(localized: "Translate", bundle: bundle), systemImage: "translate")
                 .labelStyle(.iconOnly)
@@ -534,6 +851,112 @@ struct ReaderPaneView: View {
         .menuIndicator(.hidden)
         .disabled(translationControlsDisabled)
         .help(translationMenuHelpText)
+    }
+
+    #if DEBUG
+    private var pdfTranslationDebugButton: some View {
+        Button {
+            togglePDFTranslationDebugMode()
+        } label: {
+            Label(
+                String(localized: "PDF Translation Debug Export", bundle: bundle),
+                systemImage: pdfDebugModeEnabled ? "ladybug.fill" : "ladybug"
+            )
+            .labelStyle(.iconOnly)
+            .foregroundStyle(pdfDebugModeEnabled ? Color.accentColor : Color.primary)
+        }
+        .disabled(translatedPDFAttachment == nil || isWorking)
+        .help(
+            pdfDebugModeEnabled
+                ? String(localized: "Disable PDF translation debug export", bundle: bundle)
+                : String(localized: "Enable PDF translation debug export", bundle: bundle)
+        )
+    }
+
+    private func togglePDFTranslationDebugMode() {
+        if pdfDebugModeEnabled {
+            deactivatePDFTranslationDebugMode()
+            statusMessage = String(localized: "PDF translation debug export disabled.", bundle: bundle)
+            return
+        }
+
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.canCreateDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.prompt = String(localized: "Choose", bundle: bundle)
+        panel.message = String(
+            localized: "Choose a folder, then drag a rectangle over an issue in the translated PDF. Each selection is exported automatically.",
+            bundle: bundle
+        )
+        panel.directoryURL = pdfDebugExportDirectoryURL
+
+        guard panel.runModal() == .OK, let directoryURL = panel.url else { return }
+
+        deactivatePDFTranslationDebugMode()
+        pdfDebugExportDirectoryURL = directoryURL
+        pdfDebugDirectoryHasSecurityScope = directoryURL.startAccessingSecurityScopedResource()
+        pdfDebugModeEnabled = true
+        pdfAnnotationSession.beginDebugInteraction()
+        if readerMode != .bilingualPDF && readerMode != .translatedPDF {
+            readerMode = .translatedPDF
+        }
+        statusMessage = String(
+            localized: "PDF debug export is active. Drag over an issue in the translated PDF.",
+            bundle: bundle
+        )
+    }
+    #endif
+
+    private func deactivatePDFTranslationDebugMode() {
+        if pdfDebugDirectoryHasSecurityScope {
+            pdfDebugExportDirectoryURL?.stopAccessingSecurityScopedResource()
+        }
+        pdfDebugDirectoryHasSecurityScope = false
+        pdfDebugModeEnabled = false
+        pdfDebugExportDirectoryURL = nil
+        pdfAnnotationSession.endDebugInteraction()
+    }
+
+    private func handlePDFDebugRegionSelection(_ selection: PDFDebugRegionSelection) {
+        #if DEBUG
+        guard pdfDebugModeEnabled,
+              let directoryURL = pdfDebugExportDirectoryURL,
+              let paper,
+              let translatedAttachment = translatedPDFAttachment
+        else {
+            return
+        }
+
+        let translatedURL = translatedAttachment.fileURL
+        let request = PDFTranslationDebugExportRequest(
+            paperID: paper.id,
+            paperTitle: paper.title,
+            arxivID: paper.arxivID,
+            doi: paper.doi,
+            originalAttachmentID: pdfAttachment?.id,
+            translatedAttachmentID: translatedAttachment.id,
+            originalPDFURL: pdfAttachment?.fileURL,
+            translatedPDFURL: translatedURL,
+            diagnosticsURL: BabelDocRunner.diagnosticsURL(for: translatedURL),
+            translatedLastPage: translatedAttachment.translatedLastPage,
+            selection: selection
+        )
+
+        do {
+            let exportURL = try PDFTranslationDebugExporter().export(request, to: directoryURL)
+            statusMessage = AppLocalization.format(
+                "PDF debug bundle exported to %@.",
+                bundle: bundle,
+                exportURL.path
+            )
+        } catch {
+            statusMessage = AppLocalization.errorMessage(error, bundle: bundle)
+        }
+        #else
+        _ = selection
+        #endif
     }
 
     private var exportMenu: some View {
@@ -559,12 +982,77 @@ struct ReaderPaneView: View {
                 Label(String(localized: "Export Markdown", bundle: bundle), systemImage: "square.and.arrow.up")
                     .labelStyle(.titleAndIcon)
             }
+
+            if readerMode != .html {
+                Divider()
+
+                Button {
+                    exportAnnotatedPDF()
+                } label: {
+                    Label(String(localized: "Export Annotated PDF", bundle: bundle), systemImage: "doc.badge.arrow.up")
+                        .labelStyle(.titleAndIcon)
+                }
+                .disabled(currentPDFAnnotationExportAttachment == nil)
+            }
         } label: {
             Label(String(localized: "Share", bundle: bundle), systemImage: "square.and.arrow.up")
                 .labelStyle(.iconOnly)
         }
         .menuIndicator(.hidden)
         .help(String(localized: "Share Paper", bundle: bundle))
+    }
+
+    private var currentPDFAnnotationExportAttachment: PaperAttachment? {
+        let visibleAttachments: [PaperAttachment]
+        switch readerMode {
+        case .html:
+            return nil
+        case .pdf:
+            visibleAttachments = [pdfAttachment].compactMap { $0 }
+        case .translatedPDF:
+            visibleAttachments = [translatedPDFAttachment].compactMap { $0 }
+        case .bilingualPDF:
+            visibleAttachments = [pdfAttachment, translatedPDFAttachment].compactMap { $0 }
+        }
+
+        if let activeAttachmentID = pdfAnnotationSession.activeAttachmentID,
+           let activeAttachment = visibleAttachments.first(where: { $0.id == activeAttachmentID }) {
+            return activeAttachment
+        }
+        return visibleAttachments.first
+    }
+
+    private func exportAnnotatedPDF() {
+        guard let paper, let attachment = currentPDFAnnotationExportAttachment else { return }
+
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.pdf]
+        panel.canCreateDirectories = true
+        panel.isExtensionHidden = false
+        panel.nameFieldStringValue = attachment.fileURL
+            .deletingPathExtension()
+            .lastPathComponent + "-annotated.pdf"
+        panel.prompt = String(localized: "Export", bundle: bundle)
+
+        guard panel.runModal() == .OK, let destinationURL = panel.url else { return }
+
+        do {
+            let annotationCount = try PDFAnnotationExporter().export(
+                sourcePDFURL: attachment.fileURL,
+                paperID: paper.id,
+                attachmentID: attachment.id,
+                destinationURL: destinationURL
+            )
+            digestNoticeTitle = String(localized: "PDF Exported", bundle: bundle)
+            digestNoticeMessage = AppLocalization.format(
+                "%d PDF annotations exported to %@.",
+                bundle: bundle,
+                annotationCount,
+                destinationURL.lastPathComponent
+            )
+        } catch {
+            pdfAnnotationSession.report(error)
+        }
     }
 
     private var sourceLinkURL: URL? {
@@ -578,8 +1066,41 @@ struct ReaderPaneView: View {
 
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(sourceLinkURL.absoluteString, forType: .string)
-        digestNoticeTitle = String(localized: "Link Copied", bundle: bundle)
-        digestNoticeMessage = String(localized: "Link copied to the clipboard.", bundle: bundle)
+        showCopyToast(message: String(localized: "Link copied to the clipboard.", bundle: bundle))
+    }
+
+    private func showCopyToast(message: String) {
+        copyToastDismissTask?.cancel()
+        copyToastMessage = message
+        copyToastDismissTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            guard Task.isCancelled == false else { return }
+            withAnimation(.easeIn(duration: 0.18)) {
+                copyToastMessage = nil
+            }
+            copyToastDismissTask = nil
+        }
+    }
+
+    private func dismissCopyToast() {
+        copyToastDismissTask?.cancel()
+        copyToastDismissTask = nil
+        copyToastMessage = nil
+    }
+
+    private func copyToast(message: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundStyle(.green)
+            Text(message)
+                .font(.callout.weight(.medium))
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .readPaperGlassEffect(in: Capsule())
+        .shadow(color: .black.opacity(0.14), radius: 10, y: 4)
+        .allowsHitTesting(false)
+        .accessibilityElement(children: .combine)
     }
 
     private func copyDigest() {
@@ -593,8 +1114,7 @@ struct ReaderPaneView: View {
         )
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(markdown, forType: .string)
-        digestNoticeTitle = String(localized: "Digest Ready", bundle: bundle)
-        digestNoticeMessage = String(localized: "Digest copied to the clipboard.", bundle: bundle)
+        showCopyToast(message: String(localized: "Digest copied to the clipboard.", bundle: bundle))
     }
 
     private func exportDigest() {
@@ -634,6 +1154,9 @@ struct ReaderPaneView: View {
         if isWorking {
             return String(localized: "Translation in Progress", bundle: bundle)
         }
+        if canTranslateLaTeX {
+            return String(localized: "Translate HTML, PDF, or arXiv LaTeX", bundle: bundle)
+        }
         if canTranslateHTML && canTranslatePDF {
             return String(localized: "Translate HTML or PDF", bundle: bundle)
         }
@@ -648,70 +1171,159 @@ struct ReaderPaneView: View {
 
     @ViewBuilder
     private var content: some View {
-        if paper == nil {
-            emptyReaderState
-        } else {
-            switch readerMode {
-            case .html:
-                if let htmlFileURL = htmlAttachment?.fileURL {
-                    HTMLReaderView(
-                        fileURL: htmlFileURL,
-                        attachmentID: htmlAttachment?.id,
-                        displayMode: displayMode,
-                        displayAppearance: pdfDisplayAppearance,
-                        fontSize: htmlReaderFontSize,
-                        reloadToken: htmlReloadToken,
-                        initialScrollRatio: restoredHTMLScrollRatio,
-                        scrollRatio: $htmlScrollRatio,
-                        segmentUpdate: htmlSegmentUpdate,
-                        noteNavigationRequest: noteNavigationRequest,
-                        onNoteSelectionChanged: handleNoteSelectionChange
-                    )
+        ZStack(alignment: .bottom) {
+            Group {
+                if paper == nil {
+                    emptyReaderState
                 } else {
-                    centeredUnavailableView(
-                        String(localized: "No HTML available", bundle: bundle),
-                        systemImage: "doc.text",
-                        description: Text("Import an arXiv paper or web page with HTML content to read it here.", bundle: bundle)
-                    )
+                    switch readerMode {
+                    case .html:
+                        if let htmlFileURL = htmlAttachment?.fileURL {
+                            HTMLReaderView(
+                                fileURL: htmlFileURL,
+                                attachmentID: htmlAttachment?.id,
+                                displayMode: displayMode,
+                                displayAppearance: pdfDisplayAppearance,
+                                fontSize: htmlReaderFontSize,
+                                reloadToken: htmlReloadToken,
+                                initialScrollRatio: restoredHTMLScrollRatio,
+                                scrollRatio: $htmlScrollRatio,
+                                segmentUpdate: htmlSegmentUpdate,
+                                noteNavigationRequest: noteNavigationRequest,
+                                selectionAssistantHistoryAnchors: selectionAssistantHistoryAnchors,
+                                selectionHighlightResetToken: htmlSelectionHighlightResetToken,
+                                nativeSelectionClearToken: htmlNativeSelectionClearToken,
+                                onNoteSelectionChanged: handleNoteSelectionChange,
+                                onSelectionAssistantDismissed: handleHTMLSelectionAssistantDismissal
+                            )
+                        } else {
+                            centeredUnavailableView(
+                                String(localized: "No HTML available", bundle: bundle),
+                                systemImage: "doc.text",
+                                description: Text("Import an arXiv paper or web page with HTML content to read it here.", bundle: bundle)
+                            )
+                        }
+                    case .pdf:
+                        labeledPDFReader(
+                            fileURL: pdfAttachment?.fileURL,
+                            attachmentID: pdfAttachment?.id,
+                            label: String(localized: "Original", bundle: bundle),
+                            emptyTitle: String(localized: "No PDF available", bundle: bundle),
+                            emptyDescription: String(localized: "Import a PDF or fetch one from arXiv to read it here.", bundle: bundle)
+                        )
+                    case .bilingualPDF:
+                        if translatedPDFAttachment != nil {
+                            DualPDFReaderView(
+                                paperID: paper?.id,
+                                originalURL: pdfAttachment?.fileURL,
+                                originalAttachmentID: pdfAttachment?.id,
+                                translatedURL: translatedPDFAttachment?.fileURL,
+                                translatedAttachmentID: translatedPDFAttachment?.id,
+                                translatedLastPage: translatedPDFAttachment?.translatedLastPage,
+                                displayAppearance: pdfDisplayAppearance,
+                                pageIndex: $pdfPageIndex,
+                                reloadToken: pdfReloadToken,
+                                noteNavigationRequest: noteNavigationRequest,
+                                selectionAssistantHistoryAnchors: selectionAssistantHistoryAnchors,
+                                annotationSession: pdfAnnotationSession,
+                                debugRegionSelectionEnabled: pdfDebugModeEnabled,
+                                onDebugRegionSelected: handlePDFDebugRegionSelection,
+                                onNoteSelectionChanged: handleNoteSelectionChange,
+                                onArxivLinkActivated: onArxivLinkActivated
+                            )
+                        } else {
+                            centeredUnavailableView(
+                                String(localized: "No translated PDF", bundle: bundle),
+                                systemImage: "character.book.closed",
+                                description: Text("Run PDF translation first to compare the original and translated versions side by side.", bundle: bundle)
+                            )
+                        }
+                    case .translatedPDF:
+                        labeledPDFReader(
+                            fileURL: translatedPDFAttachment?.fileURL,
+                            attachmentID: translatedPDFAttachment?.id,
+                            label: String(localized: "Translation", bundle: bundle),
+                            emptyTitle: String(localized: "No translated PDF", bundle: bundle),
+                            emptyDescription: String(localized: "Run PDF translation first to read the translated PDF on its own.", bundle: bundle),
+                            reloadToken: pdfReloadToken,
+                            debugRegionSelectionEnabled: pdfDebugModeEnabled,
+                            onDebugRegionSelected: handlePDFDebugRegionSelection
+                        )
+                    }
                 }
-            case .pdf:
-                labeledPDFReader(
-                    fileURL: pdfAttachment?.fileURL,
-                    attachmentID: pdfAttachment?.id,
-                    label: String(localized: "Original", bundle: bundle),
-                    emptyTitle: String(localized: "No PDF available", bundle: bundle),
-                    emptyDescription: String(localized: "Import a PDF or fetch one from arXiv to read it here.", bundle: bundle)
+            }
+
+            if let selection = selectionAssistantSelection,
+               selection.trimmedQuote != nil,
+               paper != nil {
+                SelectionAssistantOverlay(
+                    selection: selection,
+                    progress: selectionAssistantProgress,
+                    initialConversation: selectionAssistantInitialConversation,
+                    perform: performSelectionAssistantRequest,
+                    saveAsNote: onSaveSelectionAssistantNote,
+                    onSourceActivated: activateSelectionAssistantSource,
+                    onConversationChanged: persistSelectionAssistantConversation,
+                    onInteractionBegan: pinSelectionAssistant,
+                    onDismiss: clearSelectionAssistant
                 )
-            case .bilingualPDF:
-                if translatedPDFAttachment != nil {
-                    DualPDFReaderView(
-                        originalURL: pdfAttachment?.fileURL,
-                        originalAttachmentID: pdfAttachment?.id,
-                        translatedURL: translatedPDFAttachment?.fileURL,
-                        translatedAttachmentID: translatedPDFAttachment?.id,
-                        displayAppearance: pdfDisplayAppearance,
-                        pageIndex: $pdfPageIndex,
-                        reloadToken: pdfReloadToken,
-                        onNoteSelectionChanged: handleNoteSelectionChange
-                    )
-                } else {
-                    centeredUnavailableView(
-                        String(localized: "No translated PDF", bundle: bundle),
-                        systemImage: "character.book.closed",
-                        description: Text("Run PDF translation first to compare the original and translated versions side by side.", bundle: bundle)
-                    )
-                }
-            case .translatedPDF:
-                labeledPDFReader(
-                    fileURL: translatedPDFAttachment?.fileURL,
-                    attachmentID: translatedPDFAttachment?.id,
-                    label: String(localized: "Translation", bundle: bundle),
-                    emptyTitle: String(localized: "No translated PDF", bundle: bundle),
-                    emptyDescription: String(localized: "Run PDF translation first to read the translated PDF on its own.", bundle: bundle),
-                    reloadToken: pdfReloadToken
-                )
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .zIndex(10)
             }
         }
+        .animation(.easeOut(duration: 0.18), value: selectionAssistantSelection != nil)
+    }
+
+    @MainActor
+    private func performSelectionAssistantRequest(
+        _ request: SelectionAssistantRequest,
+        onPartialAnswer: @escaping @MainActor (String) -> Void
+    ) async throws -> SelectionAssistantResult {
+        guard let paper, let settings else {
+            throw LLMProviderError.invalidConfiguration(
+                String(localized: "Translation settings are unavailable.", bundle: bundle)
+            )
+        }
+        let route = try LLMRouteResolver().resolveAssistantRoute(
+            settings: settings,
+            modelContext: modelContext
+        )
+        selectionAssistantProgress = .collectingPaperContext
+        defer {
+            selectionAssistantProgress = nil
+        }
+        guard let selection = selectionAssistantSelection else {
+            throw LLMProviderError.invalidConfiguration(
+                String(localized: "Select some text before using the reading assistant.", bundle: bundle)
+            )
+        }
+        return try await SelectionAssistantOrchestrator().perform(
+            request,
+            selection: selection,
+            paper: paper,
+            attachments: attachments,
+            notes: notes,
+            targetLanguage: settings.targetLanguage,
+            route: route,
+            onProgress: { progress in
+                selectionAssistantProgress = progress
+            },
+            onPartialAnswer: { partialAnswer in
+                await onPartialAnswer(partialAnswer)
+            }
+        )
+    }
+
+    @MainActor
+    private func activateSelectionAssistantSource(_ source: AssistantSource) {
+        pinSelectionAssistant()
+        if let request = source.navigationRequest {
+            noteNavigationRequest = request
+            return
+        }
+        guard let urlString = source.urlString,
+              let url = URL(string: urlString) else { return }
+        NSWorkspace.shared.open(url)
     }
 
     private var statusRow: some View {
@@ -754,6 +1366,28 @@ struct ReaderPaneView: View {
                     .help(String(localized: "Copy BabelDOC Log Path", bundle: bundle))
                 }
 
+                if latexTranslationErrorLogURL != nil {
+                    Button {
+                        revealLaTeXTranslationErrorLog()
+                    } label: {
+                        Label(String(localized: "Show LaTeX Compilation Log", bundle: bundle), systemImage: "doc.text.magnifyingglass")
+                    }
+                    .labelStyle(.iconOnly)
+                    .buttonStyle(.borderless)
+                    .help(String(localized: "Show LaTeX Compilation Log", bundle: bundle))
+                }
+
+                if translatedLaTeXSourceAttachment != nil {
+                    Button {
+                        revealTranslatedLaTeXSource()
+                    } label: {
+                        Label(String(localized: "Reveal Translated LaTeX Source", bundle: bundle), systemImage: "folder")
+                    }
+                    .labelStyle(.iconOnly)
+                    .buttonStyle(.borderless)
+                    .help(String(localized: "Reveal Translated LaTeX Source", bundle: bundle))
+                }
+
                 if statusMessage != nil, !isWorking {
                     Button {
                         dismissStatusMessage()
@@ -784,6 +1418,8 @@ struct ReaderPaneView: View {
         htmlSegmentUpdate = nil
         translationProgress = nil
         pdfTranslationErrorLogURL = nil
+        pdfTranslationDiagnosticsNoticeID = nil
+        latexTranslationErrorLogURL = nil
         isWorking = true
         isCancelling = false
         statusMessage = String(localized: "Translating HTML...", bundle: bundle)
@@ -836,6 +1472,190 @@ struct ReaderPaneView: View {
         }
     }
 
+    private func translateLaTeX() {
+        guard latexTranslationEnabled,
+              let paper,
+              let settings,
+              let arxivID = paper.arxivID,
+              !arxivID.isEmpty else {
+            return
+        }
+        #if os(macOS)
+        guard ReadPaperLaTeXToolchain.detectConfigured() != nil else {
+            translationProgress = nil
+            latexTranslationErrorLogURL = nil
+            statusMessage = ReadPaperLaTeXErrorPresentation.message(
+                for: ReadPaperLaTeXToolchainError.latexmkNotFound,
+                bundle: bundle
+            )
+            return
+        }
+        #endif
+        let preferences = TranslationPreferencesSnapshot(settings)
+        let arxivIdentifier = ReadPaperArXivIdentifier.resolving(
+            id: arxivID,
+            version: paper.arxivVersion
+        )
+        let job = TranslationJob(
+            paperID: paper.id,
+            kind: "latex",
+            targetLanguage: preferences.targetLanguage,
+            state: .running
+        )
+        modelContext.insert(job)
+        do {
+            try modelContext.save()
+        } catch {
+            handleTranslationError(error)
+            return
+        }
+
+        let jobID = job.id
+        translationProgress = nil
+        pdfTranslationErrorLogURL = nil
+        pdfTranslationDiagnosticsNoticeID = nil
+        latexTranslationErrorLogURL = nil
+        isWorking = true
+        isCancelling = false
+        statusMessage = String(localized: "Preparing arXiv LaTeX source...", bundle: bundle)
+        translationTask = Task {
+            do {
+                try Task.checkCancellation()
+                let resolvedRoute = try LLMRouteResolver().resolvePDFRoute(
+                    settings: settings,
+                    modelContext: modelContext
+                )
+                let output = try await ReadPaperLaTeXTranslationService().translate(
+                    ReadPaperLaTeXTranslationRequest(
+                        paperID: paper.id,
+                        arxivIdentifier: arxivIdentifier,
+                        targetLanguage: preferences.targetLanguage,
+                        maximumConcurrency: preferences.htmlTranslationConcurrency,
+                        glossary: preferences.translationGlossary,
+                        documentSummary: paper.abstractText,
+                        route: resolvedRoute.snapshot,
+                        apiKey: resolvedRoute.apiKey
+                    )
+                ) { update in
+                    Task { @MainActor in
+                        guard isWorking, !isCancelling else { return }
+                        applyLaTeXProgress(update, jobID: jobID)
+                    }
+                }
+                try Task.checkCancellation()
+
+                let sourceAttachment = PaperAttachment(
+                    paperID: paper.id,
+                    kind: .resource,
+                    source: .latexTrans,
+                    filename: output.artifact.projectDirectory.lastPathComponent,
+                    filePath: output.artifact.projectDirectory.path
+                )
+                modelContext.insert(sourceAttachment)
+
+                var translatedAttachment: PaperAttachment?
+                if let pdfURL = output.artifact.pdfURL {
+                    let attachment = PaperAttachment(
+                        paperID: paper.id,
+                        kind: .translatedPDF,
+                        source: .latexTrans,
+                        filename: pdfURL.lastPathComponent,
+                        filePath: pdfURL.path
+                    )
+                    modelContext.insert(attachment)
+                    translatedAttachment = attachment
+                }
+
+                let compilationFailureMessage = output.pdfCompilationFailed
+                    ? ReadPaperLaTeXCompilationDiagnostics.failureStatusMessage(
+                        for: output.failedCompilationAttempts,
+                        bundle: bundle
+                    )
+                    : nil
+                if let storedJob = translationJob(id: jobID) {
+                    storedJob.attachmentID = translatedAttachment?.id ?? sourceAttachment.id
+                    storedJob.progress = output.pdfCompilationFailed ? 0.92 : 1
+                    storedJob.state = output.pdfCompilationFailed ? .failed : .completed
+                    storedJob.lastError = compilationFailureMessage
+                    storedJob.modifiedAt = Date()
+                }
+                try modelContext.save()
+
+                latexTranslationErrorLogURL = ReadPaperLaTeXCompilationDiagnostics.preferredLogURL(
+                    from: output.failedCompilationAttempts
+                )
+                translationProgress = nil
+                if translatedAttachment != nil {
+                    readerMode = pdfAttachment == nil ? .translatedPDF : .bilingualPDF
+                    pdfReloadToken += 1
+                }
+                statusMessage = compilationFailureMessage
+                    ?? String(localized: "LaTeX translation completed.", bundle: bundle)
+            } catch is CancellationError {
+                translationProgress = nil
+                finishLaTeXJob(
+                    id: jobID,
+                    state: .failed,
+                    error: String(localized: "Translation cancelled.", bundle: bundle)
+                )
+                statusMessage = String(localized: "Translation cancelled.", bundle: bundle)
+            } catch {
+                let message = ReadPaperLaTeXErrorPresentation.message(for: error, bundle: bundle)
+                finishLaTeXJob(id: jobID, state: .failed, error: message)
+                translationProgress = nil
+                pdfTranslationErrorLogURL = nil
+                statusMessage = message
+            }
+            isWorking = false
+            isCancelling = false
+            translationTask = nil
+        }
+    }
+
+    private func applyLaTeXProgress(_ update: ReadPaperLaTeXProgressUpdate, jobID: UUID) {
+        let percentage = Int((update.fractionCompleted * 100).rounded())
+        let summary: String
+        if let completed = update.completedUnits,
+           let total = update.totalUnits,
+           total > 0 {
+            summary = "\(completed)/\(total)"
+        } else {
+            summary = "\(percentage)%"
+        }
+        translationProgress = TranslationProgressStatus(
+            completed: update.fractionCompleted,
+            total: 1,
+            summary: summary
+        )
+        statusMessage = update.statusMessage(bundle: bundle)
+
+        guard let job = translationJob(id: jobID) else { return }
+        job.progress = update.fractionCompleted
+        if let completed = update.completedUnits {
+            job.processedSegments = completed
+        }
+        if let total = update.totalUnits {
+            job.totalSegments = total
+        }
+        job.modifiedAt = Date()
+        try? modelContext.save()
+    }
+
+    private func finishLaTeXJob(id: UUID, state: TranslationJobState, error: String?) {
+        guard let job = translationJob(id: id) else { return }
+        job.state = state
+        job.lastError = error
+        job.modifiedAt = Date()
+        try? modelContext.save()
+    }
+
+    private func translationJob(id: UUID) -> TranslationJob? {
+        guard let jobs = try? modelContext.fetch(FetchDescriptor<TranslationJob>()) else {
+            return nil
+        }
+        return jobs.first { $0.id == id }
+    }
+
     private func translatePDF() {
         guard let pdfAttachment else { return }
 
@@ -859,6 +1679,9 @@ struct ReaderPaneView: View {
     private func startPDFTranslation(scope: PDFTranslationScope) {
         guard let paper, let pdfAttachment, let settings else { return }
         let preferences = TranslationPreferencesSnapshot(settings)
+        let attachmentToReplace = isFullPDFTranslationComplete
+            ? translatedPDFAttachment
+            : nil
         let pageRange: ClosedRange<Int>? = {
             switch scope {
             case .firstPages(let count):
@@ -870,6 +1693,8 @@ struct ReaderPaneView: View {
 
         translationProgress = nil
         pdfTranslationErrorLogURL = nil
+        pdfTranslationDiagnosticsNoticeID = nil
+        latexTranslationErrorLogURL = nil
         isWorking = true
         isCancelling = false
         statusMessage = String(localized: "Running BabelDOC...", bundle: bundle)
@@ -881,25 +1706,32 @@ struct ReaderPaneView: View {
                     modelContext: modelContext
                 )
                 let toolManager = BabelDocToolManager()
-                if try await toolManager.needsInstallOrRepair() {
-                    statusMessage = String(localized: "Installing BabelDOC...", bundle: bundle)
-                    let installResult = try await toolManager.installOrUpdateBabelDOC(version: preferences.babelDocVersion)
-                    try Task.checkCancellation()
-                    guard installResult.exitCode == 0 else {
-                        throw BabelDocRunError.failed(installResult.combinedOutput)
-                    }
-                }
+                let nativeTool = try toolManager.nativeToolPaths()
                 statusMessage = String(localized: "Translating PDF with BabelDOC...", bundle: bundle)
                 let outputDirectory = try PaperFileStore().translationsDirectory(for: paper)
-                let toolEnvironment = try toolManager.environment()
-                let translated = try await BabelDocRunner().translatePDF(
+                let toolEnvironment = try toolManager.nativeEnvironment(apiKey: resolvedRoute.apiKey)
+                let arxivIdentifier = paper.arxivID.map {
+                    ReadPaperArXivIdentifier.resolving(id: $0, version: paper.arxivVersion)
+                }
+                let semanticHints = try await BabelDocSemanticHintService().prepareIfAvailable(
+                    isEnabled: babelDocSemanticHintsEnabled,
+                    paperID: paper.id,
+                    arxivIdentifier: arxivIdentifier
+                ) { update in
+                    Task { @MainActor in
+                        guard isWorking, !isCancelling else { return }
+                        statusMessage = update.localizedMessage
+                    }
+                }
+                let translationResult = try await BabelDocRunner().translatePDFNative(
                     inputPDF: pdfAttachment.fileURL,
                     outputDirectory: outputDirectory,
                     preferences: preferences,
                     route: resolvedRoute.snapshot,
                     apiKey: resolvedRoute.apiKey,
-                    babelDocPythonExecutable: try toolManager.babelDocPythonExecutableURL(),
-                    bridgeScript: try toolManager.ensureProgressBridgeScript(),
+                    tool: nativeTool,
+                    documentTitle: paper.title,
+                    semanticHintsURL: semanticHints?.fileURL,
                     pageRange: pageRange,
                     environment: toolEnvironment,
                     onStatusUpdate: { message in
@@ -922,6 +1754,7 @@ struct ReaderPaneView: View {
                         }
                     }
                 )
+                let translated = translationResult.outputPDF
                 try Task.checkCancellation()
                 let translatedLastPage: Int? = {
                     switch scope {
@@ -931,18 +1764,41 @@ struct ReaderPaneView: View {
                         return nil
                     }
                 }()
-                modelContext.insert(PaperAttachment(
-                    paperID: paper.id,
-                    kind: .translatedPDF,
-                    source: .babeldoc,
-                    filename: translated.lastPathComponent,
-                    filePath: translated.path,
-                    translatedLastPage: translatedLastPage
-                ))
+                let previousTranslationURL: URL?
+                if let attachmentToReplace {
+                    previousTranslationURL = attachmentToReplace.fileURL
+                    attachmentToReplace.source = .babeldoc
+                    attachmentToReplace.filename = translated.lastPathComponent
+                    attachmentToReplace.filePath = translated.path
+                    attachmentToReplace.translatedLastPage = translatedLastPage
+                } else {
+                    previousTranslationURL = nil
+                    modelContext.insert(PaperAttachment(
+                        paperID: paper.id,
+                        kind: .translatedPDF,
+                        source: .babeldoc,
+                        filename: translated.lastPathComponent,
+                        filePath: translated.path,
+                        translatedLastPage: translatedLastPage
+                    ))
+                }
                 try modelContext.save()
+                if let previousTranslationURL,
+                   previousTranslationURL.standardizedFileURL != translated.standardizedFileURL {
+                    try? FileManager.default.removeItem(at: previousTranslationURL)
+                    try? FileManager.default.removeItem(
+                        at: BabelDocRunner.diagnosticsURL(for: previousTranslationURL)
+                    )
+                }
+                pdfReloadToken += 1
                 readerMode = .bilingualPDF
                 translationProgress = nil
-                statusMessage = String(localized: "PDF translation completed.", bundle: bundle)
+                pdfTranslationErrorLogURL = translationResult.diagnosticsLogURL
+                pdfTranslationDiagnosticsNoticeID = pdfTranslationNoticeID(
+                    outputPDF: translated,
+                    diagnostics: translationResult.diagnostics
+                )
+                statusMessage = pdfTranslationCompletionMessage(translationResult.diagnostics)
             } catch is CancellationError {
                 translationProgress = nil
                 pdfTranslationErrorLogURL = nil
@@ -967,6 +1823,8 @@ struct ReaderPaneView: View {
 
         translationProgress = nil
         pdfTranslationErrorLogURL = nil
+        pdfTranslationDiagnosticsNoticeID = nil
+        latexTranslationErrorLogURL = nil
         isWorking = true
         isCancelling = false
         statusMessage = String(localized: "Running BabelDOC...", bundle: bundle)
@@ -978,21 +1836,28 @@ struct ReaderPaneView: View {
                     modelContext: modelContext
                 )
                 let toolManager = BabelDocToolManager()
-                if try await toolManager.needsInstallOrRepair() {
-                    statusMessage = String(localized: "Installing BabelDOC...", bundle: bundle)
-                    let installResult = try await toolManager.installOrUpdateBabelDOC(version: preferences.babelDocVersion)
-                    try Task.checkCancellation()
-                    guard installResult.exitCode == 0 else {
-                        throw BabelDocRunError.failed(installResult.combinedOutput)
-                    }
-                }
+                let nativeTool = try toolManager.nativeToolPaths()
                 statusMessage = String(localized: "Translating PDF with BabelDOC...", bundle: bundle)
                 let outputDirectory = try PaperFileStore().translationsDirectory(for: paper)
-                let toolEnvironment = try toolManager.environment()
+                let toolEnvironment = try toolManager.nativeEnvironment(apiKey: resolvedRoute.apiKey)
+                let arxivIdentifier = paper.arxivID.map {
+                    ReadPaperArXivIdentifier.resolving(id: $0, version: paper.arxivVersion)
+                }
+                let semanticHints = try await BabelDocSemanticHintService().prepareIfAvailable(
+                    isEnabled: babelDocSemanticHintsEnabled,
+                    paperID: paper.id,
+                    arxivIdentifier: arxivIdentifier
+                ) { update in
+                    Task { @MainActor in
+                        guard isWorking, !isCancelling else { return }
+                        statusMessage = update.localizedMessage
+                    }
+                }
 
                 guard let existingDoc = PDFDocument(url: existingAttachment.fileURL) else {
                     throw PDFMergerError.failedToOpenFile(existingAttachment.fileURL.path)
                 }
+                TranslatedPDFPageBoundsNormalizer.normalizeBounds(in: existingDoc)
                 let trimmedExisting: PDFDocument = {
                     let doc = PDFDocument()
                     let pageCount = min(currentLastPage, existingDoc.pageCount)
@@ -1003,14 +1868,15 @@ struct ReaderPaneView: View {
                     return doc
                 }()
 
-                let incrementPDF = try await BabelDocRunner().translatePDF(
+                let incrementResult = try await BabelDocRunner().translatePDFNative(
                     inputPDF: pdfAttachment.fileURL,
                     outputDirectory: outputDirectory,
                     preferences: preferences,
                     route: resolvedRoute.snapshot,
                     apiKey: resolvedRoute.apiKey,
-                    babelDocPythonExecutable: try toolManager.babelDocPythonExecutableURL(),
-                    bridgeScript: try toolManager.ensureProgressBridgeScript(),
+                    tool: nativeTool,
+                    documentTitle: paper.title,
+                    semanticHintsURL: semanticHints?.fileURL,
                     pageRange: pageRange,
                     environment: toolEnvironment,
                     onStatusUpdate: { message in
@@ -1033,17 +1899,44 @@ struct ReaderPaneView: View {
                         }
                     }
                 )
+                let incrementPDF = incrementResult.outputPDF
                 try Task.checkCancellation()
 
                 let mergedFilename = "merged-\(nextBatch)-\(UUID().uuidString.prefix(8)).pdf"
                 let mergedURL = outputDirectory.appendingPathComponent(mergedFilename)
                 let _ = try PDFMerger.merge(existing: trimmedExisting, increment: incrementPDF, output: mergedURL)
 
+                let existingDiagnostics = try? BabelDocRunner.readDiagnostics(for: existingAttachment.fileURL)
+                let combinedDiagnostics: BabelDocTranslationDiagnostics? = {
+                    switch (existingDiagnostics, incrementResult.diagnostics) {
+                    case let (existing?, increment?):
+                        return existing.merging(increment)
+                    case let (existing?, nil):
+                        return existing
+                    case let (nil, increment?):
+                        return increment
+                    case (nil, nil):
+                        return nil
+                    }
+                }()
+                let mergedDiagnosticsURL: URL?
+                if let combinedDiagnostics, combinedDiagnostics.isDegraded {
+                    mergedDiagnosticsURL = try BabelDocRunner.writeDiagnostics(
+                        combinedDiagnostics,
+                        for: mergedURL
+                    )
+                } else {
+                    mergedDiagnosticsURL = nil
+                }
+
                 // Clean up old merged PDF file to prevent storage bloat
                 let oldFileURL = existingAttachment.fileURL
                 if oldFileURL != mergedURL {
                     try? FileManager.default.removeItem(at: oldFileURL)
+                    try? FileManager.default.removeItem(at: BabelDocRunner.diagnosticsURL(for: oldFileURL))
                 }
+                try? FileManager.default.removeItem(at: incrementPDF)
+                try? FileManager.default.removeItem(at: BabelDocRunner.diagnosticsURL(for: incrementPDF))
 
                 existingAttachment.filePath = mergedURL.path
                 existingAttachment.filename = mergedFilename
@@ -1052,7 +1945,12 @@ struct ReaderPaneView: View {
 
                 pdfReloadToken += 1
                 translationProgress = nil
-                statusMessage = String(localized: "PDF translation completed.", bundle: bundle)
+                pdfTranslationErrorLogURL = mergedDiagnosticsURL
+                pdfTranslationDiagnosticsNoticeID = pdfTranslationNoticeID(
+                    outputPDF: mergedURL,
+                    diagnostics: combinedDiagnostics
+                )
+                statusMessage = pdfTranslationCompletionMessage(combinedDiagnostics)
             } catch is CancellationError {
                 translationProgress = nil
                 pdfTranslationErrorLogURL = nil
@@ -1073,8 +1971,75 @@ struct ReaderPaneView: View {
         translationTask?.cancel()
     }
 
+    private func pdfTranslationCompletionMessage(
+        _ diagnostics: BabelDocTranslationDiagnostics?
+    ) -> String {
+        guard let diagnostics, diagnostics.isDegraded else {
+            return String(localized: "PDF translation completed.", bundle: bundle)
+        }
+        return AppLocalization.format(
+            "PDF translation completed with warnings: translated %d/%d text blocks; %d failed and kept their original layout.",
+            bundle: bundle,
+            diagnostics.translatedCount,
+            diagnostics.candidateCount,
+            diagnostics.failedCount
+        )
+    }
+
+    private func restorePDFTranslationDiagnostics() {
+        guard !isWorking else { return }
+        let wasShowingDiagnosticsNotice = pdfTranslationDiagnosticsNoticeID != nil
+        pdfTranslationDiagnosticsNoticeID = nil
+
+        guard let paperID = paper?.id,
+              let translatedPDF = translatedPDFAttachment?.fileURL else {
+            pdfTranslationErrorLogURL = nil
+            if wasShowingDiagnosticsNotice {
+                statusMessage = nil
+            }
+            return
+        }
+        let diagnosticsURL = BabelDocRunner.diagnosticsURL(for: translatedPDF)
+        guard FileManager.default.fileExists(atPath: diagnosticsURL.path),
+              let diagnostics = try? BabelDocRunner.readDiagnostics(for: translatedPDF),
+              diagnostics.isDegraded else {
+            pdfTranslationErrorLogURL = nil
+            if wasShowingDiagnosticsNotice {
+                statusMessage = nil
+            }
+            return
+        }
+
+        let noticeStore = PDFTranslationDiagnosticsNoticeStore()
+        let noticeID = noticeStore.noticeID(
+            outputPDF: translatedPDF,
+            diagnostics: diagnostics
+        )
+        guard !noticeStore.isDismissed(paperID: paperID, noticeID: noticeID) else {
+            pdfTranslationErrorLogURL = nil
+            statusMessage = nil
+            return
+        }
+
+        pdfTranslationErrorLogURL = diagnosticsURL
+        pdfTranslationDiagnosticsNoticeID = noticeID
+        statusMessage = pdfTranslationCompletionMessage(diagnostics)
+    }
+
+    private func pdfTranslationNoticeID(
+        outputPDF: URL,
+        diagnostics: BabelDocTranslationDiagnostics?
+    ) -> String? {
+        guard let diagnostics, diagnostics.isDegraded else { return nil }
+        return PDFTranslationDiagnosticsNoticeStore().noticeID(
+            outputPDF: outputPDF,
+            diagnostics: diagnostics
+        )
+    }
+
     private func handleTranslationError(_ error: Error) {
         translationProgress = nil
+        pdfTranslationDiagnosticsNoticeID = nil
         if let babelDocError = error as? BabelDocRunError {
             pdfTranslationErrorLogURL = babelDocError.logURL
         } else {
@@ -1094,45 +2059,65 @@ struct ReaderPaneView: View {
         NSPasteboard.general.setString(pdfTranslationErrorLogURL.path, forType: .string)
     }
 
+    private func revealLaTeXTranslationErrorLog() {
+        guard let latexTranslationErrorLogURL else { return }
+        NSWorkspace.shared.activateFileViewerSelecting([latexTranslationErrorLogURL])
+    }
+
+    private func revealTranslatedLaTeXSource() {
+        guard let translatedLaTeXSourceAttachment else { return }
+        NSWorkspace.shared.activateFileViewerSelecting([translatedLaTeXSourceAttachment.fileURL])
+    }
+
     private func dismissStatusMessage() {
         guard !isWorking else { return }
+        if let paperID = paper?.id,
+           let noticeID = pdfTranslationDiagnosticsNoticeID {
+            PDFTranslationDiagnosticsNoticeStore().dismiss(
+                paperID: paperID,
+                noticeID: noticeID
+            )
+        }
         statusMessage = nil
         translationProgress = nil
         pdfTranslationErrorLogURL = nil
+        pdfTranslationDiagnosticsNoticeID = nil
     }
 
     private var translateMoreBanner: some View {
         let lastPage = translatedPDFAttachment?.translatedLastPage ?? 0
         let total = originalPDFPageCount ?? 0
         let nextEnd = min(lastPage + pdfTranslationBatchSize, total)
-        return HStack(spacing: 8) {
-            Text(AppLocalization.format("Translated pages 1–%@ of %@.", "\(lastPage)", "\(total)"))
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            Spacer(minLength: 0)
-            Button {
-                extendPDFTranslation()
-            } label: {
-                Text(AppLocalization.format("Translate pages %@–%@", "\(lastPage + 1)", "\(nextEnd)"))
+        return ReadPaperGlassEffectContainer(spacing: 8) {
+            HStack(spacing: 8) {
+                Text(AppLocalization.format("Translated pages 1–%@ of %@.", "\(lastPage)", "\(total)"))
                     .font(.caption)
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-
-            if nextEnd < total {
+                    .foregroundStyle(.secondary)
+                Spacer(minLength: 0)
                 Button {
-                    extendPDFTranslation(to: total)
+                    extendPDFTranslation()
                 } label: {
-                    Text("Translate All", bundle: bundle)
+                    Text(AppLocalization.format("Translate pages %@–%@", "\(lastPage + 1)", "\(nextEnd)"))
                         .font(.caption)
                 }
-                .buttonStyle(.bordered)
+                .readPaperGlassButtonStyle(prominent: true)
                 .controlSize(.small)
+
+                if nextEnd < total {
+                    Button {
+                        extendPDFTranslation(to: total)
+                    } label: {
+                        Text("Translate All", bundle: bundle)
+                            .font(.caption)
+                    }
+                    .readPaperGlassButtonStyle()
+                    .controlSize(.small)
+                }
             }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
-        .background(Color(nsColor: .windowBackgroundColor))
+        .background(ReadPaperAppearanceHeaderSurface(role: .reader))
     }
 
     private func syncReaderModeWithAvailableContent() {
@@ -1161,17 +2146,26 @@ struct ReaderPaneView: View {
         label: String,
         emptyTitle: String,
         emptyDescription: String,
-        reloadToken: Int = 0
+        reloadToken: Int = 0,
+        debugRegionSelectionEnabled: Bool = false,
+        onDebugRegionSelected: ((PDFDebugRegionSelection) -> Void)? = nil
     ) -> some View {
         if fileURL != nil {
             PDFDisplaySurface(appearance: pdfDisplayAppearance) {
                 PDFReaderView(
                     fileURL: fileURL,
+                    paperID: paper?.id,
                     attachmentID: attachmentID,
                     displayAppearance: pdfDisplayAppearance,
                     pageIndex: $pdfPageIndex,
                     reloadToken: reloadToken,
-                    onNoteSelectionChanged: handleNoteSelectionChange
+                    noteNavigationRequest: noteNavigationRequest,
+                    selectionAssistantHistoryAnchors: selectionAssistantHistoryAnchors,
+                    annotationSession: pdfAnnotationSession,
+                    onNoteSelectionChanged: handleNoteSelectionChange,
+                    onArxivLinkActivated: onArxivLinkActivated,
+                    debugRegionSelectionEnabled: debugRegionSelectionEnabled,
+                    onDebugRegionSelected: onDebugRegionSelected
                 )
             }
                 .overlay(alignment: .topLeading) {
@@ -1206,20 +2200,12 @@ struct ReaderPaneView: View {
     private var emptyReaderState: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 28) {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("READY TO READ", bundle: bundle)
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                        .tracking(1.2)
-
-                    Text("Build your local paper desk", bundle: bundle)
-                        .font(.system(size: 30, weight: .semibold, design: .rounded))
-
-                    Text("Import an arXiv paper, web page, or local PDF from the sidebar. Once the first paper is added, HTML, PDF, bilingual reading, and translation tools all appear here.", bundle: bundle)
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+                Text("Build your local paper desk", bundle: bundle)
+                    .font(.system(
+                        size: 30,
+                        weight: .semibold,
+                        design: pdfDisplayAppearance == .paper ? .serif : .rounded
+                    ))
 
                 LazyVGrid(
                     columns: [
@@ -1246,21 +2232,6 @@ struct ReaderPaneView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-                HStack(spacing: 12) {
-                    Image(systemName: "sidebar.left")
-                        .font(.title3)
-                        .foregroundStyle(.secondary)
-                        .frame(width: 36, height: 36)
-                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
-
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Start from the left sidebar", bundle: bundle)
-                            .font(.headline)
-                        Text("Use the + button in the library to create the first paper record.", bundle: bundle)
-                            .font(.callout)
-                            .foregroundStyle(.secondary)
-                    }
-                }
             }
             .padding(.horizontal, 32)
             .padding(.top, 28)
@@ -1269,7 +2240,7 @@ struct ReaderPaneView: View {
         }
         .scrollIndicators(.hidden)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(Color(nsColor: .windowBackgroundColor))
+        .background(ReadPaperAppearanceSurface(role: .reader))
     }
 
     private func emptyStateCard(
@@ -1280,9 +2251,22 @@ struct ReaderPaneView: View {
         VStack(alignment: .leading, spacing: 14) {
             Image(systemName: systemImage)
                 .font(.title2)
-                .foregroundStyle(.primary)
+                .foregroundStyle(
+                    pdfDisplayAppearance == .paper
+                        ? ReadPaperTheme.accentColor
+                        : Color.primary
+                )
                 .frame(width: 40, height: 40)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+                .background {
+                    if pdfDisplayAppearance == .paper {
+                        ReadPaperTheme.accentColor
+                            .opacity(0.10)
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                    } else {
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(.regularMaterial)
+                    }
+                }
 
             VStack(alignment: .leading, spacing: 6) {
                 Text(title)
@@ -1299,11 +2283,19 @@ struct ReaderPaneView: View {
         .padding(20)
         .background(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color(nsColor: .controlBackgroundColor))
+                .fill(
+                    pdfDisplayAppearance == .paper
+                        ? ReadPaperTheme.cardColor(scheme: colorScheme)
+                        : Color(nsColor: .controlBackgroundColor)
+                )
         )
         .overlay {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.06))
+                .strokeBorder(
+                    pdfDisplayAppearance == .paper
+                        ? ReadPaperTheme.cardBorderColor(scheme: colorScheme)
+                        : Color.primary.opacity(0.06)
+                )
         }
     }
 
@@ -1312,12 +2304,82 @@ struct ReaderPaneView: View {
             .font(.caption.weight(.semibold))
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6))
+            .readPaperGlassEffect(in: RoundedRectangle(cornerRadius: 6, style: .continuous))
             .padding(8)
     }
 
     private func handleNoteSelectionChange(_ selection: NoteSelectionContext?) {
         noteSelectionContext = selection
+        selectionAssistantDismissTask?.cancel()
+        selectionAssistantDismissTask = nil
+
+        if let selection {
+            isSelectionAssistantPinned = false
+            if let paper {
+                selectionAssistantInitialConversation = try? SelectionAssistantConversationStore()
+                    .conversation(
+                        paperID: paper.id,
+                        selectionIdentity: selection.selectionAssistantIdentity
+                    )
+            } else {
+                selectionAssistantInitialConversation = nil
+            }
+            selectionAssistantSelection = selection
+            return
+        }
+
+        guard isSelectionAssistantPinned == false else { return }
+        selectionAssistantDismissTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 350_000_000)
+            guard Task.isCancelled == false,
+                  isSelectionAssistantPinned == false else { return }
+            selectionAssistantSelection = nil
+            selectionAssistantInitialConversation = nil
+            selectionAssistantDismissTask = nil
+        }
+    }
+
+    private func pinSelectionAssistant() {
+        selectionAssistantDismissTask?.cancel()
+        selectionAssistantDismissTask = nil
+        if isSelectionAssistantPinned == false {
+            htmlNativeSelectionClearToken &+= 1
+        }
+        isSelectionAssistantPinned = true
+    }
+
+    private func handleHTMLSelectionAssistantDismissal() {
+        noteSelectionContext = nil
+        clearSelectionAssistant()
+    }
+
+    @MainActor
+    private func persistSelectionAssistantConversation(
+        _ snapshot: SelectionAssistantConversationSnapshot
+    ) {
+        guard let paper else { return }
+        try? SelectionAssistantConversationStore().save(snapshot, paperID: paper.id)
+        refreshSelectionAssistantHistoryAnchors()
+    }
+
+    @MainActor
+    private func refreshSelectionAssistantHistoryAnchors() {
+        guard let paper else {
+            selectionAssistantHistoryAnchors = []
+            return
+        }
+        selectionAssistantHistoryAnchors = (try? SelectionAssistantConversationStore()
+            .historyAnchors(paperID: paper.id)) ?? []
+    }
+
+    private func clearSelectionAssistant() {
+        selectionAssistantDismissTask?.cancel()
+        selectionAssistantDismissTask = nil
+        selectionAssistantProgress = nil
+        selectionAssistantInitialConversation = nil
+        isSelectionAssistantPinned = false
+        selectionAssistantSelection = nil
+        htmlSelectionHighlightResetToken &+= 1
     }
 
     private func revealNoteAnchorIfNeeded() {
@@ -1397,9 +2459,24 @@ struct ReaderPaneView: View {
         }
     }
 
-    private func persistReadingStateIfNeeded() {
-        guard !suspendReadingStatePersistence, let paper else { return }
-        guard htmlAttachment != nil || pdfAttachment != nil || translatedPDFAttachment != nil else { return }
+    private func refreshOriginalPDFPageCount(for request: PDFPageCountRequest?) async {
+        guard let request else {
+            originalPDFPageCount = nil
+            return
+        }
+
+        let pageCount = await Task.detached(priority: .utility) {
+            CGPDFDocument(request.fileURL as CFURL)?.numberOfPages
+        }.value
+        guard originalPDFPageCountRequest == request else { return }
+        originalPDFPageCount = pageCount
+    }
+
+    private func readingStatePersistenceSnapshot() -> ReadingStatePersistenceSnapshot? {
+        guard !suspendReadingStatePersistence, let paper else { return nil }
+        guard htmlAttachment != nil || pdfAttachment != nil || translatedPDFAttachment != nil else {
+            return nil
+        }
 
         let resolvedMode = ReadingStateStore.resolvedReaderMode(
             preferredMode: readerMode,
@@ -1407,15 +2484,86 @@ struct ReaderPaneView: View {
             hasPDF: pdfAttachment != nil,
             hasTranslatedPDF: translatedPDFAttachment != nil
         )
-        let attachmentID = attachmentID(for: resolvedMode)
+        return ReadingStatePersistenceSnapshot(
+            paperID: paper.id,
+            attachmentID: attachmentID(for: resolvedMode),
+            readerMode: resolvedMode,
+            pageIndex: pdfPageIndex,
+            scrollRatio: resolvedMode == .html ? htmlScrollRatio : 0
+        )
+    }
+
+    private func scheduleReadingStatePersistence() {
+        guard let snapshot = readingStatePersistenceSnapshot() else { return }
+        guard pendingReadingStatePersistence != snapshot else { return }
+
+        readingStatePersistenceTask?.cancel()
+        pendingReadingStatePersistence = snapshot
+        readingStatePersistenceTask = Task { @MainActor in
+            do {
+                try await Task.sleep(for: Self.readingStatePersistenceDelay)
+            } catch {
+                return
+            }
+            guard Task.isCancelled == false,
+                  pendingReadingStatePersistence == snapshot else {
+                return
+            }
+            pendingReadingStatePersistence = nil
+            readingStatePersistenceTask = nil
+            persistReadingState(snapshot)
+        }
+    }
+
+    private func persistReadingStateImmediatelyIfNeeded() {
+        readingStatePersistenceTask?.cancel()
+        readingStatePersistenceTask = nil
+        pendingReadingStatePersistence = nil
+        guard let snapshot = readingStatePersistenceSnapshot() else { return }
+        persistReadingState(snapshot)
+    }
+
+    private func flushPendingReadingStatePersistence() {
+        readingStatePersistenceTask?.cancel()
+        readingStatePersistenceTask = nil
+        guard let snapshot = pendingReadingStatePersistence else { return }
+        pendingReadingStatePersistence = nil
+        persistReadingState(snapshot)
+    }
+
+    private func flushReadingStatePersistence() {
+        if pendingReadingStatePersistence != nil {
+            flushPendingReadingStatePersistence()
+        } else {
+            persistReadingStateImmediatelyIfNeeded()
+        }
+    }
+
+    private func persistReadingState(_ snapshot: ReadingStatePersistenceSnapshot) {
+        let signpostID = OSSignpostID(log: Self.performanceLog)
+        os_signpost(
+            .begin,
+            log: Self.performanceLog,
+            name: "Persist Reading State",
+            signpostID: signpostID
+        )
+        defer {
+            os_signpost(
+                .end,
+                log: Self.performanceLog,
+                name: "Persist Reading State",
+                signpostID: signpostID
+            )
+        }
 
         do {
             try ReadingStateStore().upsertState(
-                for: paper.id,
-                attachmentID: attachmentID,
-                readerMode: resolvedMode,
-                pageIndex: pdfPageIndex,
-                scrollRatio: resolvedMode == .html ? htmlScrollRatio : 0,
+                for: snapshot.paperID,
+                attachmentID: snapshot.attachmentID,
+                readerMode: snapshot.readerMode,
+                pageIndex: snapshot.pageIndex,
+                scrollRatio: snapshot.scrollRatio,
+                knownStatesByDescendingModificationDate: readingStates,
                 in: modelContext
             )
         } catch {

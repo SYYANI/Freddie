@@ -10,6 +10,7 @@ struct AddPaperSheet: View {
     @Binding var selectedPaperID: UUID?
 
     @State private var arxivInput = ""
+    @State private var includeArxivHTML = false
     @State private var webPageInput = ""
     @State private var isImporting = false
     @State private var arxivImportProgress: ArxivImportProgress?
@@ -29,6 +30,22 @@ struct AddPaperSheet: View {
                     text: $arxivInput
                 )
                     .textFieldStyle(.roundedBorder)
+                HStack(alignment: .center, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Download HTML version", bundle: bundle)
+                        Text("Adds a localized HTML copy for HTML reading and translation. Import may take longer.", bundle: bundle)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 12)
+
+                    Toggle("", isOn: $includeArxivHTML)
+                        .labelsHidden()
+                        .toggleStyle(.switch)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 4)
+                .disabled(isImporting)
                 Button(String(localized: "Import from arXiv", bundle: bundle)) {
                     importArxiv()
                 }
@@ -92,15 +109,17 @@ struct AddPaperSheet: View {
 
     private func importArxiv() {
         isImporting = true
-        arxivImportProgress = .resolvingInput()
+        arxivImportProgress = .resolvingInput(includesHTML: includeArxivHTML)
         webPageImportProgress = nil
         errorMessage = nil
         let input = arxivInput
+        let includeHTML = includeArxivHTML
         Task {
             do {
                 let paper = try await PaperImporter().importArxiv(
                     input,
-                    modelContext: modelContext
+                    modelContext: modelContext,
+                    includeHTML: includeHTML
                 ) { progress in
                     arxivImportProgress = progress
                 }

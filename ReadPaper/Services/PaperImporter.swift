@@ -2,42 +2,54 @@ import Foundation
 import PDFKit
 import SwiftData
 import SwiftSoup
+import WebKit
 
 @MainActor
 final class PaperImporter {
     private let fileStore: PaperFileStore
     private let arxivClient: ArxivClient
     private let htmlLocalizer: HTMLLocalizer
+    private let webPageHTMLRenderer: any WebPageHTMLRendering
     private let session: URLSession
+    private let fullTextSearchService: PaperFullTextSearchService
 
     init(
         fileStore: PaperFileStore = PaperFileStore(),
         arxivClient: ArxivClient = .shared,
         htmlLocalizer: HTMLLocalizer = HTMLLocalizer(),
-        session: URLSession = .shared
+        webPageHTMLRenderer: any WebPageHTMLRendering = WebKitWebPageHTMLRenderer(),
+        session: URLSession = .shared,
+        fullTextSearchService: PaperFullTextSearchService? = nil
     ) {
         self.fileStore = fileStore
         self.arxivClient = arxivClient
         self.htmlLocalizer = htmlLocalizer
+        self.webPageHTMLRenderer = webPageHTMLRenderer
         self.session = session
+        self.fullTextSearchService = fullTextSearchService
+            ?? PaperFullTextSearchService(fileStore: fileStore)
     }
 
     func importArxiv(
         _ rawValue: String,
         modelContext: ModelContext,
+        includeHTML: Bool = false,
         onProgress: ((ArxivImportProgress) -> Void)? = nil
     ) async throws -> Paper {
-        onProgress?(.resolvingInput())
+        onProgress?(.resolvingInput(includesHTML: includeHTML))
         let identifier = try ArxivClient.normalizeIdentifier(rawValue)
-        onProgress?(.resolvingInput(identifier: identifier.queryID))
+        onProgress?(.resolvingInput(identifier: identifier.queryID, includesHTML: includeHTML))
         let existingPapers = try modelContext.fetch(FetchDescriptor<Paper>())
         if let existing = existingPapers.first(where: { $0.arxivID == identifier.baseID }) {
             return existing
         }
 
-        onProgress?(.fetchingMetadata(for: identifier.queryID))
+        onProgress?(.fetchingMetadata(for: identifier.queryID, includesHTML: includeHTML))
         let metadata = try await arxivClient.fetchMetadata(for: rawValue)
-        onProgress?(.creatingLibraryEntry(title: metadata.title.isEmpty ? metadata.arxivID : metadata.title))
+        onProgress?(.creatingLibraryEntry(
+            title: metadata.title.isEmpty ? metadata.arxivID : metadata.title,
+            includesHTML: includeHTML
+        ))
         let paper = Paper(
             arxivID: metadata.arxivID,
             arxivVersion: metadata.arxivVersion,
@@ -54,7 +66,7 @@ final class PaperImporter {
         modelContext.insert(paper)
 
         if let pdfURL = metadata.pdfURL ?? URL(string: "https://arxiv.org/pdf/\(metadata.arxivID)") {
-            onProgress?(.downloadingPDF(for: metadata.arxivID))
+            onProgress?(.downloadingPDF(for: metadata.arxivID, includesHTML: includeHTML))
             let request = BrowserRequestHeaders.request(for: pdfURL, accept: .resource)
             let (data, response) = try await session.data(for: request)
             if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
@@ -70,12 +82,17 @@ final class PaperImporter {
             ))
         }
 
-        let htmlImported = await importArxivHTMLIfAvailable(
-            for: paper,
-            modelContext: modelContext,
-            onProgress: onProgress
-        )
-        onProgress?(.finalizing(htmlImported: htmlImported))
+        let htmlImported: Bool
+        if includeHTML {
+            htmlImported = await importArxivHTMLIfAvailable(
+                for: paper,
+                modelContext: modelContext,
+                onProgress: onProgress
+            )
+        } else {
+            htmlImported = false
+        }
+        onProgress?(.finalizing(htmlImported: htmlImported, includesHTML: includeHTML))
         try modelContext.save()
         AuthorExtractionService.extractAuthorsIfNeeded(for: paper, modelContext: modelContext)
         return paper
@@ -133,11 +150,13 @@ final class PaperImporter {
         onProgress?(.validatingURL(urlString: sourceURL.absoluteString))
 
         let existingPapers = try modelContext.fetch(FetchDescriptor<Paper>())
-        if let existing = existingPapers.first(where: { $0.htmlURLString == sourceURL.absoluteString }) {
+        let existing = existingPapers.first(where: { $0.htmlURLString == sourceURL.absoluteString })
+        if let existing, try hasUsableWebImport(for: existing, modelContext: modelContext) {
             return existing
         }
 
-        let paper = Paper(
+        let isNewPaper = existing == nil
+        let paper = existing ?? Paper(
             title: Self.fallbackWebPageTitle(for: sourceURL),
             htmlURLString: sourceURL.absoluteString
         )
@@ -156,16 +175,27 @@ final class PaperImporter {
                     data: data,
                     sourceURL: sourceURL,
                     paper: paper,
+                    insertPaper: isNewPaper,
                     modelContext: modelContext,
                     onProgress: onProgress
                 )
+            }
+
+            var htmlData = data
+            let originalHTML = String(data: data, encoding: .utf8) ?? String(decoding: data, as: UTF8.self)
+            if htmlLocalizer.requiresBrowserRendering(originalHTML) {
+                let renderedHTML = try await webPageHTMLRenderer.renderHTML(for: request)
+                guard htmlLocalizer.shouldUseRenderedHTML(renderedHTML, insteadOf: originalHTML) else {
+                    throw URLError(.cannotDecodeContentData)
+                }
+                htmlData = Data(renderedHTML.utf8)
             }
 
             let outputURL = try fileStore.directory(for: paper.id).appendingPathComponent("paper.html")
             let resourcesDirectory = try fileStore.resourcesDirectory(for: paper)
 
             let htmlURL = try await htmlLocalizer.localize(
-                htmlData: data,
+                htmlData: htmlData,
                 sourceURL: sourceURL,
                 outputURL: outputURL,
                 resourcesDirectory: resourcesDirectory
@@ -173,21 +203,29 @@ final class PaperImporter {
             paper.title = Self.extractHTMLTitle(from: htmlURL) ?? paper.title
             onProgress?(.creatingLibraryEntry(title: paper.title))
 
-            modelContext.insert(paper)
-            modelContext.insert(PaperAttachment(
-                paperID: paper.id,
+            if isNewPaper {
+                modelContext.insert(paper)
+            }
+            let htmlAttachment = try upsertWebPageAttachment(
+                for: paper,
                 kind: .html,
-                source: .webPage,
-                filename: htmlURL.lastPathComponent,
-                filePath: htmlURL.path
-            ))
+                fileURL: htmlURL,
+                modelContext: modelContext
+            )
+            _ = try? fullTextSearchService.rebuild(
+                paper: paper,
+                attachments: [htmlAttachment]
+            )
 
             onProgress?(.finalizing())
+            paper.modifiedAt = Date()
             try modelContext.save()
             AuthorExtractionService.extractAuthorsIfNeeded(for: paper, modelContext: modelContext)
             return paper
         } catch {
-            try? fileStore.removeDirectory(for: paper.id)
+            if isNewPaper {
+                try? fileStore.removeDirectory(for: paper.id)
+            }
             throw error
         }
     }
@@ -196,6 +234,7 @@ final class PaperImporter {
         data: Data,
         sourceURL: URL,
         paper: Paper,
+        insertPaper: Bool,
         modelContext: ModelContext,
         onProgress: ((WebPageImportProgress) -> Void)?
     ) async throws -> Paper {
@@ -228,19 +267,75 @@ final class PaperImporter {
 
         onProgress?(.creatingLibraryEntry(title: paper.title))
 
-        modelContext.insert(paper)
-        modelContext.insert(PaperAttachment(
-            paperID: paper.id,
+        if insertPaper {
+            modelContext.insert(paper)
+        }
+        _ = try upsertWebPageAttachment(
+            for: paper,
             kind: .pdf,
-            source: .webPage,
-            filename: pdfFile.lastPathComponent,
-            filePath: pdfFile.path
-        ))
+            fileURL: pdfFile,
+            modelContext: modelContext
+        )
 
         onProgress?(.finalizing())
+        paper.modifiedAt = Date()
         try modelContext.save()
         AuthorExtractionService.extractAuthorsIfNeeded(for: paper, modelContext: modelContext)
         return paper
+    }
+
+    private func hasUsableWebImport(for paper: Paper, modelContext: ModelContext) throws -> Bool {
+        let attachments = try modelContext.fetch(FetchDescriptor<PaperAttachment>())
+            .filter { $0.paperID == paper.id && $0.source == .webPage }
+
+        for attachment in attachments {
+            let fileURL = attachment.resolvedFileURL(fileStore: fileStore)
+            guard fileStore.fileManager.fileExists(atPath: fileURL.path) else { continue }
+
+            switch attachment.kind {
+            case .html:
+                guard let html = try? String(contentsOf: fileURL, encoding: .utf8) else { continue }
+                if htmlLocalizer.hasMeaningfulHTMLContent(html) {
+                    return true
+                }
+            case .pdf:
+                if let attributes = try? fileStore.fileManager.attributesOfItem(atPath: fileURL.path),
+                   let size = attributes[.size] as? NSNumber,
+                   size.intValue > 0 {
+                    return true
+                }
+            default:
+                continue
+            }
+        }
+
+        return false
+    }
+
+    private func upsertWebPageAttachment(
+        for paper: Paper,
+        kind: AttachmentKind,
+        fileURL: URL,
+        modelContext: ModelContext
+    ) throws -> PaperAttachment {
+        let attachments = try modelContext.fetch(FetchDescriptor<PaperAttachment>())
+        if let attachment = attachments.first(where: {
+            $0.paperID == paper.id && $0.source == .webPage && $0.kind == kind
+        }) {
+            attachment.filename = fileURL.lastPathComponent
+            attachment.filePath = fileURL.path
+            return attachment
+        } else {
+            let attachment = PaperAttachment(
+                paperID: paper.id,
+                kind: kind,
+                source: .webPage,
+                filename: fileURL.lastPathComponent,
+                filePath: fileURL.path
+            )
+            modelContext.insert(attachment)
+            return attachment
+        }
     }
 
     func importArxivHTMLIfAvailable(
@@ -274,13 +369,18 @@ final class PaperImporter {
                     resourcesDirectory: resourcesDirectory
                 )
                 paper.htmlURLString = candidate.1.absoluteString
-                modelContext.insert(PaperAttachment(
+                let htmlAttachment = PaperAttachment(
                     paperID: paper.id,
                     kind: .html,
                     source: .arxivHTML,
                     filename: htmlURL.lastPathComponent,
                     filePath: htmlURL.path
-                ))
+                )
+                modelContext.insert(htmlAttachment)
+                _ = try? fullTextSearchService.rebuild(
+                    paper: paper,
+                    attachments: [htmlAttachment]
+                )
                 try? modelContext.save()
                 return true
             } catch {
@@ -424,5 +524,154 @@ final class PaperImporter {
             return nil
         }
         return title
+    }
+}
+
+@MainActor
+protocol WebPageHTMLRendering: AnyObject {
+    func renderHTML(for request: URLRequest) async throws -> String
+}
+
+@MainActor
+final class WebKitWebPageHTMLRenderer: NSObject, WebPageHTMLRendering, WKNavigationDelegate {
+    private let timeout: TimeInterval
+    private var continuation: CheckedContinuation<String, Error>?
+    private var webView: WKWebView?
+    private var timeoutWorkItem: DispatchWorkItem?
+    private var isCapturingDOM = false
+
+    init(timeout: TimeInterval = 20) {
+        self.timeout = timeout
+    }
+
+    func renderHTML(for request: URLRequest) async throws -> String {
+        guard continuation == nil else {
+            throw URLError(.cannotLoadFromNetwork)
+        }
+        try Task.checkCancellation()
+
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                self.continuation = continuation
+
+                let configuration = WKWebViewConfiguration()
+                configuration.websiteDataStore = .nonPersistent()
+                configuration.preferences.javaScriptCanOpenWindowsAutomatically = false
+                configuration.mediaTypesRequiringUserActionForPlayback = .all
+
+                let webView = WKWebView(frame: .zero, configuration: configuration)
+                webView.navigationDelegate = self
+                webView.customUserAgent = BrowserRequestHeaders.chromeUserAgent
+                self.webView = webView
+
+                let timeoutWorkItem = DispatchWorkItem { [weak self] in
+                    self?.finish(with: .failure(URLError(.timedOut)))
+                }
+                self.timeoutWorkItem = timeoutWorkItem
+                DispatchQueue.main.asyncAfter(
+                    deadline: .now() + timeout,
+                    execute: timeoutWorkItem
+                )
+
+                webView.load(request)
+            }
+        } onCancel: {
+            Task { @MainActor [weak self] in
+                self?.finish(with: .failure(CancellationError()))
+            }
+        }
+    }
+
+    func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
+        captureDOM(from: webView)
+    }
+
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        captureDOM(from: webView)
+    }
+
+    private func captureDOM(from webView: WKWebView) {
+        guard !isCapturingDOM else { return }
+        isCapturingDOM = true
+
+        let script = """
+        new Promise(resolve => {
+            const startedAt = Date.now();
+            let lastHTML = '';
+            let stableSince = Date.now();
+
+            const sample = () => {
+                const html = document.documentElement?.outerHTML || '';
+                if (html !== lastHTML) {
+                    lastHTML = html;
+                    stableSince = Date.now();
+                }
+                const textLength = (document.body?.innerText || '').trim().length;
+                if ((textLength >= 40 && Date.now() - stableSince >= 300) || Date.now() - startedAt >= 10000) {
+                    resolve(html);
+                    return;
+                }
+                setTimeout(sample, 100);
+            };
+
+            requestAnimationFrame(() => requestAnimationFrame(sample));
+        });
+        """
+
+        webView.evaluateJavaScript(script) { [weak self, weak webView] value, error in
+            Task { @MainActor in
+                guard let self, let webView else { return }
+                self.isCapturingDOM = false
+                if error != nil {
+                    self.captureCurrentDOM(from: webView)
+                } else if let html = value as? String, !html.isEmpty {
+                    self.finish(with: .success(html))
+                } else {
+                    self.finish(with: .failure(URLError(.cannotDecodeContentData)))
+                }
+            }
+        }
+    }
+
+    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+        captureCurrentDOM(from: webView)
+    }
+
+    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+        captureCurrentDOM(from: webView)
+    }
+
+    private func captureCurrentDOM(from webView: WKWebView) {
+        let script = """
+        (() => {
+            const textLength = (document.body?.innerText || '').trim().length;
+            return textLength >= 40 ? (document.documentElement?.outerHTML || '') : null;
+        })();
+        """
+        webView.evaluateJavaScript(script) { [weak self] value, _ in
+            Task { @MainActor in
+                guard let self else { return }
+                if let html = value as? String, !html.isEmpty {
+                    self.finish(with: .success(html))
+                } else {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self, weak webView] in
+                        guard let self, let webView, self.continuation != nil else { return }
+                        self.captureDOM(from: webView)
+                    }
+                }
+            }
+        }
+    }
+
+    private func finish(with result: Result<String, Error>) {
+        guard let continuation else { return }
+        self.continuation = nil
+        timeoutWorkItem?.cancel()
+        timeoutWorkItem = nil
+        isCapturingDOM = false
+        webView?.navigationDelegate = nil
+        webView?.stopLoading()
+        webView = nil
+        continuation.resume(with: result)
     }
 }

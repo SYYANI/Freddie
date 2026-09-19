@@ -1,9 +1,12 @@
+import AppKit
 import SwiftData
 import SwiftUI
 
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.localizationBundle) private var bundle
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.pdfDisplayAppearance) private var displayAppearance
     @Query(sort: \Paper.modifiedAt, order: .reverse) private var papers: [Paper]
     @Query(sort: \PaperAttachment.createdAt) private var attachments: [PaperAttachment]
     @Query(sort: \Note.modifiedAt, order: .reverse) private var notes: [Note]
@@ -18,9 +21,19 @@ struct ContentView: View {
     @State private var isAddingPaper = false
     @State private var paperPendingDeletion: Paper?
     @State private var deletionErrorMessage: String?
+    @State private var pendingArxivLinkImport: ArxivLinkImportRequest?
+    @State private var isShowingArxivLinkImport = false
+    @State private var isImportingArxivLink = false
+    @State private var arxivLinkImportProgress: ArxivImportProgress?
+    @State private var arxivLinkImportErrorMessage: String?
+    @State private var arxivLinkImportIdentifier = ""
 
     private var settings: AppSettings? {
         settingsRows.first
+    }
+
+    private var isPaperAppearance: Bool {
+        displayAppearance == .paper
     }
 
     private var selectedPaper: Paper? {
@@ -51,50 +64,154 @@ struct ContentView: View {
         )
     }
 
-    var body: some View {
-        NavigationSplitView {
-            LibrarySidebarView(
-                papers: papers,
-                selectedPaper: selectedPaper,
-                selectedPaperID: $selectedPaperID,
-                isAddingPaper: $isAddingPaper,
-                onDeleteOffsets: confirmDeletion(at:),
-                onDeletePaper: requestDeletion(of:)
-            )
-            .navigationSplitViewColumnWidth(min: 240, ideal: 260, max: 340)
-        } content: {
-            ReaderPaneView(
-                paper: selectedPaper,
-                attachments: attachments.filter { $0.paperID == selectedPaper?.id },
-                notes: notes.filter { $0.paperID == selectedPaper?.id },
-                settings: settings,
-                readerMode: $readerMode,
-                displayMode: $displayMode,
-                isInspectorCollapsed: inspectorCollapsedBinding,
-                noteSelectionContext: $noteSelectionContext,
-                noteNavigationRequest: $noteNavigationRequest,
-                onCreateAnchoredNote: createNoteFromCurrentSelection
-            )
-            .navigationSplitViewColumnWidth(min: 520, ideal: 760)
-        } detail: {
-            InspectorPaneView(
-                paper: selectedPaper,
-                notes: notes.filter { $0.paperID == selectedPaper?.id },
-                isCollapsed: isInspectorCollapsed,
-                currentSelectionContext: noteSelectionContext,
-                focusedNoteID: $focusedNoteID,
-                onCreateNote: createNoteFromCurrentSelection,
-                onOpenNoteAnchor: openNoteAnchor
-            )
-            .navigationSplitViewColumnWidth(
-                min: isInspectorCollapsed ? 0 : 280,
-                ideal: isInspectorCollapsed ? 0 : 340,
-                max: isInspectorCollapsed ? 0 : 420
-            )
+    private var inspectorPresentedBinding: Binding<Bool> {
+        Binding(
+            get: { !isInspectorCollapsed },
+            set: { inspectorCollapsedBinding.wrappedValue = !$0 }
+        )
+    }
+
+    private var sidebarColumn: some View {
+        LibrarySidebarView(
+            papers: papers,
+            selectedPaper: selectedPaper,
+            selectedPaperID: $selectedPaperID,
+            isAddingPaper: $isAddingPaper,
+            onDeleteOffsets: confirmDeletion(at:),
+            onDeletePaper: requestDeletion(of:)
+        )
+        .navigationSplitViewColumnWidth(min: 240, ideal: 260, max: 340)
+        .overlay(alignment: .trailing) {
+            if #unavailable(macOS 26.0) {
+                StableNavigationSplitDividerHandle()
+                    .frame(width: 8)
+                    .accessibilityHidden(true)
+            }
         }
+    }
+
+    private var readerColumn: some View {
+        ReaderPaneView(
+            paper: selectedPaper,
+            attachments: attachments.filter { $0.paperID == selectedPaper?.id },
+            notes: notes.filter { $0.paperID == selectedPaper?.id },
+            settings: settings,
+            readerMode: $readerMode,
+            displayMode: $displayMode,
+            isInspectorCollapsed: inspectorCollapsedBinding,
+            noteSelectionContext: $noteSelectionContext,
+            noteNavigationRequest: $noteNavigationRequest,
+            onCreateAnchoredNote: createNoteFromCurrentSelection,
+            onSaveSelectionAssistantNote: saveSelectionAssistantResultAsNote,
+            onArxivLinkActivated: handleArxivLinkActivation
+        )
+        .navigationSplitViewColumnWidth(min: 520, ideal: 760)
+        .background {
+            if !isPaperAppearance {
+                ReadPaperReaderMaterialSurface()
+                    .ignoresSafeArea()
+            }
+        }
+    }
+
+    private func inspectorColumn(isCollapsed: Bool) -> some View {
+        InspectorPaneView(
+            paper: selectedPaper,
+            notes: notes.filter { $0.paperID == selectedPaper?.id },
+            isCollapsed: isCollapsed,
+            currentSelectionContext: noteSelectionContext,
+            focusedNoteID: $focusedNoteID,
+            onCreateNote: createNoteFromCurrentSelection,
+            onOpenNoteAnchor: openNoteAnchor
+        )
+    }
+
+    @ViewBuilder
+    private var mainNavigation: some View {
+        if #available(macOS 26.0, *) {
+            NavigationSplitView {
+                sidebarColumn
+            } detail: {
+                readerColumn
+                    .inspector(isPresented: inspectorPresentedBinding) {
+                        inspectorColumn(isCollapsed: false)
+                            .inspectorColumnWidth(min: 280, ideal: 340, max: 420)
+                    }
+            }
+        } else {
+            NavigationSplitView {
+                sidebarColumn
+            } content: {
+                readerColumn
+            } detail: {
+                inspectorColumn(isCollapsed: isInspectorCollapsed)
+                    .navigationSplitViewColumnWidth(
+                        min: isInspectorCollapsed ? 0 : 280,
+                        ideal: isInspectorCollapsed ? 0 : 340,
+                        max: isInspectorCollapsed ? 0 : 420
+                    )
+            }
+        }
+    }
+
+    var body: some View {
+        mainNavigation
+        .background {
+            ZStack {
+                if isPaperAppearance {
+                    ReadPaperSurface(role: .reader)
+                } else {
+                    Color.clear
+                }
+                ReadPaperWindowChrome(
+                    colorScheme: colorScheme,
+                    isPaperEnabled: isPaperAppearance
+                )
+                    .frame(width: 0, height: 0)
+            }
+            .ignoresSafeArea()
+        }
+        // .tint(isPaperAppearance ? ReadPaperTheme.accentColor : nil)
         .sheet(isPresented: $isAddingPaper) {
             AddPaperSheet(isPresented: $isAddingPaper, selectedPaperID: $selectedPaperID)
                 .frame(width: 520)
+        }
+        .sheet(isPresented: $isShowingArxivLinkImport) {
+            ArxivLinkImportStatusSheet(
+                identifier: arxivLinkImportIdentifier,
+                progress: arxivLinkImportProgress,
+                isImporting: isImportingArxivLink,
+                errorMessage: arxivLinkImportErrorMessage,
+                onClose: { isShowingArxivLinkImport = false }
+            )
+            .frame(width: 460)
+            .interactiveDismissDisabled(isImportingArxivLink)
+        }
+        .alert(
+            String(localized: "Import arXiv Paper?", bundle: bundle),
+            isPresented: Binding(
+                get: { pendingArxivLinkImport != nil },
+                set: { isPresented in
+                    if !isPresented {
+                        pendingArxivLinkImport = nil
+                    }
+                }
+            ),
+            presenting: pendingArxivLinkImport
+        ) { request in
+            Button(String(localized: "Import", bundle: bundle)) {
+                startArxivLinkImport(request)
+            }
+            Button(String(localized: "Open in Browser", bundle: bundle)) {
+                NSWorkspace.shared.open(request.url)
+            }
+            Button(String(localized: "Cancel", bundle: bundle), role: .cancel) {}
+        } message: { request in
+            Text(AppLocalization.format(
+                "This PDF links to arXiv %@. Would you like to import it into your library?",
+                bundle: bundle,
+                request.identifier.queryID
+            ))
         }
         .confirmationDialog(
             String(localized: "Delete Paper?", bundle: bundle),
@@ -149,7 +266,13 @@ struct ContentView: View {
     }
 
     private func ensureSettings() -> AppSettings? {
-        try? LLMConfigurationBootstrapper().ensureBootstrap(modelContext: modelContext)
+        do {
+            let settings = try LLMConfigurationBootstrapper().ensureBootstrap(modelContext: modelContext)
+            try LLMDefaultProfileSeeder().ensureDefaults(modelContext: modelContext)
+            return settings
+        } catch {
+            return nil
+        }
     }
 
     private func confirmDeletion(at offsets: IndexSet) {
@@ -247,8 +370,153 @@ struct ContentView: View {
         }
     }
 
+    private func saveSelectionAssistantResultAsNote(
+        selection: NoteSelectionContext,
+        result: String,
+        existingNoteID: UUID?
+    ) throws -> UUID {
+        guard let paper = selectedPaper else {
+            throw CocoaError(.validationMissingMandatoryProperty)
+        }
+        do {
+            let note: Note
+            if let existingNoteID,
+               let existingNote = try modelContext.fetch(FetchDescriptor<Note>())
+                .first(where: { $0.id == existingNoteID }) {
+                existingNote.body = result
+                existingNote.modifiedAt = Date()
+                note = existingNote
+            } else {
+                let newNote = Note.selectionAssistantNote(
+                    paperID: paper.id,
+                    selection: selection,
+                    result: result
+                )
+                modelContext.insert(newNote)
+                note = newNote
+            }
+
+            try modelContext.save()
+            if isInspectorCollapsed {
+                inspectorCollapsedBinding.wrappedValue = false
+            }
+            focusedNoteID = note.id
+            return note.id
+        } catch {
+            modelContext.rollback()
+            throw error
+        }
+    }
+
     private func openNoteAnchor(_ note: Note) {
         noteNavigationRequest = note.navigationRequest
     }
 
+    private func handleArxivLinkActivation(_ url: URL) {
+        guard !isImportingArxivLink,
+              let request = ArxivLinkImportRequest(url: url)
+        else {
+            return
+        }
+        pendingArxivLinkImport = request
+    }
+
+    private func startArxivLinkImport(_ request: ArxivLinkImportRequest) {
+        pendingArxivLinkImport = nil
+        arxivLinkImportIdentifier = request.identifier.queryID
+        arxivLinkImportProgress = .resolvingInput(identifier: request.identifier.queryID)
+        arxivLinkImportErrorMessage = nil
+        isImportingArxivLink = true
+        isShowingArxivLinkImport = true
+
+        Task {
+            do {
+                let importedPaper = try await PaperImporter().importArxiv(
+                    request.importValue,
+                    modelContext: modelContext
+                ) { progress in
+                    arxivLinkImportProgress = progress
+                }
+                selectedPaperID = importedPaper.id
+                isShowingArxivLinkImport = false
+            } catch {
+                arxivLinkImportErrorMessage = error.localizedDescription
+            }
+            isImportingArxivLink = false
+        }
+    }
+
+}
+
+private struct ArxivLinkImportStatusSheet: View {
+    @Environment(\.localizationBundle) private var bundle
+
+    let identifier: String
+    let progress: ArxivImportProgress?
+    let isImporting: Bool
+    let errorMessage: String?
+    let onClose: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            Text("Importing from arXiv", bundle: bundle)
+                .font(.title2.weight(.semibold))
+
+            Text(AppLocalization.format("arXiv %@", bundle: bundle, identifier))
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+
+            if let progress {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text(progress.stepLabel)
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Text("\(Int(round(progress.fractionCompleted * 100)))%")
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                    }
+
+                    ProgressView(value: progress.fractionCompleted)
+                        .progressViewStyle(.linear)
+
+                    Text(progress.title)
+                        .font(.subheadline.weight(.semibold))
+
+                    if let detail = progress.detail {
+                        Text(detail)
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .padding(14)
+                .background {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(.quaternary.opacity(0.35))
+                }
+            } else if isImporting {
+                ProgressView()
+            }
+
+            if let errorMessage {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Unable to Import Paper", bundle: bundle)
+                        .font(.headline)
+                    Text(errorMessage)
+                        .foregroundStyle(.red)
+                        .textSelection(.enabled)
+                }
+            }
+
+            HStack {
+                Spacer()
+                Button(String(localized: "Close", bundle: bundle), action: onClose)
+                    .disabled(isImporting)
+                    .keyboardShortcut(.cancelAction)
+            }
+        }
+        .padding(24)
+    }
 }

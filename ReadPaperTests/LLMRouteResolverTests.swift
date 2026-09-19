@@ -6,7 +6,11 @@ final class LLMRouteResolverTests: XCTestCase {
     @MainActor
     func testResolverReturnsIndependentHTMLAndPDFRoutes() throws {
         let service = "LLMRouteResolverTests.\(UUID().uuidString)"
-        let keychainStore = KeychainStore(service: service)
+        let keychainStore = KeychainStore(service: service, accessPolicy: .unprotected)
+        let defaultsSuite = "LLMRouteResolverTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: defaultsSuite))
+        defer { defaults.removePersistentDomain(forName: defaultsSuite) }
+        let apiStyleStore = LLMProviderAPIStyleStore(userDefaults: defaults)
         let container = try makeContainer()
         let modelContext = ModelContext(container)
 
@@ -28,9 +32,15 @@ final class LLMRouteResolverTests: XCTestCase {
         modelContext.insert(pdfModel)
         modelContext.insert(settings)
         try modelContext.save()
+        XCTAssertFalse(try keychainStore.contains(account: provider.apiKeyRef))
         try keychainStore.save("sk-test", account: provider.apiKeyRef)
+        XCTAssertTrue(try keychainStore.contains(account: provider.apiKeyRef))
+        apiStyleStore.setAPIStyle(.responses, for: provider.id)
 
-        let resolver = LLMRouteResolver(keychainStore: keychainStore)
+        let resolver = LLMRouteResolver(
+            keychainStore: keychainStore,
+            apiStyleStore: apiStyleStore
+        )
         let htmlRoute = try resolver.resolveHTMLRoute(settings: settings, modelContext: modelContext)
         let pdfRoute = try resolver.resolvePDFRoute(settings: settings, modelContext: modelContext)
 
@@ -38,11 +48,97 @@ final class LLMRouteResolverTests: XCTestCase {
         XCTAssertEqual(pdfRoute.snapshot.modelProfileID, pdfModel.id)
         XCTAssertEqual(htmlRoute.apiKey, "sk-test")
         XCTAssertEqual(pdfRoute.apiKey, "sk-test")
+        XCTAssertEqual(htmlRoute.snapshot.apiStyle, .responses)
+        XCTAssertEqual(pdfRoute.snapshot.apiStyle, .responses)
+    }
+
+    @MainActor
+    func testResolverPassesThinkingModeAndReasoningEffortThroughSnapshot() throws {
+        let keychainStore = KeychainStore(
+            service: "LLMRouteResolverTests.\(UUID().uuidString)",
+            accessPolicy: .unprotected
+        )
+        let container = try makeContainer()
+        let modelContext = ModelContext(container)
+
+        let provider = LLMProviderProfile(
+            name: "Provider",
+            baseURL: "https://api.example.com/v1",
+            apiKeyRef: "provider-ref",
+            testModel: "gpt-test"
+        )
+        let model = LLMModelProfile(
+            providerID: provider.id,
+            name: "HTML",
+            modelName: "deepseek-v4-pro",
+            thinkingMode: .enabled,
+            reasoningEffort: .max
+        )
+        let settings = AppSettings(
+            selectedHTMLModelProfileID: model.id,
+            selectedPDFModelProfileID: nil
+        )
+
+        modelContext.insert(provider)
+        modelContext.insert(model)
+        modelContext.insert(settings)
+        try modelContext.save()
+        try keychainStore.save("sk-test", account: provider.apiKeyRef)
+
+        let resolver = LLMRouteResolver(keychainStore: keychainStore)
+        let route = try resolver.resolveHTMLRoute(settings: settings, modelContext: modelContext)
+
+        XCTAssertEqual(route.snapshot.thinkingMode, .enabled)
+        XCTAssertEqual(route.snapshot.reasoningEffort, .max)
+    }
+
+    @MainActor
+    func testAssistantRouteUsesUserDefaultsSelectionWithoutChangingSwiftDataSchema() throws {
+        let keychainStore = KeychainStore(
+            service: "LLMRouteResolverTests.\(UUID().uuidString)",
+            accessPolicy: .unprotected
+        )
+        let defaultsSuite = "LLMRouteResolverTests.Assistant.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: defaultsSuite))
+        defer { defaults.removePersistentDomain(forName: defaultsSuite) }
+        let container = try makeContainer()
+        let modelContext = ModelContext(container)
+        let provider = LLMProviderProfile(
+            name: "Provider",
+            baseURL: "https://api.example.com/v1",
+            apiKeyRef: "provider-ref",
+            testModel: "test-model"
+        )
+        let htmlModel = LLMModelProfile(providerID: provider.id, name: "HTML", modelName: "html-model")
+        let assistantModel = LLMModelProfile(providerID: provider.id, name: "Assistant", modelName: "assistant-model")
+        let settings = AppSettings(selectedHTMLModelProfileID: htmlModel.id)
+        modelContext.insert(provider)
+        modelContext.insert(htmlModel)
+        modelContext.insert(assistantModel)
+        modelContext.insert(settings)
+        try modelContext.save()
+        try keychainStore.save("sk-test", account: provider.apiKeyRef)
+
+        let resolver = LLMRouteResolver(keychainStore: keychainStore, userDefaults: defaults)
+        XCTAssertEqual(
+            try resolver.resolveAssistantRoute(settings: settings, modelContext: modelContext).snapshot.modelProfileID,
+            htmlModel.id
+        )
+
+        defaults.set(assistantModel.id.uuidString, forKey: SelectionAssistantPreferences.selectedModelProfileIDKey)
+        XCTAssertEqual(
+            try resolver.resolveAssistantRoute(settings: settings, modelContext: modelContext).snapshot.modelProfileID,
+            assistantModel.id
+        )
+        XCTAssertEqual(settings.selectedHTMLModelProfileID, htmlModel.id)
     }
 
     @MainActor
     func testResolverRejectsDisabledProviderAndMissingSelection() throws {
-        let keychainStore = KeychainStore(service: "LLMRouteResolverTests.\(UUID().uuidString)")
+        let keychainStore = KeychainStore(
+            service: "LLMRouteResolverTests.\(UUID().uuidString)",
+            accessPolicy: .unprotected
+        )
         let container = try makeContainer()
         let modelContext = ModelContext(container)
 
@@ -78,7 +174,10 @@ final class LLMRouteResolverTests: XCTestCase {
 
     @MainActor
     func testResolverRejectsMissingAPIKey() throws {
-        let keychainStore = KeychainStore(service: "LLMRouteResolverTests.\(UUID().uuidString)")
+        let keychainStore = KeychainStore(
+            service: "LLMRouteResolverTests.\(UUID().uuidString)",
+            accessPolicy: .unprotected
+        )
         let container = try makeContainer()
         let modelContext = ModelContext(container)
 

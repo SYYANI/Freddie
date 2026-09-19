@@ -1,6 +1,7 @@
 name: ReadPaper
 options:
-  minimumXcodeGenVersion: 2.42.0
+  minimumXcodeGenVersion: 2.46.0
+  projectFormat: xcode15_3
   deploymentTarget:
     macOS: "14.0"
 packages:
@@ -11,8 +12,36 @@ packages:
     url: https://github.com/jamesrochabrun/SwiftOpenAI
     from: 4.3.3
   Readability:
-    path: swift-readability
+    url: https://github.com/SYYANI/swift-readability.git
+    branch: main
+  BabelDocSwift:
+    url: https://github.com/SYYANI/BabelDOC.git
+    branch: dev_package_catal
+  LaTeXTransSwift:
+    url: https://github.com/SYYANI/arxivLatex.git
+    branch: main
+  SwiftStreamingMarkdown:
+    url: https://github.com/SYYANI/SwiftStreamingMarkdown.git
+    branch: main
 targets:
+  BabelDocHelper:
+    type: tool
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - path: ReadPaperBabelDocHelper
+    dependencies:
+      - package: BabelDocSwift
+        product: BabelDocKit
+    settings:
+      base:
+        ARCHS: arm64
+        PRODUCT_NAME: babeldoc-readpaper-helper
+        PRODUCT_BUNDLE_IDENTIFIER: com.yiyan.ReadPaper.BabelDocHelper
+        SWIFT_VERSION: 6.0
+        OTHER_SWIFT_FLAGS: -parse-as-library
+        CODE_SIGN_STYLE: Automatic
+        SKIP_INSTALL: YES
   ReadPaper:
     type: application
     platform: macOS
@@ -23,20 +52,126 @@ targets:
       - package: SwiftSoup
       - package: SwiftOpenAI
       - package: Readability
+      - package: BabelDocSwift
+        product: BabelDocKit
+      - package: LaTeXTransSwift
+        product: LaTeXTransKit
+      - package: SwiftStreamingMarkdown
+      - target: BabelDocHelper
+        link: false
+        embed: false
+    postBuildScripts:
+      - name: Embed BabelDOC Runtime
+        script: |
+          set -euo pipefail
+          babeldoc_root="${BUILD_DIR}/../../SourcePackages/checkouts/BabelDOC"
+          python3 "${babeldoc_root}/tools/stage_native_runtime.py" \
+            --destination "${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/BabelDOCNative"
+        inputFiles:
+          - $(BUILD_DIR)/../../SourcePackages/checkouts/BabelDOC/Sources/BabelDocKit/Resources/runtime-manifest.json
+          - $(BUILD_DIR)/../../SourcePackages/checkouts/BabelDOC/Vendor/MuPDF/lib/libmupdf.dylib
+          - $(BUILD_DIR)/../../SourcePackages/checkouts/BabelDOC/Vendor/Zstd/lib/libzstd.dylib
+          - $(BUILD_DIR)/../../SourcePackages/checkouts/BabelDOC/Vendor/Models/doclayout_yolo_docstructbench_imgsz1024.mlmodel
+          - $(BUILD_DIR)/../../SourcePackages/checkouts/BabelDOC/Vendor/Fonts/manifest.json
+        outputFiles:
+          - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/BabelDOCNative/runtime-manifest.json
+        basedOnDependencyAnalysis: false
+      - name: Embed BabelDOC Helper
+        script: |
+          set -euo pipefail
+          source_path="${BUILT_PRODUCTS_DIR}/babeldoc-readpaper-helper"
+          destination_directory="${TARGET_BUILD_DIR}/${CONTENTS_FOLDER_PATH}/Helpers"
+          destination_path="${destination_directory}/babeldoc-readpaper-helper"
+          mkdir -p "${destination_directory}"
+          ditto "${source_path}" "${destination_path}"
+          if [ "${CODE_SIGNING_ALLOWED:-YES}" = "NO" ]; then
+            codesign \
+              --force \
+              --sign - \
+              --identifier com.yiyan.ReadPaper.BabelDocHelper \
+              "${destination_path}"
+          fi
+          codesign --verify --strict --verbose=2 "${destination_path}"
+        inputFiles:
+          - $(BUILT_PRODUCTS_DIR)/babeldoc-readpaper-helper
+        outputFiles:
+          - $(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/Helpers/babeldoc-readpaper-helper
     settings:
       base:
+        ARCHS: arm64
         PRODUCT_BUNDLE_IDENTIFIER: com.yiyan.ReadPaper
         PRODUCT_NAME: Freddie
         PRODUCT_MODULE_NAME: ReadPaper
         DEVELOPMENT_LANGUAGE: en
         INFOPLIST_FILE: ReadPaper/Info.plist
         INFOPLIST_KEY_CFBundleDisplayName: Freddie
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.books
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS: NO
+        SWIFT_VERSION: 6.0
+        CODE_SIGN_STYLE: Automatic
+        CURRENT_PROJECT_VERSION: 67
+        MARKETING_VERSION: 0.5.5
+      configs:
+        Debug:
+          ENABLE_TESTABILITY: YES
+        Release:
+          ENABLE_TESTABILITY: NO
+  ReadPaperiPad:
+    type: application
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: ReadPaper
+        excludes:
+          - ReadPaperApp.swift
+          - Info.plist
+          - Readers/DualPDFReaderView.swift
+          - Services/BabelDocRunner.swift
+          - Services/BabelDocToolManager.swift
+          - Services/ProcessRunner.swift
+          - Views
+      - path: ReadPaperiPad
+    dependencies:
+      - package: SwiftSoup
+      - package: SwiftOpenAI
+      - package: Readability
+      - package: BabelDocSwift
+        product: BabelDocKit
+      - package: LaTeXTransSwift
+        product: LaTeXTransKit
+    postBuildScripts:
+      - name: Embed BabelDOC In-Process Runtime
+        script: |
+          set -euo pipefail
+          babeldoc_root="${BUILD_DIR}/../../SourcePackages/checkouts/BabelDOC"
+          python3 "${babeldoc_root}/tools/stage_embedded_runtime.py" \
+            --destination "${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/BabelDOCEmbedded"
+        inputFiles:
+          - $(BUILD_DIR)/../../SourcePackages/checkouts/BabelDOC/Sources/BabelDocKit/Resources/runtime-manifest.json
+          - $(BUILD_DIR)/../../SourcePackages/checkouts/BabelDOC/Vendor/Models/doclayout_yolo_docstructbench_imgsz1024.mlmodel
+          - $(BUILD_DIR)/../../SourcePackages/checkouts/BabelDOC/Vendor/Fonts/manifest.json
+        outputFiles:
+          - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/BabelDOCEmbedded/runtime-manifest.json
+        basedOnDependencyAnalysis: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.yiyan.ReadPaper.iPad
+        PRODUCT_NAME: Freddie
+        PRODUCT_MODULE_NAME: ReadPaperiPad
+        DEVELOPMENT_LANGUAGE: en
+        INFOPLIST_FILE: ReadPaperiPad/Info.plist
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         SWIFT_VERSION: 6.0
         ENABLE_TESTABILITY: YES
         CODE_SIGN_STYLE: Automatic
-        CURRENT_PROJECT_VERSION: 28
-        MARKETING_VERSION: 0.3.8
+        DEVELOPMENT_TEAM: 3VM5RUH8V5
+        CURRENT_PROJECT_VERSION: 67
+        MARKETING_VERSION: 0.5.5
+        SUPPORTED_PLATFORMS: iphoneos iphonesimulator
+        SUPPORTS_MACCATALYST: NO
+        SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD: NO
+        TARGETED_DEVICE_FAMILY: 2
   ReadPaperTests:
     type: bundle.unit-test
     platform: macOS
@@ -48,6 +183,7 @@ targets:
       - target: ReadPaper
     settings:
       base:
+        ARCHS: arm64
         PRODUCT_BUNDLE_IDENTIFIER: com.yiyan.ReadPaperTests
         PRODUCT_NAME: ReadPaperTests
         DEVELOPMENT_LANGUAGE: en
@@ -55,12 +191,54 @@ targets:
         SWIFT_VERSION: 6.0
         TEST_HOST: $(BUILT_PRODUCTS_DIR)/Freddie.app/Contents/MacOS/Freddie
         BUNDLE_LOADER: $(TEST_HOST)
+  ReadPaperiPadTests:
+    type: bundle.unit-test
+    platform: iOS
+    hostApplication: ReadPaperiPad
+    deploymentTarget: "17.0"
+    sources:
+      - path: ReadPaperiPadTests
+    dependencies:
+      - target: ReadPaperiPad
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.yiyan.ReadPaperiPadTests
+        PRODUCT_NAME: ReadPaperiPadTests
+        DEVELOPMENT_LANGUAGE: en
+        INFOPLIST_FILE: ReadPaperiPadTests/Info.plist
+        SWIFT_VERSION: 6.0
+        SUPPORTED_PLATFORMS: iphoneos iphonesimulator
+        SUPPORTS_MACCATALYST: YES
+        SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD: NO
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/Freddie.app/Freddie
+        BUNDLE_LOADER: $(TEST_HOST)
 schemes:
   ReadPaper:
     build:
       targets:
         ReadPaper: all
+        BabelDocHelper: all
         ReadPaperTests: [test]
+    run:
+      config: Debug
+      executable: ReadPaper
     test:
       targets:
         - ReadPaperTests
+    profile:
+      config: Release
+      executable: ReadPaper
+  ReadPaperiPad:
+    build:
+      targets:
+        ReadPaperiPad: all
+        ReadPaperiPadTests: [test]
+    run:
+      config: Debug
+      executable: ReadPaperiPad
+    test:
+      targets:
+        - ReadPaperiPadTests
+    profile:
+      config: Release
+      executable: ReadPaperiPad

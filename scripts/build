@@ -1,0 +1,181 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly REPOSITORY_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
+configuration="Release"
+output_directory=""
+derived_data_path=""
+generate_project=false
+unsigned_build=true
+
+usage() {
+    cat <<'EOF'
+Build Freddie.app for macOS.
+
+Usage: ./scripts/build [options]
+
+Options:
+  --configuration <name>  Xcode configuration (default: Release)
+  --output <directory>    App output directory (default: build/<configuration>)
+  --derived-data <path>   Xcode DerivedData path (default: /tmp/read-paper-derived-data)
+  --xcodegen              Regenerate ReadPaper.xcodeproj before building
+  --signed                Use the Xcode project's signing configuration
+  -h, --help              Show this help
+
+By default the script builds without signing. The embedded BabelDOC helper is
+still ad-hoc signed by the project's build phase so its trust checks continue
+to work.
+EOF
+}
+
+fail() {
+    echo "error: $*" >&2
+    exit 1
+}
+
+while (($# > 0)); do
+    case "$1" in
+        --configuration)
+            (($# >= 2)) || fail "--configuration requires a value"
+            configuration="$2"
+            shift 2
+            ;;
+        --output)
+            (($# >= 2)) || fail "--output requires a value"
+            output_directory="$2"
+            shift 2
+            ;;
+        --derived-data)
+            (($# >= 2)) || fail "--derived-data requires a value"
+            derived_data_path="$2"
+            shift 2
+            ;;
+        --xcodegen)
+            generate_project=true
+            shift
+            ;;
+        --signed)
+            unsigned_build=false
+            shift
+            ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        *)
+            fail "unknown option: $1 (run with --help for usage)"
+            ;;
+    esac
+done
+
+if [[ -z "${output_directory}" ]]; then
+    output_directory="${REPOSITORY_ROOT}/build/${configuration}"
+elif [[ "${output_directory}" != /* ]]; then
+    output_directory="${REPOSITORY_ROOT}/${output_directory}"
+fi
+
+if [[ -z "${derived_data_path}" ]]; then
+    derived_data_path="/tmp/read-paper-derived-data"
+elif [[ "${derived_data_path}" != /* ]]; then
+    derived_data_path="${REPOSITORY_ROOT}/${derived_data_path}"
+fi
+
+[[ "$(uname -s)" == "Darwin" ]] || fail "this macOS app must be built on macOS"
+
+if command -v xcodebuild >/dev/null 2>&1; then
+    xcodebuild_path="$(command -v xcodebuild)"
+elif [[ -x /usr/bin/xcodebuild ]]; then
+    xcodebuild_path="/usr/bin/xcodebuild"
+else
+    fail "xcodebuild was not found; install Xcode and select it with xcode-select"
+fi
+
+if [[ "${generate_project}" == true ]]; then
+    command -v xcodegen >/dev/null 2>&1 || fail "xcodegen was not found; install it with 'brew install xcodegen'"
+fi
+command -v python3 >/dev/null 2>&1 || fail "python3 was not found; install Xcode Command Line Tools"
+
+mkdir -p "${output_directory}" "${derived_data_path}"
+
+cd "${REPOSITORY_ROOT}"
+
+if [[ "${generate_project}" == true ]]; then
+    echo "Generating ReadPaper.xcodeproj..."
+    xcodegen generate --spec "${REPOSITORY_ROOT}/project.yml"
+elif [[ ! -d "${REPOSITORY_ROOT}/ReadPaper.xcodeproj" ]]; then
+    fail "ReadPaper.xcodeproj is missing; rerun with --xcodegen"
+fi
+
+echo "Resolving Swift packages..."
+"${xcodebuild_path}" -resolvePackageDependencies \
+    -project "${REPOSITORY_ROOT}/ReadPaper.xcodeproj" \
+    -scheme ReadPaper \
+    -derivedDataPath "${derived_data_path}"
+
+babeldoc_root="${derived_data_path}/SourcePackages/checkouts/BabelDOC"
+[[ -f "${babeldoc_root}/Package.swift" ]] || fail "BabelDOC package checkout is missing: ${babeldoc_root}"
+
+if ! python3 "${babeldoc_root}/tools/verify_local_runtime_assets.py" >/dev/null 2>&1; then
+    echo "Preparing BabelDOC native runtime assets..."
+    "${babeldoc_root}/tools/download_native_assets.sh" models
+    python3 "${babeldoc_root}/tools/download_runtime_fonts.py"
+    "${babeldoc_root}/tools/build_native_libraries.sh" zstd
+fi
+python3 "${babeldoc_root}/tools/verify_mupdf_vendor.py"
+python3 "${babeldoc_root}/tools/verify_model_vendor.py"
+python3 "${babeldoc_root}/tools/verify_local_runtime_assets.py"
+python3 "${babeldoc_root}/tools/generate_native_runtime_manifest.py" --check
+
+echo "Building Freddie.app (${configuration})..."
+
+xcodebuild_arguments=(
+    build
+    -project "${REPOSITORY_ROOT}/ReadPaper.xcodeproj"
+    -scheme ReadPaper
+    -configuration "${configuration}"
+    -destination "generic/platform=macOS"
+    -derivedDataPath "${derived_data_path}"
+)
+
+if [[ "${unsigned_build}" == true ]]; then
+    xcodebuild_arguments+=(
+        CODE_SIGNING_ALLOWED=NO
+        CODE_SIGNING_REQUIRED=NO
+        'CODE_SIGN_IDENTITY='
+    )
+fi
+
+"${xcodebuild_path}" "${xcodebuild_arguments[@]}"
+
+built_app_path="${derived_data_path}/Build/Products/${configuration}/Freddie.app"
+[[ -d "${built_app_path}" ]] || fail "build finished without producing ${built_app_path}"
+
+staging_directory="$(mktemp -d "${output_directory}/.freddie-stage.XXXXXX")"
+cleanup_staging_directory() {
+    /bin/rm -rf "${staging_directory}"
+}
+trap cleanup_staging_directory EXIT
+
+/usr/bin/ditto "${built_app_path}" "${staging_directory}/Freddie.app"
+
+app_path="${output_directory}/Freddie.app"
+[[ "${app_path}" == */Freddie.app ]] || fail "refusing to replace unexpected app path: ${app_path}"
+/bin/rm -rf "${app_path}"
+/bin/mv "${staging_directory}/Freddie.app" "${app_path}"
+
+[[ -x "${app_path}/Contents/MacOS/Freddie" ]] || fail "app executable is missing from ${app_path}"
+[[ -f "${app_path}/Contents/Resources/BabelDOCNative/runtime-manifest.json" ]] || fail "BabelDOC runtime is missing from ${app_path}"
+[[ -x "${app_path}/Contents/Helpers/babeldoc-readpaper-helper" ]] || fail "BabelDOC helper is missing from ${app_path}"
+
+python3 "${babeldoc_root}/tools/verify_native_runtime.py" \
+    --root "${app_path}/Contents/Resources/BabelDOCNative" \
+    --manifest "${babeldoc_root}/Sources/BabelDocKit/Resources/runtime-manifest.json"
+
+/usr/bin/codesign --verify --strict --verbose=2 \
+    "${app_path}/Contents/Helpers/babeldoc-readpaper-helper"
+
+echo
+echo "Built app: ${app_path}"

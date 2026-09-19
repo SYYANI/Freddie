@@ -76,11 +76,34 @@ struct HTMLLocalizer: @unchecked Sendable {
         try reconcileCharsetDeclaration(in: document)
         try absolutizeHyperlinks(in: document, baseURL: sourceURL)
         try document.select("base[href]").remove()
+        let repairedPreformattedProse = try splitPreformattedProseBlocks(in: document)
 
-        guard let readableDocument = try makeReadableDocument(from: html, sourceURL: sourceURL, fallback: document) else {
+        let readabilityInput = repairedPreformattedProse ? try document.outerHtml() : html
+        guard let readableDocument = try makeReadableDocument(from: readabilityInput, sourceURL: sourceURL, fallback: document) else {
             return document
         }
         return readableDocument
+    }
+
+    func requiresBrowserRendering(_ html: String) -> Bool {
+        guard let document = try? SwiftSoup.parse(html),
+              let body = document.body() else {
+            return false
+        }
+
+        let visibleText = ((try? body.text()) ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let externalScriptCount = (try? document.select("script[src]").count) ?? 0
+        return visibleText.count < 40 && externalScriptCount > 0
+    }
+
+    func shouldUseRenderedHTML(_ renderedHTML: String, insteadOf originalHTML: String) -> Bool {
+        visibleBodyTextLength(in: renderedHTML) >= 40 &&
+            visibleBodyTextLength(in: renderedHTML) > visibleBodyTextLength(in: originalHTML)
+    }
+
+    func hasMeaningfulHTMLContent(_ html: String) -> Bool {
+        visibleBodyTextLength(in: html) >= 40 && !needsXPostParagraphRepair(html)
     }
 
     func rewriteCSS(_ css: String, baseURL: URL, resourcesDirectory: URL) async throws -> String {
@@ -158,22 +181,90 @@ struct HTMLLocalizer: @unchecked Sendable {
         try injectReadabilityStyles(into: document)
         try document.body()?.addClass("rp-readability-body")
         try document.body()?.html(renderReadableBody(for: result))
-        try splitMarkdownProsePreBlocks(in: document)
+        try splitPreformattedProseBlocks(in: document)
     }
 
-    private func splitMarkdownProsePreBlocks(in document: Document) throws {
+    @discardableResult
+    private func splitPreformattedProseBlocks(in document: Document) throws -> Bool {
+        var replacedElement = false
         for pre in try document.select("pre[data-readability-pre-type=markdown]").array() {
-            let paragraphs = markdownProseParagraphHTML(from: try pre.html())
-            guard !paragraphs.isEmpty else { continue }
-
-            for paragraphHTML in paragraphs {
-                let paragraph = try document.createElement("p")
-                try paragraph.addClass("rp-readability-prose-paragraph")
-                try paragraph.html(paragraphHTML)
-                try pre.before(paragraph.outerHtml())
-            }
-            try pre.remove()
+            replacedElement = try replaceWithProseParagraphsIfNeeded(
+                pre,
+                in: document,
+                requireMultipleParagraphs: false,
+                preserveInlineWrapper: false
+            ) || replacedElement
         }
+
+        // Some social pages, including X long posts, encode paragraph boundaries as blank
+        // lines inside a white-space: pre-wrap element. The utility class stylesheet is an
+        // external resource and may be unavailable offline, so preserve the semantics in the
+        // localized DOM instead of relying on the source site's CSS.
+        for element in try document.select(".whitespace-pre-wrap").array() {
+            let hasNestedPreformattedElement = try element
+                .select(".whitespace-pre-wrap")
+                .array()
+                .contains { $0 !== element }
+            guard !hasNestedPreformattedElement else { continue }
+            replacedElement = try replaceWithProseParagraphsIfNeeded(
+                element,
+                in: document,
+                requireMultipleParagraphs: true,
+                preserveInlineWrapper: true
+            ) || replacedElement
+        }
+        return replacedElement
+    }
+
+    private func replaceWithProseParagraphsIfNeeded(
+        _ element: Element,
+        in document: Document,
+        requireMultipleParagraphs: Bool,
+        preserveInlineWrapper: Bool
+    ) throws -> Bool {
+        let paragraphs = markdownProseParagraphHTML(from: try whitespacePreservingInnerHTML(of: element))
+        guard !paragraphs.isEmpty,
+              !requireMultipleParagraphs || paragraphs.count > 1 else {
+            return false
+        }
+
+        if preserveInlineWrapper,
+           let parent = element.parent(),
+           parent.tagName().lowercased() == "div",
+           parent.hasClass("whitespace-pre-wrap") {
+            try parent.addClass("rp-readability-prose-container")
+            try parent.addClass("rp-readability-font-normal")
+            if parent.hasClass("font-chirp") {
+                try parent.addClass("rp-readability-font-chirp")
+            }
+        }
+
+        for paragraphHTML in paragraphs {
+            let paragraph = try document.createElement("p")
+            try paragraph.addClass("rp-readability-prose-paragraph")
+            if preserveInlineWrapper {
+                let inlineWrapper = try document.createElement(element.tagName())
+                for attribute in element.getAttributes() ?? Attributes() where attribute.getKey().lowercased() != "id" {
+                    try inlineWrapper.attr(attribute.getKey(), attribute.getValue())
+                }
+                try inlineWrapper.html(paragraphHTML)
+                try paragraph.appendChild(inlineWrapper)
+            } else {
+                try paragraph.html(paragraphHTML)
+            }
+            try element.before(paragraph.outerHtml())
+        }
+        try element.remove()
+        return true
+    }
+
+    private func whitespacePreservingInnerHTML(of element: Element) throws -> String {
+        try element.getChildNodes().map { node in
+            if let textNode = node as? TextNode {
+                return escapeHTML(textNode.getWholeText())
+            }
+            return try node.outerHtml()
+        }.joined()
     }
 
     private func markdownProseParagraphHTML(from html: String) -> [String] {
@@ -252,7 +343,23 @@ struct HTMLLocalizer: @unchecked Sendable {
             color: inherit !important;
             font-size: inherit !important;
             line-height: inherit !important;
-            margin: 0 0 1.1em 0 !important;
+            margin: 0 0 0.8em 0 !important;
+            white-space: normal !important;
+        }
+        .rp-readability-content .rp-readability-prose-container {
+            font-size: inherit !important;
+            line-height: inherit !important;
+            white-space: normal !important;
+        }
+        .rp-readability-content .rp-readability-font-normal {
+            font-weight: 400 !important;
+        }
+        .rp-readability-content .rp-readability-font-chirp {
+            font-family: TwitterChirp, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+        }
+        .rp-readability-content p.rp-readability-prose-paragraph > .whitespace-pre-wrap {
+            line-height: inherit !important;
+            white-space: normal !important;
         }
         .rp-readability-content p.rp-readability-prose-paragraph a {
             color: #335c85;
@@ -358,6 +465,59 @@ struct HTMLLocalizer: @unchecked Sendable {
             .joined(separator: " ")
     }
 
+    private func visibleBodyTextLength(in html: String) -> Int {
+        guard let document = try? SwiftSoup.parse(html),
+              let body = document.body() else {
+            return 0
+        }
+        return ((try? body.text()) ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .count
+    }
+
+    private func needsXPostParagraphRepair(_ html: String) -> Bool {
+        guard let document = try? SwiftSoup.parse(html),
+              (try? document.select(".rp-readability-content .whitespace-pre-wrap").count) ?? 0 > 0 else {
+            return false
+        }
+
+        let sourceURLs = [
+            try? document.select("link[rel=canonical][href]").first()?.attr("href"),
+            try? document.select("meta[property=og:url][content]").first()?.attr("content"),
+        ].compactMap { $0 }
+        let isXStatusPage = sourceURLs.contains { value in
+            guard let url = URL(string: value),
+                  let host = url.host?.lowercased() else {
+                return false
+            }
+            return (host == "x.com" || host == "www.x.com" || host == "twitter.com" || host == "www.twitter.com") &&
+                url.path.contains("/status/")
+        }
+        guard isXStatusPage else { return false }
+
+        let descriptions = [
+            try? document.select("meta[name=description][content]").first()?.attr("content"),
+            try? document.select("meta[property=og:description][content]").first()?.attr("content"),
+        ].compactMap { $0 }
+        let sourceHasParagraphBreaks = descriptions.contains { description in
+            description.range(of: #"\r?\n[\t ]*\r?\n"#, options: .regularExpression) != nil
+        }
+        guard sourceHasParagraphBreaks else { return false }
+
+        let proseParagraphCount = (try? document.select(
+            ".rp-readability-content .rp-readability-prose-paragraph"
+        ).count) ?? 0
+        let hasWhitespacePreservingParagraphContainer = ((try? document.select(
+            ".rp-readability-content div.whitespace-pre-wrap"
+        ).array()) ?? []).contains { container in
+            !container.hasClass("rp-readability-prose-container") &&
+                container.children().array().contains {
+                    $0.tagName().lowercased() == "p" && $0.hasClass("rp-readability-prose-paragraph")
+                }
+        }
+        return proseParagraphCount == 0 || hasWhitespacePreservingParagraphContainer
+    }
+
     private func reconcileCharsetDeclaration(in document: Document) throws {
         let knownEquivPatterns = [
             "content-type",
@@ -374,7 +534,7 @@ struct HTMLLocalizer: @unchecked Sendable {
         if let head = document.head() {
             let charsetMeta = try document.createElement("meta")
             try charsetMeta.attr("charset", "UTF-8")
-            let existingMetaTags = try head.children().array()
+            let existingMetaTags = head.children().array()
             if let firstMeta = existingMetaTags.first(where: { $0.tagName() == "meta" }) {
                 try firstMeta.before(charsetMeta.outerHtml())
             } else if let firstChild = existingMetaTags.first {

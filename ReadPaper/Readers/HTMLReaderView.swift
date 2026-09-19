@@ -1,6 +1,13 @@
-import AppKit
 import SwiftUI
 import WebKit
+
+#if os(macOS)
+import AppKit
+private typealias PlatformHTMLViewRepresentable = NSViewRepresentable
+#else
+import UIKit
+private typealias PlatformHTMLViewRepresentable = UIViewRepresentable
+#endif
 
 enum HTMLReaderTypography {
     static let fontSizeUserDefaultsKey = "ReadPaper.Reader.HTMLFontSize"
@@ -13,86 +20,20 @@ enum HTMLReaderTypography {
 }
 
 private extension PDFDisplayAppearance {
-    var htmlReaderBackgroundColor: NSColor {
-        switch self {
-        case .defaultMode:
-            return .textBackgroundColor
-        case .dark:
-            return NSColor(calibratedWhite: 0.09, alpha: 1)
-        case .paper:
-            return NSColor(calibratedRed: 0.95, green: 0.90, blue: 0.80, alpha: 1)
-        }
-    }
-
     var htmlReaderCSS: String {
         switch self {
         case .defaultMode:
-            return ""
-        case .dark:
             return """
-            :root { color-scheme: dark; }
+            :root { color-scheme: light; }
             html,
-            body {
-                background: #171717 !important;
-            }
-            body {
-                color: #e8e3d7 !important;
-            }
-            body.rp-readability-body {
-                background: #171717 !important;
-            }
+            body,
+            body.rp-readability-body,
             body.rp-readability-body .rp-readability-shell,
             body.rp-readability-body .rp-readability-header,
-            body.rp-readability-body .rp-readability-content {
-                color: #e8e3d7 !important;
-            }
-            body.rp-readability-body .rp-readability-title,
-            body.rp-readability-body .rp-readability-content h1,
-            body.rp-readability-body .rp-readability-content h2,
-            body.rp-readability-body .rp-readability-content h3,
-            body.rp-readability-body .rp-readability-content h4,
-            body.rp-readability-body .rp-readability-content h5,
-            body.rp-readability-body .rp-readability-content h6 {
-                color: #f5efe4 !important;
-            }
-            body.rp-readability-body .rp-readability-byline,
-            body.rp-readability-body .rp-readability-excerpt {
-                color: #aaa397 !important;
-            }
-            body.rp-readability-body .rp-readability-content a,
-            body:not(.rp-readability-body) a {
-                color: #9fc9ff !important;
-            }
-            body.rp-readability-body .rp-readability-content p.rp-readability-prose-paragraph,
-            body.rp-readability-body .rp-readability-content [data-rp-source='true'] {
-                color: inherit !important;
-            }
-            body.rp-readability-body .rp-translation-block,
-            body:not(.rp-readability-body) .rp-translation-block {
-                color: #9fd3aa !important;
-            }
-            body.rp-readability-body code,
-            body.rp-readability-body pre {
-                background: rgba(255, 255, 255, 0.08) !important;
-                color: #f1eadc !important;
-            }
-            body.rp-readability-body blockquote {
-                border-color: rgba(232, 227, 215, 0.28) !important;
-                color: #d5cec2 !important;
-            }
-            body.rp-readability-body table,
-            body.rp-readability-body th,
-            body.rp-readability-body td {
-                border-color: rgba(232, 227, 215, 0.24) !important;
-            }
-            body.rp-readability-body .rp-note-anchor-target,
-            body:not(.rp-readability-body) .rp-note-anchor-target {
-                outline-color: rgba(159, 211, 170, 0.52) !important;
-                background: rgba(159, 211, 170, 0.14) !important;
-            }
+            body.rp-readability-body .rp-readability-content,
             body:not(.rp-readability-body) {
-                background: #171717 !important;
-                color: #e8e3d7 !important;
+                background: transparent !important;
+                background-color: transparent !important;
             }
             """
         case .paper:
@@ -100,23 +41,13 @@ private extension PDFDisplayAppearance {
             :root { color-scheme: light; }
             html,
             body {
-                background: #f4ecd9 !important;
+                background: transparent !important;
             }
             body {
                 color: #2b261f !important;
             }
-            html[data-rp-reader-appearance='paper']::before {
-                content: "";
-                position: fixed;
-                inset: 0;
-                pointer-events: none;
-                z-index: 2147483647;
-                background: linear-gradient(180deg, #fff8e8 0%, #e8dcc0 100%);
-                mix-blend-mode: multiply;
-                opacity: 0.32;
-            }
             body.rp-readability-body {
-                background: #f4ecd9 !important;
+                background: transparent !important;
             }
             body.rp-readability-body .rp-readability-shell,
             body.rp-readability-body .rp-readability-header,
@@ -131,6 +62,7 @@ private extension PDFDisplayAppearance {
             body.rp-readability-body .rp-readability-content h5,
             body.rp-readability-body .rp-readability-content h6 {
                 color: #211b14 !important;
+                font-family: "New York", "Iowan Old Style", "Songti SC", "STSong", Georgia, serif !important;
             }
             body.rp-readability-body .rp-readability-byline,
             body.rp-readability-body .rp-readability-excerpt {
@@ -174,7 +106,7 @@ private extension PDFDisplayAppearance {
                 background: rgba(36, 83, 61, 0.10) !important;
             }
             body:not(.rp-readability-body) {
-                background: #f4ecd9 !important;
+                background: transparent !important;
                 color: #2b261f !important;
             }
             """
@@ -182,7 +114,7 @@ private extension PDFDisplayAppearance {
     }
 }
 
-struct HTMLReaderView: NSViewRepresentable {
+struct HTMLReaderView: PlatformHTMLViewRepresentable {
     var fileURL: URL
     var attachmentID: UUID? = nil
     var displayMode: TranslationDisplayMode
@@ -193,13 +125,36 @@ struct HTMLReaderView: NSViewRepresentable {
     @Binding var scrollRatio: Double
     var segmentUpdate: HTMLTranslationSegmentUpdate?
     var noteNavigationRequest: NoteNavigationRequest? = nil
+    var selectionAssistantHistoryAnchors: [SelectionAssistantHistoryAnchor] = []
+    var selectionHighlightResetToken: Int = 0
+    var nativeSelectionClearToken: Int = 0
     var onNoteSelectionChanged: ((NoteSelectionContext?) -> Void)? = nil
+    var onSelectionAssistantDismissed: (() -> Void)? = nil
 
+    #if os(macOS)
     func makeNSView(context: Context) -> WKWebView {
+        makeView(context: context)
+    }
+
+    func updateNSView(_ view: WKWebView, context: Context) {
+        updateView(view, context: context)
+    }
+    #else
+    func makeUIView(context: Context) -> WKWebView {
+        makeView(context: context)
+    }
+
+    func updateUIView(_ view: WKWebView, context: Context) {
+        updateView(view, context: context)
+    }
+    #endif
+
+    private func makeView(context: Context) -> WKWebView {
         let configuration = WKWebViewConfiguration()
         configuration.preferences.javaScriptCanOpenWindowsAutomatically = false
         configuration.userContentController.add(context.coordinator, name: Coordinator.scrollMessageHandlerName)
         configuration.userContentController.add(context.coordinator, name: Coordinator.selectionMessageHandlerName)
+        configuration.userContentController.add(context.coordinator, name: Coordinator.selectionResetMessageHandlerName)
         configuration.userContentController.addUserScript(
             WKUserScript(
                 source: Coordinator.mediaPreparationScript,
@@ -220,14 +175,24 @@ struct HTMLReaderView: NSViewRepresentable {
         return view
     }
 
-    func updateNSView(_ view: WKWebView, context: Context) {
+    private func updateView(_ view: WKWebView, context: Context) {
         context.coordinator.attachmentID = attachmentID
         context.coordinator.displayMode = displayMode
         context.coordinator.displayAppearance = displayAppearance
         context.coordinator.fontSize = HTMLReaderTypography.clampFontSize(fontSize)
         context.coordinator.scrollRatio = $scrollRatio
         context.coordinator.onNoteSelectionChanged = onNoteSelectionChanged
+        context.coordinator.onSelectionAssistantDismissed = onSelectionAssistantDismissed
+        context.coordinator.selectionAssistantHistoryAnchors = selectionAssistantHistoryAnchors
         applyHostDisplayAppearance(displayAppearance, to: view)
+        context.coordinator.clearSelectionHighlightIfNeeded(
+            resetToken: selectionHighlightResetToken,
+            in: view
+        )
+        context.coordinator.clearNativeSelectionIfNeeded(
+            clearToken: nativeSelectionClearToken,
+            in: view
+        )
 
         let readAccessURL = fileURL.deletingLastPathComponent()
         if context.coordinator.loadedURL != fileURL {
@@ -258,19 +223,34 @@ struct HTMLReaderView: NSViewRepresentable {
         context.coordinator.applyReaderTypography(to: view)
         context.coordinator.applyDisplayAppearance(to: view)
         context.coordinator.applySegmentUpdateIfNeeded(segmentUpdate, to: view)
+        context.coordinator.applySelectionAssistantHistoryAnchors(to: view)
         context.coordinator.applyNoteNavigationIfNeeded(noteNavigationRequest, to: view)
     }
 
     func makeCoordinator() -> Coordinator {
         Coordinator(
             scrollRatio: $scrollRatio,
-            onNoteSelectionChanged: onNoteSelectionChanged
+            onNoteSelectionChanged: onNoteSelectionChanged,
+            onSelectionAssistantDismissed: onSelectionAssistantDismissed
         )
     }
 
-    private func applyHostDisplayAppearance(_ appearance: PDFDisplayAppearance, to webView: WKWebView) {
+    private func applyHostDisplayAppearance(_: PDFDisplayAppearance, to webView: WKWebView) {
+        #if os(macOS)
+        webView.appearance = NSAppearance(named: .aqua)
         webView.wantsLayer = true
-        webView.layer?.backgroundColor = appearance.htmlReaderBackgroundColor.cgColor
+        webView.setValue(false, forKey: "drawsBackground")
+        webView.layer?.backgroundColor = NSColor.clear.cgColor
+        if #available(macOS 12.0, *) {
+            webView.underPageBackgroundColor = .clear
+        }
+        webView.enclosingScrollView?.drawsBackground = false
+        #else
+        webView.overrideUserInterfaceStyle = .light
+        webView.isOpaque = false
+        webView.backgroundColor = .clear
+        webView.scrollView.backgroundColor = .clear
+        #endif
     }
 
     final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
@@ -284,6 +264,13 @@ struct HTMLReaderView: NSViewRepresentable {
 
         static let scrollMessageHandlerName = "rpScroll"
         static let selectionMessageHandlerName = "rpSelection"
+        static let selectionResetMessageHandlerName = "rpSelectionReset"
+        static let nativeSelectionClearScript = """
+        (() => {
+            const selection = window.getSelection();
+            if (selection) { selection.removeAllRanges(); }
+        })();
+        """
         static let mediaPreparationScript = """
         (() => {
             if (window.__rpMediaPreparationInstalled) { return; }
@@ -580,6 +567,161 @@ struct HTMLReaderView: NSViewRepresentable {
                 }
             }
 
+            if (!document.getElementById('rp-selection-assistant-highlight-style')) {
+                const style = document.createElement('style');
+                style.id = 'rp-selection-assistant-highlight-style';
+                style.textContent = `
+                    ::highlight(rp-assistant-selection) {
+                        background-color: rgba(0, 122, 255, 0.24);
+                        color: inherit;
+                    }
+                `;
+                (document.head || document.documentElement).appendChild(style);
+            }
+
+            const preserveAssistantSelectionHighlight = range => {
+                if (!range || !window.CSS?.highlights || typeof Highlight === 'undefined') { return; }
+                try {
+                    CSS.highlights.set('rp-assistant-selection', new Highlight(range.cloneRange()));
+                } catch {}
+            };
+
+            window.__rpClearSelectionAssistantHighlight = () => {
+                try { CSS.highlights?.delete('rp-assistant-selection'); } catch {}
+            };
+
+            if (!document.getElementById('rp-selection-assistant-history-style')) {
+                const style = document.createElement('style');
+                style.id = 'rp-selection-assistant-history-style';
+                style.textContent = `
+                    ::highlight(rp-assistant-history) {
+                        background-color: rgba(0, 122, 255, 0.10);
+                        text-decoration: underline rgba(0, 122, 255, 0.52) 1px;
+                    }
+                    .rp-assistant-history-fallback {
+                        background: rgba(0, 122, 255, 0.055);
+                        box-shadow: inset 0 -1px rgba(0, 122, 255, 0.42);
+                        cursor: pointer;
+                    }
+                `;
+                (document.head || document.documentElement).appendChild(style);
+            }
+
+            var assistantHistoryRanges = [];
+            let assistantHistorySelectionGraceMilliseconds = 700;
+            var assistantHistorySelectionGraceUntil = 0;
+            const normalizedTextMap = element => {
+                const walker = document.createTreeWalker(
+                    element,
+                    NodeFilter.SHOW_TEXT,
+                    {
+                        acceptNode: node => {
+                            const parent = node.parentElement;
+                            if (!parent || isTranslationElement(parent)) {
+                                return NodeFilter.FILTER_REJECT;
+                            }
+                            return NodeFilter.FILTER_ACCEPT;
+                        }
+                    }
+                );
+                let text = '';
+                const positions = [];
+                let pendingSpace = null;
+                while (walker.nextNode()) {
+                    const node = walker.currentNode;
+                    const value = node.nodeValue || '';
+                    for (let offset = 0; offset < value.length; offset += 1) {
+                        const character = value[offset];
+                        if (/\\s/.test(character)) {
+                            if (text && text[text.length - 1] !== ' ') {
+                                pendingSpace = { node, offset };
+                            }
+                            continue;
+                        }
+                        if (pendingSpace) {
+                            text += ' ';
+                            positions.push(pendingSpace);
+                            pendingSpace = null;
+                        }
+                        text += character;
+                        positions.push({ node, offset });
+                    }
+                }
+                return { text: text.trim(), positions };
+            };
+
+            const assistantHistoryEntryAtPoint = (x, y) => {
+                for (const item of assistantHistoryRanges) {
+                    const containsPoint = Array.from(item.range.getClientRects()).some(rect =>
+                        x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom
+                    );
+                    if (containsPoint) { return item; }
+                }
+                const fallback = document.elementFromPoint(x, y)?.closest?.('.rp-assistant-history-fallback');
+                if (!fallback) { return null; }
+                return assistantHistoryRanges.find(item => item.target === fallback) || null;
+            };
+            window.__rpAssistantHistoryEntryAtPoint = assistantHistoryEntryAtPoint;
+
+            window.__rpSetSelectionAssistantHistory = entries => {
+                try { CSS.highlights?.delete('rp-assistant-history'); } catch {}
+                document.querySelectorAll('.rp-assistant-history-fallback').forEach(element =>
+                    element.classList.remove('rp-assistant-history-fallback')
+                );
+                assistantHistoryRanges = [];
+                const ranges = [];
+
+                for (const entry of Array.isArray(entries) ? entries : []) {
+                    const target = window.__rpResolveNoteAnchor(entry.htmlSelector);
+                    const quote = normalizeText(entry.quote);
+                    if (!target || !quote) { continue; }
+                    const mapped = normalizedTextMap(target);
+                    const start = mapped.text.indexOf(quote);
+                    const end = start + quote.length - 1;
+                    if (start >= 0 && mapped.positions[start] && mapped.positions[end]) {
+                        const range = document.createRange();
+                        range.setStart(mapped.positions[start].node, mapped.positions[start].offset);
+                        range.setEnd(mapped.positions[end].node, mapped.positions[end].offset + 1);
+                        ranges.push(range);
+                        assistantHistoryRanges.push({ entry, range, target });
+                    } else {
+                        target.classList.add('rp-assistant-history-fallback');
+                        const range = document.createRange();
+                        range.selectNodeContents(target);
+                        assistantHistoryRanges.push({ entry, range, target });
+                    }
+                }
+
+                if (window.CSS?.highlights && typeof Highlight !== 'undefined' && ranges.length > 0) {
+                    try { CSS.highlights.set('rp-assistant-history', new Highlight(...ranges)); } catch {}
+                } else {
+                    assistantHistoryRanges.forEach(item => item.target.classList.add('rp-assistant-history-fallback'));
+                }
+            };
+
+            document.addEventListener('pointerdown', event => {
+                if (event.button !== 0) { return; }
+                if (assistantHistoryEntryAtPoint(event.clientX, event.clientY)) {
+                    assistantHistorySelectionGraceUntil = Date.now() + assistantHistorySelectionGraceMilliseconds;
+                    return;
+                }
+                window.__rpClearSelectionAssistantHighlight();
+                window.webkit.messageHandlers.rpSelectionReset.postMessage(null);
+            }, true);
+
+            document.addEventListener('click', event => {
+                const item = assistantHistoryEntryAtPoint(event.clientX, event.clientY);
+                if (!item) { return; }
+                assistantHistorySelectionGraceUntil = Date.now() + assistantHistorySelectionGraceMilliseconds;
+                event.preventDefault();
+                event.stopPropagation();
+                window.webkit.messageHandlers.rpSelection.postMessage({
+                    quote: item.entry.quote,
+                    selector: item.entry.htmlSelector,
+                    localContext: normalizeText(item.target.textContent).slice(0, 8000)
+                });
+            }, true);
+
             window.__rpScrollToNoteAnchor = anchor => {
                 const target = window.__rpResolveNoteAnchor(anchor);
                 if (!target) { return false; }
@@ -605,6 +747,7 @@ struct HTMLReaderView: NSViewRepresentable {
                 const selection = window.getSelection();
                 const quote = normalizeText(selection ? selection.toString() : '');
                 if (!quote) {
+                    if (Date.now() < assistantHistorySelectionGraceUntil) { return; }
                     window.webkit.messageHandlers.rpSelection.postMessage(null);
                     return;
                 }
@@ -617,7 +760,25 @@ struct HTMLReaderView: NSViewRepresentable {
                     return;
                 }
 
-                window.webkit.messageHandlers.rpSelection.postMessage({ quote, selector });
+                if (selection.rangeCount > 0) {
+                    preserveAssistantSelectionHighlight(selection.getRangeAt(0));
+                }
+
+                const semanticSelector = '[data-rp-segment-id],p,h1,h2,h3,h4,h5,h6,figcaption,blockquote,li';
+                const candidates = Array.from(document.querySelectorAll(semanticSelector))
+                    .filter(element => !isTranslationElement(element));
+                const contextIndex = candidates.indexOf(anchorElement);
+                const contextElements = contextIndex >= 0
+                    ? candidates.slice(Math.max(0, contextIndex - 1), Math.min(candidates.length, contextIndex + 2))
+                    : [anchorElement];
+                const localContext = contextElements
+                    .filter(Boolean)
+                    .map(element => normalizeText(element.textContent))
+                    .filter(Boolean)
+                    .join('\\n\\n')
+                    .slice(0, 8000);
+
+                window.webkit.messageHandlers.rpSelection.postMessage({ quote, selector, localContext });
             };
 
             document.addEventListener('selectionchange', () => {
@@ -640,6 +801,8 @@ struct HTMLReaderView: NSViewRepresentable {
         var fontSize: Double = HTMLReaderTypography.defaultFontSize
         var scrollRatio: Binding<Double>
         var onNoteSelectionChanged: ((NoteSelectionContext?) -> Void)?
+        var onSelectionAssistantDismissed: (() -> Void)?
+        var selectionAssistantHistoryAnchors: [SelectionAssistantHistoryAnchor] = []
         private var currentRequest: LoadRequest?
         private var pendingRequest: LoadRequest?
         private var pendingScrollRatio: Double?
@@ -648,15 +811,20 @@ struct HTMLReaderView: NSViewRepresentable {
         private var pendingNoteNavigationRequest: NoteNavigationRequest?
         private var lastAppliedNoteNavigationID: UUID?
         private var lastPublishedNoteSelection: NoteSelectionContext?
+        private var lastSelectionHighlightResetToken = 0
+        private var lastNativeSelectionClearToken = 0
+        private var lastSelectionAssistantHistorySignature: String?
         private var isLoading = false
         private var isDocumentReady = false
 
         init(
             scrollRatio: Binding<Double>,
-            onNoteSelectionChanged: ((NoteSelectionContext?) -> Void)?
+            onNoteSelectionChanged: ((NoteSelectionContext?) -> Void)?,
+            onSelectionAssistantDismissed: (() -> Void)?
         ) {
             self.scrollRatio = scrollRatio
             self.onNoteSelectionChanged = onNoteSelectionChanged
+            self.onSelectionAssistantDismissed = onSelectionAssistantDismissed
         }
 
         func resetLoadedState() {
@@ -669,6 +837,7 @@ struct HTMLReaderView: NSViewRepresentable {
             lastAppliedSegmentSequence = nil
             pendingNoteNavigationRequest = nil
             lastAppliedNoteNavigationID = nil
+            lastSelectionAssistantHistorySignature = nil
             isLoading = false
             isDocumentReady = false
             publishNoteSelection(nil)
@@ -703,6 +872,7 @@ struct HTMLReaderView: NSViewRepresentable {
 
             isLoading = true
             isDocumentReady = false
+            lastSelectionAssistantHistorySignature = nil
             currentRequest = request
             pendingSegmentUpdates = []
             lastAppliedSegmentSequence = nil
@@ -816,6 +986,7 @@ struct HTMLReaderView: NSViewRepresentable {
             applyDisplayMode(to: webView)
             applyReaderTypography(to: webView)
             applyDisplayAppearance(to: webView)
+            applySelectionAssistantHistoryAnchors(to: webView)
             restoreScrollRatioIfNeeded(in: webView)
             flushPendingSegmentUpdates(in: webView)
             flushPendingNoteNavigationIfNeeded(in: webView)
@@ -844,7 +1015,11 @@ struct HTMLReaderView: NSViewRepresentable {
                 decisionHandler(.allow)
                 return
             }
+            #if os(macOS)
             NSWorkspace.shared.open(url)
+            #else
+            UIApplication.shared.open(url)
+            #endif
             decisionHandler(.cancel)
         }
 
@@ -855,6 +1030,9 @@ struct HTMLReaderView: NSViewRepresentable {
                 handleScrollMessage(message)
             case Self.selectionMessageHandlerName:
                 handleSelectionMessage(message)
+            case Self.selectionResetMessageHandlerName:
+                publishNoteSelection(nil)
+                onSelectionAssistantDismissed?()
             default:
                 return
             }
@@ -993,6 +1171,34 @@ struct HTMLReaderView: NSViewRepresentable {
             lastAppliedNoteNavigationID = request.id
         }
 
+        func applySelectionAssistantHistoryAnchors(to webView: WKWebView) {
+            guard isDocumentReady, isLoading == false else { return }
+            let matchingAnchors = selectionAssistantHistoryAnchors.filter {
+                $0.attachmentID == nil || $0.attachmentID == attachmentID
+            }
+            guard let data = try? JSONEncoder().encode(matchingAnchors),
+                  let json = String(data: data, encoding: .utf8) else { return }
+            let signature = Hashing.sha256Hex(json)
+            guard signature != lastSelectionAssistantHistorySignature else { return }
+            runJavaScript(
+                "window.__rpSetSelectionAssistantHistory?.(\(json));",
+                in: webView
+            )
+            lastSelectionAssistantHistorySignature = signature
+        }
+
+        func clearSelectionHighlightIfNeeded(resetToken: Int, in webView: WKWebView) {
+            guard resetToken != lastSelectionHighlightResetToken else { return }
+            lastSelectionHighlightResetToken = resetToken
+            runJavaScript("window.__rpClearSelectionAssistantHighlight?.();", in: webView)
+        }
+
+        func clearNativeSelectionIfNeeded(clearToken: Int, in webView: WKWebView) {
+            guard clearToken != lastNativeSelectionClearToken else { return }
+            lastNativeSelectionClearToken = clearToken
+            runJavaScript(Self.nativeSelectionClearScript, in: webView)
+        }
+
         private func flushPendingNoteNavigationIfNeeded(in webView: WKWebView) {
             guard let pendingNoteNavigationRequest else { return }
             self.pendingNoteNavigationRequest = nil
@@ -1037,7 +1243,8 @@ struct HTMLReaderView: NSViewRepresentable {
             let selection = NoteSelectionContext(
                 attachmentID: attachmentID,
                 quote: body["quote"] as? String ?? "",
-                htmlSelector: body["selector"] as? String
+                htmlSelector: body["selector"] as? String,
+                localContext: body["localContext"] as? String
             )
             guard selection.trimmedQuote != nil, selection.hasAnchor else {
                 publishNoteSelection(nil)

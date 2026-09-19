@@ -9,13 +9,13 @@ struct InspectorPaneView: View {
 
     @Environment(\.modelContext) private var modelContext
     @Environment(\.localizationBundle) private var bundle
+    @Environment(\.pdfDisplayAppearance) private var displayAppearance
     @State private var notePendingDeletion: Note?
     @State private var noteDeletionErrorMessage: String?
     @State private var authorsSaveErrorMessage: String?
     @State private var isAbstractExpanded = false
-    @State private var isTranslatingAbstract = false
-    @State private var abstractTranslationError: String?
-    @State private var translatedAbstract: String?
+    @State private var abstractTranslationState = AbstractTranslationPresentationState()
+    @State private var abstractTranslationTask: Task<Void, Never>?
     @State private var isEditingAuthors = false
     @State private var authorsDraft = ""
     @FocusState private var focusedMetadataField: MetadataField?
@@ -36,12 +36,17 @@ struct InspectorPaneView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(Color(nsColor: .windowBackgroundColor))
+        .readPaperInspectorBackground()
         .onAppear {
             syncMetadataEditorState(with: paper)
+            synchronizeAbstractPresentation(with: paper?.id)
         }
-        .onChange(of: paper?.id) { _, _ in
+        .onChange(of: paper?.id) { _, newPaperID in
             syncMetadataEditorState(with: paper)
+            synchronizeAbstractPresentation(with: newPaperID)
+        }
+        .onDisappear {
+            cancelAbstractTranslation()
         }
         .confirmationDialog(
             String(localized: "Delete Note?", bundle: bundle),
@@ -85,9 +90,6 @@ struct InspectorPaneView: View {
 
     private var expandedInspectorPane: some View {
         VStack(spacing: 0) {
-            paneHeader
-            Divider()
-
             Group {
                 if let paper {
                     ScrollView {
@@ -103,39 +105,11 @@ struct InspectorPaneView: View {
                 }
             }
         }
-    }
-
-    private var paneHeader: some View {
-        HStack(spacing: 12) {
-            Text("INSPECTOR", bundle: bundle)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-                .tracking(1.1)
-
-            if paper == nil {
-                Text("Paper details, abstract, and notes", bundle: bundle)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            } else {
-                Text("Metadata, abstract, and notes", bundle: bundle)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-
-            Spacer(minLength: 0)
-        }
-        .frame(minHeight: 20)
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .background(Color(nsColor: .windowBackgroundColor))
+        .fontDesign(displayAppearance == .paper ? .serif : .default)
     }
 
     private func metadataSection(_ paper: Paper) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Metadata", bundle: bundle)
-                .font(.headline)
             Text(paper.title)
                 .font(.title3.weight(.semibold))
                 .textSelection(.enabled)
@@ -210,9 +184,9 @@ struct InspectorPaneView: View {
                 Spacer()
                 
                 HStack(spacing: 8) {
-                    if translatedAbstract != nil {
+                    if abstractTranslationState.translatedText != nil {
                         Button {
-                            self.translatedAbstract = nil
+                            abstractTranslationState.showOriginal()
                         } label: {
                             HStack(spacing: 4) {
                                 Text(String(localized: "Original", bundle: bundle))
@@ -234,7 +208,7 @@ struct InspectorPaneView: View {
                         }
                         .buttonStyle(.plain)
                         .foregroundStyle(.secondary)
-                    } else if !isTranslatingAbstract {
+                    } else if !abstractTranslationState.isTranslating {
                         Button {
                             translateAbstract()
                         } label: {
@@ -258,7 +232,7 @@ struct InspectorPaneView: View {
                         }
                         .buttonStyle(.plain)
                         .foregroundStyle(.secondary)
-                        .disabled(isTranslatingAbstract)
+                        .disabled(abstractTranslationState.isTranslating)
                     }
                     
                     Button {
@@ -293,7 +267,7 @@ struct InspectorPaneView: View {
                 }
             }
             
-            if let error = abstractTranslationError {
+            if let error = abstractTranslationState.errorMessage {
                 Text(error)
                     .font(.caption)
                     .foregroundStyle(.red)
@@ -301,7 +275,7 @@ struct InspectorPaneView: View {
             }
             
             ZStack(alignment: .bottom) {
-                if isTranslatingAbstract {
+                if abstractTranslationState.isTranslating {
                     HStack(spacing: 8) {
                         ProgressView()
                             .controlSize(.small)
@@ -312,7 +286,7 @@ struct InspectorPaneView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.vertical, 8)
                 } else {
-                    Text(translatedAbstract ?? abstractText)
+                    Text(abstractTranslationState.translatedText ?? abstractText)
                         .font(.callout)
                         .textSelection(.enabled)
                         .lineLimit(isAbstractExpanded ? nil : 8)
@@ -320,7 +294,7 @@ struct InspectorPaneView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 
-                if !isAbstractExpanded && !isTranslatingAbstract {
+                if !isAbstractExpanded && !abstractTranslationState.isTranslating {
                     LinearGradient(
                         gradient: Gradient(colors: [
                             .clear,
@@ -462,11 +436,14 @@ struct InspectorPaneView: View {
     
     private func translateAbstract() {
         guard let paper = paper else { return }
-        
-        isTranslatingAbstract = true
-        abstractTranslationError = nil
-        
-        Task {
+
+        synchronizeAbstractPresentation(with: paper.id)
+        abstractTranslationTask?.cancel()
+
+        let paperID = paper.id
+        let requestID = abstractTranslationState.beginTranslation(for: paperID)
+
+        abstractTranslationTask = Task { @MainActor in
             do {
                 let service = AbstractTranslationService()
                 let settings = try modelContext.fetch(FetchDescriptor<AppSettings>()).first ?? AppSettings()
@@ -477,27 +454,44 @@ struct InspectorPaneView: View {
                     modelContext: modelContext,
                     onProgress: nil
                 )
-                
-                await MainActor.run {
-                    translatedAbstract = translated
-                    isTranslatingAbstract = false
+
+                if abstractTranslationState.acceptTranslation(
+                    translated,
+                    paperID: paperID,
+                    requestID: requestID
+                ) {
+                    abstractTranslationTask = nil
                 }
             } catch {
-                await MainActor.run {
-                    abstractTranslationError = error.localizedDescription
-                    isTranslatingAbstract = false
+                if abstractTranslationState.acceptFailure(
+                    error.localizedDescription,
+                    paperID: paperID,
+                    requestID: requestID
+                ) {
+                    abstractTranslationTask = nil
                 }
             }
         }
     }
 
+    private func synchronizeAbstractPresentation(with paperID: UUID?) {
+        guard abstractTranslationState.paperID != paperID else { return }
+
+        abstractTranslationTask?.cancel()
+        abstractTranslationTask = nil
+        abstractTranslationState.selectPaper(paperID)
+        isAbstractExpanded = false
+    }
+
+    private func cancelAbstractTranslation() {
+        abstractTranslationTask?.cancel()
+        abstractTranslationTask = nil
+        abstractTranslationState.cancelActiveRequest()
+    }
+
     private var emptyInspectorState: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                Text("INSPECTOR", bundle: bundle)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                    .tracking(1.1)
 
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Paper details will appear here", bundle: bundle)
@@ -507,32 +501,11 @@ struct InspectorPaneView: View {
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-
-                VStack(alignment: .leading, spacing: 12) {
-                    inspectorHintRow(
-                        title: String(localized: "Metadata", bundle: bundle),
-                        systemImage: "text.document",
-                        description: String(localized: "Title, authors, arXiv ID, and abstract.", bundle: bundle)
-                    )
-                    inspectorHintRow(
-                        title: String(localized: "Notes", bundle: bundle),
-                        systemImage: "note.text",
-                        description: String(localized: "Quick reading notes stay attached to the current paper.", bundle: bundle)
-                    )
-                }
-                .padding(16)
-                .background(
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .fill(Color(nsColor: .controlBackgroundColor))
-                )
-                .overlay {
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .strokeBorder(Color.primary.opacity(0.06))
-                }
             }
             .padding(16)
         }
         .scrollIndicators(.hidden)
+        .fontDesign(displayAppearance == .paper ? .serif : .default)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
@@ -560,8 +533,85 @@ struct InspectorPaneView: View {
     }
 }
 
+struct AbstractTranslationPresentationState {
+    private(set) var paperID: UUID?
+    private(set) var activeRequestID: UUID?
+    private(set) var isTranslating = false
+    private(set) var translatedText: String?
+    private(set) var errorMessage: String?
+
+    mutating func selectPaper(_ paperID: UUID?) {
+        self.paperID = paperID
+        activeRequestID = nil
+        isTranslating = false
+        translatedText = nil
+        errorMessage = nil
+    }
+
+    mutating func beginTranslation(for paperID: UUID) -> UUID {
+        if self.paperID != paperID {
+            selectPaper(paperID)
+        }
+
+        let requestID = UUID()
+        activeRequestID = requestID
+        isTranslating = true
+        translatedText = nil
+        errorMessage = nil
+        return requestID
+    }
+
+    @discardableResult
+    mutating func acceptTranslation(
+        _ translatedText: String,
+        paperID: UUID,
+        requestID: UUID
+    ) -> Bool {
+        guard isCurrentRequest(paperID: paperID, requestID: requestID) else {
+            return false
+        }
+
+        activeRequestID = nil
+        isTranslating = false
+        self.translatedText = translatedText
+        errorMessage = nil
+        return true
+    }
+
+    @discardableResult
+    mutating func acceptFailure(
+        _ errorMessage: String,
+        paperID: UUID,
+        requestID: UUID
+    ) -> Bool {
+        guard isCurrentRequest(paperID: paperID, requestID: requestID) else {
+            return false
+        }
+
+        activeRequestID = nil
+        isTranslating = false
+        translatedText = nil
+        self.errorMessage = errorMessage
+        return true
+    }
+
+    mutating func showOriginal() {
+        translatedText = nil
+    }
+
+    mutating func cancelActiveRequest() {
+        activeRequestID = nil
+        isTranslating = false
+    }
+
+    private func isCurrentRequest(paperID: UUID, requestID: UUID) -> Bool {
+        self.paperID == paperID && activeRequestID == requestID
+    }
+}
+
 private struct NoteEditor: View {
     @Environment(\.localizationBundle) private var bundle
+    @Environment(\.pdfDisplayAppearance) private var displayAppearance
     @Bindable var note: Note
     let shouldFocus: Bool
     let onOpenAnchor: (() -> Void)?
@@ -632,7 +682,8 @@ private struct NoteEditor: View {
                     onEditingEnded: {
                         isEditorFocusPending = false
                         isEditing = false
-                    }
+                    },
+                    usesPaperTypography: displayAppearance == .paper
                 )
                     .frame(minHeight: 90)
                     .background(
@@ -744,6 +795,7 @@ private struct InsetTextView: NSViewRepresentable {
     var onFocusApplied: () -> Void
     var onEditingBegan: () -> Void = {}
     var onEditingEnded: () -> Void = {}
+    var usesPaperTypography = false
 
     func makeCoordinator() -> Coordinator {
         Coordinator(
@@ -786,7 +838,7 @@ private struct InsetTextView: NSViewRepresentable {
         if #available(macOS 15.0, *) {
             textView.writingToolsBehavior = .none
         }
-        textView.font = .preferredFont(forTextStyle: .body)
+        textView.font = editorFont()
         textView.string = text
         textView.textContainerInset = NSSize(width: 10, height: 10)
 
@@ -807,13 +859,25 @@ private struct InsetTextView: NSViewRepresentable {
             textView.string = text
         }
 
+        textView.font = editorFont()
+
         context.coordinator.applyFocusIfNeeded(to: textView, shouldFocus: shouldFocus)
+    }
+
+    private func editorFont() -> NSFont {
+        let size = NSFont.preferredFont(forTextStyle: .body).pointSize
+        guard usesPaperTypography,
+              let paperFont = NSFont(name: "New York", size: size) else {
+            return .preferredFont(forTextStyle: .body)
+        }
+        return paperFont
     }
 
     static func dismantleNSView(_ nsView: NSScrollView, coordinator: Coordinator) {
         coordinator.stopOutsideClickMonitoring()
     }
 
+    @MainActor
     final class Coordinator: NSObject, NSTextViewDelegate {
         @Binding private var text: String
         private let onFocusApplied: () -> Void
@@ -823,7 +887,7 @@ private struct InsetTextView: NSViewRepresentable {
         private var isFocusScheduled = false
         private var focusGeneration = 0
         weak var hostScrollView: NSScrollView?
-        private var outsideClickMonitor: Any?
+        nonisolated(unsafe) private var outsideClickMonitor: Any?
 
         init(
             text: Binding<String>,
@@ -903,21 +967,24 @@ private struct InsetTextView: NSViewRepresentable {
             outsideClickMonitor = NSEvent.addLocalMonitorForEvents(
                 matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]
             ) { [weak self] event in
-                guard let self,
-                      let scrollView = self.hostScrollView,
-                      let window = scrollView.window,
-                      event.window === window else {
-                    return event
-                }
-
+                let eventWindowNumber = event.windowNumber
                 let pointInWindow = event.locationInWindow
-                let pointInScrollView = scrollView.convert(pointInWindow, from: nil)
-                let isInsideEditor = scrollView.bounds.contains(pointInScrollView)
 
-                if !isInsideEditor {
-                    window.makeFirstResponder(nil)
+                MainActor.assumeIsolated {
+                    guard let self,
+                          let scrollView = self.hostScrollView,
+                          let window = scrollView.window,
+                          eventWindowNumber == window.windowNumber else {
+                        return
+                    }
+
+                    let pointInScrollView = scrollView.convert(pointInWindow, from: nil)
+                    let isInsideEditor = scrollView.bounds.contains(pointInScrollView)
+
+                    if !isInsideEditor {
+                        window.makeFirstResponder(nil)
+                    }
                 }
-
                 return event
             }
         }
@@ -930,7 +997,9 @@ private struct InsetTextView: NSViewRepresentable {
         }
 
         deinit {
-            stopOutsideClickMonitoring()
+            if let outsideClickMonitor {
+                NSEvent.removeMonitor(outsideClickMonitor)
+            }
         }
     }
 }

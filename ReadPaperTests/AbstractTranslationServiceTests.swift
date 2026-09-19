@@ -24,7 +24,7 @@ final class AbstractTranslationServiceTests: XCTestCase {
         
         // 创建模拟的翻译客户端
         let mockClient = MockTranslationClient()
-        service = AbstractTranslationService(translationClient: mockClient)
+        service = AbstractTranslationService(translationClient: mockClient, glossaryProvider: { "" })
     }
     
     override func tearDown() async throws {
@@ -168,6 +168,61 @@ final class AbstractTranslationServiceTests: XCTestCase {
         let languageDefault = service.getCurrentTargetLanguage(settings: settingsDefault)
         XCTAssertEqual(languageDefault.code, "zh-CN") // 默认回退到简体中文
     }
+
+    func testCachedTranslationIsScopedToReasoningConfiguration() throws {
+        let paper = Paper(
+            title: "Test Paper",
+            abstractText: "This is a test abstract.",
+            localDirectoryPath: ""
+        )
+        modelContext.insert(paper)
+
+        let providerID = UUID()
+        let modelID = UUID()
+        let defaultSnapshot = LLMModelRouteSnapshot(
+            providerProfileID: providerID,
+            providerName: "Provider",
+            modelProfileID: modelID,
+            modelProfileName: "Model",
+            baseURL: "https://example.test/v1",
+            apiKeyRef: "key-ref",
+            modelName: "deepseek-v4-pro"
+        )
+        var reasonedSnapshot = defaultSnapshot
+        reasonedSnapshot.thinkingMode = .enabled
+        reasonedSnapshot.reasoningEffort = .max
+
+        modelContext.insert(TranslationSegment(
+            paperID: paper.id,
+            sourceType: "abstract",
+            targetLanguage: "zh-CN",
+            sourceHash: Hashing.sha256Hex(paper.abstractText),
+            sourceText: paper.abstractText,
+            translatedText: "Cached translation",
+            providerProfileID: providerID,
+            modelProfileID: modelID,
+            modelName: defaultSnapshot.translationCacheIdentity
+        ))
+        try modelContext.save()
+
+        let defaultRoute = ResolvedLLMModelRoute(snapshot: defaultSnapshot, apiKey: "key")
+        let reasonedRoute = ResolvedLLMModelRoute(snapshot: reasonedSnapshot, apiKey: "key")
+        XCTAssertEqual(
+            try service.getCachedTranslation(
+                paper: paper,
+                targetLanguage: "zh-CN",
+                route: defaultRoute,
+                modelContext: modelContext
+            ),
+            "Cached translation"
+        )
+        XCTAssertNil(try service.getCachedTranslation(
+            paper: paper,
+            targetLanguage: "zh-CN",
+            route: reasonedRoute,
+            modelContext: modelContext
+        ))
+    }
     
     func testClearCache() throws {
         let paper = Paper(
@@ -289,13 +344,83 @@ final class AbstractTranslationServiceTests: XCTestCase {
     }
 }
 
+final class AbstractTranslationPresentationStateTests: XCTestCase {
+    func testSelectingAnotherPaperClearsDisplayedTranslation() {
+        let firstPaperID = UUID()
+        let secondPaperID = UUID()
+        var state = AbstractTranslationPresentationState()
+
+        state.selectPaper(firstPaperID)
+        let firstRequestID = state.beginTranslation(for: firstPaperID)
+        XCTAssertTrue(state.acceptTranslation(
+            "Translation from the first paper",
+            paperID: firstPaperID,
+            requestID: firstRequestID
+        ))
+        XCTAssertEqual(state.translatedText, "Translation from the first paper")
+
+        state.selectPaper(secondPaperID)
+
+        XCTAssertEqual(state.paperID, secondPaperID)
+        XCTAssertNil(state.translatedText)
+        XCTAssertNil(state.errorMessage)
+        XCTAssertFalse(state.isTranslating)
+    }
+
+    func testSelectingAnotherPaperRejectsPreviousRequest() {
+        let firstPaperID = UUID()
+        let secondPaperID = UUID()
+        var state = AbstractTranslationPresentationState()
+
+        state.selectPaper(firstPaperID)
+        let firstRequestID = state.beginTranslation(for: firstPaperID)
+        state.selectPaper(secondPaperID)
+
+        XCTAssertFalse(state.acceptTranslation(
+            "Translation from the first paper",
+            paperID: firstPaperID,
+            requestID: firstRequestID
+        ))
+        XCTAssertNil(state.translatedText)
+    }
+
+    func testOldRequestCannotOverwriteNewRequestAfterReturningToSamePaper() {
+        let firstPaperID = UUID()
+        let secondPaperID = UUID()
+        var state = AbstractTranslationPresentationState()
+
+        state.selectPaper(firstPaperID)
+        let oldRequestID = state.beginTranslation(for: firstPaperID)
+        state.selectPaper(secondPaperID)
+        state.selectPaper(firstPaperID)
+        let currentRequestID = state.beginTranslation(for: firstPaperID)
+
+        XCTAssertFalse(state.acceptTranslation(
+            "Stale translation",
+            paperID: firstPaperID,
+            requestID: oldRequestID
+        ))
+        XCTAssertTrue(state.isTranslating)
+        XCTAssertNil(state.translatedText)
+
+        XCTAssertTrue(state.acceptTranslation(
+            "Current translation",
+            paperID: firstPaperID,
+            requestID: currentRequestID
+        ))
+        XCTAssertFalse(state.isTranslating)
+        XCTAssertEqual(state.translatedText, "Current translation")
+    }
+}
+
 // Mock translation client for testing
 private final class MockTranslationClient: TranslationLLMClientProtocol {
     func translate(
         _ text: String,
         targetLanguage: String,
         route: LLMModelRouteSnapshot,
-        apiKey: String
+        apiKey: String,
+        context: AcademicTranslationContext
     ) async throws -> String {
         // 模拟翻译：简单地在文本前添加"Translated to [language]: "
         return "Translated to \(targetLanguage): \(text)"

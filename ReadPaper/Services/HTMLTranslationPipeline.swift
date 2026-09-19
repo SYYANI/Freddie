@@ -8,6 +8,9 @@ struct HTMLTranslationCandidate: Equatable, Sendable {
     var tagName: String
     var sourceText: String
     var protectedFragments: [String]
+    var sectionTitle: String?
+    var previousSourceText: String?
+    var nextSourceText: String?
 }
 
 struct HTMLTranslationSegmentUpdate: Equatable, Sendable {
@@ -47,6 +50,8 @@ final class HTMLTranslationPipeline {
         let candidates = extraction.candidates
         let document = try SwiftSoup.parse(extraction.preparedHTML)
         let client = self.client
+        let cacheIdentity = preferences.translationCacheIdentity(for: route)
+        let documentTitle = paper.title
         try Self.injectDisplayStyles(into: document)
         try Self.writeDocument(document, to: htmlURL)
         onDocumentPrepared?()
@@ -91,6 +96,7 @@ final class HTMLTranslationPipeline {
                     targetLanguage: preferences.targetLanguage,
                     sourceHash: candidate.sourceHash,
                     route: route,
+                    cacheIdentity: cacheIdentity,
                     modelContext: modelContext
                 ) {
                     try applyTranslatedSegment(candidate, translated: cached.translatedText)
@@ -109,7 +115,14 @@ final class HTMLTranslationPipeline {
                                 candidate.sourceText,
                                 targetLanguage: preferences.targetLanguage,
                                 route: route,
-                                apiKey: apiKey
+                                apiKey: apiKey,
+                                context: AcademicTranslationContext(
+                                    documentTitle: documentTitle,
+                                    sectionTitle: candidate.sectionTitle,
+                                    previousSegment: candidate.previousSourceText,
+                                    nextSegment: candidate.nextSourceText,
+                                    glossary: preferences.translationGlossary
+                                )
                             )
                             return (candidate, translated)
                         }
@@ -126,7 +139,7 @@ final class HTMLTranslationPipeline {
                             translatedText: translated,
                             providerProfileID: route.providerProfileID,
                             modelProfileID: route.modelProfileID,
-                            modelName: route.modelName
+                            modelName: cacheIdentity
                         ))
                         try applyTranslatedSegment(candidate, translated: translated)
                     }
@@ -159,6 +172,7 @@ final class HTMLTranslationPipeline {
         targetLanguage: String,
         sourceHash: String,
         route: LLMModelRouteSnapshot,
+        cacheIdentity: String,
         modelContext: ModelContext
     ) throws -> TranslationSegment? {
         let segments = try modelContext.fetch(FetchDescriptor<TranslationSegment>())
@@ -168,7 +182,8 @@ final class HTMLTranslationPipeline {
                 $0.targetLanguage == targetLanguage &&
                 $0.sourceHash == sourceHash &&
                 $0.providerProfileID == route.providerProfileID &&
-                $0.modelProfileID == route.modelProfileID
+                $0.modelProfileID == route.modelProfileID &&
+                $0.modelName == cacheIdentity
         }
     }
 
@@ -181,6 +196,7 @@ final class HTMLTranslationPipeline {
         try removeExistingTranslationBlocks(from: document)
         try removeExistingSourceMarkers(from: document)
         var candidates: [HTMLTranslationCandidate] = []
+        var currentSectionTitle: String?
 
         for element in try document.select(candidateSelector).array() {
             if try shouldSkip(element) { continue }
@@ -188,6 +204,9 @@ final class HTMLTranslationPipeline {
             let tagName = element.tagName()
             let protected = try protectedText(from: element)
             let minimumLength = tagName.hasPrefix("h") ? 2 : 10
+            if tagName.hasPrefix("h"), protected.text.isEmpty == false {
+                currentSectionTitle = protected.text
+            }
             guard protected.text.count >= minimumLength else { continue }
 
             let segmentID = "rp-\(Hashing.sha256Hex(protected.text).prefix(16))-\(candidates.count)"
@@ -198,8 +217,21 @@ final class HTMLTranslationPipeline {
                 sourceHash: Hashing.sha256Hex(protected.text),
                 tagName: tagName,
                 sourceText: protected.text,
-                protectedFragments: protected.fragments
+                protectedFragments: protected.fragments,
+                sectionTitle: tagName.hasPrefix("h") ? nil : currentSectionTitle,
+                previousSourceText: nil,
+                nextSourceText: nil
             ))
+        }
+
+        for index in candidates.indices {
+            if index > candidates.startIndex {
+                candidates[index].previousSourceText = candidates[index - 1].sourceText
+            }
+            let nextIndex = candidates.index(after: index)
+            if nextIndex < candidates.endIndex {
+                candidates[index].nextSourceText = candidates[nextIndex].sourceText
+            }
         }
 
         return (try document.outerHtml(), candidates)

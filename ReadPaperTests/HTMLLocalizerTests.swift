@@ -193,6 +193,109 @@ final class HTMLLocalizerTests: XCTestCase {
         XCTAssertEqual(try paragraphs[0].select("a[href]").first()?.attr("href"), "https://github.com/antirez/ds4")
     }
 
+    func testLocalizeSplitsXPreWrappedLongPostIntoParagraphs() throws {
+        let firstParagraph = String(repeating: "Scaling depends on parameters, data, compute, and deployment conditions. ", count: 4)
+        let secondParagraph = String(repeating: "The field learned this through repeated scaling-law experiments. ", count: 4)
+        let thirdParagraph = String(repeating: "Inference cost moves the optimum toward smaller models trained longer. ", count: 4)
+        let html = """
+        <html>
+        <head><title>jietang on X: Thoughts About Scaling Law</title></head>
+        <body>
+        <main>
+        <article>
+        <div dir="auto" class="font-chirp max-w-full whitespace-pre-wrap break-words text-body">
+        <span class="font-chirp max-w-full whitespace-pre-wrap break-words text-inherit">Thoughts About Scaling Law
+
+        \(firstParagraph)
+
+        \(secondParagraph) <a href="/reference">Reference</a>
+
+        \(thirdParagraph)</span>
+        </div>
+        </article>
+        </main>
+        </body>
+        </html>
+        """
+
+        let document = try HTMLLocalizer().makeDocumentForLocalization(
+            html: html,
+            sourceURL: URL(string: "https://x.com/jietang/status/2089941544581403107")!
+        )
+
+        XCTAssertEqual(document.body()?.hasClass("rp-readability-body"), true)
+        let proseContainer = try XCTUnwrap(
+            document.select(".rp-readability-content div.rp-readability-prose-container").first()
+        )
+        XCTAssertTrue(proseContainer.hasClass("whitespace-pre-wrap"))
+        XCTAssertTrue(proseContainer.hasClass("rp-readability-font-normal"))
+        XCTAssertTrue(proseContainer.hasClass("rp-readability-font-chirp"))
+        XCTAssertTrue(proseContainer.hasClass("text-body"))
+        XCTAssertEqual(try proseContainer.attr("dir"), "auto")
+
+        let paragraphs = try document.select(".rp-readability-content p.rp-readability-prose-paragraph").array()
+        XCTAssertEqual(paragraphs.count, 4)
+        guard paragraphs.count == 4 else { return }
+        XCTAssertEqual(try paragraphs[0].text(), "Thoughts About Scaling Law")
+        XCTAssertTrue(try paragraphs[1].text().contains("Scaling depends on parameters"))
+        XCTAssertTrue(try paragraphs[2].text().contains("repeated scaling-law experiments"))
+        XCTAssertTrue(try paragraphs[3].text().contains("Inference cost moves the optimum"))
+        XCTAssertEqual(try paragraphs[2].select("a[href]").first()?.attr("href"), "https://x.com/reference")
+        XCTAssertEqual(try paragraphs[0].select("span.font-chirp.whitespace-pre-wrap").count, 1)
+
+        let style = try XCTUnwrap(try document.getElementById("rp-readability-style"))
+        XCTAssertTrue(style.data().contains("margin: 0 0 0.8em 0 !important"))
+        XCTAssertTrue(style.data().contains(".rp-readability-content .rp-readability-prose-container"))
+        XCTAssertTrue(style.data().contains(".rp-readability-content .rp-readability-font-normal"))
+        XCTAssertTrue(style.data().contains(".rp-readability-content .rp-readability-font-chirp"))
+        XCTAssertTrue(style.data().contains("p.rp-readability-prose-paragraph > .whitespace-pre-wrap"))
+        XCTAssertTrue(HTMLLocalizer().hasMeaningfulHTMLContent(try document.outerHtml()))
+    }
+
+    func testLegacyCollapsedXPostIsEligibleForReimport() {
+        let collapsedText = String(repeating: "A previously imported long post has lost all paragraph boundaries. ", count: 8)
+        let html = """
+        <html>
+        <head>
+        <link rel="canonical" href="https://x.com/jietang/status/2089941544581403107">
+        <meta name="description" content="First paragraph.
+
+        Second paragraph.">
+        </head>
+        <body class="rp-readability-body">
+        <article class="rp-readability-content">
+        <p><span class="whitespace-pre-wrap">\(collapsedText)</span></p>
+        </article>
+        </body>
+        </html>
+        """
+
+        XCTAssertFalse(HTMLLocalizer().hasMeaningfulHTMLContent(html))
+    }
+
+    func testWhitespacePreservingParagraphContainerIsEligibleForReimport() {
+        let html = """
+        <html>
+        <head>
+        <link rel="canonical" href="https://x.com/jietang/status/2089941544581403107">
+        <meta name="description" content="First paragraph.
+
+        Second paragraph.">
+        </head>
+        <body class="rp-readability-body">
+        <article class="rp-readability-content">
+        <div class="font-chirp whitespace-pre-wrap text-body font-normal">
+        <p class="rp-readability-prose-paragraph">First paragraph.</p>
+        <p class="rp-readability-prose-paragraph">Second paragraph.</p>
+        </div>
+        </article>
+        </body>
+        </html>
+        """
+
+        XCTAssertFalse(HTMLLocalizer().hasMeaningfulHTMLContent(html))
+    }
+
     func testLocalizeTunesEmbeddedMediaForReaderPerformance() async throws {
         let paragraph = String(repeating: "This is article content that should survive readability extraction. ", count: 12)
         let html = """
@@ -317,6 +420,30 @@ final class HTMLLocalizerTests: XCTestCase {
         XCTAssertEqual(try document.select(".rp-readability-shell").count, 0)
         XCTAssertEqual(try document.select("p").text(), "short")
         XCTAssertEqual(try document.select("a[href]").first()?.attr("href"), "https://example.com/note")
+    }
+
+    func testRequiresBrowserRenderingForEmptyJavaScriptAppShell() {
+        let html = """
+        <!doctype html>
+        <html>
+        <head><script type="module" src="/assets/article.js"></script></head>
+        <body><div id="root"></div></body>
+        </html>
+        """
+
+        XCTAssertTrue(HTMLLocalizer().requiresBrowserRendering(html))
+    }
+
+    func testDoesNotRequireBrowserRenderingForStaticArticle() {
+        let paragraph = String(repeating: "This server-rendered article is already available. ", count: 4)
+        let html = """
+        <html>
+        <head><script src="/analytics.js"></script></head>
+        <body><article><p>\(paragraph)</p></article></body>
+        </html>
+        """
+
+        XCTAssertFalse(HTMLLocalizer().requiresBrowserRendering(html))
     }
 }
 

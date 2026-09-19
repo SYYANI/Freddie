@@ -5,9 +5,15 @@ import SwiftUI
 private enum SettingsTab: String, Hashable {
     case general
     case reader
+    case latex
     case digest
     case providers
     case models
+}
+
+private struct NativeBabelDocSettingsProbe: Sendable {
+    let isAvailable: Bool
+    let installedVersion: String?
 }
 
 enum SettingsGeneralStatusSource: Equatable {
@@ -53,9 +59,9 @@ struct SettingsView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.localizationBundle) private var bundle
     @Query private var settingsRows: [AppSettings]
-    @Query private var papers: [Paper]
     @Query(sort: [SortDescriptor(\LLMProviderProfile.modifiedAt, order: .reverse)]) private var providers: [LLMProviderProfile]
     @Query(sort: [SortDescriptor(\LLMModelProfile.modifiedAt, order: .reverse)]) private var models: [LLMModelProfile]
+    @State private var paperCount = 0
 
     var body: some View {
         Group {
@@ -64,17 +70,25 @@ struct SettingsView: View {
                     settings: settings,
                     providers: providers,
                     models: models,
-                    paperCount: papers.count
+                    paperCount: paperCount
                 )
             } else {
                 ProgressView()
                     .task {
                         _ = try? LLMConfigurationBootstrapper().ensureBootstrap(modelContext: modelContext)
+                        try? LLMDefaultProfileSeeder().ensureDefaults(modelContext: modelContext)
                     }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(SettingsWindowCenteringView())
+        .background {
+            AppWindowBackdrop(role: .settings)
+                .ignoresSafeArea()
+                .allowsHitTesting(false)
+        }
+        .task {
+            paperCount = (try? modelContext.fetchCount(FetchDescriptor<Paper>())) ?? 0
+        }
     }
 }
 
@@ -96,19 +110,38 @@ private struct SettingsForm: View {
     private var pdfTranslationBatchSizeRawValue = PDFTranslationBatchPreference.defaultValue
     @AppStorage(HTMLReaderTypography.fontSizeUserDefaultsKey)
     private var htmlReaderFontSize = HTMLReaderTypography.defaultFontSize
+    @AppStorage(TranslationGlossaryPreference.userDefaultsKey)
+    private var translationGlossary = ""
+    @AppStorage(BabelDocSemanticHintPreference.userDefaultsKey)
+    private var babelDocSemanticHintsEnabled = BabelDocSemanticHintPreference.defaultValue
+    @AppStorage(LaTeXIntegrationPreferences.translationEnabledKey)
+    private var latexTranslationEnabled = false
+    @AppStorage(LaTeXIntegrationPreferences.toolchainDirectoryKey)
+    private var latexToolchainDirectoryPath = ""
     @AppStorage(PaperDigestExportConfiguration.templateKey) private var digestExportTemplate = PaperDigestExportPolicy.defaultMarkdownTemplate
     @AppStorage(PaperDigestExportConfiguration.directoryDisplayPathKey) private var digestExportDirectoryPath = ""
+    @AppStorage(SelectionAssistantPreferences.selectedModelProfileIDKey)
+    private var selectedAssistantModelProfileIDRawValue = ""
+    @AppStorage(SelectionAssistantPreferences.externalSearchEnabledKey)
+    private var externalAssistantSearchEnabled = false
 
     @State private var selectedProviderID: UUID?
     @State private var providerName = ""
     @State private var providerBaseURL = "https://api.openai.com/v1"
     @State private var providerAPIKey = ""
     @State private var providerTestModel = ""
+    @State private var providerAPIStyle: LLMAPIStyle = .chatCompletions
     @State private var providerEnabled = true
     @State private var providerHasStoredAPIKey = false
     @State private var providerStatusMessage: String?
     @State private var providerOutputPreview: String?
     @State private var isTestingProvider = false
+    @State private var providerWebSearchStatusMessage: String?
+    @State private var providerWebSearchOutputPreview: String?
+    @State private var providerWebSearchSources: [LLMWebSearchSource] = []
+    @State private var webSearchTrace = WebSearchTraceStore()
+    @State private var showsProviderWebSearchTrace = false
+    @State private var isTestingProviderWebSearch = false
 
     @State private var selectedModelID: UUID?
     @State private var modelProviderID: UUID?
@@ -117,6 +150,8 @@ private struct SettingsForm: View {
     @State private var modelTemperature = ""
     @State private var modelTopP = ""
     @State private var modelMaxTokens = ""
+    @State private var modelThinkingMode: LLMThinkingMode?
+    @State private var modelReasoningEffort: LLMReasoningEffort?
     @State private var modelEnabled = true
     @State private var modelStatusMessage: String?
     @State private var modelOutputPreview: String?
@@ -134,8 +169,13 @@ private struct SettingsForm: View {
     @State private var isLoadingLatestBabelDocVersion = false
     @State private var digestTemplateInsertion: String?
     @State private var digestStatusMessage: String?
+    @State private var glossaryInsertion: String?
+    @State private var detectedLaTeXInstallations: [ReadPaperLaTeXInstallation] = []
+    @State private var providerIDsWithStoredAPIKeys: Set<UUID> = []
 
     private let keychainStore = KeychainStore()
+    private let apiStyleStore = LLMProviderAPIStyleStore()
+    private let defaultProfileDeletionStore = LLMDefaultProfileDeletionStore()
     private let validator = LLMProviderValidationUseCase()
 
     private var sortedProviders: [LLMProviderProfile] {
@@ -182,7 +222,7 @@ private struct SettingsForm: View {
 
     private var readyProviders: [LLMProviderProfile] {
         sortedProviders.filter { provider in
-            provider.isEnabled && hasStoredAPIKey(ref: provider.apiKeyRef)
+            provider.isEnabled && providerIDsWithStoredAPIKeys.contains(provider.id)
         }
     }
 
@@ -232,6 +272,13 @@ private struct SettingsForm: View {
         )
     }
 
+    private var selectedAssistantModelProfileIDBinding: Binding<UUID?> {
+        Binding(
+            get: { UUID(uuidString: selectedAssistantModelProfileIDRawValue) },
+            set: { selectedAssistantModelProfileIDRawValue = $0?.uuidString ?? "" }
+        )
+    }
+
     private var appLanguageBinding: Binding<String?> {
         Binding(
             get: { LanguageManager.shared.languageOverride },
@@ -271,44 +318,84 @@ private struct SettingsForm: View {
         Int(HTMLReaderTypography.clampFontSize(htmlReaderFontSize).rounded())
     }
 
+    private var selectedLaTeXDirectoryURL: URL? {
+        guard !latexToolchainDirectoryPath.isEmpty else { return nil }
+        return URL(fileURLWithPath: latexToolchainDirectoryPath, isDirectory: true).standardizedFileURL
+    }
+
+    private var activeLaTeXInstallation: ReadPaperLaTeXInstallation? {
+        if let selectedLaTeXDirectoryURL {
+            return ReadPaperLaTeXToolchain.installation(at: selectedLaTeXDirectoryURL)
+        }
+        guard let toolchain = ReadPaperLaTeXToolchain.detect() else { return nil }
+        return ReadPaperLaTeXToolchain.installation(
+            at: toolchain.latexmkURL.deletingLastPathComponent()
+        )
+    }
+
+    private var automaticLaTeXLocation: String? {
+        ReadPaperLaTeXToolchain.detect()?.latexmkURL.deletingLastPathComponent().path
+    }
+
     var body: some View {
         TabView(selection: selectedTabBinding) {
-            generalTab
+            tabContent(for: .general) {
+                generalTab
+            }
                 .tag(SettingsTab.general)
                 .tabItem {
                     Label(String(localized: "General", bundle: bundle), systemImage: "gearshape")
                 }
 
-            readerTab
+            tabContent(for: .reader) {
+                readerTab
+            }
                 .tag(SettingsTab.reader)
                 .tabItem {
                     Label(String(localized: "Reader", bundle: bundle), systemImage: "book.closed")
                 }
 
-            digestTab
+            tabContent(for: .latex) {
+                latexTab
+            }
+                .tag(SettingsTab.latex)
+                .tabItem {
+                    Label(String(localized: "LaTeX", bundle: bundle), systemImage: "text.document")
+                }
+
+            tabContent(for: .digest) {
+                digestTab
+            }
                 .tag(SettingsTab.digest)
                 .tabItem {
                     Label(String(localized: "Digest", bundle: bundle), systemImage: "doc.plaintext")
                 }
 
-            providerTab
+            tabContent(for: .providers) {
+                providerTab
+            }
                 .tag(SettingsTab.providers)
                 .tabItem {
                     Label(String(localized: "Providers", bundle: bundle), systemImage: "network")
                 }
 
-            modelTab
+            tabContent(for: .models) {
+                modelTab
+            }
                 .tag(SettingsTab.models)
                 .tabItem {
                     Label(String(localized: "Models", bundle: bundle), systemImage: "sparkles.rectangle.stack")
                 }
         }
         .formStyle(.grouped)
+        .scrollContentBackground(.hidden)
         .task {
-            _ = try? LLMConfigurationBootstrapper().ensureBootstrap(modelContext: modelContext)
             loadInitialSelectionIfNeeded()
-            await refreshInstalledBabelDOCVersion()
-            await refreshLatestBabelDOCVersion()
+            await Task.yield()
+            refreshStoredAPIKeyAvailability()
+            async let latexRefresh: Void = refreshLaTeXInstallations()
+            async let babelDocRefresh: Void = refreshInstalledBabelDOCVersion()
+            _ = await (latexRefresh, babelDocRefresh)
         }
         .onChange(of: selectedProviderID) { _, _ in
             applySelectedProvider()
@@ -317,21 +404,38 @@ private struct SettingsForm: View {
             applySelectedModel()
         }
         .onChange(of: providers.map(\.id)) { _, _ in
-            normalizeSelections()
+            refreshStoredAPIKeyAvailability()
+            loadInitialSelectionIfNeeded()
         }
         .onChange(of: models.map(\.id)) { _, _ in
-            normalizeSelections()
+            loadInitialSelectionIfNeeded()
         }
-        .onChange(of: babelDocInstallSourceRawValue) { _, _ in
-            Task { @MainActor in
-                await refreshLatestBabelDOCVersion()
+        .onChange(of: latexToolchainDirectoryPath) { _, _ in
+            Task {
+                await refreshLaTeXInstallations()
             }
         }
     }
 
+    @ViewBuilder
+    private func tabContent<Content: View>(
+        for tab: SettingsTab,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        if selectedTab == tab {
+            content()
+        } else {
+            Color.clear
+        }
+    }
+
+    private var selectedTab: SettingsTab {
+        SettingsTab(rawValue: selectedTabRawValue) ?? .general
+    }
+
     private var selectedTabBinding: Binding<SettingsTab> {
         Binding(
-            get: { SettingsTab(rawValue: selectedTabRawValue) ?? .general },
+            get: { selectedTab },
             set: { selectedTabRawValue = $0.rawValue }
         )
     }
@@ -355,10 +459,6 @@ private struct SettingsForm: View {
                         }
                     }
                     .pickerStyle(.menu)
-
-                    Text("Choose whether ReadPaper follows the macOS language setting or always uses English or Simplified Chinese.", bundle: bundle)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
                 }
 
                 Section(String(localized: "Translation", bundle: bundle)) {
@@ -368,6 +468,18 @@ private struct SettingsForm: View {
                         }
                     }
                     .pickerStyle(.menu)
+
+                    Toggle(
+                        String(localized: "Use arXiv LaTeX structure for PDF translation", bundle: bundle),
+                        isOn: $babelDocSemanticHintsEnabled
+                    )
+
+                    Text(
+                        "When enabled, ReadPaper uses available arXiv source to improve BabelDOC structure and translation context. No TeX installation is required, and failures fall back to PDF-only analysis.",
+                        bundle: bundle
+                    )
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
 
                     Stepper(
                         String(
@@ -383,7 +495,7 @@ private struct SettingsForm: View {
                             settings.babelDocQPS
                         ),
                         value: $settings.babelDocQPS,
-                        in: 1...20
+                        in: 1...50
                     )
                     Stepper(
                         String(
@@ -400,10 +512,31 @@ private struct SettingsForm: View {
                     )
                         .font(.footnote)
                         .foregroundStyle(.secondary)
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Optional glossary", bundle: bundle)
+                        SettingsTemplateTextEditor(
+                            text: $translationGlossary,
+                            pendingInsertion: $glossaryInsertion
+                        )
+                        .frame(minHeight: 110)
+                    }
+
+                    Button(String(localized: "Clear glossary", bundle: bundle), role: .destructive) {
+                        translationGlossary = ""
+                    }
+                    .disabled(translationGlossary.isEmpty)
+
+                    Text(
+                        "Enter one preferred term mapping per line, for example “large language model = 大语言模型”. The glossary is optional and is used as reference context by both HTML and PDF translation.",
+                        bundle: bundle
+                    )
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                 }
 
                 Section(String(localized: "BabelDOC", bundle: bundle)) {
-                    LabeledContent(String(localized: "Current installed version", bundle: bundle)) {
+                    LabeledContent("Native runtime") {
                         if isLoadingInstalledBabelDocVersion {
                             ProgressView()
                                 .controlSize(.small)
@@ -414,68 +547,13 @@ private struct SettingsForm: View {
                         }
                     }
 
-                    LabeledContent(String(localized: "Latest available version", bundle: bundle)) {
-                        if isLoadingLatestBabelDocVersion {
-                            ProgressView()
-                                .controlSize(.small)
-                        } else {
-                            Text(latestBabelDocVersion ?? String(localized: "Unavailable", bundle: bundle))
-                                .foregroundStyle(latestBabelDocVersion == nil ? .secondary : .primary)
-                                .textSelection(.enabled)
-                        }
-                    }
-
-                    Picker(String(localized: "Install source", bundle: bundle), selection: babelDocInstallSourceBinding) {
-                        Text("Official PyPI", bundle: bundle).tag(BabelDocInstallSource.official)
-                        Text("Tsinghua mirror", bundle: bundle).tag(BabelDocInstallSource.tsinghua)
-                    }
-                    .pickerStyle(.segmented)
-
-                    SettingsFieldRow(String(localized: "Target version", bundle: bundle)) {
-                        SettingsPlainTextField(text: $settings.babelDocVersion)
-                    }
-
-                    HStack(spacing: 10) {
-                        Button(
-                            isInstallingBabelDOC
-                                ? String(localized: "Installing...", bundle: bundle)
-                                : String(localized: "Install or update BabelDOC", bundle: bundle)
-                        ) {
-                            installBabelDOC()
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .disabled(isInstallingBabelDOC || isRemovingBabelDOC)
-
-                        if isInstallingBabelDOC {
-                            Button(String(localized: "Cancel", bundle: bundle)) {
-                                cancelBabelDOCInstallation()
-                            }
-                        } else {
-                            Button(String(localized: "Remove BabelDOC", bundle: bundle), role: .destructive) {
-                                removeBabelDOC()
-                            }
-                            .disabled(isRemovingBabelDOC || hasManagedBabelDOCFiles == false)
-                        }
-                    }
-
-                    Text("The PDF translation tool is managed separately from the reader. Updating it here keeps the BabelDOC route ready when a paper needs full-PDF translation.", bundle: bundle)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-
-                    Text("Set the target version to \"latest\" to resolve the newest BabelDOC release from the selected source when installing. You can still enter a specific version to pin it.", bundle: bundle)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-
-                    Text("Choose which package index uv uses for BabelDOC installs. Official PyPI uses the default upstream index, while Tsinghua mirror uses the TUNA mirror for faster access in some regions. Latest version lookup follows the selected source.", bundle: bundle)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-
                     if let generalStatusMessage = generalStatus.message {
                         statusLabel(generalStatusMessage)
                     }
                 }
             }
             .formStyle(.grouped)
+            .scrollContentBackground(.hidden)
 
             Spacer(minLength: 0)
         }
@@ -509,14 +587,16 @@ private struct SettingsForm: View {
                 }
 
                 Section(String(localized: "Reader Appearance", bundle: bundle)) {
-                    Picker(String(localized: "Reader Appearance", bundle: bundle), selection: pdfDisplayAppearanceBinding) {
+                    Picker(
+                        String(localized: "Reader Appearance", bundle: bundle),
+                        selection: pdfDisplayAppearanceBinding
+                    ) {
                         Text("Default", bundle: bundle).tag(PDFDisplayAppearance.defaultMode)
-                        Text("Dark", bundle: bundle).tag(PDFDisplayAppearance.dark)
                         Text("Paper Tone", bundle: bundle).tag(PDFDisplayAppearance.paper)
                     }
                     .pickerStyle(.segmented)
 
-                    Text("Choose the default look for reading. Default keeps the original rendering, Dark uses a low-light reading surface, and Paper Tone adds a warm paper-like tint to PDF and HTML content.", bundle: bundle)
+                    Text("System appearance changes automatically select Default for Light Mode and Paper Tone for Dark Mode. You can switch either option manually afterward.", bundle: bundle)
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -547,12 +627,180 @@ private struct SettingsForm: View {
                         }
                     }
 
-                    Text("Choose which saved model profile powers HTML translation and the BabelDOC PDF route inside the reader.", bundle: bundle)
+                    Picker(
+                        String(localized: "Reading Assistant Model", bundle: bundle),
+                        selection: selectedAssistantModelProfileIDBinding
+                    ) {
+                        Text("Use HTML Model", bundle: bundle).tag(Optional<UUID>.none)
+                        ForEach(sortedModels, id: \.id) { model in
+                            Text(modelDisplayName(model)).tag(Optional(model.id))
+                        }
+                    }
+
+                    Toggle(
+                        String(localized: "Allow external search for the reading assistant", bundle: bundle),
+                        isOn: $externalAssistantSearchEnabled
+                    )
+
+                    Text("Choose separate saved model profiles for translation and reading assistance. When enabled, external questions are answered through the selected model's server-side web search (Responses API), instead of calling academic search services directly.", bundle: bundle)
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
             }
             .formStyle(.grouped)
+            .scrollContentBackground(.hidden)
+
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .padding(20)
+    }
+
+    private var latexTab: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Form {
+                Section(String(localized: "LaTeX Translation", bundle: bundle)) {
+                    Toggle(
+                        String(localized: "Enable arXiv LaTeX translation", bundle: bundle),
+                        isOn: $latexTranslationEnabled
+                    )
+
+                    Text(
+                        "When enabled, Translate arXiv LaTeX appears in the reader's Translate menu. It downloads the paper source, translates its semantic units, and uses the selected external TeX distribution to compile the translated PDF.",
+                        bundle: bundle
+                    )
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                    if latexTranslationEnabled, activeLaTeXInstallation?.isHealthy != true {
+                        Label {
+                            Text(
+                                "LaTeX translation is enabled, but the selected toolchain is not ready. Install MacTeX or choose a directory that contains latexmk and a PDF engine.",
+                                bundle: bundle
+                            )
+                        } icon: {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                        }
+                        .foregroundStyle(.orange)
+                        .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+
+                Section(String(localized: "MacTeX", bundle: bundle)) {
+                    Text(
+                        "If you do not have a TeX distribution installed, MacTeX is recommended. The distribution is installed and maintained separately from Freddie.",
+                        bundle: bundle
+                    )
+                    .fixedSize(horizontal: false, vertical: true)
+
+                    Link(
+                        String(localized: "Download MacTeX", bundle: bundle),
+                        destination: URL(string: "https://tug.org/mactex/mactex-download.html")!
+                    )
+                }
+
+                Section(String(localized: "LaTeX Installation", bundle: bundle)) {
+                    Picker(
+                        String(localized: "Toolchain directory", bundle: bundle),
+                        selection: $latexToolchainDirectoryPath
+                    ) {
+                        if let automaticLaTeXLocation {
+                            Text(
+                                String(
+                                    format: String(localized: "Automatic (%@)", bundle: bundle),
+                                    automaticLaTeXLocation
+                                )
+                            )
+                            .tag("")
+                        } else {
+                            Text("Automatic (not found)", bundle: bundle)
+                                .tag("")
+                        }
+
+                        ForEach(detectedLaTeXInstallations) { installation in
+                            Text(verbatim: installation.directoryURL.path)
+                                .tag(installation.directoryURL.path)
+                        }
+                    }
+                    .pickerStyle(.menu)
+
+                    HStack(spacing: 10) {
+                        Button(String(localized: "Refresh", bundle: bundle)) {
+                            Task {
+                                await refreshLaTeXInstallations()
+                            }
+                        }
+
+                        Button(String(localized: "Choose Folder", bundle: bundle)) {
+                            chooseLaTeXToolchainDirectory()
+                        }
+
+                        Button(String(localized: "Use Automatic Detection", bundle: bundle)) {
+                            latexToolchainDirectoryPath = ""
+                        }
+                        .disabled(latexToolchainDirectoryPath.isEmpty)
+                    }
+
+                    Text(
+                        "Automatic detection checks the app's PATH and common MacTeX, Homebrew, and /usr/local locations. A manually selected directory takes precedence and must contain an executable latexmk.",
+                        bundle: bundle
+                    )
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Section(String(localized: "Current LaTeX Toolchain", bundle: bundle)) {
+                    LabeledContent(String(localized: "Location on Disk", bundle: bundle)) {
+                        Text(
+                            activeLaTeXInstallation?.directoryURL.path
+                                ?? String(localized: "Not found", bundle: bundle)
+                        )
+                        .foregroundStyle(activeLaTeXInstallation == nil ? .secondary : .primary)
+                        .textSelection(.enabled)
+                    }
+
+                    if let installation = activeLaTeXInstallation {
+                        Label {
+                            Text(
+                                installation.isHealthy
+                                    ? String(localized: "Basic health check passed", bundle: bundle)
+                                    : String(localized: "Basic health check failed", bundle: bundle)
+                            )
+                        } icon: {
+                            Image(systemName: installation.isHealthy ? "checkmark.circle.fill" : "xmark.circle.fill")
+                        }
+                        .foregroundStyle(installation.isHealthy ? .green : .red)
+
+                        LazyVGrid(
+                            columns: [GridItem(.adaptive(minimum: 130), alignment: .leading)],
+                            alignment: .leading,
+                            spacing: 10
+                        ) {
+                            ForEach(installation.executables) { executable in
+                                Label(
+                                    executable.name,
+                                    systemImage: executable.isAvailable
+                                        ? "checkmark.circle.fill"
+                                        : "xmark.circle"
+                                )
+                                .foregroundStyle(executable.isAvailable ? .green : .secondary)
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    } else {
+                        Text(
+                            "No usable LaTeX installation was found. Install MacTeX, refresh detection, or choose the TeX binary directory manually.",
+                            bundle: bundle
+                        )
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+            .formStyle(.grouped)
+            .scrollContentBackground(.hidden)
 
             Spacer(minLength: 0)
         }
@@ -627,6 +875,7 @@ private struct SettingsForm: View {
                 }
             }
             .formStyle(.grouped)
+            .scrollContentBackground(.hidden)
 
             Spacer(minLength: 0)
         }
@@ -657,13 +906,26 @@ private struct SettingsForm: View {
             title: String(localized: "Providers", bundle: bundle),
             count: sortedProviders.count
         ) {
-            List(selection: $selectedProviderID) {
-                ForEach(sortedProviders, id: \.id) { provider in
-                    providerListRow(provider)
-                        .tag(Optional(provider.id))
+            ScrollView {
+                LazyVStack(spacing: 0) {
+                    ForEach(sortedProviders, id: \.id) { provider in
+                        entityListRow(isSelected: selectedProviderID == provider.id) {
+                            providerListRow(provider)
+                        }
+                        .onTapGesture {
+                            selectedProviderID = provider.id
+                        }
+
+                        if provider.id != sortedProviders.last?.id {
+                            Divider()
+                                .padding(.leading, 12)
+                        }
+                    }
                 }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 10)
             }
-            .listStyle(.inset(alternatesRowBackgrounds: false))
+            .background(Color.clear)
         } toolbar: {
             Button {
                 resetProviderForm()
@@ -685,10 +947,10 @@ private struct SettingsForm: View {
     private var providerDetailPanel: some View {
         Form {
             Section(String(localized: "Providers", bundle: bundle)) {
-                Text("Create one provider for each OpenAI-compatible endpoint you want to use. The API key is stored in Keychain, so leaving the API key field blank while editing an existing provider keeps the saved key.", bundle: bundle)
+                Text("OpenAI and DeepSeek are ready to use after you save an API key. You can also add custom providers and choose either the Responses API or Chat Completions.", bundle: bundle)
                     .fixedSize(horizontal: false, vertical: true)
 
-                Text("For a typical setup, fill in the service base URL, paste the API key, set a lightweight test model, then click Save and Test.", bundle: bundle)
+                Text("API keys are protected with Touch ID or your device password. After the first approval, this Freddie installation stays authorized until the app is updated or the key changes. Leaving the API key field blank while editing keeps the saved key.", bundle: bundle)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -700,6 +962,14 @@ private struct SettingsForm: View {
                 }
                 SettingsFieldRow(String(localized: "Base URL", bundle: bundle)) {
                     SettingsPlainTextField(text: $providerBaseURL)
+                }
+                SettingsFieldRow(String(localized: "API protocol", bundle: bundle)) {
+                    Picker(String(localized: "API protocol", bundle: bundle), selection: $providerAPIStyle) {
+                        ForEach(LLMAPIStyle.allCases, id: \.self) { style in
+                            Text(apiStyleLabel(style)).tag(style)
+                        }
+                    }
+                    .labelsHidden()
                 }
                 SettingsFieldRow(String(localized: "API key", bundle: bundle)) {
                     SettingsSecureTextField(text: $providerAPIKey, placeholder: providerAPIKeyPrompt)
@@ -736,7 +1006,25 @@ private struct SettingsForm: View {
                     ) {
                         testProvider()
                     }
-                    .disabled(isTestingProvider)
+                    .disabled(isTestingProvider || isTestingProviderWebSearch)
+
+                    Button(
+                        isTestingProviderWebSearch
+                            ? String(localized: "Testing web search...", bundle: bundle)
+                            : String(localized: "Test Web Search", bundle: bundle)
+                    ) {
+                        testProviderWebSearch()
+                    }
+                    .disabled(
+                        isTestingProvider
+                            || isTestingProviderWebSearch
+                            || providerAPIStyle != .responses
+                    )
+                    .help(
+                        providerAPIStyle == .responses
+                            ? String(localized: "Test server-side web search and capture its complete trace.", bundle: bundle)
+                            : String(localized: "Web search testing requires the Responses API.", bundle: bundle)
+                    )
                 }
 
                 if let providerStatusMessage {
@@ -750,9 +1038,53 @@ private struct SettingsForm: View {
                         .fixedSize(horizontal: false, vertical: true)
                         .textSelection(.enabled)
                 }
+
+                if let providerWebSearchStatusMessage {
+                    statusLabel(providerWebSearchStatusMessage)
+                }
+
+                if let providerWebSearchOutputPreview,
+                   providerWebSearchOutputPreview.isEmpty == false {
+                    Text(providerWebSearchOutputPreview)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .textSelection(.enabled)
+                }
+
+                if providerWebSearchSources.isEmpty == false {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 6) {
+                            ForEach(providerWebSearchSources, id: \.urlString) { source in
+                                Button {
+                                    guard let url = URL(string: source.urlString) else { return }
+                                    NSWorkspace.shared.open(url)
+                                } label: {
+                                    Label(
+                                        URL(string: source.urlString)?.host ?? source.urlString,
+                                        systemImage: "network"
+                                    )
+                                    .font(.caption)
+                                    .lineLimit(1)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 5)
+                                    .background(Color.primary.opacity(0.06), in: Capsule())
+                                }
+                                .buttonStyle(.plain)
+                                .help(source.title ?? source.urlString)
+                            }
+                        }
+                    }
+                }
+
+                WebSearchTracePanel(
+                    store: webSearchTrace,
+                    isExpanded: $showsProviderWebSearchTrace
+                )
             }
         }
         .formStyle(.grouped)
+        .scrollContentBackground(.hidden)
     }
 
     private var modelListPanel: some View {
@@ -760,13 +1092,26 @@ private struct SettingsForm: View {
             title: String(localized: "Models", bundle: bundle),
             count: sortedModels.count
         ) {
-            List(selection: $selectedModelID) {
-                ForEach(sortedModels, id: \.id) { model in
-                    modelListRow(model)
-                        .tag(Optional(model.id))
+            ScrollView {
+                LazyVStack(spacing: 0) {
+                    ForEach(sortedModels, id: \.id) { model in
+                        entityListRow(isSelected: selectedModelID == model.id) {
+                            modelListRow(model)
+                        }
+                        .onTapGesture {
+                            selectedModelID = model.id
+                        }
+
+                        if model.id != sortedModels.last?.id {
+                            Divider()
+                                .padding(.leading, 12)
+                        }
+                    }
                 }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 10)
             }
-            .listStyle(.inset(alternatesRowBackgrounds: false))
+            .background(Color.clear)
         } toolbar: {
             Button {
                 resetModelForm()
@@ -788,7 +1133,7 @@ private struct SettingsForm: View {
     private var modelDetailPanel: some View {
         Form {
             Section(String(localized: "Models", bundle: bundle)) {
-                Text("A model profile points to one provider and stores the exact chat model name plus optional sampling parameters. You can create separate profiles for fast HTML translation and heavier PDF work.", bundle: bundle)
+                Text("A model profile points to one provider and stores the exact model name plus optional sampling parameters. You can create separate profiles for fast HTML translation and heavier PDF work.", bundle: bundle)
                     .fixedSize(horizontal: false, vertical: true)
 
                 Text("Profile name is only for display inside ReadPaper. Model name must match the real model identifier accepted by your provider.", bundle: bundle)
@@ -821,6 +1166,32 @@ private struct SettingsForm: View {
 
                 DisclosureGroup(isExpanded: $showsModelAdvancedOptions) {
                     VStack(alignment: .leading, spacing: 12) {
+                        SettingsFieldRow(String(localized: "Thinking Mode", bundle: bundle)) {
+                            Picker(String(localized: "Thinking Mode", bundle: bundle), selection: $modelThinkingMode) {
+                                Text(String(localized: "Default", bundle: bundle))
+                                    .tag(Optional<LLMThinkingMode>.none)
+                                ForEach(LLMThinkingMode.allCases, id: \.self) { mode in
+                                    Text(thinkingModeLabel(mode))
+                                        .tag(Optional(mode))
+                                }
+                            }
+                            .labelsHidden()
+                        }
+                        SettingsFieldRow(String(localized: "Reasoning Effort", bundle: bundle)) {
+                            Picker(String(localized: "Reasoning Effort", bundle: bundle), selection: $modelReasoningEffort) {
+                                Text(String(localized: "Default", bundle: bundle))
+                                    .tag(Optional<LLMReasoningEffort>.none)
+                                ForEach(LLMReasoningEffort.allCases, id: \.self) { effort in
+                                    Text(reasoningEffortLabel(effort))
+                                        .tag(Optional(effort))
+                                }
+                            }
+                            .labelsHidden()
+                            .disabled(modelThinkingMode == .disabled)
+                        }
+                        Text("Thinking mode controls whether the model outputs a chain of thought before answering (for example DeepSeek V4). Reasoning effort is omitted while thinking is disabled.", bundle: bundle)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
                         SettingsFieldRow(String(localized: "Temperature", bundle: bundle)) {
                             SettingsPlainTextField(text: $modelTemperature)
                         }
@@ -888,6 +1259,7 @@ private struct SettingsForm: View {
             }
         }
         .formStyle(.grouped)
+        .scrollContentBackground(.hidden)
     }
 
     @ViewBuilder
@@ -951,17 +1323,38 @@ private struct SettingsForm: View {
                 Spacer(minLength: 0)
             }
             .buttonStyle(.borderless)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .background(Color(nsColor: .windowBackgroundColor).opacity(0.65))
+            .frame(height: 28)
+            .padding(.horizontal, 8)
+            .background(Color(nsColor: .controlBackgroundColor).opacity(0.28))
         }
         .background(panelBackground)
-        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(Color(nsColor: .separatorColor), lineWidth: 0.5)
+        }
     }
 
     private var panelBackground: some View {
-        RoundedRectangle(cornerRadius: 8, style: .continuous)
-            .fill(Color(nsColor: .controlBackgroundColor))
+        RoundedRectangle(cornerRadius: 10, style: .continuous)
+            .fill(Color(nsColor: .controlBackgroundColor).opacity(0.3))
+    }
+
+    private func entityListRow<RowContent: View>(
+        isSelected: Bool,
+        @ViewBuilder content: () -> RowContent
+    ) -> some View {
+        content()
+            .padding(.horizontal, 4)
+            .padding(.vertical, 6)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .background {
+                if isSelected {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(Color(nsColor: .selectedContentBackgroundColor).opacity(0.18))
+                }
+            }
     }
 
     private func providerListRow(_ provider: LLMProviderProfile) -> some View {
@@ -973,7 +1366,7 @@ private struct SettingsForm: View {
 
                 Spacer(minLength: 0)
 
-                if hasStoredAPIKey(ref: provider.apiKeyRef) {
+                if providerIDsWithStoredAPIKeys.contains(provider.id) {
                     Image(systemName: "key.fill")
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -989,6 +1382,10 @@ private struct SettingsForm: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .textSelection(.enabled)
+
+            Text(apiStyleLabel(apiStyleStore.apiStyle(for: provider.id)))
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
         }
         .padding(.vertical, 4)
         .opacity(provider.isEnabled ? 1 : 0.68)
@@ -1045,7 +1442,7 @@ private struct SettingsForm: View {
                         configuredProviderCount,
                         configuredProviderCount == 1 ? "" : "s"
                     )
-                    : String(localized: "Open Providers, fill in the base URL, API key, and test model, then save and test it.", bundle: bundle),
+                    : String(localized: "Open Providers, choose OpenAI or DeepSeek, and save an API key.", bundle: bundle),
                 isComplete: configuredProviderCount > 0,
                 actionTitle: String(localized: "Open Providers", bundle: bundle),
                 targetTab: .providers
@@ -1059,7 +1456,7 @@ private struct SettingsForm: View {
                         readyModelCount,
                         readyModelCount == 1 ? "" : "s"
                     )
-                    : String(localized: "Create at least one enabled model profile and attach it to a provider with a saved API key.", bundle: bundle),
+                    : String(localized: "Default OpenAI and DeepSeek model profiles are ready when their provider has a saved API key.", bundle: bundle),
                 isComplete: readyModelCount > 0,
                 actionTitle: String(localized: "Open Models", bundle: bundle),
                 targetTab: .models
@@ -1192,6 +1589,10 @@ private struct SettingsForm: View {
            models.contains(where: { $0.id == pdfModelID }) == false {
             settings.selectedPDFModelProfileID = nil
         }
+        if let assistantModelID = UUID(uuidString: selectedAssistantModelProfileIDRawValue),
+           models.contains(where: { $0.id == assistantModelID }) == false {
+            selectedAssistantModelProfileIDRawValue = ""
+        }
     }
 
     private func applySelectedProvider() {
@@ -1203,10 +1604,12 @@ private struct SettingsForm: View {
         providerBaseURL = provider.baseURL
         providerAPIKey = ""
         providerTestModel = provider.testModel
+        providerAPIStyle = apiStyleStore.apiStyle(for: provider.id)
         providerEnabled = provider.isEnabled
         providerHasStoredAPIKey = hasStoredAPIKey(ref: provider.apiKeyRef)
         providerStatusMessage = nil
         providerOutputPreview = nil
+        resetProviderWebSearchTestState()
     }
 
     private func applySelectedModel() {
@@ -1220,8 +1623,14 @@ private struct SettingsForm: View {
         modelTemperature = model.temperature.map { String($0) } ?? ""
         modelTopP = model.topP.map { String($0) } ?? ""
         modelMaxTokens = model.maxTokens.map { String($0) } ?? ""
+        modelThinkingMode = model.thinkingModeValue
+        modelReasoningEffort = model.reasoningEffortValue
         modelEnabled = model.isEnabled
-        showsModelAdvancedOptions = model.temperature != nil || model.topP != nil || model.maxTokens != nil
+        showsModelAdvancedOptions = model.temperature != nil
+            || model.topP != nil
+            || model.maxTokens != nil
+            || model.thinkingModeValue != nil
+            || model.reasoningEffortValue != nil
         modelStatusMessage = nil
         modelOutputPreview = nil
     }
@@ -1232,10 +1641,12 @@ private struct SettingsForm: View {
         providerBaseURL = "https://api.openai.com/v1"
         providerAPIKey = ""
         providerTestModel = ""
+        providerAPIStyle = .chatCompletions
         providerEnabled = true
         providerHasStoredAPIKey = false
         providerStatusMessage = nil
         providerOutputPreview = nil
+        resetProviderWebSearchTestState()
     }
 
     private func resetModelForm() {
@@ -1246,6 +1657,8 @@ private struct SettingsForm: View {
         modelTemperature = ""
         modelTopP = ""
         modelMaxTokens = ""
+        modelThinkingMode = nil
+        modelReasoningEffort = nil
         modelEnabled = true
         showsModelAdvancedOptions = false
         modelStatusMessage = nil
@@ -1261,6 +1674,7 @@ private struct SettingsForm: View {
 
             let normalizedBaseURL = try validator.normalizedBaseURL(providerBaseURL)
             let normalizedTestModel = try validator.validateModelName(providerTestModel)
+            let normalizedAPIStyle = providerAPIStyle
             let now = Date()
 
             let provider: LLMProviderProfile
@@ -1286,22 +1700,34 @@ private struct SettingsForm: View {
             provider.testModel = normalizedTestModel
             provider.isEnabled = providerEnabled
             provider.modifiedAt = now
+            apiStyleStore.setAPIStyle(normalizedAPIStyle, for: provider.id)
 
             let trimmedAPIKey = providerAPIKey.trimmingCharacters(in: .whitespacesAndNewlines)
             if trimmedAPIKey.isEmpty == false {
                 try keychainStore.save(trimmedAPIKey, account: provider.apiKeyRef)
-            } else if hasStoredAPIKey(ref: provider.apiKeyRef) == false {
-                throw LLMProviderValidationError.emptyAPIKey
+            } else {
+                guard try keychainStore.migrateToUserPresenceIfNeeded(account: provider.apiKeyRef) else {
+                    throw LLMProviderValidationError.emptyAPIKey
+                }
             }
 
+            LLMDefaultRouteActivator().selectRoutesIfNeeded(
+                for: provider.id,
+                settings: settings,
+                providers: providers.contains(where: { $0.id == provider.id }) ? providers : providers + [provider],
+                models: models,
+                hasStoredAPIKey: hasStoredAPIKey
+            )
             settings.modifiedAt = now
             try modelContext.save()
 
             selectedProviderID = provider.id
             providerAPIKey = ""
             providerHasStoredAPIKey = true
+            providerIDsWithStoredAPIKeys.insert(provider.id)
             providerStatusMessage = String(localized: "Provider saved.", bundle: bundle)
             providerOutputPreview = nil
+            resetProviderWebSearchTestState()
         } catch {
             providerStatusMessage = AppLocalization.errorMessage(error, bundle: bundle)
         }
@@ -1309,8 +1735,11 @@ private struct SettingsForm: View {
 
     private func deleteSelectedProvider() {
         guard let provider = selectedProvider else { return }
+        let providerID = provider.id
+        let isBuiltInProvider = LLMDefaultProfiles.isBuiltInProvider(providerID)
 
         let relatedModelIDs = Set(models.filter { $0.providerID == provider.id }.map(\.id))
+        let relatedBuiltInModelIDs = relatedModelIDs.filter(LLMDefaultProfiles.isBuiltInModel)
         for model in models where relatedModelIDs.contains(model.id) {
             modelContext.delete(model)
         }
@@ -1320,11 +1749,24 @@ private struct SettingsForm: View {
         if let pdfModelID = settings.selectedPDFModelProfileID, relatedModelIDs.contains(pdfModelID) {
             settings.selectedPDFModelProfileID = nil
         }
+        if let assistantModelID = UUID(uuidString: selectedAssistantModelProfileIDRawValue),
+           relatedModelIDs.contains(assistantModelID) {
+            selectedAssistantModelProfileIDRawValue = ""
+        }
         modelContext.delete(provider)
+        apiStyleStore.removeAPIStyle(for: provider.id)
 
         do {
             settings.modifiedAt = Date()
             try modelContext.save()
+            try? keychainStore.delete(account: provider.apiKeyRef)
+            providerIDsWithStoredAPIKeys.remove(providerID)
+            if isBuiltInProvider {
+                defaultProfileDeletionStore.markProviderDeleted(providerID)
+            }
+            for modelID in relatedBuiltInModelIDs {
+                defaultProfileDeletionStore.markModelDeleted(modelID)
+            }
             resetProviderForm()
             if let selectedModelID, relatedModelIDs.contains(selectedModelID) {
                 resetModelForm()
@@ -1357,6 +1799,7 @@ private struct SettingsForm: View {
 
                 let result = try await validator.testConnection(
                     baseURL: providerBaseURL,
+                    apiStyle: providerAPIStyle,
                     apiKey: apiKey,
                     model: providerTestModel
                 )
@@ -1371,6 +1814,62 @@ private struct SettingsForm: View {
                 providerOutputPreview = nil
             }
         }
+    }
+
+    private func testProviderWebSearch() {
+        isTestingProviderWebSearch = true
+        providerWebSearchStatusMessage = String(localized: "Testing web search...", bundle: bundle)
+        providerWebSearchOutputPreview = nil
+        providerWebSearchSources = []
+        webSearchTrace.reset()
+        showsProviderWebSearchTrace = true
+
+        Task { @MainActor in
+            defer { isTestingProviderWebSearch = false }
+
+            do {
+                let apiKey: String
+                let trimmedAPIKey = providerAPIKey.trimmingCharacters(in: .whitespacesAndNewlines)
+                if trimmedAPIKey.isEmpty == false {
+                    apiKey = trimmedAPIKey
+                } else if let selectedProvider {
+                    apiKey = try loadStoredAPIKey(ref: selectedProvider.apiKeyRef)
+                } else {
+                    throw LLMProviderValidationError.emptyAPIKey
+                }
+
+                let result = try await validator.testWebSearch(
+                    baseURL: providerBaseURL,
+                    apiStyle: providerAPIStyle,
+                    apiKey: apiKey,
+                    model: providerTestModel,
+                    onTraceUpdated: { appendedEntries in
+                        await webSearchTrace.append(appendedEntries)
+                    }
+                )
+
+                providerWebSearchStatusMessage = AppLocalization.format(
+                    "Web search test passed in %d ms with %d source URLs.",
+                    bundle: bundle,
+                    result.latencyMs,
+                    result.sources.count
+                )
+                providerWebSearchOutputPreview = result.outputPreview
+                providerWebSearchSources = result.sources
+            } catch {
+                providerWebSearchStatusMessage = AppLocalization.errorMessage(error, bundle: bundle)
+                providerWebSearchOutputPreview = nil
+                providerWebSearchSources = []
+            }
+        }
+    }
+
+    private func resetProviderWebSearchTestState() {
+        providerWebSearchStatusMessage = nil
+        providerWebSearchOutputPreview = nil
+        providerWebSearchSources = []
+        webSearchTrace.reset()
+        showsProviderWebSearchTrace = false
     }
 
     private func saveModel() {
@@ -1388,6 +1887,8 @@ private struct SettingsForm: View {
             let temperature = try parseOptionalDouble(modelTemperature, label: String(localized: "Temperature", bundle: bundle))
             let topP = try parseOptionalDouble(modelTopP, label: String(localized: "Top-P", bundle: bundle))
             let maxTokens = try parseOptionalInt(modelMaxTokens, label: String(localized: "Max tokens", bundle: bundle))
+            let thinkingMode = modelThinkingMode
+            let reasoningEffort = modelReasoningEffort
             let now = Date()
 
             let model: LLMModelProfile
@@ -1401,6 +1902,8 @@ private struct SettingsForm: View {
                     temperature: temperature,
                     topP: topP,
                     maxTokens: maxTokens,
+                    thinkingMode: thinkingMode,
+                    reasoningEffort: reasoningEffort,
                     isEnabled: modelEnabled,
                     createdAt: now,
                     modifiedAt: now
@@ -1414,6 +1917,8 @@ private struct SettingsForm: View {
             model.temperature = temperature
             model.topP = topP
             model.maxTokens = maxTokens
+            model.thinkingModeValue = thinkingMode
+            model.reasoningEffortValue = reasoningEffort
             model.isEnabled = modelEnabled
             model.modifiedAt = now
 
@@ -1430,17 +1935,25 @@ private struct SettingsForm: View {
 
     private func deleteSelectedModel() {
         guard let model = selectedModel else { return }
+        let modelID = model.id
+        let isBuiltInModel = LLMDefaultProfiles.isBuiltInModel(modelID)
         if settings.selectedHTMLModelProfileID == model.id {
             settings.selectedHTMLModelProfileID = nil
         }
         if settings.selectedPDFModelProfileID == model.id {
             settings.selectedPDFModelProfileID = nil
         }
+        if UUID(uuidString: selectedAssistantModelProfileIDRawValue) == model.id {
+            selectedAssistantModelProfileIDRawValue = ""
+        }
         modelContext.delete(model)
 
         do {
             settings.modifiedAt = Date()
             try modelContext.save()
+            if isBuiltInModel {
+                defaultProfileDeletionStore.markModelDeleted(modelID)
+            }
             resetModelForm()
             modelStatusMessage = String(localized: "Model deleted.", bundle: bundle)
             modelOutputPreview = nil
@@ -1468,11 +1981,14 @@ private struct SettingsForm: View {
                 let apiKey = try loadStoredAPIKey(ref: provider.apiKeyRef)
                 let result = try await validator.testConnection(
                     baseURL: provider.baseURL,
+                    apiStyle: apiStyleStore.apiStyle(for: provider.id),
                     apiKey: apiKey,
                     model: modelIdentifier,
                     temperature: try parseOptionalDouble(modelTemperature, label: String(localized: "Temperature", bundle: bundle)),
                     topP: try parseOptionalDouble(modelTopP, label: String(localized: "Top-P", bundle: bundle)),
-                    maxTokens: try parseOptionalInt(modelMaxTokens, label: String(localized: "Max tokens", bundle: bundle))
+                    maxTokens: try parseOptionalInt(modelMaxTokens, label: String(localized: "Max tokens", bundle: bundle)),
+                    thinkingMode: modelThinkingMode,
+                    reasoningEffort: modelReasoningEffort
                 )
 
                 if let selectedModel {
@@ -1557,14 +2073,22 @@ private struct SettingsForm: View {
         isLoadingInstalledBabelDocVersion = true
         defer { isLoadingInstalledBabelDocVersion = false }
 
-        let manager = BabelDocToolManager()
-        hasManagedBabelDOCFiles = (try? manager.hasManagedInstallation()) ?? false
-
-        do {
-            installedBabelDocVersion = try await manager.installedVersion()
-        } catch {
-            installedBabelDocVersion = nil
-        }
+        let probe = await Task.detached(priority: .utility) {
+            do {
+                let paths = try BabelDocToolManager().nativeToolPaths()
+                return NativeBabelDocSettingsProbe(
+                    isAvailable: true,
+                    installedVersion: paths.runtimeVersion
+                )
+            } catch {
+                return NativeBabelDocSettingsProbe(
+                    isAvailable: false,
+                    installedVersion: nil
+                )
+            }
+        }.value
+        hasManagedBabelDOCFiles = probe.isAvailable
+        installedBabelDocVersion = probe.installedVersion
 
         generalStatus.syncInstalledBabelDocVersion(installedBabelDocVersion, bundle: bundle)
     }
@@ -1577,6 +2101,48 @@ private struct SettingsForm: View {
             latestBabelDocVersion = try await BabelDocToolManager().latestPublishedVersion()
         } catch {
             latestBabelDocVersion = nil
+        }
+    }
+
+    private func refreshLaTeXInstallations() async {
+        let selectedDirectories = selectedLaTeXDirectoryURL.map { [$0] } ?? []
+        let selectedDirectory = selectedLaTeXDirectoryURL
+        let installations = await Task.detached(priority: .utility) {
+            var detected = ReadPaperLaTeXToolchain.installations(
+                additionalSearchDirectories: selectedDirectories
+            )
+            if let selectedDirectory,
+               !detected.contains(where: { $0.directoryURL == selectedDirectory }) {
+                detected.append(
+                    ReadPaperLaTeXToolchain.installation(at: selectedDirectory)
+                )
+            }
+            return detected
+        }.value
+        detectedLaTeXInstallations = installations.sorted {
+            $0.directoryURL.path.localizedStandardCompare($1.directoryURL.path) == .orderedAscending
+        }
+    }
+
+    private func chooseLaTeXToolchainDirectory() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.canCreateDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.prompt = String(localized: "Choose", bundle: bundle)
+        panel.message = String(
+            localized: "Choose the directory that contains latexmk and your TeX engines.",
+            bundle: bundle
+        )
+        panel.directoryURL = selectedLaTeXDirectoryURL
+            ?? activeLaTeXInstallation?.directoryURL
+            ?? URL(fileURLWithPath: "/Library/TeX/texbin", isDirectory: true)
+
+        guard panel.runModal() == .OK, let directoryURL = panel.url else { return }
+        latexToolchainDirectoryPath = directoryURL.standardizedFileURL.path
+        Task {
+            await refreshLaTeXInstallations()
         }
     }
 
@@ -1618,13 +2184,50 @@ private struct SettingsForm: View {
     }
 
     private func hasStoredAPIKey(ref: String) -> Bool {
-        ((try? keychainStore.load(account: ref)) ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+        (try? keychainStore.contains(account: ref)) == true
+    }
+
+    private func refreshStoredAPIKeyAvailability() {
+        providerIDsWithStoredAPIKeys = Set(
+            providers.compactMap { provider in
+                hasStoredAPIKey(ref: provider.apiKeyRef) ? provider.id : nil
+            }
+        )
     }
 
     private func modelDisplayName(_ model: LLMModelProfile) -> String {
         let providerName = providers.first(where: { $0.id == model.providerID })?.name
             ?? String(localized: "Unknown Provider", bundle: bundle)
         return "\(providerName) / \(model.name)"
+    }
+
+    private func apiStyleLabel(_ style: LLMAPIStyle) -> String {
+        switch style {
+        case .responses:
+            return String(localized: "Responses API", bundle: bundle)
+        case .chatCompletions:
+            return String(localized: "Chat Completions", bundle: bundle)
+        }
+    }
+
+    private func thinkingModeLabel(_ mode: LLMThinkingMode) -> String {
+        switch mode {
+        case .enabled:
+            return String(localized: "Enabled", bundle: bundle)
+        case .disabled:
+            return String(localized: "Disabled", bundle: bundle)
+        }
+    }
+
+    private func reasoningEffortLabel(_ effort: LLMReasoningEffort) -> String {
+        switch effort {
+        case .low:
+            return String(localized: "Low", bundle: bundle)
+        case .high:
+            return String(localized: "High", bundle: bundle)
+        case .max:
+            return String(localized: "Max", bundle: bundle)
+        }
     }
 
     private func parseOptionalDouble(_ value: String, label: String) throws -> Double? {
@@ -1878,71 +2481,6 @@ private struct SettingsTemplateTextEditor: NSViewRepresentable {
             }
             return true
         }
-    }
-}
-
-private struct SettingsWindowCenteringView: NSViewRepresentable {
-    func makeNSView(context: Context) -> SettingsWindowCenteringNSView {
-        SettingsWindowCenteringNSView()
-    }
-
-    func updateNSView(_ nsView: SettingsWindowCenteringNSView, context: Context) {}
-}
-
-private final class SettingsWindowCenteringNSView: NSView {
-    private weak var observedWindow: NSWindow?
-    private var didCenterCurrentWindow = false
-
-    override func viewDidMoveToWindow() {
-        super.viewDidMoveToWindow()
-        guard window !== observedWindow else { return }
-
-        observedWindow = window
-        didCenterCurrentWindow = false
-        scheduleCenteringIfNeeded()
-    }
-
-    override func viewDidMoveToSuperview() {
-        super.viewDidMoveToSuperview()
-        scheduleCenteringIfNeeded()
-    }
-
-    private func scheduleCenteringIfNeeded() {
-        DispatchQueue.main.async { [weak self] in
-            self?.centerWindowIfNeeded()
-        }
-    }
-
-    private func centerWindowIfNeeded() {
-        guard didCenterCurrentWindow == false, let settingsWindow = window else { return }
-
-        let anchorWindow = NSApp.windows.first { candidate in
-            candidate !== settingsWindow && candidate.isVisible && (candidate.isMainWindow || candidate.isKeyWindow)
-        } ?? NSApp.orderedWindows.first { candidate in
-            candidate !== settingsWindow && candidate.isVisible
-        }
-
-        let targetScreen = anchorWindow?.screen ?? settingsWindow.screen ?? NSScreen.main
-        let visibleFrame = targetScreen?.visibleFrame ?? settingsWindow.frame
-
-        var frame = settingsWindow.frame
-
-        if let anchorFrame = anchorWindow?.frame {
-            frame.origin.x = anchorFrame.midX - (frame.width / 2)
-            frame.origin.y = anchorFrame.midY - (frame.height / 2)
-        } else {
-            frame.origin.x = visibleFrame.midX - (frame.width / 2)
-            frame.origin.y = visibleFrame.midY - (frame.height / 2)
-        }
-
-        let maxOriginX = max(visibleFrame.minX, visibleFrame.maxX - frame.width)
-        let maxOriginY = max(visibleFrame.minY, visibleFrame.maxY - frame.height)
-
-        frame.origin.x = min(max(frame.origin.x, visibleFrame.minX), maxOriginX)
-        frame.origin.y = min(max(frame.origin.y, visibleFrame.minY), maxOriginY)
-
-        settingsWindow.setFrame(frame, display: false)
-        didCenterCurrentWindow = true
     }
 }
 

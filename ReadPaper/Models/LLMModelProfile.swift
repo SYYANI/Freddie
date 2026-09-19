@@ -10,6 +10,11 @@ final class LLMModelProfile {
     var temperature: Double?
     var topP: Double?
     var maxTokens: Int?
+    // Compatibility fields are optional so existing stores can adopt them via
+    // lightweight migration. Do not remove or rename them without a versioned
+    // SwiftData migration plan.
+    var thinkingMode: String?
+    var reasoningEffort: String?
     var isEnabled: Bool
     var lastTestedAt: Date?
     var createdAt: Date
@@ -23,6 +28,8 @@ final class LLMModelProfile {
         temperature: Double? = nil,
         topP: Double? = nil,
         maxTokens: Int? = nil,
+        thinkingMode: LLMThinkingMode? = nil,
+        reasoningEffort: LLMReasoningEffort? = nil,
         isEnabled: Bool = true,
         lastTestedAt: Date? = nil,
         createdAt: Date = Date(),
@@ -35,9 +42,21 @@ final class LLMModelProfile {
         self.temperature = temperature
         self.topP = topP
         self.maxTokens = maxTokens
+        self.thinkingMode = thinkingMode?.rawValue
+        self.reasoningEffort = reasoningEffort?.rawValue
         self.isEnabled = isEnabled
         self.lastTestedAt = lastTestedAt
         self.createdAt = createdAt
         self.modifiedAt = modifiedAt
+    }
+
+    var thinkingModeValue: LLMThinkingMode? {
+        get { thinkingMode.flatMap(LLMThinkingMode.init(rawValue:)) }
+        set { thinkingMode = newValue?.rawValue }
+    }
+
+    var reasoningEffortValue: LLMReasoningEffort? {
+        get { reasoningEffort.flatMap(LLMReasoningEffort.init(rawValue:)) }
+        set { reasoningEffort = newValue?.rawValue }
     }
 }

@@ -1,11 +1,21 @@
 .DerivedData
+build/
 .cache
 .home
 mercury
 swift-readability
 temp
 err.log
+trace.log
 # Xcode user interface state
 *.xcuserstate
 xcuserdata/
 paper.html
+# Xcode per-user data
+*.xcodeproj/xcuserdata/
+*.xcworkspace/xcuserdata/
+.DerivedData-iPad/
+.DerivedData-Mac/
+.DerivedData-final-ios/
+.DerivedData-glass/
+debug/*

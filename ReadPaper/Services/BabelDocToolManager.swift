@@ -1,5 +1,28 @@
 import Foundation
 import OSLog
+import BabelDocKit
+
+struct NativeBabelDocToolPaths: Sendable, Equatable {
+    let executable: URL
+    let runtimeRoot: URL
+    let runtimeManifest: URL
+    let runtimeVersion: String
+    let mupdfLibrary: URL
+    let zstdLibrary: URL
+    let layoutModel: URL
+    let fontDirectory: URL
+}
+
+enum NativeBabelDocToolError: Error, LocalizedError {
+    case missingRuntime(String)
+
+    var errorDescription: String? {
+        switch self {
+        case let .missingRuntime(path):
+            "Native BabelDOC runtime is incomplete or missing at \(path)."
+        }
+    }
+}
 
 enum BabelDocInstallSource: String, CaseIterable, Identifiable, Sendable {
     case official
@@ -52,24 +75,96 @@ struct BabelDocToolManager {
     let runner: ProcessRunner
     let session: URLSession
     let installSource: BabelDocInstallSource
+    let nativeHelperURL: URL?
+    let nativeRuntimeRootURL: URL?
+    let nativeRuntimeResolver: @Sendable (URL, URL) throws -> BabelDocRuntimeAssets
+    let nativeHelperVerifier: @Sendable (URL, String?) throws -> Void
     let logger = Logger(subsystem: "com.yiyan.ReadPaper", category: "BabelDocToolManager")
 
     init(
         fileStore: PaperFileStore = PaperFileStore(),
         runner: ProcessRunner = ProcessRunner(),
         session: URLSession = .shared,
-        installSource: BabelDocInstallSource = .stored()
+        installSource: BabelDocInstallSource = .stored(),
+        nativeHelperURL: URL? = nil,
+        nativeRuntimeRootURL: URL? = nil,
+        nativeRuntimeResolver: @escaping @Sendable (URL, URL) throws -> BabelDocRuntimeAssets = { root, manifest in
+            try BabelDocRuntimeVerifier.verifyRuntime(
+                at: root,
+                trustedManifestURL: manifest
+            )
+        },
+        nativeHelperVerifier: @escaping @Sendable (URL, String?) throws -> Void = { helper, teamIdentifier in
+            _ = try BabelDocRuntimeVerifier.verifyCode(
+                at: helper,
+                expectedIdentifier: nil,
+                expectedTeamIdentifier: teamIdentifier
+            )
+        }
     ) {
         self.fileStore = fileStore
         self.runner = runner
         self.session = session
         self.installSource = installSource
+        self.nativeHelperURL = nativeHelperURL
+        self.nativeRuntimeRootURL = nativeRuntimeRootURL
+        self.nativeRuntimeResolver = nativeRuntimeResolver
+        self.nativeHelperVerifier = nativeHelperVerifier
     }
 
     var toolRoot: URL {
         get throws {
             try fileStore.toolDirectory.appendingPathComponent("BabelDOC", isDirectory: true)
         }
+    }
+
+    var nativeToolRoot: URL {
+        get throws {
+            if let nativeRuntimeRootURL {
+                return nativeRuntimeRootURL
+            }
+            guard let resources = Bundle.main.resourceURL else {
+                throw NativeBabelDocToolError.missingRuntime(Bundle.main.bundleURL.path)
+            }
+            return resources.appendingPathComponent("BabelDOCNative", isDirectory: true)
+        }
+    }
+
+    func nativeToolPaths() throws -> NativeBabelDocToolPaths {
+        let root = try nativeToolRoot
+        let fm = fileStore.fileManager
+        let helper = nativeHelperURL ?? Bundle.main.bundleURL
+            .appendingPathComponent("Contents/Helpers/babeldoc-readpaper-helper")
+        guard fm.isExecutableFile(atPath: helper.path),
+              let trustedManifest = BabelDocRuntimeVerifier.bundledManifestURL else {
+            throw NativeBabelDocToolError.missingRuntime(root.path)
+        }
+        let currentSignature = try? BabelDocRuntimeVerifier.currentProcessCodeSignature()
+        try nativeHelperVerifier(helper, currentSignature?.teamIdentifier)
+        let assets = try nativeRuntimeResolver(root, trustedManifest)
+        return NativeBabelDocToolPaths(
+            executable: helper,
+            runtimeRoot: root,
+            runtimeManifest: trustedManifest,
+            runtimeVersion: assets.manifestVersion,
+            mupdfLibrary: assets.mupdfLibrary,
+            zstdLibrary: assets.zstdLibrary,
+            layoutModel: assets.layoutModel,
+            fontDirectory: assets.fontDirectory
+        )
+    }
+
+    func nativeEnvironment(apiKey: String) throws -> [String: String] {
+        _ = try nativeToolPaths()
+        return [
+            "READPAPER_LLM_API_KEY": apiKey,
+            "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
+        ]
+    }
+
+    func nativeInstalledVersion() async throws -> String? {
+        let paths = try nativeToolPaths()
+        return paths.runtimeVersion
     }
 
     var toolBinDirectory: URL {

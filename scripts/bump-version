@@ -1,0 +1,215 @@
+#!/bin/bash
+
+set -euo pipefail
+
+readonly project_file="project.yml"
+readonly xcode_project_file="ReadPaper.xcodeproj/project.pbxproj"
+
+repo_root="$(git rev-parse --show-toplevel)"
+cd "$repo_root"
+
+temporary_directory="$(mktemp -d "${TMPDIR:-/tmp}/readpaper-version-bump.XXXXXX")"
+trap 'rm -rf "$temporary_directory"' EXIT
+
+fail() {
+    echo "version bump: $*" >&2
+    exit 1
+}
+
+read_version_value() {
+    local file="$1"
+    local key="$2"
+    local values
+    local value_count
+
+    values="$(awk -v key="$key" '$1 == key ":" { print $2 }' "$file" | sort -u)"
+    value_count="$(printf '%s\n' "$values" | awk 'NF { count += 1 } END { print count + 0 }')"
+    [[ "$value_count" -eq 1 ]] || fail "$file must contain one consistent $key value"
+    printf '%s' "$values"
+}
+
+read_xcode_version_value() {
+    local file="$1"
+    local key="$2"
+    local values
+    local value_count
+
+    values="$(awk -v key="$key" '$1 == key && $2 == "=" { value = $3; sub(/;$/, "", value); print value }' "$file" | sort -u)"
+    value_count="$(printf '%s\n' "$values" | awk 'NF { count += 1 } END { print count + 0 }')"
+    [[ "$value_count" -eq 1 ]] || fail "$file must contain one consistent $key value"
+    printf '%s' "$values"
+}
+
+validate_version() {
+    local version="$1"
+    local major
+    local minor
+    local patch
+
+    [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] \
+        || fail "MARKETING_VERSION must use major.minor.patch format (found $version)"
+
+    IFS=. read -r major minor patch <<< "$version"
+    ((10#$minor <= 9)) \
+        || fail "MARKETING_VERSION minor component must not exceed 9 (found $version)"
+    ((10#$patch <= 20)) \
+        || fail "MARKETING_VERSION patch component must not exceed 20 (found $version)"
+}
+
+validate_build() {
+    local build="$1"
+    [[ "$build" =~ ^[0-9]+$ ]] \
+        || fail "CURRENT_PROJECT_VERSION must be an integer (found $build)"
+}
+
+next_marketing_version() {
+    local version="$1"
+    local major
+    local minor
+    local patch
+
+    IFS=. read -r major minor patch <<< "$version"
+    major="$((10#$major))"
+    minor="$((10#$minor))"
+    patch="$((10#$patch))"
+
+    if ((patch < 20)); then
+        patch="$((patch + 1))"
+    elif ((minor < 9)); then
+        minor="$((minor + 1))"
+        patch=0
+    else
+        major="$((major + 1))"
+        minor=0
+        patch=0
+    fi
+
+    printf '%d.%d.%d' "$major" "$minor" "$patch"
+}
+
+rewrite_versions() {
+    local input_file="$1"
+    local output_file="$2"
+    local version="$3"
+    local build="$4"
+
+    awk -v version="$version" -v build="$build" '
+        /^[[:space:]]*CURRENT_PROJECT_VERSION:[[:space:]]*/ {
+            sub(/CURRENT_PROJECT_VERSION:.*/, "CURRENT_PROJECT_VERSION: " build)
+        }
+        /^[[:space:]]*MARKETING_VERSION:[[:space:]]*/ {
+            sub(/MARKETING_VERSION:.*/, "MARKETING_VERSION: " version)
+        }
+        /^[[:space:]]*CURRENT_PROJECT_VERSION = [0-9]+;[[:space:]]*$/ {
+            sub(/CURRENT_PROJECT_VERSION = [0-9]+;/, "CURRENT_PROJECT_VERSION = " build ";")
+        }
+        /^[[:space:]]*MARKETING_VERSION = [0-9]+\.[0-9]+\.[0-9]+;[[:space:]]*$/ {
+            sub(/MARKETING_VERSION = [0-9]+\.[0-9]+\.[0-9]+;/, "MARKETING_VERSION = " version ";")
+        }
+        { print }
+    ' "$input_file" > "$output_file"
+}
+
+update_index() {
+    local path="$1"
+    local content_file="$2"
+    local mode
+    local blob
+
+    mode="$(git ls-files -s -- "$path" | awk 'NR == 1 { print $1 }')"
+    [[ -n "$mode" ]] || fail "$path is not tracked"
+    blob="$(git hash-object -w "$content_file")"
+    git update-index --cacheinfo "$mode,$blob,$path"
+}
+
+sync_worktree() {
+    local path="$1"
+    local version="$2"
+    local build="$3"
+    local rewritten_file="$temporary_directory/worktree-$(basename "$path")"
+
+    rewrite_versions "$path" "$rewritten_file" "$version" "$build"
+    if ! cmp -s "$path" "$rewritten_file"; then
+        # Redirecting into the existing file preserves its executable/permission bits.
+        /bin/cat "$rewritten_file" > "$path"
+    fi
+}
+
+git cat-file -e "HEAD:$project_file" 2>/dev/null \
+    || fail "$project_file does not exist in HEAD"
+git cat-file -e ":$project_file" 2>/dev/null \
+    || fail "$project_file is not present in the index"
+git cat-file -e ":$xcode_project_file" 2>/dev/null \
+    || fail "$xcode_project_file is not present in the index"
+
+head_project="$temporary_directory/head-project.yml"
+staged_project="$temporary_directory/staged-project.yml"
+staged_xcode_project="$temporary_directory/staged-project.pbxproj"
+git show "HEAD:$project_file" > "$head_project"
+git show ":$project_file" > "$staged_project"
+git show ":$xcode_project_file" > "$staged_xcode_project"
+
+head_version="$(read_version_value "$head_project" MARKETING_VERSION)"
+head_build="$(read_version_value "$head_project" CURRENT_PROJECT_VERSION)"
+staged_version="$(read_version_value "$staged_project" MARKETING_VERSION)"
+staged_build="$(read_version_value "$staged_project" CURRENT_PROJECT_VERSION)"
+worktree_version="$(read_version_value "$project_file" MARKETING_VERSION)"
+worktree_build="$(read_version_value "$project_file" CURRENT_PROJECT_VERSION)"
+validate_version "$head_version"
+validate_version "$staged_version"
+validate_version "$worktree_version"
+validate_build "$head_build"
+validate_build "$staged_build"
+validate_build "$worktree_build"
+
+next_version="$(next_marketing_version "$head_version")"
+next_build="$((10#$head_build + 1))"
+
+if [[ "$worktree_version" == "$staged_version" && "$worktree_build" != "$staged_build" ]] \
+    || [[ "$worktree_version" != "$staged_version" && "$worktree_build" == "$staged_build" ]]; then
+    fail "change MARKETING_VERSION and CURRENT_PROJECT_VERSION together in $project_file"
+elif [[ "$worktree_version" != "$staged_version" && "$worktree_build" != "$staged_build" ]]; then
+    # Version fields are intentionally staged by this hook, so an explicit bump in
+    # the working tree must not be discarded merely because the developer did not
+    # stage project.yml before committing other files.
+    target_version="$worktree_version"
+    target_build="$worktree_build"
+    did_bump=false
+elif [[ "$staged_version" == "$head_version" && "$staged_build" == "$head_build" ]]; then
+    target_version="$next_version"
+    target_build="$next_build"
+    did_bump=true
+elif [[ "$staged_version" != "$head_version" && "$staged_build" != "$head_build" ]]; then
+    # This includes a retry after another hook rejected the commit. It also respects
+    # an intentional version/build change that was already staged by the developer.
+    target_version="$staged_version"
+    target_build="$staged_build"
+    did_bump=false
+else
+    fail "stage MARKETING_VERSION and CURRENT_PROJECT_VERSION together, or leave both unchanged"
+fi
+
+rewritten_project="$temporary_directory/rewritten-project.yml"
+rewritten_xcode_project="$temporary_directory/rewritten-project.pbxproj"
+rewrite_versions "$staged_project" "$rewritten_project" "$target_version" "$target_build"
+rewrite_versions "$staged_xcode_project" "$rewritten_xcode_project" "$target_version" "$target_build"
+
+[[ "$(read_version_value "$rewritten_project" MARKETING_VERSION)" == "$target_version" ]] \
+    || fail "could not update MARKETING_VERSION in $project_file"
+[[ "$(read_version_value "$rewritten_project" CURRENT_PROJECT_VERSION)" == "$target_build" ]] \
+    || fail "could not update CURRENT_PROJECT_VERSION in $project_file"
+[[ "$(read_xcode_version_value "$rewritten_xcode_project" MARKETING_VERSION)" == "$target_version" ]] \
+    || fail "could not update MARKETING_VERSION in $xcode_project_file"
+[[ "$(read_xcode_version_value "$rewritten_xcode_project" CURRENT_PROJECT_VERSION)" == "$target_build" ]] \
+    || fail "could not update CURRENT_PROJECT_VERSION in $xcode_project_file"
+
+update_index "$project_file" "$rewritten_project"
+update_index "$xcode_project_file" "$rewritten_xcode_project"
+sync_worktree "$project_file" "$target_version" "$target_build"
+sync_worktree "$xcode_project_file" "$target_version" "$target_build"
+
+if [[ "$did_bump" == true ]]; then
+    echo "Version bumped: $head_version ($head_build) -> $target_version ($target_build)"
+else
+    echo "Version already prepared: $target_version ($target_build)"
+fi

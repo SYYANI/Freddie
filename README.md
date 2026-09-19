@@ -31,7 +31,11 @@ It focuses on three practical reading workflows:
 - macOS 14.0+
 - Xcode with Swift 6 support
 - `xcodegen`
-- `swift-readability` checked out at `./swift-readability`
+
+Xcode resolves the Swift packages from their GitHub repositories. The selected
+branches are declared in `project.yml`; no sibling repository checkouts are
+required. The `scripts/build` command also downloads or builds the
+manifest-verified BabelDOC native runtime assets in Xcode's package checkout.
 
 `create-dmg` is only needed if you want to build a distributable DMG locally.
 
@@ -42,12 +46,6 @@ Clone the repository:
 ```sh
 git clone <your-repo-url>
 cd read-paper
-```
-
-If `swift-readability` is missing, clone it into the expected local path:
-
-```sh
-git clone https://github.com/SYYANI/swift-readability.git swift-readability
 ```
 
 Generate the Xcode project:
@@ -65,14 +63,37 @@ open ReadPaper.xcodeproj
 Or build from the command line:
 
 ```sh
-xcodebuild -project ReadPaper.xcodeproj -scheme ReadPaper -destination 'platform=macOS' -derivedDataPath .DerivedData build
+./scripts/build
 ```
+
+The build script performs an unsigned Release build, verifies the embedded
+BabelDOC runtime and helper, and writes the app to
+`build/Release/Freddie.app`; compilation intermediates remain under
+`/tmp/read-paper-derived-data`, so the repository and release directory stay
+free of compilation intermediates. Run
+`./scripts/build --help` for Debug builds, custom output paths, optional
+XcodeGen project regeneration, and Xcode signing options.
 
 Run tests:
 
 ```sh
-xcodebuild -project ReadPaper.xcodeproj -scheme ReadPaper -destination 'platform=macOS' -derivedDataPath .DerivedData test
+xcodebuild -project ReadPaper.xcodeproj -scheme ReadPaper -destination 'platform=macOS' -derivedDataPath /tmp/read-paper-derived-data test
 ```
+
+Enable the repository's Git hooks once per clone:
+
+```sh
+git config core.hooksPath .githooks
+```
+
+The pre-commit hook increments the marketing version and build number together,
+then stages only those version fields in `project.yml` and the generated Xcode
+project. The patch component runs from `0` through `20`, and the minor component
+runs from `0` through `9`: `0.3.19` becomes `0.3.20`, `0.3.20` becomes `0.4.0`,
+and `0.9.20` becomes `1.0.0`. To set an explicit version, change
+`MARKETING_VERSION` and `CURRENT_PROJECT_VERSION` together in `project.yml`;
+the hook preserves and stages that change even if `project.yml` was not staged
+yet.
 
 ## Project Structure
 
@@ -103,7 +124,10 @@ Key locations there:
 
 - `ReadPaper.store`: the SwiftData store for papers, attachments, translation cache, provider/model profiles, and app settings
 - `Library/{paper UUID}/`: per-paper files such as `paper.pdf`, `paper.html`, `Resources/`, `translations/`, and `notes/`
-- `Tools/`: app-managed external tool files
+- `Tools/`: legacy or optional app-managed external tool files
+
+The native BabelDOC helper and its manifest-pinned MuPDF, zstd, layout model,
+and font runtime are bundled with the app; no separate runtime install step is required.
 
 Even though the app bundle name is `Freddie`, the on-disk application support directory currently remains `ReadPaper`.
 
@@ -114,11 +138,21 @@ Other system locations affected by the app:
 
 ## Release
 
-The repository includes a GitHub Actions workflow that can generate an unsigned macOS DMG on tag push or manual dispatch.
+The repository includes a GitHub Actions workflow that can generate an unsigned
+macOS DMG artifact on tag push or manual dispatch. Xcode resolves the remote
+Swift packages, then the workflow downloads/builds and verifies the native
+runtime before the app build. Unsigned artifacts are intentionally not
+published as GitHub Releases. Each artifact also includes
+`build-provenance.txt` with the resolved source commits and runtime manifest hash.
+Public distribution remains gated on signing, notarization, Corresponding
+Source, and complete third-party notices.
 
 ## License
 
-This project is released under the MIT License. See [LICENSE](LICENSE).
+Copyright (c) 2026 SYYANI.
+
+This project is licensed under the GNU Affero General Public License v3.0
+(`AGPL-3.0-only`). See [LICENSE](LICENSE) for the full license text.
 
 ## Acknowledgements
 
