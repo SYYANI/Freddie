@@ -52,7 +52,7 @@ xcodebuild -project ReadPaper.xcodeproj -scheme ReadPaper -destination 'platform
 GitHub Actions 构建 DMG：
 
 - 仓库已包含 [`.github/workflows/release.yml`](/Users/yiyan/Desktop/read-paper/.github/workflows/release.yml)，支持在 GitHub Actions 上构建 DMG；触发方式为手动 `workflow_dispatch` 或推送 `v*` tag。
-- 当前 workflow 运行在 `macos-26`，通过 Xcode 解析 `project.yml` 中的 GitHub Swift Package 分支，并从 `SourcePackages/checkouts/BabelDOC` 准备和验证模型、字体、许可证、zstd、MuPDF 与 trusted runtime manifest，再执行无签名 Release 构建。构建时的实际依赖 commit 写入 `build-provenance.txt`。
+- 当前 workflow 运行在 `macos-26`，通过 Xcode 解析 `project.yml` 中的 GitHub Swift Package 分支；四个 `SYYANI` 仓库是 private，需要 Actions Secret `READPAPER_PACKAGES_TOKEN`（仅授予这四个仓库 Contents Read）。解析后从 `SourcePackages/checkouts/BabelDOC` 准备和验证模型、字体、许可证、zstd、MuPDF 与 trusted runtime manifest，再执行无签名 Release 构建。构建时的实际依赖 commit 写入 `build-provenance.txt`。
 - CI 产物当前是 unsigned 的 `Freddie.app` 和 `Freddie-<version>-unsigned.dmg`；helper 在关闭 Xcode signing 时仍做 ad-hoc 签名以满足 App 内信任契约。artifact 同时包含记录 App 与四个远程包源码 commit、runtime manifest hash 和版本号的 `build-provenance.txt`。tag 与手动触发都只上传 Actions artifact；在 Developer ID 签名、notarization、Corresponding Source 和完整第三方 notices 闭环前，不自动创建公开 GitHub Release。
 - 后续若调整 app 名称、scheme、产物路径、签名或打包方式，要同步更新 workflow 中的 `APP_NAME`、`APP_PATH`、`DMG_PATH` 和 release 上传逻辑，避免本地可构建但 CI 打包失效。
 

@@ -25,6 +25,19 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
+          persist-credentials: false
+
+      - name: Configure private Swift package access
+        env:
+          READPAPER_PACKAGES_TOKEN: ${{ secrets.READPAPER_PACKAGES_TOKEN }}
+        run: |
+          if [ -z "$READPAPER_PACKAGES_TOKEN" ]; then
+            echo "::error::Set the READPAPER_PACKAGES_TOKEN Actions secret with read access to the four SYYANI Swift package repositories."
+            exit 1
+          fi
+          git config --global credential.https://github.com.useHttpPath true
+          git config --global --add credential.https://github.com.helper ""
+          git config --global --add credential.https://github.com.helper "$GITHUB_WORKSPACE/scripts/git-credential-private-packages"
 
       - name: Check Environment Versions
         run: |
@@ -41,6 +54,9 @@ jobs:
           xcodegen generate
 
       - name: Resolve remote package dependencies
+        env:
+          READPAPER_PACKAGES_TOKEN: ${{ secrets.READPAPER_PACKAGES_TOKEN }}
+          GIT_TERMINAL_PROMPT: "0"
         run: |
           xcodebuild -resolvePackageDependencies \
             -project "$PROJECT_PATH" \
@@ -65,6 +81,7 @@ jobs:
             -configuration Release \
             -destination "generic/platform=macOS" \
             -derivedDataPath "$DERIVED_DATA_PATH" \
+            -disableAutomaticPackageResolution \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY=""

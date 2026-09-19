@@ -147,6 +147,15 @@ published as GitHub Releases. Each artifact also includes
 Public distribution remains gated on signing, notarization, Corresponding
 Source, and complete third-party notices.
 
+The four `SYYANI` Swift package repositories are private. Before running the
+workflow, create a fine-grained GitHub personal access token with **Contents:
+Read-only** permission, resource owner `SYYANI`, and access to only
+`swift-readability`, `BabelDOC`, `arxivLatex`, and
+`SwiftStreamingMarkdown`, then save it in this repository's **Settings → Secrets
+and variables → Actions** as `READPAPER_PACKAGES_TOKEN`. The workflow uses the
+token only while resolving packages and never stores it in package URLs or the
+build artifact.
+
 ## License
 
 Copyright (c) 2026 SYYANI.
