@@ -47,7 +47,7 @@ jobs:
 
       - name: Install build tools
         run: |
-          brew install xcodegen create-dmg
+          brew install xcodegen create-dmg uv
 
       - name: Generate Xcode project
         run: |
