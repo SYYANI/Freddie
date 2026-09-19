@@ -67,7 +67,10 @@ jobs:
         run: |
           ./scripts/prepare-generated-babeldoc-model "$BABELDOC_ROOT"
           python3 "$BABELDOC_ROOT/tools/download_runtime_fonts.py"
-          "$BABELDOC_ROOT/tools/build_native_libraries.sh" zstd
+          # Keep the same Vendor directory while deferring BabelDOC's in-place
+          # manifest write to the atomic refresh step below.
+          BABELDOC_VENDOR_ROOT="$BABELDOC_ROOT/Vendor/." \
+            "$BABELDOC_ROOT/tools/build_native_libraries.sh" zstd
           python3 "$BABELDOC_ROOT/tools/verify_mupdf_vendor.py"
           python3 "$BABELDOC_ROOT/tools/verify_model_vendor.py"
           python3 "$BABELDOC_ROOT/tools/verify_local_runtime_assets.py"

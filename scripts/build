@@ -122,9 +122,10 @@ babeldoc_root="${derived_data_path}/SourcePackages/checkouts/BabelDOC"
 
 if ! python3 "${babeldoc_root}/tools/verify_local_runtime_assets.py" >/dev/null 2>&1; then
     echo "Preparing BabelDOC native runtime assets..."
-    "${babeldoc_root}/tools/download_native_assets.sh" models
     python3 "${babeldoc_root}/tools/download_runtime_fonts.py"
-    "${babeldoc_root}/tools/build_native_libraries.sh" zstd
+    # Defer BabelDOC's in-place manifest write to the atomic refresh below.
+    BABELDOC_VENDOR_ROOT="${babeldoc_root}/Vendor/." \
+        "${babeldoc_root}/tools/build_native_libraries.sh" zstd
 fi
 python3 "${babeldoc_root}/tools/verify_mupdf_vendor.py"
 python3 "${babeldoc_root}/tools/verify_model_vendor.py"
