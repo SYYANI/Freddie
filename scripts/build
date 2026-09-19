@@ -129,9 +129,7 @@ fi
 python3 "${babeldoc_root}/tools/verify_mupdf_vendor.py"
 python3 "${babeldoc_root}/tools/verify_model_vendor.py"
 python3 "${babeldoc_root}/tools/verify_local_runtime_assets.py"
-chmod u+w "${babeldoc_root}/Sources/BabelDocKit/Resources/runtime-manifest.json"
-python3 "${babeldoc_root}/tools/generate_native_runtime_manifest.py"
-python3 "${babeldoc_root}/tools/generate_native_runtime_manifest.py" --check
+"${REPOSITORY_ROOT}/scripts/refresh-babeldoc-runtime-manifest" "${babeldoc_root}"
 
 echo "Building Freddie.app (${configuration})..."
 

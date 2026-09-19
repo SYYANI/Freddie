@@ -71,9 +71,7 @@ jobs:
           python3 "$BABELDOC_ROOT/tools/verify_mupdf_vendor.py"
           python3 "$BABELDOC_ROOT/tools/verify_model_vendor.py"
           python3 "$BABELDOC_ROOT/tools/verify_local_runtime_assets.py"
-          chmod u+w "$BABELDOC_ROOT/Sources/BabelDocKit/Resources/runtime-manifest.json"
-          python3 "$BABELDOC_ROOT/tools/generate_native_runtime_manifest.py"
-          python3 "$BABELDOC_ROOT/tools/generate_native_runtime_manifest.py" --check
+          ./scripts/refresh-babeldoc-runtime-manifest "$BABELDOC_ROOT"
 
       - name: Build unsigned app
         run: |
