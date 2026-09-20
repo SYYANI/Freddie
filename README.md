@@ -139,27 +139,6 @@ Other system locations affected by the app:
 - `~/.cache/babeldoc/`: BabelDOC may create or update its own cache outside the app support directory during PDF translation-related work
 - macOS Keychain: provider API keys are stored as generic password items under the Keychain service `com.yiyan.ReadPaper`; SwiftData keeps only references such as `apiKeyRef`, not the raw keys themselves
 
-## Release
-
-The repository includes a GitHub Actions workflow that can generate an unsigned
-macOS DMG artifact on tag push or manual dispatch. Xcode resolves the remote
-Swift packages, then the workflow downloads/builds and verifies the native
-runtime before the app build. A run on a `v*` tag also publishes the unsigned
-DMG and `build-provenance.txt` to GitHub Releases; runs on branches upload only
-an Actions artifact. The provenance file records the resolved source commits,
-generated model hash, and runtime manifest hash. Developer ID signing,
-notarization, Corresponding Source, and complete third-party notices remain
-outstanding.
-
-The four `SYYANI` Swift package repositories are private. Before running the
-workflow, create a fine-grained GitHub personal access token with **Contents:
-Read-only** permission, resource owner `SYYANI`, and access to only
-`swift-readability`, `BabelDOC`, `arxivLatex`, and
-`SwiftStreamingMarkdown`, then save it in this repository's **Settings → Secrets
-and variables → Actions** as `READPAPER_PACKAGES_TOKEN`. The workflow uses the
-token only while resolving packages and never stores it in package URLs or the
-build artifact.
-
 ## License
 
 Copyright (c) 2026 SYYANI.
