@@ -11,7 +11,7 @@ jobs:
     runs-on: macos-26
     timeout-minutes: 90
     permissions:
-      contents: read
+      contents: write
     env:
       APP_NAME: Freddie
       PROJECT_PATH: ReadPaper.xcodeproj
@@ -159,3 +159,14 @@ jobs:
           path: |
             ${{ steps.artifact_meta.outputs.dmg_path }}
             build/build-provenance.txt
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v3
+        with:
+          name: ${{ github.ref_name }}
+          files: |
+            ${{ steps.artifact_meta.outputs.dmg_path }}
+            build/build-provenance.txt
+          fail_on_unmatched_files: true
+          generate_release_notes: true

@@ -144,12 +144,12 @@ Other system locations affected by the app:
 The repository includes a GitHub Actions workflow that can generate an unsigned
 macOS DMG artifact on tag push or manual dispatch. Xcode resolves the remote
 Swift packages, then the workflow downloads/builds and verifies the native
-runtime before the app build. Unsigned artifacts are intentionally not
-published as GitHub Releases. Each artifact also includes
-`build-provenance.txt` with the resolved source commits, generated model hash,
-and runtime manifest hash.
-Public distribution remains gated on signing, notarization, Corresponding
-Source, and complete third-party notices.
+runtime before the app build. A run on a `v*` tag also publishes the unsigned
+DMG and `build-provenance.txt` to GitHub Releases; runs on branches upload only
+an Actions artifact. The provenance file records the resolved source commits,
+generated model hash, and runtime manifest hash. Developer ID signing,
+notarization, Corresponding Source, and complete third-party notices remain
+outstanding.
 
 The four `SYYANI` Swift package repositories are private. Before running the
 workflow, create a fine-grained GitHub personal access token with **Contents:
