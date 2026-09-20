@@ -134,11 +134,6 @@ and font runtime are bundled with the app; no separate runtime install step is r
 
 Even though the app bundle name is `Freddie`, the on-disk application support directory currently remains `ReadPaper`.
 
-Other system locations affected by the app:
-
-- `~/.cache/babeldoc/`: BabelDOC may create or update its own cache outside the app support directory during PDF translation-related work
-- macOS Keychain: provider API keys are stored as generic password items under the Keychain service `com.yiyan.ReadPaper`; SwiftData keeps only references such as `apiKeyRef`, not the raw keys themselves
-
 ## License
 
 Copyright (c) 2026 SYYANI.
