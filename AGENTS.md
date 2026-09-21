@@ -52,8 +52,8 @@ xcodebuild -project ReadPaper.xcodeproj -scheme ReadPaper -destination 'platform
 GitHub Actions 构建 DMG：
 
 - 仓库已包含 [`.github/workflows/release.yml`](/Users/yiyan/Desktop/read-paper/.github/workflows/release.yml)，支持在 GitHub Actions 上构建 DMG；触发方式为手动 `workflow_dispatch` 或推送 `v*` tag。
-- 当前 workflow 运行在 `macos-26`，通过 Xcode 解析 `project.yml` 中的 GitHub Swift Package 分支；四个 `SYYANI` 仓库是 private，需要 Actions Secret `READPAPER_PACKAGES_TOKEN`（仅授予这四个仓库 Contents Read）。解析后从 `SourcePackages/checkouts/BabelDOC` 准备和验证模型、字体、许可证、zstd、MuPDF 与 trusted runtime manifest，再执行无签名 Release 构建。构建时的实际依赖 commit 写入 `build-provenance.txt`。
-- CI 产物当前是 unsigned 的 `Freddie.app` 和 `Freddie-<version>-unsigned.dmg`；helper 在关闭 Xcode signing 时仍做 ad-hoc 签名以满足 App 内信任契约。artifact 同时包含记录 App 与四个远程包源码 commit、runtime manifest hash 和版本号的 `build-provenance.txt`。在 `v*` tag 上运行时还会把 DMG 和 provenance 上传为 GitHub Release；在分支上手动触发只上传 Actions artifact。Developer ID 签名、notarization、Corresponding Source 和完整第三方 notices 仍待完成。
+- 当前 workflow 运行在 `macos-26`，通过 Xcode 解析 `project.yml` 中的 GitHub Swift Package 分支；四个 `SYYANI` 仓库是 private，需要 Actions Secret `READPAPER_PACKAGES_TOKEN`（仅授予这四个仓库 Contents Read）。解析后从 `SourcePackages/checkouts/BabelDOC` 准备和验证模型、字体、许可证、zstd、MuPDF 与 trusted runtime manifest，再执行无 Developer ID 的 Release 构建，并在打包前对完整 App bundle 做 ad-hoc 资源封印与严格签名验证。构建时的实际依赖 commit 写入 `build-provenance.txt`。
+- CI 产物当前是无 Developer ID 的 `Freddie.app` 和 `Freddie-<version>-unsigned.dmg`；helper 和完整 App bundle 会做 ad-hoc 签名，分别满足 App 内信任契约与 bundle 资源完整性检查。artifact 同时包含记录 App 与四个远程包源码 commit、runtime manifest hash 和版本号的 `build-provenance.txt`。在 `v*` tag 上运行时还会把 DMG 和 provenance 上传为 GitHub Release；在分支上手动触发只上传 Actions artifact。Developer ID 签名、notarization、Corresponding Source 和完整第三方 notices 仍待完成。
 - 后续若调整 app 名称、scheme、产物路径、签名或打包方式，要同步更新 workflow 中的 `APP_NAME`、`APP_PATH`、`DMG_PATH` 和 release 上传逻辑，避免本地可构建但 CI 打包失效。
 
 如果沙箱或受限终端里 `xcodebuild` 因 Xcode/SwiftPM/clang 缓存目录权限失败，不要先判断为代码失败；换到可写 Xcode 缓存的环境或使用 Xcode 运行后再确认。
