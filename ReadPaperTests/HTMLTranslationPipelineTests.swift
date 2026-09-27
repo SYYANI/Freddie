@@ -11,7 +11,7 @@ final class HTMLTranslationPipelineTests: XCTestCase {
     }
 
     @MainActor
-    func testHTMLSelectionInstrumentationKeepsJavaScriptNewlineEscapesIntact() {
+    func testHTMLSelectionInstrumentationKeepsJavaScriptNewlineEscapesIntact() throws {
         let script = HTMLReaderView.Coordinator.instrumentationScript
 
         XCTAssertTrue(script.contains(".join('\\n\\n')"))
@@ -28,6 +28,18 @@ final class HTMLTranslationPipelineTests: XCTestCase {
         XCTAssertTrue(HTMLReaderView.Coordinator.nativeSelectionClearScript.contains("removeAllRanges"))
         XCTAssertTrue(script.contains("rpSelectionReset.postMessage(null)"))
         XCTAssertTrue(script.contains("document.addEventListener('pointerdown'"))
+        XCTAssertTrue(script.contains("#readability-page-1 :not(svg, svg *, math, math *)"))
+        XCTAssertTrue(script.contains("position: static !important"))
+        XCTAssertTrue(script.contains("#readability-page-1 :is(ul, ol)"))
+        XCTAssertTrue(script.contains("position: relative !important"))
+        let translationStyleCall = try XCTUnwrap(script.range(of: "ensureTranslationDisplayStyle();"))
+        let layoutRepairCall = try XCTUnwrap(
+            script.range(
+                of: "ensureReadabilityLayoutRepairStyle();",
+                range: translationStyleCall.upperBound..<script.endIndex
+            )
+        )
+        XCTAssertLessThan(script.distance(from: translationStyleCall.upperBound, to: layoutRepairCall.lowerBound), 80)
     }
 
     @MainActor

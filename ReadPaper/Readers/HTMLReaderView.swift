@@ -417,6 +417,23 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
             `.trim();
 
             const readabilityLayoutRepairCSS = `
+                body.rp-readability-body .rp-readability-content #readability-page-1 :not(svg, svg *, math, math *) {
+                    position: static !important;
+                    inset: auto !important;
+                    transform: none !important;
+                    translate: none !important;
+                    rotate: none !important;
+                    scale: none !important;
+                }
+                body.rp-readability-body .rp-readability-content #readability-page-1 :is(ul, ol) {
+                    position: relative !important;
+                }
+                body.rp-readability-body .rp-readability-content #readability-page-1 :is(article, section, main, header, footer, aside, div) {
+                    height: auto !important;
+                    min-height: 0 !important;
+                    max-height: none !important;
+                    overflow: visible !important;
+                }
                 html[data-rp-page-padding-repair='true'] .rp-readability-content > #readability-page-1.page {
                     padding: 32px 28px 56px !important;
                     box-sizing: border-box;
@@ -550,6 +567,7 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
             };
 
             ensureTranslationDisplayStyle();
+            ensureReadabilityLayoutRepairStyle();
             updateReadabilityLayoutRepair();
 
             if (!document.getElementById('rp-note-anchor-style')) {

@@ -97,6 +97,49 @@ final class HTMLLocalizerTests: XCTestCase {
         ))
     }
 
+    func testReadabilityStylesRestoreNormalFlowForAnimatedArticleContent() throws {
+        let paragraph = String(repeating: "This article copy must remain in normal document flow. ", count: 8)
+        let html = """
+        <html>
+        <head>
+        <style>
+        .reveal-line { position: absolute; inset: 0; transform: translateY(20px); }
+        .sticky-section { position: sticky; top: 0; height: 100vh; overflow: hidden; }
+        ul.framer-text { padding-inline-start: 0; position: relative; }
+        li.framer-text { padding-inline-start: 2ch; list-style: none; }
+        ul.framer-text > li.framer-text::before { content: "•"; position: absolute; inset-inline-start: 0; }
+        </style>
+        </head>
+        <body>
+        <article>
+        <section class="sticky-section">
+        <h2 class="reveal-line">Boris tweeteth, the internet copy-pasteth</h2>
+        <p class="reveal-line">\(paragraph)</p>
+        <ul class="framer-text"><li class="framer-text"><p>List markers stay with the article text.</p></li></ul>
+        </section>
+        </article>
+        </body>
+        </html>
+        """
+
+        let document = try HTMLLocalizer().makeDocumentForLocalization(
+            html: html,
+            sourceURL: URL(string: "https://reasonable.io/blog/tla-tutorial/")!
+        )
+
+        let style = try XCTUnwrap(try document.getElementById("rp-readability-style"))
+        let readabilityCSS = style.data()
+        XCTAssertTrue(readabilityCSS.contains("#readability-page-1 :not(svg, svg *, math, math *)"))
+        XCTAssertTrue(readabilityCSS.contains("position: static !important"))
+        XCTAssertTrue(readabilityCSS.contains("transform: none !important"))
+        XCTAssertTrue(readabilityCSS.contains("#readability-page-1 :is(ul, ol)"))
+        XCTAssertTrue(readabilityCSS.contains("position: relative !important"))
+        XCTAssertTrue(readabilityCSS.contains("#readability-page-1 :is(article, section, main, header, footer, aside, div)"))
+        XCTAssertTrue(readabilityCSS.contains("height: auto !important"))
+        XCTAssertTrue(readabilityCSS.contains("overflow: visible !important"))
+        XCTAssertTrue(try document.select(".rp-readability-content").text().contains("Boris tweeteth"))
+    }
+
     func testLocalizeWritesDownloadedStylesAsRawCSS() async throws {
         let paragraph = String(repeating: "This is article content that should survive readability extraction. ", count: 12)
         let html = """
