@@ -1206,6 +1206,16 @@
         }
       }
     },
+    "Adding the PDF files to your library." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在将 PDF 文件添加到你的资料库。"
+          }
+        }
+      }
+    },
     "Choose Folder" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1876,6 +1886,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "DOI：%1$@"
+          }
+        }
+      }
+    },
+    "Drop PDFs to Import" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "拖放 PDF 以导入"
           }
         }
       }
@@ -3226,6 +3246,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在加载 %1$@ 的标题、作者、摘要和链接。"
+          }
+        }
+      }
+    },
+    "Importing PDFs…" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在导入 PDF…"
           }
         }
       }
@@ -6237,6 +6267,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "清华镜像"
+          }
+        }
+      }
+    },
+    "Release to add the PDF files to your library." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "松开即可将 PDF 文件添加到你的资料库。"
           }
         }
       }

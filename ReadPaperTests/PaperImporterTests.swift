@@ -48,6 +48,21 @@ final class PaperImporterTests: XCTestCase {
     }
 
     @MainActor
+    func testSupportedLocalPDFsFiltersNonPDFAndRemoteURLs() throws {
+        let pdf = URL(fileURLWithPath: "/tmp/Paper.PDF")
+        let duplicatePDF = URL(fileURLWithPath: "/tmp/./Paper.PDF")
+        let textFile = URL(fileURLWithPath: "/tmp/notes.txt")
+        let remotePDF = try XCTUnwrap(URL(string: "https://example.com/paper.pdf"))
+
+        XCTAssertEqual(
+            PaperImporter.supportedLocalPDFs(
+                from: [pdf, duplicatePDF, textFile, remotePDF]
+            ),
+            [pdf]
+        )
+    }
+
+    @MainActor
     func testArxivLinkImportRequestRecognizesSupportedPaperLinks() throws {
         let absRequest = try XCTUnwrap(ArxivLinkImportRequest(
             url: XCTUnwrap(URL(string: "https://arxiv.org/abs/2303.08774v2#references"))

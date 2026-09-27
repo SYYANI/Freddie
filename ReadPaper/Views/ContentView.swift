@@ -27,6 +27,9 @@ struct ContentView: View {
     @State private var arxivLinkImportProgress: ArxivImportProgress?
     @State private var arxivLinkImportErrorMessage: String?
     @State private var arxivLinkImportIdentifier = ""
+    @State private var isPDFDropTargeted = false
+    @State private var isImportingDroppedPDFs = false
+    @State private var droppedPDFImportErrorMessage: String?
 
     private var settings: AppSettings? {
         settingsRows.first
@@ -171,6 +174,20 @@ struct ContentView: View {
             }
             .ignoresSafeArea()
         }
+        .overlay {
+            if isPDFDropTargeted || isImportingDroppedPDFs {
+                PDFDropOverlay(isImporting: isImportingDroppedPDFs)
+                    .allowsHitTesting(false)
+                    .transition(.opacity.combined(with: .scale(scale: 0.98)))
+            }
+        }
+        .dropDestination(for: URL.self) { urls, _ in
+            importDroppedPDFs(urls)
+        } isTargeted: { isTargeted in
+            withAnimation(.easeInOut(duration: 0.16)) {
+                isPDFDropTargeted = isTargeted
+            }
+        }
         // .tint(isPaperAppearance ? ReadPaperTheme.accentColor : nil)
         .sheet(isPresented: $isAddingPaper) {
             AddPaperSheet(isPresented: $isAddingPaper, selectedPaperID: $selectedPaperID)
@@ -248,6 +265,18 @@ struct ContentView: View {
             Button(String(localized: "OK", bundle: bundle), role: .cancel) {}
         } message: {
             Text(deletionErrorMessage ?? "")
+        }
+        .alert(String(localized: "Unable to Import Paper", bundle: bundle), isPresented: Binding(
+            get: { droppedPDFImportErrorMessage != nil },
+            set: { isPresented in
+                if !isPresented {
+                    droppedPDFImportErrorMessage = nil
+                }
+            }
+        )) {
+            Button(String(localized: "OK", bundle: bundle), role: .cancel) {}
+        } message: {
+            Text(droppedPDFImportErrorMessage ?? "")
         }
         .onAppear {
             let restoredSettings = ensureSettings()
@@ -446,6 +475,110 @@ struct ContentView: View {
         }
     }
 
+    private func importDroppedPDFs(_ urls: [URL]) -> Bool {
+        guard !isImportingDroppedPDFs else { return false }
+
+        let pdfURLs = PaperImporter.supportedLocalPDFs(from: urls)
+        guard !pdfURLs.isEmpty else { return false }
+
+        let scopedURLs = pdfURLs.map { url in
+            (url: url, isSecurityScoped: url.startAccessingSecurityScopedResource())
+        }
+        isPDFDropTargeted = false
+        isImportingDroppedPDFs = true
+        droppedPDFImportErrorMessage = nil
+
+        Task { @MainActor in
+            await Task.yield()
+
+            defer {
+                for scopedURL in scopedURLs where scopedURL.isSecurityScoped {
+                    scopedURL.url.stopAccessingSecurityScopedResource()
+                }
+                isImportingDroppedPDFs = false
+            }
+
+            var lastImportedPaperID: UUID?
+            var failures: [String] = []
+
+            let importer = PaperImporter()
+            for scopedURL in scopedURLs {
+                do {
+                    let paper = try importer.importLocalPDF(
+                        scopedURL.url,
+                        modelContext: modelContext
+                    )
+                    lastImportedPaperID = paper.id
+                } catch {
+                    modelContext.rollback()
+                    failures.append("\(scopedURL.url.lastPathComponent): \(error.localizedDescription)")
+                }
+            }
+
+            if let lastImportedPaperID {
+                selectedPaperID = lastImportedPaperID
+            }
+            if !failures.isEmpty {
+                droppedPDFImportErrorMessage = failures.joined(separator: "\n")
+            }
+        }
+
+        return true
+    }
+
+}
+
+private struct PDFDropOverlay: View {
+    @Environment(\.localizationBundle) private var bundle
+
+    let isImporting: Bool
+
+    var body: some View {
+        ZStack {
+            Color.accentColor.opacity(0.09)
+
+            VStack(spacing: 14) {
+                Image(systemName: isImporting ? "doc.text" : "arrow.down.doc")
+                    .font(.system(size: 40, weight: .semibold))
+                    .symbolRenderingMode(.hierarchical)
+                    .foregroundStyle(Color.accentColor)
+                    .accessibilityHidden(true)
+
+                Group {
+                    if isImporting {
+                        Text("Importing PDFs…", bundle: bundle)
+                    } else {
+                        Text("Drop PDFs to Import", bundle: bundle)
+                    }
+                }
+                .font(.title2.weight(.semibold))
+
+                Group {
+                    if isImporting {
+                        Text("Adding the PDF files to your library.", bundle: bundle)
+                    } else {
+                        Text("Release to add the PDF files to your library.", bundle: bundle)
+                    }
+                }
+                .font(.callout)
+                .foregroundStyle(.secondary)
+            }
+            .multilineTextAlignment(.center)
+            .padding(.horizontal, 44)
+            .padding(.vertical, 32)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(
+                        Color.accentColor.opacity(0.8),
+                        style: StrokeStyle(lineWidth: 2, dash: [8, 6])
+                    )
+            }
+            .shadow(color: .black.opacity(0.16), radius: 24, y: 10)
+        }
+        .ignoresSafeArea()
+        .accessibilityElement(children: .combine)
+    }
 }
 
 private struct ArxivLinkImportStatusSheet: View {
