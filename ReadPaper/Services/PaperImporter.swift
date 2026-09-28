@@ -99,7 +99,7 @@ final class PaperImporter {
     }
 
     func importLocalPDF(_ url: URL, modelContext: ModelContext) throws -> Paper {
-        guard url.pathExtension.lowercased() == "pdf" else {
+        guard Self.isSupportedLocalPDF(url) else {
             throw PaperImportError.unsupportedFile(url)
         }
         let pdfDocument = PDFDocument(url: url)
@@ -138,6 +138,19 @@ final class PaperImporter {
         try modelContext.save()
         AuthorExtractionService.extractAuthorsIfNeeded(for: paper, modelContext: modelContext)
         return paper
+    }
+
+    static func supportedLocalPDFs(from urls: [URL]) -> [URL] {
+        var seenPaths = Set<String>()
+
+        return urls.filter { url in
+            guard isSupportedLocalPDF(url) else { return false }
+            return seenPaths.insert(url.standardizedFileURL.path).inserted
+        }
+    }
+
+    private static func isSupportedLocalPDF(_ url: URL) -> Bool {
+        url.isFileURL && url.pathExtension.caseInsensitiveCompare("pdf") == .orderedSame
     }
 
     func importWebPage(

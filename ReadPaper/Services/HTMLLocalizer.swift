@@ -367,6 +367,32 @@ struct HTMLLocalizer: @unchecked Sendable {
             text-underline-offset: 0.16em;
         }
         .rp-readability-content img, .rp-readability-content video, .rp-readability-content svg, .rp-readability-content math { max-width: 100%; }
+        /*
+         * Readability keeps source classes so that math, code, and article-specific
+         * semantics survive localization. Some source sites use those classes to
+         * absolutely position or transform every article block for scroll effects.
+         * Once their scripts are removed, all of those blocks occupy the same visual
+         * position. Restore normal document flow while leaving SVG/MathML internals
+         * untouched.
+         */
+        body.rp-readability-body .rp-readability-content #readability-page-1 :not(svg, svg *, math, math *) {
+            position: static !important;
+            inset: auto !important;
+            transform: none !important;
+            translate: none !important;
+            rotate: none !important;
+            scale: none !important;
+        }
+        /* Keep list-generated markers anchored to their own list container. */
+        body.rp-readability-body .rp-readability-content #readability-page-1 :is(ul, ol) {
+            position: relative !important;
+        }
+        body.rp-readability-body .rp-readability-content #readability-page-1 :is(article, section, main, header, footer, aside, div) {
+            height: auto !important;
+            min-height: 0 !important;
+            max-height: none !important;
+            overflow: visible !important;
+        }
         .rp-readability-content .page,
         .rp-readability-content .available-content,
         .rp-readability-content .grid,
