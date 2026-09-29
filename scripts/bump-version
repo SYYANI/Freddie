@@ -175,6 +175,23 @@ elif [[ "$worktree_version" != "$staged_version" && "$worktree_build" != "$stage
     target_version="$worktree_version"
     target_build="$worktree_build"
     did_bump=false
+elif git rev-parse -q --verify MERGE_HEAD >/dev/null; then
+    # A merge commit only carries versions that were already bumped on its parents.
+    # Bumping again would make the merge target drift ahead of the merged branch on
+    # every merge, so adopt the newest parent/staged version instead.
+    merge_project="$temporary_directory/merge-project.yml"
+    git show "MERGE_HEAD:$project_file" > "$merge_project"
+    merge_version="$(read_version_value "$merge_project" MARKETING_VERSION)"
+    merge_build="$(read_version_value "$merge_project" CURRENT_PROJECT_VERSION)"
+    validate_version "$merge_version"
+    validate_build "$merge_build"
+    target_version="$staged_version"
+    target_build="$staged_build"
+    if ((10#$merge_build > 10#$target_build)); then
+        target_version="$merge_version"
+        target_build="$merge_build"
+    fi
+    did_bump=false
 elif [[ "$staged_version" == "$head_version" && "$staged_build" == "$head_build" ]]; then
     target_version="$next_version"
     target_build="$next_build"
