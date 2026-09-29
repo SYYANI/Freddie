@@ -44,6 +44,9 @@ struct DualPDFReaderView: View {
     var onDebugRegionSelected: ((PDFDebugRegionSelection) -> Void)? = nil
     var onNoteSelectionChanged: ((NoteSelectionContext?) -> Void)? = nil
     var onArxivLinkActivated: ((URL) -> Void)? = nil
+    var findRequest: DocumentFindRequest? = nil
+    var findTarget: DualPDFSelectionSource = .original
+    var onFindStatusChanged: ((DocumentFindStatus) -> Void)? = nil
     @State private var translatedPageCount: Int = 0
     @State private var originalPageCount: Int = 0
     @State private var selectionOwnership = DualPDFSelectionOwnership()
@@ -85,6 +88,7 @@ struct DualPDFReaderView: View {
             pageIndex: $pageIndex,
             selectionResetToken: originalSelectionResetToken,
             noteNavigationRequest: originalNoteNavigationRequest,
+            findRequest: findTarget == .original ? findRequest : nil,
             debugRegionSelectionEnabled: false,
             onDocumentPageCountChanged: { pageCount in
                 guard originalPageCount != pageCount else { return }
@@ -106,6 +110,7 @@ struct DualPDFReaderView: View {
             reloadToken: reloadToken,
             selectionResetToken: translatedSelectionResetToken,
             noteNavigationRequest: translatedNoteNavigationRequest,
+            findRequest: findTarget == .translated ? findRequest : nil,
             debugRegionSelectionEnabled: debugRegionSelectionEnabled,
             onDocumentPageCountChanged: { pageCount in
                 guard translatedPageCount != pageCount else { return }
@@ -167,6 +172,7 @@ struct DualPDFReaderView: View {
         reloadToken: Int = 0,
         selectionResetToken: Int,
         noteNavigationRequest: NoteNavigationRequest?,
+        findRequest: DocumentFindRequest?,
         debugRegionSelectionEnabled: Bool,
         onDocumentPageCountChanged: @escaping (Int) -> Void,
         onSelectionChanged: @escaping (NoteSelectionContext?) -> Void
@@ -189,7 +195,9 @@ struct DualPDFReaderView: View {
                 onArxivLinkActivated: onArxivLinkActivated,
                 onDocumentPageCountChanged: onDocumentPageCountChanged,
                 debugRegionSelectionEnabled: debugRegionSelectionEnabled,
-                onDebugRegionSelected: onDebugRegionSelected
+                onDebugRegionSelected: onDebugRegionSelected,
+                findRequest: findRequest,
+                onFindStatusChanged: onFindStatusChanged
             )
         }
     }

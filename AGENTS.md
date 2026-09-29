@@ -132,6 +132,7 @@ LLM 配置现已拆成独立 SwiftData 模型：`LLMProviderProfile` 负责 prov
 - 如果要改设置页输入框，优先保持当前 AppKit-backed 单行输入控件策略：关闭 text completion、smart quotes/dashes、自动替换、拼写检查和 character picker；在可用系统版本上关闭 Writing Tools / affordance；并在结束编辑前主动 `unmarkText()` / `discardMarkedText()`，尽量降低快速切换焦点时的系统输入服务噪音日志。不要轻易退回成默认 SwiftUI `TextField` / `SecureField` 而不处理这些输入系统细节。
 - 阅读器不同模式的缺失态/空状态要保持一致的视觉语义；例如缺少 HTML、PDF 或翻译 PDF 时，优先复用统一的居中 unavailable 组件，不要一处是完整空状态卡片、另一处只显示一行占位文字。
 - 与阅读模式切换相邻、语义上属于“二选一 / 多选一”或并列主操作的按钮，视觉上优先向阅读器里的 `htmlDisplayPicker` / segmented control 靠拢：保持紧凑、等权、成组展示，必要时使用共享圆角底板和分隔线；避免混入单个过强的 `.borderedProminent` 按钮破坏整组节奏。空状态里的并列 action 也优先遵循这套样式，并预留足够宽度保证文案完整展示。
+- 文内查找（⌘F）的匹配逻辑统一在 `DocumentTextSearch`：PDF 与 HTML 共用同一套"忽略空白/连字符后匹配，再按空白布局区分 exact / spacing-tolerant"的规则，不要在 JS 或各阅读器里另写一套规范化。HTML 高亮只用 CSS Custom Highlight API，不要用 `<mark>` 等方式改 DOM，否则会破坏按子元素下标计算的笔记锚点；PDF 高亮用 `PDFView.highlightedSelections`，不要改成写入 `PDFAnnotation` 或设置 `currentSelection`（会触发选区助手）。
 - `DualPDFReaderView` 的双向页码同步要区分“共享的原文阅读位置”和“译文侧可显示范围”。如果翻译 PDF 只是 partial 文档，译文侧 `translatedPageIndex` 可以 clamp 到当前最大可用页，但不要把原文侧共享的 `pageIndex` 反向夹回 partial 范围，否则会导致 original PDF 无法翻到后续未翻译页面。
 - PDF 阅读位置恢复与持久化时，`ReadingState` 中保存的 `pageIndex` 仍应表达用户在原文坐标系里的上次位置。双栏或纯译文视图在打开时，以及 translated page count 发生变化时，应把译文侧位置同步到 `min(savedOriginalPageIndex, translatedLastAvailablePage)`；但不要因此把 original `pageIndex` 改写成更小值。关闭应用后二次打开时，至少要保证译文侧落到与上次阅读位置对应的可用页，而不是回到首页。
 - arXiv 导入进度要尽量使用确定型、分步骤的状态反馈；如果链路已知关键阶段，至少同时展示当前步骤标题和阶段性说明，不要退回成只有转圈、没有上下文的等待态。若 HTML 主源失败并回退到备用源，也要把“正在尝试备用源”明确告诉用户。
@@ -169,6 +170,7 @@ xcodebuild -project ReadPaper.xcodeproj -scheme ReadPaper -destination 'platform
 - OpenAI-compatible `/v1` 回退与代理路径保留：`OpenAICompatibleLLMProviderTests`
 - settings 初始化保障：`LLMConfigurationBootstrapperTests`
 - 阅读位置存储与 mode 回退：`ReadingStateStoreTests`
+- 文内查找的文本规范化（PDF 空格/断词/连字容错、短词误命中保护、HTML 分段偏移）：`DocumentTextSearchTests`
 - 运行时语言选择、bundle 规范化/回退、代表性本地化行为：`LanguageManagerTests`、`LocalizationBehaviorTests`
 
 涉及真实网络、OpenAI API、BabelDOC 安装或真实 PDF 翻译的测试不要默认加入单元测试；优先用可注入依赖、临时目录和小样本文本覆盖行为。

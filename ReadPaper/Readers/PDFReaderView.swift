@@ -294,6 +294,8 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
     var onDocumentPageCountChanged: ((Int) -> Void)? = nil
     var debugRegionSelectionEnabled = false
     var onDebugRegionSelected: ((PDFDebugRegionSelection) -> Void)? = nil
+    var findRequest: DocumentFindRequest? = nil
+    var onFindStatusChanged: ((DocumentFindStatus) -> Void)? = nil
 
     #if os(macOS)
     func makeNSView(context: Context) -> PDFView {
@@ -356,6 +358,7 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
         context.coordinator.onNoteSelectionChanged = onNoteSelectionChanged
         context.coordinator.onArxivLinkActivated = onArxivLinkActivated
         context.coordinator.onDocumentPageCountChanged = onDocumentPageCountChanged
+        context.coordinator.onFindStatusChanged = onFindStatusChanged
         if context.coordinator.lastSelectionResetToken != selectionResetToken {
             context.coordinator.lastSelectionResetToken = selectionResetToken
             view.clearSelection()
@@ -376,6 +379,7 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
         guard let fileURL else {
             let hadLoadedDocument = view.document != nil || context.coordinator.loadedURL != nil
             if hadLoadedDocument {
+                context.coordinator.invalidateFindDocument(in: view, keepingPosition: false)
                 view.document = nil
                 context.coordinator.clearLoadedAnnotations()
                 context.coordinator.clearProgrammaticPageRestore()
@@ -386,6 +390,7 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
             context.coordinator.loadedAttachmentID = attachmentID
             context.coordinator.lastReloadToken = reloadToken
             context.coordinator.scheduleDocumentPageCountUpdate(0)
+            context.coordinator.applyFindRequest(nil, in: view)
             return
         }
         let shouldReloadDocument = context.coordinator.loadedURL != fileURL ||
@@ -399,6 +404,11 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
             )
             context.coordinator.prepareForProgrammaticPageRestore(to: restorePosition)
             context.coordinator.clearSelectionAssistantHistoryAnnotations()
+            context.coordinator.invalidateFindDocument(
+                in: view,
+                keepingPosition: context.coordinator.loadedURL == fileURL &&
+                    context.coordinator.loadedAttachmentID == attachmentID
+            )
             let document = PDFDocument(url: fileURL)
             view.document = document
             context.coordinator.loadedURL = fileURL
@@ -431,6 +441,7 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
             force: shouldReloadDocument
         )
         context.coordinator.applyNoteNavigationIfNeeded(noteNavigationRequest, in: view)
+        context.coordinator.applyFindRequest(findRequest, in: view)
     }
 
     func makeCoordinator() -> Coordinator {
@@ -507,6 +518,18 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
         private var appliedSelectionAssistantHistoryAnchors: [SelectionAssistantHistoryAnchor] = []
         private var renderedSelectionAssistantHistoryAnchorIDs: Set<String> = []
         private var selectionAssistantHistoryAnnotations: [(SelectionAssistantHistoryAnchor, PDFAnnotation)] = []
+        var onFindStatusChanged: ((DocumentFindStatus) -> Void)?
+        private var findDocumentGeneration = 0
+        private var findPageTexts: [DocumentSearchText]?
+        private var findPageTextsKey: FindDocumentKey?
+        private var findTextLoadingKey: FindDocumentKey?
+        private var findTextLoadTask: Task<Void, Never>?
+        private var latestFindRequest: DocumentFindRequest?
+        private var appliedFindRequest: DocumentFindRequest?
+        private var findResultsNeedRefresh = false
+        private var findMatches: [(pageIndex: Int, selection: PDFSelection)] = []
+        private var currentFindMatchIndex: Int?
+        private var lastPublishedFindStatus: DocumentFindStatus?
 
         init(
             paperID: UUID? = nil,
@@ -734,6 +757,8 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
         }
 
         func detach() {
+            findTextLoadTask?.cancel()
+            findTextLoadTask = nil
             clearNoteNavigationHighlight()
             clearSelectionAssistantHistoryAnnotations()
             if let pdfView {
@@ -822,6 +847,177 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
                 try? await Task.sleep(for: .milliseconds(1_400))
                 guard Task.isCancelled == false else { return }
                 self?.clearNoteNavigationHighlight()
+            }
+        }
+
+        private struct FindDocumentKey: Equatable {
+            var url: URL
+            var generation: Int
+        }
+
+        func invalidateFindDocument(in pdfView: PDFView, keepingPosition: Bool) {
+            findDocumentGeneration += 1
+            findTextLoadTask?.cancel()
+            findTextLoadTask = nil
+            findTextLoadingKey = nil
+            findPageTexts = nil
+            findPageTextsKey = nil
+            findMatches = []
+            pdfView.highlightedSelections = nil
+            // Keep the current match position when the same search is re-run on
+            // the reloaded document (e.g. a translated PDF that grew by a batch);
+            // a different document starts a fresh search from the visible page.
+            if keepingPosition == false {
+                appliedFindRequest = nil
+                currentFindMatchIndex = nil
+            }
+            findResultsNeedRefresh = appliedFindRequest != nil
+        }
+
+        func applyFindRequest(_ request: DocumentFindRequest?, in pdfView: PDFView) {
+            latestFindRequest = request
+            guard let request,
+                  DocumentSearchQuery(request.query).isEmpty == false,
+                  let url = loadedURL
+            else {
+                clearFind(in: pdfView)
+                return
+            }
+            guard let document = pdfView.document else {
+                publishFindStatus(DocumentFindStatus(
+                    query: request.query,
+                    options: request.options,
+                    matchCount: 0,
+                    currentIndex: nil,
+                    isSearching: false
+                ))
+                return
+            }
+
+            let key = FindDocumentKey(url: url, generation: findDocumentGeneration)
+            guard let pageTexts = findPageTexts, findPageTextsKey == key else {
+                loadFindPageTexts(for: key)
+                publishFindStatus(.searching(request))
+                return
+            }
+
+            let isNewSearch = findResultsNeedRefresh ||
+                appliedFindRequest?.query != request.query ||
+                appliedFindRequest?.options != request.options
+            if isNewSearch {
+                let isRefresh = findResultsNeedRefresh &&
+                    appliedFindRequest?.query == request.query &&
+                    appliedFindRequest?.options == request.options
+                let previousIndex = currentFindMatchIndex
+                findResultsNeedRefresh = false
+                findMatches = Self.findMatches(for: request, pageTexts: pageTexts, in: document)
+                appliedFindRequest = request
+
+                if findMatches.isEmpty {
+                    currentFindMatchIndex = nil
+                } else if isRefresh {
+                    currentFindMatchIndex = min(previousIndex ?? 0, findMatches.count - 1)
+                } else {
+                    let visiblePageIndex = pdfView.currentPage.map { document.index(for: $0) } ?? 0
+                    currentFindMatchIndex = findMatches.firstIndex { $0.pageIndex >= visiblePageIndex } ?? 0
+                    revealCurrentFindMatch(in: pdfView)
+                }
+            } else if appliedFindRequest?.navigationToken != request.navigationToken {
+                appliedFindRequest = request
+                guard findMatches.isEmpty == false else { return }
+                let step = request.navigationDirection == .forward ? 1 : -1
+                let current = currentFindMatchIndex ?? (step > 0 ? -1 : 0)
+                currentFindMatchIndex = (current + step + findMatches.count) % findMatches.count
+                revealCurrentFindMatch(in: pdfView)
+            } else {
+                return
+            }
+
+            renderFindHighlights(in: pdfView)
+            publishFindStatus(DocumentFindStatus(
+                query: request.query,
+                options: request.options,
+                matchCount: findMatches.count,
+                currentIndex: currentFindMatchIndex,
+                isSearching: false
+            ))
+        }
+
+        private static func findMatches(
+            for request: DocumentFindRequest,
+            pageTexts: [DocumentSearchText],
+            in document: PDFDocument
+        ) -> [(pageIndex: Int, selection: PDFSelection)] {
+            let query = DocumentSearchQuery(request.query)
+            var matches: [(pageIndex: Int, selection: PDFSelection)] = []
+            for (pageIndex, pageText) in pageTexts.enumerated() where pageIndex < document.pageCount {
+                let pageMatches = pageText.matches(of: query, options: request.options)
+                guard pageMatches.isEmpty == false, let page = document.page(at: pageIndex) else { continue }
+                for match in pageMatches {
+                    if let selection = page.selection(for: match.sourceRange) {
+                        matches.append((pageIndex, selection))
+                    }
+                }
+            }
+            return matches
+        }
+
+        private func loadFindPageTexts(for key: FindDocumentKey) {
+            guard findTextLoadingKey != key else { return }
+            findTextLoadTask?.cancel()
+            findTextLoadingKey = key
+            findTextLoadTask = Task { @MainActor [weak self] in
+                let pageTexts = await PDFDocumentSearchTextLoader.loadPages(from: key.url)
+                guard let self, Task.isCancelled == false, self.findTextLoadingKey == key else { return }
+                self.findTextLoadTask = nil
+                self.findTextLoadingKey = nil
+                self.findPageTexts = pageTexts ?? []
+                self.findPageTextsKey = key
+                if let pdfView = self.pdfView {
+                    self.applyFindRequest(self.latestFindRequest, in: pdfView)
+                }
+            }
+        }
+
+        private func clearFind(in pdfView: PDFView) {
+            guard appliedFindRequest != nil || findMatches.isEmpty == false ||
+                pdfView.highlightedSelections != nil
+            else {
+                return
+            }
+            findMatches = []
+            appliedFindRequest = nil
+            currentFindMatchIndex = nil
+            findResultsNeedRefresh = false
+            lastPublishedFindStatus = nil
+            pdfView.highlightedSelections = nil
+        }
+
+        private func revealCurrentFindMatch(in pdfView: PDFView) {
+            guard let currentFindMatchIndex, findMatches.indices.contains(currentFindMatchIndex) else { return }
+            pdfView.go(to: findMatches[currentFindMatchIndex].selection)
+            scheduleCurrentPageIndexUpdate()
+        }
+
+        private func renderFindHighlights(in pdfView: PDFView) {
+            guard findMatches.isEmpty == false else {
+                pdfView.highlightedSelections = nil
+                return
+            }
+            for (index, match) in findMatches.enumerated() {
+                match.selection.color = index == currentFindMatchIndex
+                    ? PlatformPDFColor.systemOrange.withAlphaComponent(0.7)
+                    : PlatformPDFColor.systemYellow.withAlphaComponent(0.45)
+            }
+            pdfView.highlightedSelections = findMatches.map(\.selection)
+        }
+
+        private func publishFindStatus(_ status: DocumentFindStatus) {
+            guard lastPublishedFindStatus != status else { return }
+            lastPublishedFindStatus = status
+            // Defer so SwiftUI state is not mutated during a view update.
+            Task { @MainActor [weak self] in
+                self?.onFindStatusChanged?(status)
             }
         }
 

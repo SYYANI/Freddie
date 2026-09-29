@@ -130,6 +130,8 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
     var nativeSelectionClearToken: Int = 0
     var onNoteSelectionChanged: ((NoteSelectionContext?) -> Void)? = nil
     var onSelectionAssistantDismissed: (() -> Void)? = nil
+    var findRequest: DocumentFindRequest? = nil
+    var onFindStatusChanged: ((DocumentFindStatus) -> Void)? = nil
 
     #if os(macOS)
     func makeNSView(context: Context) -> WKWebView {
@@ -169,6 +171,13 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
                 forMainFrameOnly: true
             )
         )
+        configuration.userContentController.addUserScript(
+            WKUserScript(
+                source: Coordinator.findScript,
+                injectionTime: .atDocumentEnd,
+                forMainFrameOnly: true
+            )
+        )
         let view = WKWebView(frame: .zero, configuration: configuration)
         view.navigationDelegate = context.coordinator
         applyHostDisplayAppearance(displayAppearance, to: view)
@@ -184,6 +193,8 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
         context.coordinator.onNoteSelectionChanged = onNoteSelectionChanged
         context.coordinator.onSelectionAssistantDismissed = onSelectionAssistantDismissed
         context.coordinator.selectionAssistantHistoryAnchors = selectionAssistantHistoryAnchors
+        context.coordinator.findRequest = findRequest
+        context.coordinator.onFindStatusChanged = onFindStatusChanged
         applyHostDisplayAppearance(displayAppearance, to: view)
         context.coordinator.clearSelectionHighlightIfNeeded(
             resetToken: selectionHighlightResetToken,
@@ -225,6 +236,7 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
         context.coordinator.applySegmentUpdateIfNeeded(segmentUpdate, to: view)
         context.coordinator.applySelectionAssistantHistoryAnchors(to: view)
         context.coordinator.applyNoteNavigationIfNeeded(noteNavigationRequest, to: view)
+        context.coordinator.applyFindRequestIfNeeded(to: view)
     }
 
     func makeCoordinator() -> Coordinator {
@@ -811,6 +823,177 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
         })();
         """
 
+        /// In-document find support. Swift owns matching (shared with PDF find);
+        /// this script only snapshots visible text nodes and paints matches with
+        /// the CSS Custom Highlight API so the DOM, and therefore note anchors,
+        /// stay untouched.
+        static let findScript = """
+        (() => {
+            if (window.__rpFindInstalled) { return; }
+            window.__rpFindInstalled = true;
+
+            const skippedSelector = 'script,style,noscript,template,textarea,select,annotation,annotation-xml';
+            const blockSelector = [
+                'address', 'article', 'aside', 'blockquote', 'body', 'caption', 'dd', 'details', 'div', 'dl', 'dt',
+                'figcaption', 'figure', 'footer', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'header', 'li', 'main', 'nav',
+                'ol', 'p', 'pre', 'section', 'summary', 'table', 'td', 'th', 'tr', 'ul', '.rp-translation-block'
+            ].join(',');
+            let nodes = [];
+            let ranges = [];
+            let currentIndex = -1;
+
+            const supportsHighlights = () =>
+                !!(window.CSS && CSS.highlights && typeof Highlight !== 'undefined');
+
+            if (!document.getElementById('rp-find-style')) {
+                const style = document.createElement('style');
+                style.id = 'rp-find-style';
+                style.textContent = `
+                    ::highlight(rp-find) {
+                        background-color: rgba(255, 204, 0, 0.42);
+                        color: inherit;
+                    }
+                    ::highlight(rp-find-current) {
+                        background-color: rgba(255, 149, 0, 0.78);
+                        color: inherit;
+                    }
+                `;
+                (document.head || document.documentElement).appendChild(style);
+            }
+
+            const isVisible = (element, cache) => {
+                if (cache.has(element)) { return cache.get(element); }
+                let visible = element.getClientRects().length > 0;
+                if (visible) {
+                    const style = window.getComputedStyle(element);
+                    visible = style.visibility !== 'hidden' && style.visibility !== 'collapse';
+                }
+                cache.set(element, visible);
+                return visible;
+            };
+
+            window.__rpFindCollect = () => {
+                nodes = [];
+                ranges = [];
+                currentIndex = -1;
+                const segments = [];
+                const breaks = [];
+                const root = document.body;
+                if (!root) { return JSON.stringify({ segments, breaks }); }
+
+                const visibility = new Map();
+                const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+                    acceptNode: node => {
+                        const parent = node.parentElement;
+                        if (!node.data || !parent || parent.closest(skippedSelector)) {
+                            return NodeFilter.FILTER_REJECT;
+                        }
+                        return isVisible(parent, visibility) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+                    }
+                });
+
+                let lastBlock = null;
+                while (walker.nextNode()) {
+                    const node = walker.currentNode;
+                    const block = node.parentElement.closest(blockSelector);
+                    breaks.push(nodes.length > 0 && block !== lastBlock);
+                    lastBlock = block;
+                    nodes.push(node);
+                    segments.push(node.data);
+                }
+                return JSON.stringify({ segments, breaks });
+            };
+
+            const paint = () => {
+                if (!supportsHighlights()) { return; }
+                try {
+                    const all = new Highlight();
+                    ranges.forEach((range, index) => {
+                        if (range && index !== currentIndex) { all.add(range); }
+                    });
+                    CSS.highlights.set('rp-find', all);
+                    const current = ranges[currentIndex];
+                    if (current) {
+                        const highlight = new Highlight(current);
+                        highlight.priority = 1;
+                        CSS.highlights.set('rp-find-current', highlight);
+                    } else {
+                        CSS.highlights.delete('rp-find-current');
+                    }
+                } catch {}
+            };
+
+            const reveal = range => {
+                if (!range) { return; }
+                const rect = range.getBoundingClientRect();
+                if (!rect || (rect.width === 0 && rect.height === 0)) {
+                    range.startContainer.parentElement?.scrollIntoView({ block: 'center', inline: 'nearest' });
+                } else {
+                    const margin = window.innerHeight * 0.15;
+                    if (rect.top < margin || rect.bottom > window.innerHeight - margin) {
+                        window.scrollTo({ top: window.scrollY + rect.top - window.innerHeight / 3, behavior: 'auto' });
+                    }
+                }
+                if (!supportsHighlights()) {
+                    const element = range.startContainer.parentElement;
+                    element?.classList.add('rp-note-anchor-target');
+                    window.setTimeout(() => element?.classList.remove('rp-note-anchor-target'), 1400);
+                }
+            };
+
+            const firstIndexFromViewport = () => {
+                for (let index = 0; index < ranges.length; index += 1) {
+                    const range = ranges[index];
+                    if (range && range.getBoundingClientRect().bottom >= 0) { return index; }
+                }
+                return ranges.findIndex(Boolean);
+            };
+
+            window.__rpFindSetMatches = (matches, mode, preferredIndex) => {
+                ranges = matches.map(match => {
+                    const start = nodes[match[0]];
+                    const end = nodes[match[2]];
+                    if (!start || !end || !start.isConnected || !end.isConnected) { return null; }
+                    try {
+                        const range = document.createRange();
+                        range.setStart(start, Math.min(match[1], start.length));
+                        range.setEnd(end, Math.min(match[3], end.length));
+                        return range;
+                    } catch {
+                        return null;
+                    }
+                });
+                if (ranges.length === 0) {
+                    currentIndex = -1;
+                } else if (mode === 'keep') {
+                    currentIndex = Math.min(Math.max(0, preferredIndex), ranges.length - 1);
+                } else {
+                    currentIndex = firstIndexFromViewport();
+                    reveal(ranges[currentIndex]);
+                }
+                paint();
+                return String(currentIndex);
+            };
+
+            window.__rpFindFocus = index => {
+                if (index < 0 || index >= ranges.length) { return; }
+                currentIndex = index;
+                paint();
+                reveal(ranges[currentIndex]);
+            };
+
+            window.__rpFindClear = () => {
+                nodes = [];
+                ranges = [];
+                currentIndex = -1;
+                try {
+                    CSS.highlights?.delete('rp-find');
+                    CSS.highlights?.delete('rp-find-current');
+                } catch {}
+            };
+        })();
+        """
+
         var loadedURL: URL?
         var loadedReloadToken: Int?
         var attachmentID: UUID?
@@ -834,6 +1017,17 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
         private var lastSelectionAssistantHistorySignature: String?
         private var isLoading = false
         private var isDocumentReady = false
+        var findRequest: DocumentFindRequest?
+        var onFindStatusChanged: ((DocumentFindStatus) -> Void)?
+        private var findText: DocumentSearchSegmentedText?
+        private var findTextGeneration = 0
+        private var isCollectingFindText = false
+        private var findTextDisplayMode: TranslationDisplayMode?
+        private var appliedFindRequest: DocumentFindRequest?
+        private var findResultsNeedRefresh = false
+        private var findMatchCount = 0
+        private var currentFindMatchIndex: Int?
+        private var lastPublishedFindStatus: DocumentFindStatus?
 
         init(
             scrollRatio: Binding<Double>,
@@ -858,6 +1052,7 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
             lastSelectionAssistantHistorySignature = nil
             isLoading = false
             isDocumentReady = false
+            invalidateFindText(keepingPosition: false)
             publishNoteSelection(nil)
         }
 
@@ -891,6 +1086,7 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
             isLoading = true
             isDocumentReady = false
             lastSelectionAssistantHistorySignature = nil
+            invalidateFindText(keepingPosition: request.preserveScrollPosition)
             currentRequest = request
             pendingSegmentUpdates = []
             lastAppliedSegmentSequence = nil
@@ -1009,6 +1205,7 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
             flushPendingSegmentUpdates(in: webView)
             flushPendingNoteNavigationIfNeeded(in: webView)
             finishLoadIfNeeded(in: webView)
+            applyFindRequestIfNeeded(to: webView)
         }
 
         @MainActor
@@ -1160,6 +1357,161 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
             """
             runJavaScript(script, in: webView)
             lastAppliedSegmentSequence = update.sequence
+            invalidateFindText(keepingPosition: true)
+        }
+
+        func applyFindRequestIfNeeded(to webView: WKWebView) {
+            guard let request = findRequest, DocumentSearchQuery(request.query).isEmpty == false else {
+                clearFind(in: webView)
+                return
+            }
+            guard isDocumentReady, isLoading == false else {
+                publishFindStatus(.searching(request))
+                return
+            }
+            if findTextDisplayMode != displayMode {
+                findTextDisplayMode = displayMode
+                invalidateFindText(keepingPosition: true)
+            }
+            guard let findText else {
+                collectFindText(in: webView)
+                publishFindStatus(.searching(request))
+                return
+            }
+
+            let isNewSearch = findResultsNeedRefresh ||
+                appliedFindRequest?.query != request.query ||
+                appliedFindRequest?.options != request.options
+            if isNewSearch {
+                let isRefresh = findResultsNeedRefresh &&
+                    appliedFindRequest?.query == request.query &&
+                    appliedFindRequest?.options == request.options
+                findResultsNeedRefresh = false
+                appliedFindRequest = request
+                showFindMatches(
+                    findText.matches(of: request.query, options: request.options),
+                    for: request,
+                    keepingCurrentMatch: isRefresh,
+                    in: webView
+                )
+            } else if appliedFindRequest?.navigationToken != request.navigationToken {
+                appliedFindRequest = request
+                guard findMatchCount > 0 else { return }
+                let step = request.navigationDirection == .forward ? 1 : -1
+                let current = currentFindMatchIndex ?? (step > 0 ? -1 : 0)
+                let nextIndex = (current + step + findMatchCount) % findMatchCount
+                currentFindMatchIndex = nextIndex
+                runJavaScript("window.__rpFindFocus?.(\(nextIndex));", in: webView)
+                publishFindResults(for: request)
+            }
+        }
+
+        private func showFindMatches(
+            _ matches: [DocumentSearchSegmentedText.SegmentMatch],
+            for request: DocumentFindRequest,
+            keepingCurrentMatch: Bool,
+            in webView: WKWebView
+        ) {
+            findMatchCount = matches.count
+            let payload = matches.map { [$0.start.segment, $0.start.offset, $0.end.segment, $0.end.offset] }
+            guard let data = try? JSONSerialization.data(withJSONObject: payload),
+                  let json = String(data: data, encoding: .utf8) else {
+                return
+            }
+            let mode = keepingCurrentMatch ? "keep" : "viewport"
+            let preferredIndex = currentFindMatchIndex ?? 0
+            let generation = findTextGeneration
+            let script = "window.__rpFindSetMatches ? window.__rpFindSetMatches(\(json), '\(mode)', \(preferredIndex)) : '-1';"
+            webView.evaluateJavaScript(script) { [weak self] result, _ in
+                let index = (result as? String).flatMap(Int.init) ?? -1
+                Task { @MainActor in
+                    guard let self,
+                          generation == self.findTextGeneration,
+                          self.appliedFindRequest?.query == request.query,
+                          self.appliedFindRequest?.options == request.options
+                    else {
+                        return
+                    }
+                    self.currentFindMatchIndex = index >= 0 ? index : nil
+                    self.publishFindResults(for: request)
+                }
+            }
+        }
+
+        private func collectFindText(in webView: WKWebView) {
+            guard isCollectingFindText == false else { return }
+            isCollectingFindText = true
+            let generation = findTextGeneration
+            webView.evaluateJavaScript("window.__rpFindCollect ? window.__rpFindCollect() : null") { [weak self, weak webView] result, _ in
+                let json = result as? String
+                Task { @MainActor in
+                    let findText = await Task.detached(priority: .userInitiated) {
+                        Self.makeFindText(fromJSON: json)
+                    }.value
+                    guard let self, let webView, generation == self.findTextGeneration else { return }
+                    self.isCollectingFindText = false
+                    self.findText = findText
+                    self.applyFindRequestIfNeeded(to: webView)
+                }
+            }
+        }
+
+        private nonisolated static func makeFindText(fromJSON json: String?) -> DocumentSearchSegmentedText {
+            struct Snapshot: Decodable {
+                var segments: [String]
+                var breaks: [Bool]
+            }
+            guard let data = json?.data(using: .utf8),
+                  let snapshot = try? JSONDecoder().decode(Snapshot.self, from: data) else {
+                return DocumentSearchSegmentedText(segments: [], breaksBefore: [])
+            }
+            return DocumentSearchSegmentedText(segments: snapshot.segments, breaksBefore: snapshot.breaks)
+        }
+
+        private func invalidateFindText(keepingPosition: Bool) {
+            findTextGeneration += 1
+            findText = nil
+            isCollectingFindText = false
+            // Re-run the same search on the new text without jumping away from
+            // the reader's position (e.g. while translation blocks stream in);
+            // a different document starts a fresh search from the viewport.
+            if keepingPosition == false {
+                appliedFindRequest = nil
+                currentFindMatchIndex = nil
+            }
+            findResultsNeedRefresh = appliedFindRequest != nil
+        }
+
+        private func clearFind(in webView: WKWebView) {
+            guard appliedFindRequest != nil || findText != nil || isCollectingFindText else { return }
+            findTextGeneration += 1
+            findText = nil
+            isCollectingFindText = false
+            appliedFindRequest = nil
+            findResultsNeedRefresh = false
+            findMatchCount = 0
+            currentFindMatchIndex = nil
+            lastPublishedFindStatus = nil
+            runJavaScript("window.__rpFindClear?.();", in: webView)
+        }
+
+        private func publishFindResults(for request: DocumentFindRequest) {
+            publishFindStatus(DocumentFindStatus(
+                query: request.query,
+                options: request.options,
+                matchCount: findMatchCount,
+                currentIndex: currentFindMatchIndex,
+                isSearching: false
+            ))
+        }
+
+        private func publishFindStatus(_ status: DocumentFindStatus) {
+            guard lastPublishedFindStatus != status else { return }
+            lastPublishedFindStatus = status
+            // Defer so SwiftUI state is not mutated during a view update.
+            Task { @MainActor [weak self] in
+                self?.onFindStatusChanged?(status)
+            }
         }
 
         func applyNoteNavigationIfNeeded(_ request: NoteNavigationRequest?, to webView: WKWebView) {

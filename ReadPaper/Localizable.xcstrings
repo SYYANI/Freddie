@@ -334,6 +334,16 @@
         }
       }
     },
+    "Adding the PDF files to your library." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在将 PDF 文件添加到你的资料库。"
+          }
+        }
+      }
+    },
     "Adds a localized HTML copy for HTML reading and translation. Import may take longer." : {
       "localizations" : {
         "zh-Hans" : {
@@ -1206,16 +1216,6 @@
         }
       }
     },
-    "Adding the PDF files to your library." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "正在将 PDF 文件添加到你的资料库。"
-          }
-        }
-      }
-    },
     "Choose Folder" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1341,6 +1341,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "清空术语表"
+          }
+        }
+      }
+    },
+    "Clear Search" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "清除查找内容"
           }
         }
       }
@@ -1890,12 +1901,13 @@
         }
       }
     },
-    "Drop PDFs to Import" : {
+    "Done" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "拖放 PDF 以导入"
+            "value" : "完成"
           }
         }
       }
@@ -1960,6 +1972,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "画笔粗细"
+          }
+        }
+      }
+    },
+    "Drop PDFs to Import" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "拖放 PDF 以导入"
           }
         }
       }
@@ -2317,6 +2339,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在完成导入"
+          }
+        }
+      }
+    },
+    "Find" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "查找"
+          }
+        }
+      }
+    },
+    "Find in Document" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在文档中查找"
           }
         }
       }
@@ -2875,6 +2919,16 @@
         }
       }
     },
+    "Importing PDFs…" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在导入 PDF…"
+          }
+        }
+      }
+    },
     "Increase Font Size" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -3250,16 +3304,6 @@
         }
       }
     },
-    "Importing PDFs…" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "正在导入 PDF…"
-          }
-        }
-      }
-    },
     "Local PDF" : {
       "localizations" : {
         "zh-Hans" : {
@@ -3331,6 +3375,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Markdown 模板"
+          }
+        }
+      }
+    },
+    "Match Case" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "区分大小写"
           }
         }
       }
@@ -3574,6 +3629,17 @@
         }
       }
     },
+    "Next Match" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "下一个匹配"
+          }
+        }
+      }
+    },
     "No API key is saved for provider “%@”." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -3603,6 +3669,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "没有可用的 HTML"
+          }
+        }
+      }
+    },
+    "No Matches" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无匹配结果"
           }
         }
       }
@@ -4333,6 +4409,17 @@
         }
       }
     },
+    "Previous Match" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "上一个匹配"
+          }
+        }
+      }
+    },
     "Primary Model" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -4649,6 +4736,16 @@
         }
       }
     },
+    "Release to add the PDF files to your library." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "松开即可将 PDF 文件添加到你的资料库。"
+          }
+        }
+      }
+    },
     "Remove BabelDOC" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -4915,6 +5012,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在将 %1$@ 的源 PDF 保存到你的本地资料库。"
+          }
+        }
+      }
+    },
+    "Search In" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "查找范围"
           }
         }
       }
@@ -6173,7 +6281,6 @@
       }
     },
     "Translation" : {
-      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -6267,16 +6374,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "清华镜像"
-          }
-        }
-      }
-    },
-    "Release to add the PDF files to your library." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "松开即可将 PDF 文件添加到你的资料库。"
           }
         }
       }
@@ -6586,6 +6683,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "启用后，阅读器的“翻译”菜单中会显示“翻译 arXiv LaTeX”。它会下载论文源文件、翻译其中的语义单元，并使用所选的外部 TeX 发行版编译译文 PDF。"
+          }
+        }
+      }
+    },
+    "Whole Words" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "全词匹配"
           }
         }
       }
