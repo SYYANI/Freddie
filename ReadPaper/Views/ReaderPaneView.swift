@@ -120,6 +120,15 @@ struct ReaderPaneView: View {
     @State private var htmlSelectionHighlightResetToken = 0
     @State private var htmlNativeSelectionClearToken = 0
     @State private var originalPDFPageCount: Int?
+    @State private var isFindBarVisible = false
+    @State private var findQuery = ""
+    @State private var committedFindQuery = ""
+    @State private var findOptions = DocumentSearchOptions()
+    @State private var findNavigationToken = 0
+    @State private var findNavigationDirection: DocumentFindDirection = .forward
+    @State private var findStatus: DocumentFindStatus?
+    @State private var findFocusToken = 0
+    @State private var bilingualFindTarget: DualPDFSelectionSource = .original
 
     private var pdfAttachment: PaperAttachment? {
         attachments.first { $0.kind == .pdf }
@@ -241,6 +250,43 @@ struct ReaderPaneView: View {
                 readerMode = normalizedMode
             }
         )
+    }
+
+    private var isFindAvailable: Bool {
+        switch readerMode {
+        case .html:
+            htmlAttachment?.fileURL != nil
+        case .pdf:
+            pdfAttachment?.fileURL != nil
+        case .bilingualPDF, .translatedPDF:
+            translatedPDFAttachment?.fileURL != nil
+        }
+    }
+
+    private var findRequest: DocumentFindRequest? {
+        guard isFindBarVisible,
+              isFindAvailable,
+              committedFindQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+        else {
+            return nil
+        }
+        return DocumentFindRequest(
+            query: committedFindQuery,
+            options: findOptions,
+            navigationToken: findNavigationToken,
+            navigationDirection: findNavigationDirection
+        )
+    }
+
+    private var visibleFindStatus: DocumentFindStatus? {
+        guard let findRequest else { return nil }
+        guard let findStatus,
+              findStatus.query == findRequest.query,
+              findStatus.options == findRequest.options
+        else {
+            return .searching(findRequest)
+        }
+        return findStatus
     }
 
     private var readerBody: some View {
@@ -366,6 +412,15 @@ struct ReaderPaneView: View {
 
     var body: some View {
         readerBody
+            .task(id: findQuery) {
+                await commitFindQueryAfterTyping()
+            }
+            .onChange(of: readerMode) { _, _ in
+                findStatus = nil
+            }
+            .onChange(of: bilingualFindTarget) { _, _ in
+                findStatus = nil
+            }
             .alert(
                 String(localized: "Add PDF Note", bundle: bundle),
                 isPresented: pdfTextNoteAlertPresented
@@ -419,6 +474,20 @@ struct ReaderPaneView: View {
                 Divider()
                 paneHeader
                 Divider()
+
+                if isFindBarVisible {
+                    DocumentFindBar(
+                        query: $findQuery,
+                        options: $findOptions,
+                        bilingualTarget: readerMode == .bilingualPDF ? $bilingualFindTarget : nil,
+                        status: visibleFindStatus,
+                        focusToken: findFocusToken,
+                        onNext: { moveToFindMatch(.forward) },
+                        onPrevious: { moveToFindMatch(.backward) },
+                        onClose: closeFindBar
+                    )
+                    Divider()
+                }
             }
 
             if isWorking || statusMessage != nil {
@@ -483,6 +552,7 @@ struct ReaderPaneView: View {
             }
 
             ToolbarItemGroup(placement: .primaryAction) {
+                findButton
                 noteSelectionButton
                 translationMenu
                 #if DEBUG
@@ -534,6 +604,51 @@ struct ReaderPaneView: View {
                 )
             }
         }
+    }
+
+    private var findButton: some View {
+        Button {
+            showFindBar()
+        } label: {
+            Label(String(localized: "Find", bundle: bundle), systemImage: "magnifyingglass")
+        }
+        .labelStyle(.iconOnly)
+        .keyboardShortcut("f", modifiers: .command)
+        .disabled(isFindAvailable == false)
+        .help(String(localized: "Find in Document", bundle: bundle))
+    }
+
+    private func showFindBar() {
+        isFindBarVisible = true
+        findFocusToken &+= 1
+    }
+
+    private func closeFindBar() {
+        isFindBarVisible = false
+        findStatus = nil
+    }
+
+    private func moveToFindMatch(_ direction: DocumentFindDirection) {
+        // Return right after typing starts the search instead of skipping its first match.
+        if committedFindQuery != findQuery {
+            committedFindQuery = findQuery
+            return
+        }
+        findNavigationDirection = direction
+        findNavigationToken &+= 1
+    }
+
+    private func commitFindQueryAfterTyping() async {
+        guard committedFindQuery != findQuery else { return }
+        if findQuery.isEmpty == false {
+            try? await Task.sleep(for: .milliseconds(200))
+            guard Task.isCancelled == false else { return }
+        }
+        committedFindQuery = findQuery
+    }
+
+    private func handleFindStatusChange(_ status: DocumentFindStatus) {
+        findStatus = status
     }
 
     private var noteSelectionButton: some View {
@@ -1194,7 +1309,9 @@ struct ReaderPaneView: View {
                                 selectionHighlightResetToken: htmlSelectionHighlightResetToken,
                                 nativeSelectionClearToken: htmlNativeSelectionClearToken,
                                 onNoteSelectionChanged: handleNoteSelectionChange,
-                                onSelectionAssistantDismissed: handleHTMLSelectionAssistantDismissal
+                                onSelectionAssistantDismissed: handleHTMLSelectionAssistantDismissal,
+                                findRequest: findRequest,
+                                onFindStatusChanged: handleFindStatusChange
                             )
                         } else {
                             centeredUnavailableView(
@@ -1229,7 +1346,10 @@ struct ReaderPaneView: View {
                                 debugRegionSelectionEnabled: pdfDebugModeEnabled,
                                 onDebugRegionSelected: handlePDFDebugRegionSelection,
                                 onNoteSelectionChanged: handleNoteSelectionChange,
-                                onArxivLinkActivated: onArxivLinkActivated
+                                onArxivLinkActivated: onArxivLinkActivated,
+                                findRequest: findRequest,
+                                findTarget: bilingualFindTarget,
+                                onFindStatusChanged: handleFindStatusChange
                             )
                         } else {
                             centeredUnavailableView(
@@ -2165,7 +2285,9 @@ struct ReaderPaneView: View {
                     onNoteSelectionChanged: handleNoteSelectionChange,
                     onArxivLinkActivated: onArxivLinkActivated,
                     debugRegionSelectionEnabled: debugRegionSelectionEnabled,
-                    onDebugRegionSelected: onDebugRegionSelected
+                    onDebugRegionSelected: onDebugRegionSelected,
+                    findRequest: findRequest,
+                    onFindStatusChanged: handleFindStatusChange
                 )
             }
                 .overlay(alignment: .topLeading) {
