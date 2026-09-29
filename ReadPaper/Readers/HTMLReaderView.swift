@@ -1132,11 +1132,14 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
                         body.rp-readability-body .rp-readability-content .rp-translation-block {
                             font-size: var(--rp-reader-font-size) !important;
                         }
-                        body.rp-readability-body .rp-readability-title {
+                        body.rp-readability-body .rp-readability-title,
+                        body.rp-readability-body .rp-readability-title + .rp-translation-block {
                             font-size: calc(var(--rp-reader-font-size) * 1.9) !important;
                         }
                         body.rp-readability-body .rp-readability-byline,
-                        body.rp-readability-body .rp-readability-excerpt {
+                        body.rp-readability-body .rp-readability-excerpt,
+                        body.rp-readability-body .rp-readability-byline + .rp-translation-block,
+                        body.rp-readability-body .rp-readability-excerpt + .rp-translation-block {
                             font-size: calc(var(--rp-reader-font-size) * 0.95) !important;
                         }
                         body:not(.rp-readability-body) {
