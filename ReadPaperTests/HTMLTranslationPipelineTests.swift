@@ -1,9 +1,82 @@
 import SwiftData
 import SwiftSoup
+import WebKit
 import XCTest
 @testable import ReadPaper
 
 final class HTMLTranslationPipelineTests: XCTestCase {
+    @MainActor
+    func testReadableTranslationsShareColumnWithCenteredSourceProse() async throws {
+        // Mirrors the source site's reading-column rule, without fetching the site.
+        let paragraph = String(repeating: "A research paragraph long enough for readability extraction. ", count: 8)
+        let html = """
+        <html><head><title>Research article</title><style>
+        .reading-column { max-width: 640px; width: 100%; margin-left: auto; margin-right: auto; }
+        blockquote { margin-inline: 40px; }
+        ul { padding-left: 40px; }
+        </style></head><body><article>
+        <h2 class="reading-column">Research findings</h2>
+        <p class="reading-column">\(paragraph)</p>
+        <p class="reading-column">\(paragraph)</p>
+        <blockquote><p class="reading-column">\(paragraph)</p></blockquote>
+        <ul><li><p class="reading-column">\(paragraph)</p></li></ul>
+        </article></body></html>
+        """
+        let localized = try HTMLLocalizer().makeDocumentForLocalization(
+            html: html, sourceURL: URL(string: "https://example.com/research")!
+        )
+        XCTAssertTrue(localized.body()?.hasClass("rp-readability-body") == true)
+        let prepared = try HTMLTranslationPipeline.prepareDocument(localized.outerHtml())
+        let translated = try HTMLTranslationPipeline.applyTranslations(
+            toPreparedHTML: prepared.preparedHTML,
+            candidates: prepared.candidates,
+            translations: Dictionary(uniqueKeysWithValues: prepared.candidates.map { ($0.segmentID, "用于验证正文和译文对齐的中文段落。") })
+        )
+
+        for repairSavedDocument in [false, true] {
+            let configuration = WKWebViewConfiguration()
+            configuration.websiteDataStore = .nonPersistent()
+            let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 1100, height: 800), configuration: configuration)
+            let loaded = expectation(description: "Readability document loaded")
+            let observer = HTMLLayoutNavigationObserver(loaded: loaded)
+            webView.navigationDelegate = observer
+            let documentHTML = repairSavedDocument
+                ? translated.replacingOccurrences(of: HTMLLocalizer.readableProseLayoutCSS, with: "")
+                : translated
+            webView.loadHTMLString(documentHTML, baseURL: nil)
+            await fulfillment(of: [loaded], timeout: 15)
+            if repairSavedDocument {
+                let oldWidthDifference = try await webView.evaluateJavaScript("""
+                (() => {
+                    const source = document.querySelector('.rp-readability-content p.reading-column');
+                    return source.nextElementSibling.getBoundingClientRect().width - source.getBoundingClientRect().width;
+                })();
+                """)
+                XCTAssertGreaterThan(try XCTUnwrap(oldWidthDifference as? Double), 100)
+                _ = try await webView.evaluateJavaScript(HTMLReaderView.Coordinator.instrumentationScript)
+            }
+
+            for width in [1100.0, 600.0] {
+                webView.setFrameSize(CGSize(width: width, height: 800))
+                let aligned = try await webView.evaluateJavaScript("""
+                (() => {
+                    document.documentElement.dataset.rpDisplayMode = 'bilingual';
+                    const sources = [...document.querySelectorAll('.rp-readability-content [data-rp-source="true"]')];
+                    return sources.length >= 4 && sources.every(source => {
+                        const translation = source.nextElementSibling;
+                        const a = source.getBoundingClientRect();
+                        const b = translation.getBoundingClientRect();
+                        return translation.classList.contains('rp-translation-block') && a.width > 0 &&
+                            Math.abs(a.left - b.left) < 1 && Math.abs(a.width - b.width) < 1 && b.top >= a.bottom;
+                    }) && parseFloat(getComputedStyle(document.querySelector('blockquote')).marginLeft) === 40 &&
+                        parseFloat(getComputedStyle(document.querySelector('ul')).paddingLeft) === 40;
+                })();
+                """)
+                XCTAssertEqual(aligned as? Bool, true, "width=\(width), saved=\(repairSavedDocument)")
+            }
+        }
+    }
+
     func testHTMLReaderTypographyClampsFontSize() {
         XCTAssertEqual(HTMLReaderTypography.clampFontSize(8), 13)
         XCTAssertEqual(HTMLReaderTypography.clampFontSize(17), 17)
@@ -560,6 +633,19 @@ private struct HTMLPipelineTestEnvironment {
     let modelContext: ModelContext
     let paper: Paper
     let attachment: PaperAttachment
+}
+
+@MainActor
+private final class HTMLLayoutNavigationObserver: NSObject, WKNavigationDelegate {
+    let loaded: XCTestExpectation
+
+    init(loaded: XCTestExpectation) {
+        self.loaded = loaded
+    }
+
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        loaded.fulfill()
+    }
 }
 
 private actor MockTranslationLLMClient: TranslationLLMClientProtocol {

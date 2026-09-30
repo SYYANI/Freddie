@@ -3,6 +3,21 @@ import Readability
 import SwiftSoup
 
 struct HTMLLocalizer: @unchecked Sendable {
+    // Readability owns the reading column. Source-site prose classes can otherwise
+    // constrain only the original (e.g. a centered 640px paragraph), leaving its
+    // translated sibling at full width. Share this with the reader to repair saved
+    // documents as well, without changing the DOM used by note anchors.
+    static let readableProseLayoutCSS = """
+    body.rp-readability-body .rp-readability-content :is(p, h1, h2, h3, h4, h5, h6):not(svg *, math *) {
+        width: 100% !important;
+        min-width: 0 !important;
+        max-width: 100% !important;
+        margin-inline: 0 !important;
+        padding-inline: 0 !important;
+        box-sizing: border-box !important;
+    }
+    """
+
     let session: URLSession
     let fileManager: FileManager
 
@@ -411,6 +426,7 @@ struct HTMLLocalizer: @unchecked Sendable {
             grid-column: auto !important;
             box-sizing: border-box;
         }
+        \(Self.readableProseLayoutCSS)
         """, on: style)
         if let head = document.head() {
             try head.appendChild(style)

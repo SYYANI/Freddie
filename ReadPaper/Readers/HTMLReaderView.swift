@@ -429,6 +429,7 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
             `.trim();
 
             const readabilityLayoutRepairCSS = `
+                \(HTMLLocalizer.readableProseLayoutCSS)
                 body.rp-readability-body .rp-readability-content #readability-page-1 :not(svg, svg *, math, math *) {
                     position: static !important;
                     inset: auto !important;
