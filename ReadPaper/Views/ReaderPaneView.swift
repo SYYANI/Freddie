@@ -104,6 +104,8 @@ struct ReaderPaneView: View {
     @State private var digestNoticeMessage: String?
     @State private var digestNoticeTitle: String?
     @State private var digestErrorMessage: String?
+    @State private var isExportingHTMLPDF = false
+    @State private var htmlPDFExportError: String?
     @State private var copyToastMessage: String?
     @State private var copyToastDismissTask: Task<Void, Never>?
     @State private var pdfDebugModeEnabled = false
@@ -443,6 +445,17 @@ struct ReaderPaneView: View {
                 Button(String(localized: "OK", bundle: bundle), role: .cancel) {}
             } message: {
                 Text(pdfAnnotationSession.errorMessage ?? "")
+            }
+            .alert(
+                String(localized: "Unable to Export PDF", bundle: bundle),
+                isPresented: Binding(
+                    get: { htmlPDFExportError != nil },
+                    set: { if !$0 { htmlPDFExportError = nil } }
+                )
+            ) {
+                Button(String(localized: "OK", bundle: bundle), role: .cancel) {}
+            } message: {
+                Text(htmlPDFExportError ?? "")
             }
     }
 
@@ -1098,7 +1111,17 @@ struct ReaderPaneView: View {
                     .labelStyle(.titleAndIcon)
             }
 
-            if readerMode != .html {
+            if readerMode == .html {
+                Divider()
+
+                Button {
+                    exportHTMLPDF()
+                } label: {
+                    Label(String(localized: "Export HTML as PDF", bundle: bundle), systemImage: "doc.badge.arrow.up")
+                        .labelStyle(.titleAndIcon)
+                }
+                .disabled(htmlAttachment == nil || isExportingHTMLPDF)
+            } else {
                 Divider()
 
                 Button {
@@ -1110,11 +1133,56 @@ struct ReaderPaneView: View {
                 .disabled(currentPDFAnnotationExportAttachment == nil)
             }
         } label: {
-            Label(String(localized: "Share", bundle: bundle), systemImage: "square.and.arrow.up")
-                .labelStyle(.iconOnly)
+            if isExportingHTMLPDF {
+                ProgressView()
+                    .controlSize(.small)
+                    .accessibilityLabel(Text("Exporting PDF…", bundle: bundle))
+            } else {
+                Label(String(localized: "Share", bundle: bundle), systemImage: "square.and.arrow.up")
+                    .labelStyle(.iconOnly)
+            }
         }
         .menuIndicator(.hidden)
-        .help(String(localized: "Share Paper", bundle: bundle))
+        .help(isExportingHTMLPDF
+              ? String(localized: "Exporting PDF…", bundle: bundle)
+              : String(localized: "Share Paper", bundle: bundle))
+    }
+
+    private func exportHTMLPDF() {
+        guard let paper, let attachment = htmlAttachment, !isExportingHTMLPDF else { return }
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.pdf]
+        panel.canCreateDirectories = true
+        panel.isExtensionHidden = false
+        let title = paper.title.components(separatedBy: CharacterSet(charactersIn: "/:\n\r"))
+            .filter { !$0.isEmpty }.joined(separator: "-")
+        panel.nameFieldStringValue = (title.isEmpty ? "paper" : String(title.prefix(120))) + ".pdf"
+        panel.prompt = String(localized: "Export", bundle: bundle)
+        panel.message = String(localized: "Export the HTML using the current original, bilingual, or translated display mode.", bundle: bundle)
+        guard panel.runModal() == .OK, let destinationURL = panel.url else { return }
+
+        let sourceURL = attachment.fileURL
+        let exportDisplayMode = displayMode
+        let exportFontSize = htmlReaderFontSize
+        isExportingHTMLPDF = true
+        Task { @MainActor in
+            defer { isExportingHTMLPDF = false }
+            do {
+                try await HTMLPDFExporter().export(
+                    sourceURL: sourceURL,
+                    displayMode: exportDisplayMode,
+                    fontSize: exportFontSize,
+                    destinationURL: destinationURL
+                )
+                showCopyToast(message: AppLocalization.format(
+                    "PDF exported to %@.",
+                    bundle: bundle,
+                    destinationURL.lastPathComponent
+                ))
+            } catch {
+                htmlPDFExportError = AppLocalization.errorMessage(error, bundle: bundle)
+            }
+        }
     }
 
     private var currentPDFAnnotationExportAttachment: PaperAttachment? {

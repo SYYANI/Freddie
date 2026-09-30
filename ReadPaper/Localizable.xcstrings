@@ -2192,6 +2192,23 @@
         }
       }
     },
+    "Export HTML as PDF" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Export HTML as PDF"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "将 HTML 导出为 PDF"
+          }
+        }
+      }
+    },
     "Export Markdown" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2210,6 +2227,39 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "将当前论文的元数据、摘要和笔记导出为 Markdown 文摘。"
+          }
+        }
+      }
+    },
+    "Export the HTML using the current original, bilingual, or translated display mode." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Export the HTML using the current original, bilingual, or translated display mode."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "按当前的原文、双语或译文显示模式导出 HTML。"
+          }
+        }
+      }
+    },
+    "Exporting PDF…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exporting PDF…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在导出 PDF…"
           }
         }
       }
@@ -4209,6 +4259,23 @@
         }
       }
     },
+    "PDF exported to %@." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PDF exported to %@."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PDF 已导出至 %@。"
+          }
+        }
+      }
+    },
     "PDF is not available for this paper." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -5643,6 +5710,22 @@
         }
       }
     },
+    "The HTML content took too long to load. Please try exporting again." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The HTML content took too long to load. Please try exporting again."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "HTML 内容加载超时，请重试导出。"
+          }
+        }
+      }
+    },
     "The latest BabelDOC version could not be parsed: %@" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -6411,12 +6494,45 @@
         }
       }
     },
+    "Unable to Export PDF" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unable to Export PDF"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法导出 PDF"
+          }
+        }
+      }
+    },
     "Unable to Import Paper" : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "无法导入论文"
+          }
+        }
+      }
+    },
+    "Unable to render the HTML content as a PDF." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unable to render the HTML content as a PDF."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法将 HTML 内容渲染为 PDF。"
           }
         }
       }
