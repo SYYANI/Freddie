@@ -328,6 +328,30 @@ final class PDFMergerTests: XCTestCase {
     }
 
     @MainActor
+    func testReopeningPartialTranslationRestoresAvailablePageInsteadOfFirstPage() throws {
+        let savedState = ReadingState(paperID: UUID(), readerMode: .bilingualPDF, pageIndex: 14)
+        let translatedDocument = createPDFDocument(withPageCount: 10)
+        let pdfView = PDFView()
+        pdfView.document = translatedDocument
+        let target = DualPDFPageIndexSync.translatedPageIndex(
+            forOriginalPageIndex: savedState.pageIndex,
+            translatedPageCount: translatedDocument.pageCount
+        )
+        let coordinator = PDFReaderView.Coordinator(
+            attachmentID: nil,
+            pageIndex: .constant(target),
+            onNoteSelectionChanged: nil
+        )
+        coordinator.attach(to: pdfView)
+        coordinator.prepareForProgrammaticPageRestore(to: PDFReadingPosition(pageIndex: target))
+        pdfView.go(to: try XCTUnwrap(translatedDocument.page(at: target)))
+        coordinator.updateCurrentPageIndexIfNeeded()
+
+        XCTAssertEqual(translatedDocument.index(for: try XCTUnwrap(pdfView.currentPage)), 9)
+        XCTAssertEqual(savedState.pageIndex, 14)
+    }
+
+    @MainActor
     func testTranslatedPDFCoordinatorDoesNotPushPartialClampBackToOriginalBinding() throws {
         let document = createPDFDocument(withPageCount: 10)
         let pdfView = PDFView()

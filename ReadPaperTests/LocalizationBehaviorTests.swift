@@ -16,6 +16,8 @@ final class LocalizationBehaviorTests: XCTestCase {
         )
         XCTAssertEqual(AppLocalization.localized("PDF Annotations"), "PDF 标注")
         XCTAssertEqual(AppLocalization.localized("Retranslate PDF"), "重新翻译 PDF")
+        XCTAssertEqual(AppLocalization.localized("Export HTML as PDF"), "将 HTML 导出为 PDF")
+        XCTAssertEqual(HTMLPDFExportError.renderingFailed.localizedDescription, "无法将 HTML 内容渲染为 PDF。")
         XCTAssertEqual(
             PDFAnnotationStoreError.sourceAndDestinationMatch.localizedDescription,
             "请选择其他位置，以保留原始 PDF。"
@@ -25,5 +27,7 @@ final class LocalizationBehaviorTests: XCTestCase {
         XCTAssertEqual(PaperImportError.missingPDF.localizedDescription, "No PDF attachment is available for this paper.")
         XCTAssertEqual(AppLocalization.localized("PDF Annotations"), "PDF Annotations")
         XCTAssertEqual(AppLocalization.localized("Retranslate PDF"), "Retranslate PDF")
+        XCTAssertEqual(AppLocalization.localized("Export HTML as PDF"), "Export HTML as PDF")
+        XCTAssertEqual(HTMLPDFExportError.renderingFailed.localizedDescription, "Unable to render the HTML content as a PDF.")
     }
 }

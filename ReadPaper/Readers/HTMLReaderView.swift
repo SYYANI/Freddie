@@ -17,6 +17,34 @@ enum HTMLReaderTypography {
     static func clampFontSize(_ value: Double) -> Double {
         min(max(value, fontSizeRange.lowerBound), fontSizeRange.upperBound)
     }
+
+    static func css(fontSize: Double) -> String {
+        let clampedFontSize = Int(clampFontSize(fontSize).rounded())
+        return """
+        :root { --rp-reader-font-size: \(clampedFontSize)px; }
+        body.rp-readability-body .rp-readability-content {
+            font-size: var(--rp-reader-font-size) !important;
+        }
+        body.rp-readability-body .rp-readability-content p.rp-readability-prose-paragraph,
+        body.rp-readability-body .rp-readability-content [data-rp-source='true'],
+        body.rp-readability-body .rp-readability-content .rp-translation-block {
+            font-size: var(--rp-reader-font-size) !important;
+        }
+        body.rp-readability-body .rp-readability-title,
+        body.rp-readability-body .rp-readability-title + .rp-translation-block {
+            font-size: calc(var(--rp-reader-font-size) * 1.9) !important;
+        }
+        body.rp-readability-body .rp-readability-byline,
+        body.rp-readability-body .rp-readability-excerpt,
+        body.rp-readability-body .rp-readability-byline + .rp-translation-block,
+        body.rp-readability-body .rp-readability-excerpt + .rp-translation-block {
+            font-size: calc(var(--rp-reader-font-size) * 0.95) !important;
+        }
+        body:not(.rp-readability-body) {
+            font-size: var(--rp-reader-font-size);
+        }
+        """
+    }
 }
 
 private extension PDFDisplayAppearance {
@@ -39,6 +67,12 @@ private extension PDFDisplayAppearance {
         case .paper:
             return """
             :root { color-scheme: light; }
+            body.rp-readability-body {
+                --rp-reader-text: #2b261f;
+                --rp-reader-muted: #726752;
+                --rp-reader-link: #285f86;
+                --rp-reader-translation: #24533d;
+            }
             html,
             body {
                 background: transparent !important;
@@ -430,6 +464,7 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
 
             const readabilityLayoutRepairCSS = `
                 \(HTMLLocalizer.readableProseLayoutCSS)
+                \(HTMLLocalizer.readableProseColorCSS)
                 body.rp-readability-body .rp-readability-content #readability-page-1 :not(svg, svg *, math, math *) {
                     position: static !important;
                     inset: auto !important;
@@ -1119,33 +1154,11 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
         }
 
         func applyReaderTypography(to webView: WKWebView) {
-            let clampedFontSize = Int(HTMLReaderTypography.clampFontSize(fontSize).rounded())
             runJavaScript(
                 """
                 (() => {
                     const css = `
-                        :root { --rp-reader-font-size: \(clampedFontSize)px; }
-                        body.rp-readability-body .rp-readability-content {
-                            font-size: var(--rp-reader-font-size) !important;
-                        }
-                        body.rp-readability-body .rp-readability-content p.rp-readability-prose-paragraph,
-                        body.rp-readability-body .rp-readability-content [data-rp-source='true'],
-                        body.rp-readability-body .rp-readability-content .rp-translation-block {
-                            font-size: var(--rp-reader-font-size) !important;
-                        }
-                        body.rp-readability-body .rp-readability-title,
-                        body.rp-readability-body .rp-readability-title + .rp-translation-block {
-                            font-size: calc(var(--rp-reader-font-size) * 1.9) !important;
-                        }
-                        body.rp-readability-body .rp-readability-byline,
-                        body.rp-readability-body .rp-readability-excerpt,
-                        body.rp-readability-body .rp-readability-byline + .rp-translation-block,
-                        body.rp-readability-body .rp-readability-excerpt + .rp-translation-block {
-                            font-size: calc(var(--rp-reader-font-size) * 0.95) !important;
-                        }
-                        body:not(.rp-readability-body) {
-                            font-size: var(--rp-reader-font-size);
-                        }
+                        \(HTMLReaderTypography.css(fontSize: fontSize))
                     `.trim();
                     let style = document.getElementById('rp-reader-typography-style');
                     if (!style) {
