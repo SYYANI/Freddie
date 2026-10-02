@@ -6,6 +6,98 @@ import XCTest
 
 final class HTMLTranslationPipelineTests: XCTestCase {
     @MainActor
+    func testDarkSiteProseUsesReaderPaletteForNewAndSavedArticles() async throws {
+        // Reduced sigh.dev structure: a dark body palette plus a retained .md-body
+        // class overrides the extracted article's color on our light reading surface.
+        let paragraph = String(repeating: "An article paragraph with enough content for extraction. ", count: 8)
+        let html = """
+        <html><head><title>Dark site article</title><meta name="author" content="Example author">
+        <style>
+        :root { --site-text: #bfd0d7; }
+        body { background: #08151c; color: var(--site-text); }
+        .md-body { color: var(--site-text); background-color: #08151c; }
+        .md-body strong, .md-body h2 { color: #ddeeff; text-shadow: 1px 1px black; }
+        .md-body a { color: #00ccff; }
+        pre { background: #112233; color: #ddeeff; }
+        code span { color: #ff9900; }
+        math mi { color: #0000ff; }
+        </style></head><body><article><div class="md-body">
+        <p>\(paragraph) <strong>Emphasis</strong> <a href="/reference"><span>Reference</span></a></p>
+        <h2>Article section</h2><p>\(paragraph)</p>
+        <pre><code><span>example_code()</span></code></pre>
+        <svg><text style="fill: #ff0000; color: #00ff00">Diagram</text></svg>
+        <math><mi>x</mi></math>
+        </div></article></body></html>
+        """
+        let localized = try HTMLLocalizer().makeDocumentForLocalization(
+            html: html, sourceURL: URL(string: "https://example.com/article")!
+        )
+        XCTAssertTrue(localized.body()?.hasClass("rp-readability-body") == true)
+        let prepared = try HTMLTranslationPipeline.prepareDocument(localized.outerHtml())
+        let translated = try HTMLTranslationPipeline.applyTranslations(
+            toPreparedHTML: prepared.preparedHTML,
+            candidates: prepared.candidates,
+            translations: Dictionary(uniqueKeysWithValues: prepared.candidates.map { ($0.segmentID, "用于验证阅读器配色的中文译文。") })
+        )
+
+        for repairSavedDocument in [false, true] {
+            let configuration = WKWebViewConfiguration()
+            configuration.websiteDataStore = .nonPersistent()
+            let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 1100, height: 800), configuration: configuration)
+            let loaded = expectation(description: "Dark site article loaded")
+            let observer = HTMLLayoutNavigationObserver(loaded: loaded)
+            webView.navigationDelegate = observer
+            webView.loadHTMLString(repairSavedDocument
+                ? translated.replacingOccurrences(of: HTMLLocalizer.readableProseColorCSS, with: "")
+                : translated, baseURL: nil)
+            await fulfillment(of: [loaded], timeout: 15)
+
+            if repairSavedDocument {
+                let oldColor = try await webView.evaluateJavaScript("getComputedStyle(document.querySelector('.md-body p')).color")
+                XCTAssertEqual(oldColor as? String, "rgb(191, 208, 215)")
+                _ = try await webView.evaluateJavaScript("window.savedBodyHTML = document.body.innerHTML;")
+                _ = try await webView.evaluateJavaScript(HTMLReaderView.Coordinator.instrumentationScript)
+                let unchanged = try await webView.evaluateJavaScript("window.savedBodyHTML === document.body.innerHTML")
+                XCTAssertEqual(unchanged as? Bool, true, "Color repair must preserve note-anchor DOM paths")
+            }
+
+            let coordinator = HTMLReaderView.Coordinator(
+                scrollRatio: .constant(0), onNoteSelectionChanged: nil, onSelectionAssistantDismissed: nil
+            )
+            // Exercise both palettes and switching back, so paper colors cannot leak.
+            for appearance in [PDFDisplayAppearance.defaultMode, .paper, .defaultMode] {
+                coordinator.displayAppearance = appearance
+                coordinator.applyDisplayAppearance(to: webView)
+                let result = try await webView.evaluateJavaScript("""
+                (() => {
+                    const color = selector => getComputedStyle(document.querySelector(selector)).color;
+                    return {
+                        title: color('.rp-readability-title'), prose: color('.md-body p'),
+                        emphasis: color('.md-body strong'), link: color('.md-body a span'),
+                        translation: color('.md-body .rp-translation-block'),
+                        code: color('code span'), formula: color('math mi'), diagram: color('svg text'),
+                        codeBackground: getComputedStyle(document.querySelector('pre')).backgroundColor,
+                        background: getComputedStyle(document.querySelector('.md-body')).backgroundColor
+                    };
+                })();
+                """)
+                let colors = try XCTUnwrap(result as? [String: String])
+                let paper = appearance == .paper
+                XCTAssertEqual(colors["title"], paper ? "rgb(33, 27, 20)" : "rgb(31, 31, 31)")
+                XCTAssertEqual(colors["prose"], paper ? "rgb(43, 38, 31)" : "rgb(31, 31, 31)")
+                XCTAssertEqual(colors["emphasis"], colors["prose"])
+                XCTAssertEqual(colors["link"], paper ? "rgb(40, 95, 134)" : "rgb(51, 92, 133)")
+                XCTAssertEqual(colors["translation"], paper ? "rgb(36, 83, 61)" : "rgb(31, 77, 58)")
+                XCTAssertEqual(colors["code"], "rgb(255, 153, 0)")
+                XCTAssertEqual(colors["formula"], "rgb(0, 0, 255)")
+                XCTAssertEqual(colors["diagram"], "rgb(0, 255, 0)")
+                XCTAssertEqual(colors["background"], "rgba(0, 0, 0, 0)")
+                if !paper { XCTAssertEqual(colors["codeBackground"], "rgb(17, 34, 51)") }
+            }
+        }
+    }
+
+    @MainActor
     func testReadableTranslationsShareColumnWithCenteredSourceProse() async throws {
         // Mirrors the source site's reading-column rule, without fetching the site.
         let paragraph = String(repeating: "A research paragraph long enough for readability extraction. ", count: 8)

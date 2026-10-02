@@ -67,6 +67,12 @@ private extension PDFDisplayAppearance {
         case .paper:
             return """
             :root { color-scheme: light; }
+            body.rp-readability-body {
+                --rp-reader-text: #2b261f;
+                --rp-reader-muted: #726752;
+                --rp-reader-link: #285f86;
+                --rp-reader-translation: #24533d;
+            }
             html,
             body {
                 background: transparent !important;
@@ -458,6 +464,7 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
 
             const readabilityLayoutRepairCSS = `
                 \(HTMLLocalizer.readableProseLayoutCSS)
+                \(HTMLLocalizer.readableProseColorCSS)
                 body.rp-readability-body .rp-readability-content #readability-page-1 :not(svg, svg *, math, math *) {
                     position: static !important;
                     inset: auto !important;
