@@ -4,29 +4,40 @@ import SwiftStreamingMarkdown
 
 enum ReadPaperMarkdownStyle {
     static let config: MarkdownRenderConfig = makeConfig(design: .default)
+    private static let compactConfig = makeConfig(design: .default, bodySize: 12, textColor: .secondary)
+    private static let compactPaperConfig = makeConfig(design: .serif, bodySize: 12, textColor: .secondary)
 
     static func config(for displayAppearance: PDFDisplayAppearance) -> MarkdownRenderConfig {
         displayAppearance == .paper ? makeConfig(design: .serif) : config
     }
 
-    private static func makeConfig(design: Font.Design) -> MarkdownRenderConfig {
-        let body = textFonts(size: 14, design: design)
+    /// Smaller, muted text for notes shown in the reader's margin.
+    static func compactConfig(for displayAppearance: PDFDisplayAppearance) -> MarkdownRenderConfig {
+        displayAppearance == .paper ? compactPaperConfig : compactConfig
+    }
+
+    private static func makeConfig(
+        design: Font.Design,
+        bodySize: CGFloat = 14,
+        textColor: Color = .primary
+    ) -> MarkdownRenderConfig {
+        let body = textFonts(size: bodySize, design: design)
         let paragraph = MarkdownRenderConfig.MarkdownTextStyle(
             textFonts: body,
-            textColor: .primary
+            textColor: textColor
         )
         let blockQuote = MarkdownRenderConfig.MarkdownTextStyle(
             textFonts: body,
             textColor: .secondary
         )
         let heading = MarkdownRenderConfig.MarkdownHeadingTextStyle(
-            h1Font: textFonts(size: 18, weight: .semibold, design: design),
-            h2Font: textFonts(size: 16, weight: .semibold, design: design),
-            h3Font: textFonts(size: 15, weight: .semibold, design: design),
-            h4Font: textFonts(size: 14, weight: .semibold, design: design),
-            h5Font: textFonts(size: 14, weight: .semibold, design: design),
-            h6Font: textFonts(size: 14, weight: .semibold, design: design),
-            textColor: .primary
+            h1Font: textFonts(size: bodySize + 4, weight: .semibold, design: design),
+            h2Font: textFonts(size: bodySize + 2, weight: .semibold, design: design),
+            h3Font: textFonts(size: bodySize + 1, weight: .semibold, design: design),
+            h4Font: textFonts(size: bodySize, weight: .semibold, design: design),
+            h5Font: textFonts(size: bodySize, weight: .semibold, design: design),
+            h6Font: textFonts(size: bodySize, weight: .semibold, design: design),
+            textColor: textColor
         )
 
         return MarkdownRenderConfig.default
@@ -35,7 +46,7 @@ enum ReadPaperMarkdownStyle {
             .withHeadingStyle(value: heading)
             .withOrderedListStyle(value: paragraph)
             .withParagraphStyle(value: paragraph)
-            .withBlockSpacing(value: 12)
+            .withBlockSpacing(value: bodySize < 14 ? 6 : 12)
     }
 
     private static func textFonts(
@@ -81,12 +92,15 @@ enum ReadPaperMarkdownStyle {
 
 struct ReadPaperMarkdownView: View {
     let markdown: String
+    var isCompact = false
     @Environment(\.pdfDisplayAppearance) private var displayAppearance
 
     var body: some View {
         MarkdownView(
             text: markdown,
-            config: ReadPaperMarkdownStyle.config(for: displayAppearance)
+            config: isCompact
+                ? ReadPaperMarkdownStyle.compactConfig(for: displayAppearance)
+                : ReadPaperMarkdownStyle.config(for: displayAppearance)
         )
     }
 }

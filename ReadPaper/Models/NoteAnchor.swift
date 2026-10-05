@@ -128,3 +128,73 @@ private extension NoteNavigationRequest {
         return normalized.isEmpty ? nil : normalized
     }
 }
+
+/// A note rendered in the HTML reader's margin, anchored to the selection it was created from.
+struct HTMLSidenote: Equatable, Sendable, Identifiable {
+    var id: UUID
+    var quote: String
+    var htmlSelector: String
+    var markdown: String
+
+    static func sidenotes(from notes: [Note], attachmentID: UUID?) -> [HTMLSidenote] {
+        notes.compactMap { note in
+            guard let htmlSelector = note.normalizedHTMLSelector else { return nil }
+            if let noteAttachmentID = note.attachmentID, let attachmentID, noteAttachmentID != attachmentID {
+                return nil
+            }
+            return HTMLSidenote(
+                id: note.id,
+                quote: note.trimmedQuote ?? "",
+                htmlSelector: htmlSelector,
+                markdown: note.body
+            )
+        }
+    }
+
+    /// Fallback preview used when no Markdown renderer is supplied.
+    static func plainTextHTML(_ markdown: String) -> String {
+        escapedHTML(markdown)
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .joined(separator: "<br>")
+    }
+
+    static func escapedHTML(_ text: String) -> String {
+        var escaped = ""
+        escaped.reserveCapacity(text.count)
+        for character in text {
+            switch character {
+            case "&": escaped += "&amp;"
+            case "<": escaped += "&lt;"
+            case ">": escaped += "&gt;"
+            case "\"": escaped += "&quot;"
+            case "'": escaped += "&#39;"
+            default: escaped.append(character)
+            }
+        }
+        return escaped
+    }
+}
+
+/// Localized strings shown inside the HTML reader's margin notes.
+struct HTMLSidenoteLabels: Codable, Equatable, Sendable {
+    var placeholder = ""
+    var editorPlaceholder = ""
+    var delete = ""
+}
+
+/// Edits made directly in an HTML margin note.
+enum HTMLSidenoteEvent: Equatable, Sendable {
+    /// `isFinal` marks the end of an editing session, when the change should be saved.
+    case bodyChanged(noteID: UUID, body: String, isFinal: Bool)
+    case deleteRequested(noteID: UUID)
+}
+
+struct SidenoteFocusRequest: Equatable, Identifiable {
+    let id: UUID
+    var noteID: UUID
+
+    init(id: UUID = UUID(), noteID: UUID) {
+        self.id = id
+        self.noteID = noteID
+    }
+}

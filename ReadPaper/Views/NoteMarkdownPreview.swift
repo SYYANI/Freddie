@@ -30,6 +30,53 @@ enum NoteMarkdownRenderer {
         return rendered
     }
 
+    /// Renders the same Markdown subset as `render(_:)` to escaped HTML for the
+    /// HTML reader's margin notes. Only http(s) and mailto links are kept.
+    static func html(_ markdown: String) -> String {
+        blocks(for: markdown).map(html(for:)).joined()
+    }
+
+    private static func html(for block: Block) -> String {
+        switch block {
+        case let .heading(level, text):
+            return "<h\(level)>\(inlineHTML(text))</h\(level)>"
+        case let .paragraph(text):
+            return "<p>\(inlineHTML(text))</p>"
+        case let .list(items):
+            return "<ul>" + items.map { "<li>\(inlineHTML($0))</li>" }.joined() + "</ul>"
+        case let .quote(lines):
+            return "<blockquote>" + lines.map(inlineHTML).joined(separator: "<br>") + "</blockquote>"
+        case let .code(text):
+            return "<pre><code>\(HTMLSidenote.escapedHTML(text))</code></pre>"
+        }
+    }
+
+    private static func inlineHTML(_ text: String) -> String {
+        guard let attributed = inlineAttributedString(text) else {
+            return HTMLSidenote.escapedHTML(text)
+        }
+
+        var rendered = ""
+        for run in attributed.runs {
+            var piece = HTMLSidenote.escapedHTML(String(attributed[run.range].characters))
+                .replacingOccurrences(of: "\n", with: "<br>")
+            let intent = run.inlinePresentationIntent ?? []
+            if intent.contains(.code) {
+                piece = "<code>\(piece)</code>"
+            } else {
+                if intent.contains(.stronglyEmphasized) { piece = "<strong>\(piece)</strong>" }
+                if intent.contains(.emphasized) { piece = "<em>\(piece)</em>" }
+                if intent.contains(.strikethrough) { piece = "<s>\(piece)</s>" }
+            }
+            if let link = run.link,
+               ["http", "https", "mailto"].contains(link.scheme?.lowercased() ?? "") {
+                piece = "<a href=\"\(HTMLSidenote.escapedHTML(link.absoluteString))\">\(piece)</a>"
+            }
+            rendered += piece
+        }
+        return rendered
+    }
+
     fileprivate static func blocks(for markdown: String) -> [Block] {
         let normalized = normalize(markdown)
         return parseBlocks(from: normalized)

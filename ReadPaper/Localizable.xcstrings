@@ -6825,6 +6825,16 @@
         }
       }
     },
+    "Write a note…" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "写点笔记…"
+          }
+        }
+      }
+    },
     "Yellow" : {
       "extractionState" : "stale",
       "localizations" : {

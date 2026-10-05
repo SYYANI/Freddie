@@ -11,7 +11,6 @@ struct InspectorPaneView: View {
     @Environment(\.localizationBundle) private var bundle
     @Environment(\.pdfDisplayAppearance) private var displayAppearance
     @State private var notePendingDeletion: Note?
-    @State private var noteDeletionErrorMessage: String?
     @State private var authorsSaveErrorMessage: String?
     @State private var isAbstractExpanded = false
     @State private var abstractTranslationState = AbstractTranslationPresentationState()
@@ -48,43 +47,10 @@ struct InspectorPaneView: View {
         .onDisappear {
             cancelAbstractTranslation()
         }
-        .confirmationDialog(
-            String(localized: "Delete Note?", bundle: bundle),
-            isPresented: Binding(
-                get: { notePendingDeletion != nil },
-                set: { isPresented in
-                    if !isPresented {
-                        notePendingDeletion = nil
-                    }
-                }
-            ),
-            presenting: notePendingDeletion
-        ) { note in
-            Button(String(localized: "Delete", bundle: bundle), role: .destructive) {
-                deleteNote(note)
+        .noteDeletionConfirmation($notePendingDeletion) { note in
+            if focusedNoteID == note.id {
+                focusedNoteID = nil
             }
-            Button(String(localized: "Cancel", bundle: bundle), role: .cancel) {}
-        } message: { note in
-            Text(
-                note.body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                    ? String(localized: "This empty note will be removed.", bundle: bundle)
-                    : String(localized: "This note will be permanently removed.", bundle: bundle)
-            )
-        }
-        .alert(
-            String(localized: "Unable to Delete Note", bundle: bundle),
-            isPresented: Binding(
-                get: { noteDeletionErrorMessage != nil },
-                set: { isPresented in
-                    if !isPresented {
-                        noteDeletionErrorMessage = nil
-                    }
-                }
-            )
-        ) {
-            Button(String(localized: "OK", bundle: bundle), role: .cancel) {}
-        } message: {
-            Text(noteDeletionErrorMessage ?? "")
         }
     }
 
@@ -366,22 +332,6 @@ struct InspectorPaneView: View {
         }
     }
 
-    private func deleteNote(_ note: Note) {
-        if focusedNoteID == note.id {
-            focusedNoteID = nil
-        }
-        modelContext.delete(note)
-
-        do {
-            try modelContext.save()
-            notePendingDeletion = nil
-        } catch {
-            modelContext.rollback()
-            notePendingDeletion = nil
-            noteDeletionErrorMessage = error.localizedDescription
-        }
-    }
-
     private func syncMetadataEditorState(with paper: Paper?) {
         authorsSaveErrorMessage = nil
         isEditingAuthors = false
@@ -606,6 +556,80 @@ struct AbstractTranslationPresentationState {
 
     private func isCurrentRequest(paperID: UUID, requestID: UUID) -> Bool {
         self.paperID == paperID && activeRequestID == requestID
+    }
+}
+
+/// Confirms and performs deletion of a note; shared by the inspector and the HTML margin notes.
+private struct NoteDeletionConfirmation: ViewModifier {
+    @Environment(\.modelContext) private var modelContext
+    @Environment(\.localizationBundle) private var bundle
+    @Binding var note: Note?
+    let willDelete: (Note) -> Void
+    @State private var errorMessage: String?
+
+    func body(content: Content) -> some View {
+        content
+            .confirmationDialog(
+                String(localized: "Delete Note?", bundle: bundle),
+                isPresented: Binding(
+                    get: { note != nil },
+                    set: { isPresented in
+                        if !isPresented {
+                            note = nil
+                        }
+                    }
+                ),
+                presenting: note
+            ) { note in
+                Button(String(localized: "Delete", bundle: bundle), role: .destructive) {
+                    delete(note)
+                }
+                Button(String(localized: "Cancel", bundle: bundle), role: .cancel) {}
+            } message: { note in
+                Text(
+                    note.body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                        ? String(localized: "This empty note will be removed.", bundle: bundle)
+                        : String(localized: "This note will be permanently removed.", bundle: bundle)
+                )
+            }
+            .alert(
+                String(localized: "Unable to Delete Note", bundle: bundle),
+                isPresented: Binding(
+                    get: { errorMessage != nil },
+                    set: { isPresented in
+                        if !isPresented {
+                            errorMessage = nil
+                        }
+                    }
+                )
+            ) {
+                Button(String(localized: "OK", bundle: bundle), role: .cancel) {}
+            } message: {
+                Text(errorMessage ?? "")
+            }
+    }
+
+    private func delete(_ note: Note) {
+        willDelete(note)
+        modelContext.delete(note)
+
+        do {
+            try modelContext.save()
+            self.note = nil
+        } catch {
+            modelContext.rollback()
+            self.note = nil
+            errorMessage = error.localizedDescription
+        }
+    }
+}
+
+extension View {
+    func noteDeletionConfirmation(
+        _ note: Binding<Note?>,
+        willDelete: @escaping (Note) -> Void = { _ in }
+    ) -> some View {
+        modifier(NoteDeletionConfirmation(note: note, willDelete: willDelete))
     }
 }
 
