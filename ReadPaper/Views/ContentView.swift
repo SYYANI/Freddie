@@ -18,6 +18,7 @@ struct ContentView: View {
     @State private var noteSelectionContext: NoteSelectionContext?
     @State private var focusedNoteID: UUID?
     @State private var noteNavigationRequest: NoteNavigationRequest?
+    @State private var sidenoteFocusRequest: SidenoteFocusRequest?
     @State private var isAddingPaper = false
     @State private var paperPendingDeletion: Paper?
     @State private var deletionErrorMessage: String?
@@ -104,6 +105,7 @@ struct ContentView: View {
             isInspectorCollapsed: inspectorCollapsedBinding,
             noteSelectionContext: $noteSelectionContext,
             noteNavigationRequest: $noteNavigationRequest,
+            sidenoteFocusRequest: $sidenoteFocusRequest,
             onCreateAnchoredNote: createNoteFromCurrentSelection,
             onSaveSelectionAssistantNote: saveSelectionAssistantResultAsNote,
             onArxivLinkActivated: handleArxivLinkActivation
@@ -290,6 +292,7 @@ struct ContentView: View {
             noteSelectionContext = nil
             focusedNoteID = nil
             noteNavigationRequest = nil
+            sidenoteFocusRequest = nil
             persistSelectedPaperIDIfNeeded(newValue)
         }
     }
@@ -389,14 +392,28 @@ struct ContentView: View {
 
         do {
             try modelContext.save()
-            if isInspectorCollapsed {
-                inspectorCollapsedBinding.wrappedValue = false
+            if isShownAsHTMLSidenote(note) {
+                sidenoteFocusRequest = SidenoteFocusRequest(noteID: note.id)
+            } else {
+                revealInInspector(note)
             }
-            focusedNoteID = note.id
         } catch {
             modelContext.rollback()
             assertionFailure("Failed to save note: \(error.localizedDescription)")
         }
+    }
+
+    /// HTML-anchored notes appear in the reader's margin, so they are edited there
+    /// instead of opening the inspector.
+    private func isShownAsHTMLSidenote(_ note: Note) -> Bool {
+        readerMode == .html && note.normalizedHTMLSelector != nil
+    }
+
+    private func revealInInspector(_ note: Note) {
+        if isInspectorCollapsed {
+            inspectorCollapsedBinding.wrappedValue = false
+        }
+        focusedNoteID = note.id
     }
 
     private func saveSelectionAssistantResultAsNote(
@@ -426,10 +443,9 @@ struct ContentView: View {
             }
 
             try modelContext.save()
-            if isInspectorCollapsed {
-                inspectorCollapsedBinding.wrappedValue = false
+            if !isShownAsHTMLSidenote(note) {
+                revealInInspector(note)
             }
-            focusedNoteID = note.id
             return note.id
         } catch {
             modelContext.rollback()

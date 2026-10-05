@@ -47,4 +47,36 @@ final class NoteMarkdownRendererTests: XCTestCase {
         XCTAssertTrue(boldFont.fontDescriptor.symbolicTraits.contains(.bold))
         XCTAssertTrue(italicFont.fontDescriptor.symbolicTraits.contains(.italic))
     }
+
+    func testHTMLRendersBlocksAndInlineStylesForMarginNotes() {
+        let html = NoteMarkdownRenderer.html(
+            """
+            ## Idea
+
+            **Bold**, *italic* and `x < y`
+            - item [link](https://example.com/a?b=1&c=2)
+
+            > quoted
+            """
+        )
+
+        XCTAssertEqual(
+            html,
+            "<h2>Idea</h2>"
+                + "<p><strong>Bold</strong>, <em>italic</em> and <code>x &lt; y</code></p>"
+                + "<ul><li>item <a href=\"https://example.com/a?b=1&amp;c=2\">link</a></li></ul>"
+                + "<blockquote>quoted</blockquote>"
+        )
+    }
+
+    func testHTMLEscapesRawMarkupAndDropsUnsafeLinks() {
+        let html = NoteMarkdownRenderer.html(
+            "<script>alert(1)</script> [run](javascript:void)\n\n```\n<b>code</b>\n```"
+        )
+
+        XCTAssertFalse(html.contains("<script>"))
+        XCTAssertFalse(html.contains("javascript:"))
+        XCTAssertTrue(html.contains("&lt;script&gt;"))
+        XCTAssertTrue(html.contains("<pre><code>&lt;b&gt;code&lt;/b&gt;</code></pre>"))
+    }
 }

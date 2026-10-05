@@ -74,6 +74,7 @@ struct ReaderPaneView: View {
     @Binding var isInspectorCollapsed: Bool
     @Binding var noteSelectionContext: NoteSelectionContext?
     @Binding var noteNavigationRequest: NoteNavigationRequest?
+    @Binding var sidenoteFocusRequest: SidenoteFocusRequest?
     var onCreateAnchoredNote: () -> Void
     var onSaveSelectionAssistantNote: @MainActor @Sendable (
         NoteSelectionContext,
@@ -121,6 +122,7 @@ struct ReaderPaneView: View {
     @State private var selectionAssistantHistoryAnchors: [SelectionAssistantHistoryAnchor] = []
     @State private var htmlSelectionHighlightResetToken = 0
     @State private var htmlNativeSelectionClearToken = 0
+    @State private var sidenotePendingDeletion: Note?
     @State private var originalPDFPageCount: Int?
     @State private var isFindBarVisible = false
     @State private var findQuery = ""
@@ -457,6 +459,40 @@ struct ReaderPaneView: View {
             } message: {
                 Text(htmlPDFExportError ?? "")
             }
+            .noteDeletionConfirmation($sidenotePendingDeletion)
+    }
+
+    private var sidenoteLabels: HTMLSidenoteLabels {
+        HTMLSidenoteLabels(
+            placeholder: String(localized: "Click to edit note", bundle: bundle),
+            editorPlaceholder: String(localized: "Write a note…", bundle: bundle),
+            delete: String(localized: "Delete Note", bundle: bundle)
+        )
+    }
+
+    private func handleSidenoteEvent(_ event: HTMLSidenoteEvent) {
+        switch event {
+        case let .bodyChanged(noteID, body, isFinal):
+            guard let note = notes.first(where: { $0.id == noteID }) else { return }
+            if note.body != body {
+                note.body = body
+                note.modifiedAt = Date()
+            }
+            guard isFinal, modelContext.hasChanges else { return }
+            do {
+                try modelContext.save()
+            } catch {
+                assertionFailure("Failed to save margin note: \(error.localizedDescription)")
+            }
+        case let .deleteRequested(noteID):
+            sidenotePendingDeletion = notes.first { $0.id == noteID }
+        }
+    }
+
+    private func handleSidenoteFocusHandled(_ request: SidenoteFocusRequest) {
+        if sidenoteFocusRequest == request {
+            sidenoteFocusRequest = nil
+        }
     }
 
     private var pdfTextNoteAlertPresented: Binding<Bool> {
@@ -1379,7 +1415,13 @@ struct ReaderPaneView: View {
                                 onNoteSelectionChanged: handleNoteSelectionChange,
                                 onSelectionAssistantDismissed: handleHTMLSelectionAssistantDismissal,
                                 findRequest: findRequest,
-                                onFindStatusChanged: handleFindStatusChange
+                                onFindStatusChanged: handleFindStatusChange,
+                                sidenotes: HTMLSidenote.sidenotes(from: notes, attachmentID: htmlAttachment?.id),
+                                sidenoteLabels: sidenoteLabels,
+                                renderSidenoteMarkdown: NoteMarkdownRenderer.html,
+                                sidenoteFocusRequest: sidenoteFocusRequest,
+                                onSidenoteEvent: handleSidenoteEvent,
+                                onSidenoteFocusHandled: handleSidenoteFocusHandled
                             )
                         } else {
                             centeredUnavailableView(
