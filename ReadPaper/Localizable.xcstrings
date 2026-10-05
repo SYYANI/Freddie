@@ -12,6 +12,76 @@
         }
       }
     },
+    "%lld segments were skipped because the model returned invalid output. Translate again to retry them." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "有 %lld 个段落因模型返回无效输出而被跳过。再次翻译即可重试这些段落。"
+          }
+        }
+      }
+    },
+    "protected placeholders were lost or duplicated" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "受保护的占位符丢失或重复"
+          }
+        }
+      }
+    },
+    "the model repeated neighboring context" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "模型复述了相邻段落的上下文"
+          }
+        }
+      }
+    },
+    "the model repeated the translation prompt" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "模型复述了翻译提示词"
+          }
+        }
+      }
+    },
+    "The model returned an invalid translation after %lld attempts: %@." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "模型在 %1$lld 次尝试后仍返回无效译文：%2$@。"
+          }
+        }
+      }
+    },
+    "the model returned the source text untranslated" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "模型原样返回了未翻译的原文"
+          }
+        }
+      }
+    },
+    "the output was far longer than the source" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "输出远长于原文"
+          }
+        }
+      }
+    },
     "“%@” and all of its local files, notes, reading state, and translation cache will be removed." : {
       "extractionState" : "stale",
       "localizations" : {

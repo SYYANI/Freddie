@@ -13,6 +13,24 @@ struct HTMLTranslationCandidate: Equatable, Sendable {
     var nextSourceText: String?
 }
 
+extension HTMLTranslationCandidate {
+    /// Context sent with the request; also used to recognise outputs that echo it.
+    func translationContext(documentTitle: String?, glossary: String?) -> AcademicTranslationContext {
+        AcademicTranslationContext(
+            documentTitle: documentTitle,
+            sectionTitle: sectionTitle,
+            previousSegment: previousSourceText,
+            nextSegment: nextSourceText,
+            glossary: glossary
+        )
+    }
+}
+
+struct HTMLTranslationOutcome: Equatable, Sendable {
+    /// Segments left untranslated because every attempt returned unusable output.
+    var failedSegments: Int
+}
+
 struct HTMLTranslationSegmentUpdate: Equatable, Sendable {
     var sequence: Int
     var processedSegments: Int
@@ -31,6 +49,7 @@ final class HTMLTranslationPipeline {
         self.client = client
     }
 
+    @discardableResult
     func translateHTML(
         attachment: PaperAttachment,
         paper: Paper,
@@ -41,7 +60,7 @@ final class HTMLTranslationPipeline {
         onDocumentPrepared: (() -> Void)? = nil,
         onProgressUpdated: ((Int, Int) -> Void)? = nil,
         onSegmentTranslated: ((HTMLTranslationSegmentUpdate) -> Void)? = nil
-    ) async throws {
+    ) async throws -> HTMLTranslationOutcome {
         try Task.checkCancellation()
         guard attachment.kind == .html else { throw PaperImportError.missingHTML }
         let htmlURL = attachment.fileURL
@@ -70,15 +89,20 @@ final class HTMLTranslationPipeline {
 
         do {
             var pendingCandidates: [HTMLTranslationCandidate] = []
+            var failedSegments = 0
 
-            func applyTranslatedSegment(_ candidate: HTMLTranslationCandidate, translated: String) throws {
-                try Self.applyTranslation(translated, candidate: candidate, to: document)
+            func advanceProgress() throws {
                 job.processedSegments += 1
                 job.progress = candidates.isEmpty ? 1 : Double(job.processedSegments) / Double(candidates.count)
                 job.modifiedAt = Date()
                 try modelContext.save()
-                try Self.writeDocument(document, to: htmlURL)
                 onProgressUpdated?(job.processedSegments, candidates.count)
+            }
+
+            func applyTranslatedSegment(_ candidate: HTMLTranslationCandidate, translated: String) throws {
+                try Self.applyTranslation(translated, candidate: candidate, to: document)
+                try Self.writeDocument(document, to: htmlURL)
+                try advanceProgress()
                 onSegmentTranslated?(HTMLTranslationSegmentUpdate(
                     sequence: job.processedSegments,
                     processedSegments: job.processedSegments,
@@ -94,7 +118,7 @@ final class HTMLTranslationPipeline {
                     paperID: paper.id,
                     sourceType: "html",
                     targetLanguage: preferences.targetLanguage,
-                    sourceHash: candidate.sourceHash,
+                    candidate: candidate,
                     route: route,
                     cacheIdentity: cacheIdentity,
                     modelContext: modelContext
@@ -108,28 +132,36 @@ final class HTMLTranslationPipeline {
             let concurrency = max(1, preferences.htmlTranslationConcurrency)
             for batch in pendingCandidates.chunked(into: concurrency) {
                 try Task.checkCancellation()
-                try await withThrowingTaskGroup(of: (HTMLTranslationCandidate, String).self) { group in
+                try await withThrowingTaskGroup(of: (HTMLTranslationCandidate, String?).self) { group in
                     for candidate in batch {
                         group.addTask {
-                            let translated = try await client.translate(
-                                candidate.sourceText,
-                                targetLanguage: preferences.targetLanguage,
-                                route: route,
-                                apiKey: apiKey,
-                                context: AcademicTranslationContext(
-                                    documentTitle: documentTitle,
-                                    sectionTitle: candidate.sectionTitle,
-                                    previousSegment: candidate.previousSourceText,
-                                    nextSegment: candidate.nextSourceText,
-                                    glossary: preferences.translationGlossary
+                            do {
+                                let translated = try await client.validatedTranslate(
+                                    candidate.sourceText,
+                                    targetLanguage: preferences.targetLanguage,
+                                    route: route,
+                                    apiKey: apiKey,
+                                    context: candidate.translationContext(
+                                        documentTitle: documentTitle,
+                                        glossary: preferences.translationGlossary
+                                    )
                                 )
-                            )
-                            return (candidate, translated)
+                                return (candidate, translated)
+                            } catch is TranslationOutputValidationError {
+                                // An unstable model must not abort the whole document; the segment
+                                // stays untranslated and uncached so the next run retries it.
+                                return (candidate, nil)
+                            }
                         }
                     }
 
                     for try await (candidate, translated) in group {
                         try Task.checkCancellation()
+                        guard let translated else {
+                            failedSegments += 1
+                            try advanceProgress()
+                            continue
+                        }
                         modelContext.insert(TranslationSegment(
                             paperID: paper.id,
                             sourceType: "html",
@@ -149,8 +181,10 @@ final class HTMLTranslationPipeline {
             try Task.checkCancellation()
             job.state = .completed
             job.progress = 1
+            job.lastError = failedSegments > 0 ? Self.skippedSegmentsMessage(count: failedSegments) : nil
             job.modifiedAt = Date()
             try modelContext.save()
+            return HTMLTranslationOutcome(failedSegments: failedSegments)
         } catch is CancellationError {
             job.state = .failed
             job.lastError = AppLocalization.localized("Translation cancelled.")
@@ -166,25 +200,49 @@ final class HTMLTranslationPipeline {
         }
     }
 
+    static func skippedSegmentsMessage(count: Int, bundle: Bundle? = nil) -> String {
+        AppLocalization.format(
+            "%lld segments were skipped because the model returned invalid output. Translate again to retry them.",
+            bundle: bundle,
+            count
+        )
+    }
+
     private func cachedSegment(
         paperID: UUID,
         sourceType: String,
         targetLanguage: String,
-        sourceHash: String,
+        candidate: HTMLTranslationCandidate,
         route: LLMModelRouteSnapshot,
         cacheIdentity: String,
         modelContext: ModelContext
     ) throws -> TranslationSegment? {
         let segments = try modelContext.fetch(FetchDescriptor<TranslationSegment>())
-        return segments.first {
+        let matches = segments.filter {
             $0.paperID == paperID &&
                 $0.sourceType == sourceType &&
                 $0.targetLanguage == targetLanguage &&
-                $0.sourceHash == sourceHash &&
+                $0.sourceHash == candidate.sourceHash &&
                 $0.providerProfileID == route.providerProfileID &&
                 $0.modelProfileID == route.modelProfileID &&
                 $0.modelName == cacheIdentity
         }
+        let context = candidate.translationContext(documentTitle: nil, glossary: nil)
+        var validSegment: TranslationSegment?
+        for segment in matches {
+            let issue = TranslationOutputValidator.issue(
+                in: segment.translatedText,
+                source: candidate.sourceText,
+                context: context
+            )
+            if let issue, issue.isFatal {
+                // Purge outputs cached before validation existed (e.g. echoed prompts).
+                modelContext.delete(segment)
+            } else if validSegment == nil {
+                validSegment = segment
+            }
+        }
+        return validSegment
     }
 
     static func extractCandidates(from html: String) throws -> [HTMLTranslationCandidate] {

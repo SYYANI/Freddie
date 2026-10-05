@@ -65,7 +65,7 @@ final class AbstractTranslationService {
         // 使用真实的翻译客户端
         let translatedText: String
         do {
-            translatedText = try await translationClient.translate(
+            translatedText = try await translationClient.validatedTranslate(
                 paper.abstractText,
                 targetLanguage: actualTargetLanguage,
                 route: route.snapshot,
@@ -114,7 +114,7 @@ final class AbstractTranslationService {
         let descriptor = FetchDescriptor<TranslationSegment>()
         let allSegments = try modelContext.fetch(descriptor)
         
-        // 手动过滤缓存
+        // 手动过滤缓存；跳过校验前缓存下来的无效输出（如模型回显的 prompt）
         return allSegments.first { segment in
             segment.paperID == paper.id &&
             segment.sourceType == "abstract" &&
@@ -122,7 +122,12 @@ final class AbstractTranslationService {
             segment.targetLanguage == targetLanguage &&
             segment.providerProfileID == route.snapshot.providerProfileID &&
             segment.modelProfileID == route.snapshot.modelProfileID &&
-            segment.modelName == (cacheIdentity ?? route.snapshot.translationCacheIdentity)
+            segment.modelName == (cacheIdentity ?? route.snapshot.translationCacheIdentity) &&
+            TranslationOutputValidator.issue(
+                in: segment.translatedText,
+                source: paper.abstractText,
+                context: AcademicTranslationContext()
+            )?.isFatal != true
         }?.translatedText
     }
     

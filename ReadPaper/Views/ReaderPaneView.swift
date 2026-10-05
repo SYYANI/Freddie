@@ -1671,7 +1671,7 @@ struct ReaderPaneView: View {
                     settings: settings,
                     modelContext: modelContext
                 )
-                try await HTMLTranslationPipeline().translateHTML(
+                let outcome = try await HTMLTranslationPipeline().translateHTML(
                     attachment: htmlAttachment,
                     paper: paper,
                     preferences: preferences,
@@ -1700,7 +1700,9 @@ struct ReaderPaneView: View {
                 try Task.checkCancellation()
                 displayMode = .bilingual
                 translationProgress = nil
-                statusMessage = String(localized: "HTML translation completed.", bundle: bundle)
+                statusMessage = outcome.failedSegments > 0
+                    ? HTMLTranslationPipeline.skippedSegmentsMessage(count: outcome.failedSegments, bundle: bundle)
+                    : String(localized: "HTML translation completed.", bundle: bundle)
             } catch is CancellationError {
                 translationProgress = nil
                 statusMessage = String(localized: "Translation cancelled.", bundle: bundle)
