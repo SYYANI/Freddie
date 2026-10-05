@@ -6826,7 +6826,6 @@
       }
     },
     "Write a note…" : {
-      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {

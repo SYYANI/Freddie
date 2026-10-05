@@ -1,3 +1,4 @@
+import PDFKit
 import WebKit
 import XCTest
 @testable import ReadPaper
@@ -264,6 +265,132 @@ final class NoteAnchorTests: XCTestCase {
         coordinator.applySidenotes(to: webView)
         let pruned = try await sidenoteState(in: webView)
         XCTAssertEqual(pruned.cards.map(\.id), [alpha.id.uuidString])
+    }
+
+    func testSidenoteStackingKeepsDesiredTopsAndPushesOverlapsDown() {
+        XCTAssertEqual(
+            SidenoteStacking.tops(desired: [10, 20, 200, 205], heights: [30, 40, 10, 10], spacing: 8),
+            [10, 48, 200, 218]
+        )
+        XCTAssertEqual(SidenoteStacking.tops(desired: [-50, -40], heights: [20, 20], spacing: 10), [-50, -20])
+        XCTAssertEqual(SidenoteStacking.tops(desired: [], heights: [], spacing: 10), [])
+    }
+
+    func testPDFSidenoteAnchorsKeepNotesOfTheDisplayedPDF() {
+        let paperID = UUID()
+        let originalID = UUID()
+        let translatedID = UUID()
+        let original = Note(paperID: paperID, attachmentID: originalID, quote: " Original\n quote ", pageIndex: 2)
+        let translated = Note(paperID: paperID, attachmentID: translatedID, quote: "译文", pageIndex: 0)
+        let legacy = Note(paperID: paperID, quote: "Legacy", pageIndex: 1)
+        let html = Note(paperID: paperID, attachmentID: UUID(), quote: "HTML", htmlSelector: "rp-anchor:1")
+        let notes = [original, translated, legacy, html]
+
+        let originalAnchors = PDFSidenoteAnchor.anchors(
+            from: notes, attachmentID: originalID, includesUnattributedNotes: true
+        )
+        XCTAssertEqual(originalAnchors, [
+            PDFSidenoteAnchor(id: original.id, pageIndex: 2, quote: "Original quote"),
+            PDFSidenoteAnchor(id: legacy.id, pageIndex: 1, quote: "Legacy"),
+        ])
+        XCTAssertEqual(
+            PDFSidenoteAnchor.anchors(from: notes, attachmentID: translatedID, includesUnattributedNotes: false).map(\.id),
+            [translated.id]
+        )
+    }
+
+    @MainActor
+    func testPDFSidenoteAnchorsResolveQuoteBoundsAndFollowPDFViewScrolling() async throws {
+        let document = try XCTUnwrap(PDFDocument(data: try makeSidenoteTestPDF()))
+        let firstPage = try XCTUnwrap(document.page(at: 0))
+        let alpha = PDFSidenoteAnchor(id: UUID(), pageIndex: 0, quote: "Alpha target")
+        let beta = PDFSidenoteAnchor(id: UUID(), pageIndex: 0, quote: "beta phrase")
+        let missing = PDFSidenoteAnchor(id: UUID(), pageIndex: 1, quote: "Not on this page")
+        let outOfRange = PDFSidenoteAnchor(id: UUID(), pageIndex: 5, quote: "Alpha target")
+        let pageText: (Int) -> String? = { document.page(at: $0)?.string }
+
+        let alphaRect = try XCTUnwrap(PDFSidenoteAnchorResolver.pageRect(for: alpha, in: document, pageText: pageText))
+        XCTAssertTrue(firstPage.selection(for: alphaRect)?.string?.contains("Alpha target") == true)
+        XCTAssertEqual(alphaRect.minY, 500, accuracy: 8)
+        let missingRect = try XCTUnwrap(PDFSidenoteAnchorResolver.pageRect(for: missing, in: document, pageText: pageText))
+        let secondPageBounds = try XCTUnwrap(document.page(at: 1)).bounds(for: .cropBox)
+        XCTAssertEqual(missingRect.maxY, secondPageBounds.maxY)
+        XCTAssertEqual(missingRect.height, PDFSidenoteAnchorResolver.fallbackBandHeight)
+        XCTAssertNil(PDFSidenoteAnchorResolver.pageRect(for: outOfRange, in: document, pageText: pageText))
+
+        let pdfView = PDFView(frame: CGRect(x: 0, y: 0, width: 500, height: 400))
+        pdfView.displayMode = .singlePageContinuous
+        pdfView.displayDirection = .vertical
+        pdfView.autoScales = false
+        pdfView.scaleFactor = 1
+        let coordinator = PDFReaderView.Coordinator(attachmentID: nil, pageIndex: .constant(0), onNoteSelectionChanged: nil)
+        coordinator.attach(to: pdfView)
+        pdfView.document = document
+        let layout = PDFSidenoteLayoutModel()
+        coordinator.applySidenoteAnchors(
+            [alpha, beta, missing, outOfRange], layout: layout, documentReloaded: true, in: pdfView
+        )
+        try await waitUntil { layout.anchorTops.count == 3 }
+
+        let before = layout.anchorTops
+        let alphaTop = try XCTUnwrap(before[alpha.id])
+        let betaTop = try XCTUnwrap(before[beta.id])
+        let missingTop = try XCTUnwrap(before[missing.id])
+        XCTAssertNil(before[outOfRange.id])
+        XCTAssertEqual(betaTop - alphaTop, 300, accuracy: 2, "Tops follow page coordinates at 100% scale")
+        XCTAssertGreaterThan(missingTop, betaTop)
+
+        pdfView.go(to: try XCTUnwrap(document.page(at: 1)))
+        try await waitUntil { layout.anchorTops[alpha.id] != alphaTop }
+        let after = layout.anchorTops
+        let alphaShift = alphaTop - (try XCTUnwrap(after[alpha.id]))
+        let missingShift = missingTop - (try XCTUnwrap(after[missing.id]))
+        XCTAssertGreaterThan(alphaShift, 100, "Scrolling down moves anchors up")
+        XCTAssertEqual(alphaShift, missingShift, accuracy: 1)
+
+        coordinator.applySidenoteAnchors([], layout: layout, documentReloaded: false, in: pdfView)
+        try await waitUntil { layout.anchorTops.isEmpty }
+        coordinator.detach()
+    }
+
+    private func makeSidenoteTestPDF() throws -> Data {
+        let data = NSMutableData()
+        var mediaBox = CGRect(x: 0, y: 0, width: 400, height: 600)
+        let consumer = try XCTUnwrap(CGDataConsumer(data: data as CFMutableData))
+        let context = try XCTUnwrap(CGContext(consumer: consumer, mediaBox: &mediaBox, nil))
+        let pages: [[(String, CGFloat)]] = [
+            [("Alpha target sentence", 500), ("Lower beta phrase", 200)],
+            [("Second page text", 500)],
+        ]
+        for lines in pages {
+            context.beginPDFPage(nil)
+            for (line, y) in lines {
+                let text = NSAttributedString(
+                    string: line,
+                    attributes: [.font: NSFont.systemFont(ofSize: 14), .foregroundColor: NSColor.black]
+                )
+                context.textPosition = CGPoint(x: 40, y: y)
+                CTLineDraw(CTLineCreateWithAttributedString(text as CFAttributedString), context)
+            }
+            context.endPDFPage()
+        }
+        context.closePDF()
+        return data as Data
+    }
+
+    @MainActor
+    private func waitUntil(
+        timeout: Duration = .seconds(3),
+        _ condition: @MainActor () -> Bool
+    ) async throws {
+        let deadline = ContinuousClock.now + timeout
+        while condition() == false {
+            guard ContinuousClock.now < deadline else {
+                XCTFail("Timed out waiting for condition")
+                return
+            }
+            try await Task.sleep(for: .milliseconds(20))
+        }
     }
 
     @MainActor

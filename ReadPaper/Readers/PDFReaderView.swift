@@ -296,6 +296,8 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
     var onDebugRegionSelected: ((PDFDebugRegionSelection) -> Void)? = nil
     var findRequest: DocumentFindRequest? = nil
     var onFindStatusChanged: ((DocumentFindStatus) -> Void)? = nil
+    var sidenoteAnchors: [PDFSidenoteAnchor] = []
+    var sidenoteLayout: PDFSidenoteLayoutModel? = nil
 
     #if os(macOS)
     func makeNSView(context: Context) -> PDFView {
@@ -391,6 +393,12 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
             context.coordinator.lastReloadToken = reloadToken
             context.coordinator.scheduleDocumentPageCountUpdate(0)
             context.coordinator.applyFindRequest(nil, in: view)
+            context.coordinator.applySidenoteAnchors(
+                [],
+                layout: sidenoteLayout,
+                documentReloaded: hadLoadedDocument,
+                in: view
+            )
             return
         }
         let shouldReloadDocument = context.coordinator.loadedURL != fileURL ||
@@ -442,6 +450,12 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
         )
         context.coordinator.applyNoteNavigationIfNeeded(noteNavigationRequest, in: view)
         context.coordinator.applyFindRequest(findRequest, in: view)
+        context.coordinator.applySidenoteAnchors(
+            sidenoteAnchors,
+            layout: sidenoteLayout,
+            documentReloaded: shouldReloadDocument,
+            in: view
+        )
     }
 
     func makeCoordinator() -> Coordinator {
@@ -530,6 +544,14 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
         private var findMatches: [(pageIndex: Int, selection: PDFSelection)] = []
         private var currentFindMatchIndex: Int?
         private var lastPublishedFindStatus: DocumentFindStatus?
+        private var sidenoteAnchors: [PDFSidenoteAnchor] = []
+        private weak var sidenoteLayout: PDFSidenoteLayoutModel?
+        private var sidenotePageRects: [UUID: (pageIndex: Int, rect: CGRect)] = [:]
+        private var sidenotePageTexts: [Int: String] = [:]
+        private var isSidenotePositionUpdateScheduled = false
+        #if os(macOS)
+        private weak var observedSidenoteScrollView: NSScrollView?
+        #endif
 
         init(
             paperID: UUID? = nil,
@@ -759,6 +781,9 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
         func detach() {
             findTextLoadTask?.cancel()
             findTextLoadTask = nil
+            #if os(macOS)
+            stopObservingSidenoteGeometry()
+            #endif
             clearNoteNavigationHighlight()
             clearSelectionAssistantHistoryAnnotations()
             if let pdfView {
@@ -790,6 +815,114 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
             onDocumentPageCountChanged = nil
             self.pdfView = nil
         }
+
+        /// Resolves margin-note anchors to page rects and keeps the rail's
+        /// positions in step with scrolling, zooming, and resizing.
+        func applySidenoteAnchors(
+            _ anchors: [PDFSidenoteAnchor],
+            layout: PDFSidenoteLayoutModel?,
+            documentReloaded: Bool,
+            in pdfView: PDFView
+        ) {
+            guard documentReloaded || sidenoteLayout !== layout || anchors != sidenoteAnchors else { return }
+            if documentReloaded {
+                sidenotePageTexts = [:]
+            }
+            sidenoteAnchors = anchors
+            sidenoteLayout = layout
+            resolveSidenoteAnchors(in: pdfView)
+            #if os(macOS)
+            observeSidenoteGeometry(of: pdfView)
+            #endif
+            scheduleSidenotePositionUpdate()
+        }
+
+        private func resolveSidenoteAnchors(in pdfView: PDFView) {
+            sidenotePageRects = [:]
+            guard sidenoteLayout != nil, let document = pdfView.document else { return }
+            for anchor in sidenoteAnchors {
+                let rect = PDFSidenoteAnchorResolver.pageRect(for: anchor, in: document) { pageIndex in
+                    sidenotePageText(at: pageIndex, in: document)
+                }
+                if let rect {
+                    sidenotePageRects[anchor.id] = (anchor.pageIndex, rect)
+                }
+            }
+        }
+
+        private func sidenotePageText(at pageIndex: Int, in document: PDFDocument) -> String? {
+            if let cached = sidenotePageTexts[pageIndex] {
+                return cached
+            }
+            let text = document.page(at: pageIndex)?.string
+            sidenotePageTexts[pageIndex] = text ?? ""
+            return text
+        }
+
+        private func scheduleSidenotePositionUpdate() {
+            guard isSidenotePositionUpdateScheduled == false else { return }
+            isSidenotePositionUpdateScheduled = true
+            // Run after the current view update or scroll event, before the next
+            // frame, so the rail moves together with the pages.
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.isSidenotePositionUpdateScheduled = false
+                self.updateSidenotePositions()
+            }
+        }
+
+        private func updateSidenotePositions() {
+            guard let layout = sidenoteLayout else { return }
+            guard let pdfView, let document = pdfView.document else {
+                layout.update(anchorTops: [:])
+                return
+            }
+            var tops: [UUID: CGFloat] = [:]
+            for (id, anchor) in sidenotePageRects {
+                guard let page = document.page(at: anchor.pageIndex) else { continue }
+                let viewRect = pdfView.convert(anchor.rect, from: page)
+                tops[id] = pdfView.isFlipped ? viewRect.minY : pdfView.bounds.height - viewRect.maxY
+            }
+            layout.update(anchorTops: tops)
+        }
+
+        #if os(macOS)
+        private func observeSidenoteGeometry(of pdfView: PDFView) {
+            guard let layout = sidenoteLayout,
+                  let scrollView = pdfView.subviews.lazy.compactMap({ $0 as? NSScrollView }).first else {
+                stopObservingSidenoteGeometry()
+                return
+            }
+            layout.scrollView = scrollView
+            guard observedSidenoteScrollView !== scrollView else { return }
+            stopObservingSidenoteGeometry()
+            observedSidenoteScrollView = scrollView
+            scrollView.contentView.postsBoundsChangedNotifications = true
+            let center = NotificationCenter.default
+            let selector = #selector(handleSidenoteGeometryChanged(_:))
+            center.addObserver(self, selector: selector, name: NSView.boundsDidChangeNotification, object: scrollView.contentView)
+            center.addObserver(self, selector: selector, name: NSView.frameDidChangeNotification, object: scrollView.contentView)
+            center.addObserver(self, selector: selector, name: Notification.Name.PDFViewScaleChanged, object: pdfView)
+            center.addObserver(self, selector: selector, name: Notification.Name.PDFViewDocumentChanged, object: pdfView)
+        }
+
+        private func stopObservingSidenoteGeometry() {
+            let center = NotificationCenter.default
+            if let contentView = observedSidenoteScrollView?.contentView {
+                center.removeObserver(self, name: NSView.boundsDidChangeNotification, object: contentView)
+                center.removeObserver(self, name: NSView.frameDidChangeNotification, object: contentView)
+            }
+            if let pdfView {
+                center.removeObserver(self, name: Notification.Name.PDFViewScaleChanged, object: pdfView)
+                center.removeObserver(self, name: Notification.Name.PDFViewDocumentChanged, object: pdfView)
+            }
+            observedSidenoteScrollView = nil
+        }
+
+        @objc private func handleSidenoteGeometryChanged(_ notification: Notification) {
+            scheduleSidenotePositionUpdate()
+        }
+        #endif
 
         func applyNoteNavigationIfNeeded(
             _ request: NoteNavigationRequest?,

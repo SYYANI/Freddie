@@ -75,6 +75,8 @@ struct ReaderPaneView: View {
     @Binding var noteSelectionContext: NoteSelectionContext?
     @Binding var noteNavigationRequest: NoteNavigationRequest?
     @Binding var sidenoteFocusRequest: SidenoteFocusRequest?
+    /// Whether the single-PDF reader is wide enough to show margin notes.
+    @Binding var isPDFSidenoteRailAvailable: Bool
     var onCreateAnchoredNote: () -> Void
     var onSaveSelectionAssistantNote: @MainActor @Sendable (
         NoteSelectionContext,
@@ -123,6 +125,7 @@ struct ReaderPaneView: View {
     @State private var htmlSelectionHighlightResetToken = 0
     @State private var htmlNativeSelectionClearToken = 0
     @State private var sidenotePendingDeletion: Note?
+    @State private var pdfSidenoteLayout = PDFSidenoteLayoutModel()
     @State private var originalPDFPageCount: Int?
     @State private var isFindBarVisible = false
     @State private var findQuery = ""
@@ -478,14 +481,20 @@ struct ReaderPaneView: View {
                 note.body = body
                 note.modifiedAt = Date()
             }
-            guard isFinal, modelContext.hasChanges else { return }
-            do {
-                try modelContext.save()
-            } catch {
-                assertionFailure("Failed to save margin note: \(error.localizedDescription)")
+            if isFinal {
+                saveSidenoteEdits()
             }
         case let .deleteRequested(noteID):
             sidenotePendingDeletion = notes.first { $0.id == noteID }
+        }
+    }
+
+    private func saveSidenoteEdits() {
+        guard modelContext.hasChanges else { return }
+        do {
+            try modelContext.save()
+        } catch {
+            assertionFailure("Failed to save margin note: \(error.localizedDescription)")
         }
     }
 
@@ -1434,6 +1443,7 @@ struct ReaderPaneView: View {
                         labeledPDFReader(
                             fileURL: pdfAttachment?.fileURL,
                             attachmentID: pdfAttachment?.id,
+                            includesUnattributedSidenotes: true,
                             label: String(localized: "Original", bundle: bundle),
                             emptyTitle: String(localized: "No PDF available", bundle: bundle),
                             emptyDescription: String(localized: "Import a PDF or fetch one from arXiv to read it here.", bundle: bundle)
@@ -1472,6 +1482,7 @@ struct ReaderPaneView: View {
                         labeledPDFReader(
                             fileURL: translatedPDFAttachment?.fileURL,
                             attachmentID: translatedPDFAttachment?.id,
+                            includesUnattributedSidenotes: false,
                             label: String(localized: "Translation", bundle: bundle),
                             emptyTitle: String(localized: "No translated PDF", bundle: bundle),
                             emptyDescription: String(localized: "Run PDF translation first to read the translated PDF on its own.", bundle: bundle),
@@ -2373,6 +2384,7 @@ struct ReaderPaneView: View {
     private func labeledPDFReader(
         fileURL: URL?,
         attachmentID: UUID?,
+        includesUnattributedSidenotes: Bool,
         label: String,
         emptyTitle: String,
         emptyDescription: String,
@@ -2381,24 +2393,53 @@ struct ReaderPaneView: View {
         onDebugRegionSelected: ((PDFDebugRegionSelection) -> Void)? = nil
     ) -> some View {
         if fileURL != nil {
-            PDFDisplaySurface(appearance: pdfDisplayAppearance) {
-                PDFReaderView(
-                    fileURL: fileURL,
-                    paperID: paper?.id,
-                    attachmentID: attachmentID,
-                    displayAppearance: pdfDisplayAppearance,
-                    pageIndex: $pdfPageIndex,
-                    reloadToken: reloadToken,
-                    noteNavigationRequest: noteNavigationRequest,
-                    selectionAssistantHistoryAnchors: selectionAssistantHistoryAnchors,
-                    annotationSession: pdfAnnotationSession,
-                    onNoteSelectionChanged: handleNoteSelectionChange,
-                    onArxivLinkActivated: onArxivLinkActivated,
-                    debugRegionSelectionEnabled: debugRegionSelectionEnabled,
-                    onDebugRegionSelected: onDebugRegionSelected,
-                    findRequest: findRequest,
-                    onFindStatusChanged: handleFindStatusChange
-                )
+            GeometryReader { proxy in
+                let canShowRail = proxy.size.width >= PDFSidenoteRail.width + PDFSidenoteRail.minimumReaderWidth
+                let anchors = canShowRail
+                    ? PDFSidenoteAnchor.anchors(
+                        from: notes,
+                        attachmentID: attachmentID,
+                        includesUnattributedNotes: includesUnattributedSidenotes
+                    )
+                    : []
+                PDFDisplaySurface(appearance: pdfDisplayAppearance) {
+                    HStack(spacing: 0) {
+                        PDFReaderView(
+                            fileURL: fileURL,
+                            paperID: paper?.id,
+                            attachmentID: attachmentID,
+                            displayAppearance: pdfDisplayAppearance,
+                            pageIndex: $pdfPageIndex,
+                            reloadToken: reloadToken,
+                            noteNavigationRequest: noteNavigationRequest,
+                            selectionAssistantHistoryAnchors: selectionAssistantHistoryAnchors,
+                            annotationSession: pdfAnnotationSession,
+                            onNoteSelectionChanged: handleNoteSelectionChange,
+                            onArxivLinkActivated: onArxivLinkActivated,
+                            debugRegionSelectionEnabled: debugRegionSelectionEnabled,
+                            onDebugRegionSelected: onDebugRegionSelected,
+                            findRequest: findRequest,
+                            onFindStatusChanged: handleFindStatusChange,
+                            sidenoteAnchors: anchors,
+                            sidenoteLayout: pdfSidenoteLayout
+                        )
+
+                        if anchors.isEmpty == false {
+                            let anchoredIDs = Set(anchors.map(\.id))
+                            PDFSidenoteRail(
+                                notes: notes.filter { anchoredIDs.contains($0.id) },
+                                layout: pdfSidenoteLayout,
+                                focusRequest: sidenoteFocusRequest,
+                                onFocusHandled: handleSidenoteFocusHandled,
+                                onCommit: saveSidenoteEdits,
+                                onDelete: { sidenotePendingDeletion = $0 }
+                            )
+                        }
+                    }
+                }
+                .onChange(of: canShowRail, initial: true) { _, newValue in
+                    isPDFSidenoteRailAvailable = newValue
+                }
             }
                 .overlay(alignment: .topLeading) {
                     readerLabel(label)
