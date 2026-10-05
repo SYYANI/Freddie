@@ -18,6 +18,7 @@ struct PDFSidenoteRail: View {
     var onDelete: (Note) -> Void
 
     @State private var editingNoteID: UUID?
+    @State private var hoveredNoteID: UUID?
     @State private var railHeight: CGFloat = 0
 
     private struct PlacedNote: Identifiable {
@@ -35,8 +36,16 @@ struct PDFSidenoteRail: View {
                     note: placed.note,
                     number: placed.number,
                     isEditing: editingNoteID == placed.note.id,
+                    flashToken: layout.flashRequest?.noteID == placed.note.id ? layout.flashRequest?.token : nil,
                     onBeginEditing: { beginEditing(placed.note.id) },
                     onEndEditing: { endEditing(placed.note.id) },
+                    onHoverChanged: { isHovered in
+                        if isHovered {
+                            hoveredNoteID = placed.note.id
+                        } else if hoveredNoteID == placed.note.id {
+                            hoveredNoteID = nil
+                        }
+                    },
                     onDelete: { onDelete(placed.note) }
                 )
                 .layoutValue(key: SidenoteDesiredTopKey.self, value: placed.desiredTop)
@@ -54,6 +63,12 @@ struct PDFSidenoteRail: View {
         .clipped()
         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { railHeight = $0 }
         .onAppear(perform: applyFocusRequestIfPossible)
+        .onChange(of: hoveredNoteID ?? editingNoteID) { _, activeNoteID in
+            layout.setActiveNote(activeNoteID)
+        }
+        .onDisappear {
+            layout.setActiveNote(nil)
+        }
         .onChange(of: focusRequest) { _, _ in applyFocusRequestIfPossible() }
         .onChange(of: placedNotes.map(\.id)) { _, _ in applyFocusRequestIfPossible() }
     }
@@ -135,10 +150,13 @@ private struct PDFSidenoteCard: View {
     @Bindable var note: Note
     let number: Int
     let isEditing: Bool
+    let flashToken: Int?
     let onBeginEditing: () -> Void
     let onEndEditing: () -> Void
+    let onHoverChanged: (Bool) -> Void
     let onDelete: () -> Void
     @State private var isHovered = false
+    @State private var isFlashing = false
 
     private static let accentColor = Color(red: 0.71, green: 0.47, blue: 0.16)
 
@@ -177,7 +195,20 @@ private struct PDFSidenoteCard: View {
                 onBeginEditing()
             }
         }
-        .onHover { isHovered = $0 }
+        .onHover { isHovered in
+            self.isHovered = isHovered
+            onHoverChanged(isHovered)
+        }
+        .onChange(of: flashToken) { _, token in
+            guard token != nil else { return }
+            isFlashing = true
+            // Fade out from the next update so the flash is drawn at full strength first.
+            Task { @MainActor in
+                withAnimation(.easeOut(duration: 0.9)) {
+                    isFlashing = false
+                }
+            }
+        }
         .padding(.trailing, 12)
     }
 
@@ -223,10 +254,12 @@ private struct PDFSidenoteCard: View {
                     : Color(nsColor: .textBackgroundColor).opacity(0.94))
                 .overlay { shape.stroke(Color.primary.opacity(0.08)) }
                 .shadow(color: .black.opacity(0.06), radius: 6, y: 2)
-        } else if isHovered {
-            shape.fill(Color.primary.opacity(0.04))
         } else {
-            Color.clear
+            shape.fill(
+                isFlashing
+                    ? Self.accentColor.opacity(0.22)
+                    : (isHovered ? Color.primary.opacity(0.04) : Color.clear)
+            )
         }
     }
 }

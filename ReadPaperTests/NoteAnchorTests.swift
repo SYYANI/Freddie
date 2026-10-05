@@ -267,6 +267,91 @@ final class NoteAnchorTests: XCTestCase {
         XCTAssertEqual(pruned.cards.map(\.id), [alpha.id.uuidString])
     }
 
+    @MainActor
+    func testHTMLSidenotesOnlyReserveMissingWidthWhenSiteCapsBodyWidth() async throws {
+        // Reduced sigh.dev layout: the site caps <body> at 768px and keeps it left
+        // aligned. Cover both box models, which react differently to padding.
+        for boxSizing in ["border-box", "content-box"] {
+            try await assertCappedBodyKeepsReadableColumn(boxSizing: boxSizing)
+        }
+    }
+
+    @MainActor
+    private func assertCappedBodyKeepsReadableColumn(boxSizing: String) async throws {
+        let paragraph = String(repeating: "I haven't found much use for the personal assistant part of Muse. ", count: 5)
+        let html = """
+        <html><head><meta charset="UTF-8"><style>
+        *, ::before, ::after { box-sizing: \(boxSizing); }
+        body.rp-readability-body { margin: 0; padding: 32px 24px 56px; }
+        .rp-readability-shell { max-width: 980px; margin: 0 auto; }
+        body { max-width: 768px; }
+        </style></head><body class="rp-readability-body"><main class="rp-readability-shell">
+        <div class="rp-readability-content"><div class="md-body"><p>\(paragraph)</p><p>\(paragraph)</p></div></div>
+        </main></body></html>
+        """
+        let configuration = WKWebViewConfiguration()
+        configuration.websiteDataStore = .nonPersistent()
+        let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 1400, height: 800), configuration: configuration)
+        let loaded = expectation(description: "Capped body document loaded")
+        let observer = SidenoteNavigationObserver(loaded: loaded)
+        webView.navigationDelegate = observer
+        webView.loadHTMLString(html, baseURL: nil)
+        await fulfillment(of: [loaded], timeout: 15)
+        _ = try await webView.evaluateJavaScript(HTMLReaderView.Coordinator.instrumentationScript)
+        _ = try await webView.evaluateJavaScript(HTMLReaderView.Coordinator.sidenoteScript)
+        let naturalWidthValue = try await webView.evaluateJavaScript(
+            "document.querySelector('.md-body p').getBoundingClientRect().width"
+        )
+        let naturalWidth = try XCTUnwrap(naturalWidthValue as? Double)
+        let notesJSON = String(data: try JSONSerialization.data(withJSONObject: [[
+            "id": UUID().uuidString, "quote": "personal assistant", "htmlSelector": "rp-anchor:0/0/0/0",
+            "markdown": "Note", "html": "Note",
+        ]]), encoding: .utf8)!
+        _ = try await webView.evaluateJavaScript("window.__rpSetSidenotes(\(notesJSON), {}); true")
+
+        let metricsScript = """
+        (() => {
+            const state = window.__rpSidenoteState();
+            const card = state.cards[0];
+            const text = document.querySelector('.md-body p').getBoundingClientRect();
+            return JSON.stringify({
+                mode: state.mode, visible: card.visible, cardLeft: card.left,
+                cardRight: document.querySelector('.rp-sidenote').getBoundingClientRect().right,
+                textRight: text.right, textWidth: text.width,
+                reserved: document.documentElement.hasAttribute('data-rp-sidenote-reserved')
+            });
+        })()
+        """
+        struct Metrics: Decodable {
+            var mode: String
+            var visible: Bool
+            var cardLeft: Double
+            var cardRight: Double
+            var textRight: Double
+            var textWidth: Double
+            var reserved: Bool
+        }
+        func metrics() async throws -> Metrics {
+            let json = try await webView.evaluateJavaScript(metricsScript) as? String
+            return try JSONDecoder().decode(Metrics.self, from: Data(try XCTUnwrap(json).utf8))
+        }
+
+        let roomy = try await metrics()
+        XCTAssertEqual(roomy.mode, "margin", boxSizing)
+        XCTAssertFalse(roomy.reserved, "Pages with room beside the text keep their layout (\(boxSizing))")
+        XCTAssertEqual(roomy.textWidth, naturalWidth, accuracy: 0.5, boxSizing)
+        XCTAssertGreaterThanOrEqual(roomy.cardLeft, roomy.textRight + 30, boxSizing)
+
+        webView.setFrameSize(CGSize(width: 970, height: 800))
+        let tight = try await metrics()
+        XCTAssertEqual(tight.mode, "margin", boxSizing)
+        XCTAssertTrue(tight.visible, boxSizing)
+        XCTAssertTrue(tight.reserved, boxSizing)
+        XCTAssertGreaterThan(tight.textWidth, 600, "Only the missing width is taken from the text (\(boxSizing))")
+        XCTAssertGreaterThanOrEqual(tight.cardLeft, tight.textRight + 30, boxSizing)
+        XCTAssertLessThanOrEqual(tight.cardRight, 970, boxSizing)
+    }
+
     func testSidenoteStackingKeepsDesiredTopsAndPushesOverlapsDown() {
         XCTAssertEqual(
             SidenoteStacking.tops(desired: [10, 20, 200, 205], heights: [30, 40, 10, 10], spacing: 8),
@@ -290,9 +375,14 @@ final class NoteAnchorTests: XCTestCase {
             from: notes, attachmentID: originalID, includesUnattributedNotes: true
         )
         XCTAssertEqual(originalAnchors, [
-            PDFSidenoteAnchor(id: original.id, pageIndex: 2, quote: "Original quote"),
             PDFSidenoteAnchor(id: legacy.id, pageIndex: 1, quote: "Legacy"),
+            PDFSidenoteAnchor(id: original.id, pageIndex: 2, quote: "Original quote"),
         ])
+        XCTAssertEqual(
+            PDFSidenoteAnchor.anchors(from: notes.reversed(), attachmentID: originalID, includesUnattributedNotes: true),
+            originalAnchors,
+            "Reordering notes, e.g. by editing one, must not change the anchors"
+        )
         XCTAssertEqual(
             PDFSidenoteAnchor.anchors(from: notes, attachmentID: translatedID, includesUnattributedNotes: false).map(\.id),
             [translated.id]
@@ -340,6 +430,16 @@ final class NoteAnchorTests: XCTestCase {
         XCTAssertEqual(betaTop - alphaTop, 300, accuracy: 2, "Tops follow page coordinates at 100% scale")
         XCTAssertGreaterThan(missingTop, betaTop)
 
+        let highlights = firstPage.annotations.filter { "/" + ($0.type ?? "") == PDFAnnotationSubtype.highlight.rawValue }
+        XCTAssertEqual(highlights.count, 2, "One highlight per found quote line; none for missing quotes")
+        XCTAssertTrue(try XCTUnwrap(document.page(at: 1)).annotations.isEmpty)
+        let alphaHighlight = try XCTUnwrap(highlights.first { $0.bounds.intersects(alphaRect) })
+        let restingAlpha = alphaHighlight.color.alphaComponent
+        layout.setActiveNote(alpha.id)
+        XCTAssertGreaterThan(alphaHighlight.color.alphaComponent, restingAlpha, "The hovered note's highlight is emphasized")
+        layout.setActiveNote(nil)
+        XCTAssertEqual(alphaHighlight.color.alphaComponent, restingAlpha, accuracy: 0.01)
+
         pdfView.go(to: try XCTUnwrap(document.page(at: 1)))
         try await waitUntil { layout.anchorTops[alpha.id] != alphaTop }
         let after = layout.anchorTops
@@ -350,6 +450,7 @@ final class NoteAnchorTests: XCTestCase {
 
         coordinator.applySidenoteAnchors([], layout: layout, documentReloaded: false, in: pdfView)
         try await waitUntil { layout.anchorTops.isEmpty }
+        XCTAssertTrue(firstPage.annotations.isEmpty, "Removing notes removes their highlights")
         coordinator.detach()
     }
 

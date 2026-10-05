@@ -547,6 +547,7 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
         private var sidenoteAnchors: [PDFSidenoteAnchor] = []
         private weak var sidenoteLayout: PDFSidenoteLayoutModel?
         private var sidenotePageRects: [UUID: (pageIndex: Int, rect: CGRect)] = [:]
+        private var sidenoteHighlightAnnotations: [UUID: [PDFAnnotation]] = [:]
         private var sidenotePageTexts: [Int: String] = [:]
         private var isSidenotePositionUpdateScheduled = false
         #if os(macOS)
@@ -763,7 +764,9 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
                     self?.activateAnnotationDocument()
                 }
                 interactiveView.onBrowseClick = { [weak self] page, point in
-                    self?.handleSelectionAssistantHistoryClick(on: page, at: point) ?? false
+                    guard let self else { return false }
+                    self.flashSidenote(on: page, at: point)
+                    return self.handleSelectionAssistantHistoryClick(on: page, at: point)
                 }
                 interactiveView.onInkStrokeCompleted = { [weak self] page, points in
                     self?.addInkAnnotation(on: page, points: points)
@@ -784,6 +787,7 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
             #if os(macOS)
             stopObservingSidenoteGeometry()
             #endif
+            removeSidenoteHighlights()
             clearNoteNavigationHighlight()
             clearSelectionAssistantHistoryAnnotations()
             if let pdfView {
@@ -829,6 +833,12 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
                 sidenotePageTexts = [:]
             }
             sidenoteAnchors = anchors
+            if sidenoteLayout !== layout {
+                sidenoteLayout?.onActiveNoteChanged = nil
+                layout?.onActiveNoteChanged = { [weak self] noteID in
+                    self?.emphasizeSidenoteHighlight(noteID)
+                }
+            }
             sidenoteLayout = layout
             resolveSidenoteAnchors(in: pdfView)
             #if os(macOS)
@@ -839,14 +849,59 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
 
         private func resolveSidenoteAnchors(in pdfView: PDFView) {
             sidenotePageRects = [:]
+            removeSidenoteHighlights()
             guard sidenoteLayout != nil, let document = pdfView.document else { return }
             for anchor in sidenoteAnchors {
-                let rect = PDFSidenoteAnchorResolver.pageRect(for: anchor, in: document) { pageIndex in
+                let resolution = PDFSidenoteAnchorResolver.resolve(anchor, in: document) { pageIndex in
                     sidenotePageText(at: pageIndex, in: document)
                 }
-                if let rect {
-                    sidenotePageRects[anchor.id] = (anchor.pageIndex, rect)
+                guard let resolution, let page = document.page(at: anchor.pageIndex) else { continue }
+                sidenotePageRects[anchor.id] = (anchor.pageIndex, resolution.anchorRect)
+                sidenoteHighlightAnnotations[anchor.id] = resolution.quoteLineRects.map { rect in
+                    let annotation = PDFAnnotation(bounds: rect, forType: .highlight, withProperties: nil)
+                    annotation.color = sidenoteHighlightColor(isActive: false)
+                    page.addAnnotation(annotation)
+                    return annotation
                 }
+            }
+            emphasizeSidenoteHighlight(sidenoteLayout?.activeNoteID)
+        }
+
+        /// Note highlights are in-memory annotations, like the selection
+        /// assistant's history underlines: annotation export reopens the PDF
+        /// from disk and erasing only touches user annotation records.
+        private func removeSidenoteHighlights() {
+            for annotation in sidenoteHighlightAnnotations.values.joined() {
+                annotation.page?.removeAnnotation(annotation)
+            }
+            sidenoteHighlightAnnotations = [:]
+        }
+
+        private func emphasizeSidenoteHighlight(_ activeNoteID: UUID?) {
+            for (noteID, annotations) in sidenoteHighlightAnnotations {
+                let color = sidenoteHighlightColor(isActive: noteID == activeNoteID)
+                for annotation in annotations where annotation.color != color {
+                    annotation.color = color
+                }
+            }
+        }
+
+        private func sidenoteHighlightColor(isActive: Bool) -> PlatformPDFColor {
+            let alpha: CGFloat = isActive ? 0.55 : 0.28
+            #if os(macOS)
+            return NSColor(srgbRed: 0.90, green: 0.67, blue: 0.24, alpha: alpha)
+            #else
+            return UIColor(red: 0.90, green: 0.67, blue: 0.24, alpha: alpha)
+            #endif
+        }
+
+        private func flashSidenote(on page: PDFPage, at point: CGPoint) {
+            guard let layout = sidenoteLayout else { return }
+            let hit = sidenoteHighlightAnnotations.first { _, annotations in
+                annotations.contains { $0.page === page && $0.bounds.insetBy(dx: -2, dy: -2).contains(point) }
+            }
+            if let noteID = hit?.key {
+                layout.flash(noteID)
             }
         }
 

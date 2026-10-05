@@ -1080,7 +1080,6 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
             const minColumnWidth = 200;
             const maxColumnWidth = 280;
             const minTextWidth = 480;
-            const bodyHorizontalPadding = 48;
             const edgeInset = 16;
             const cardSpacing = 10;
             const popoverWidth = 340;
@@ -1092,6 +1091,7 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
             let labels = {};
             let layer = null;
             let mode = 'none';
+            let modeKey = null;
             let columnWidth = 0;
             let editingID = null;
             let openID = null;
@@ -1107,11 +1107,10 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
                 const style = document.createElement('style');
                 style.id = 'rp-sidenote-style';
                 style.textContent = `
-                    html[data-rp-sidenotes='margin'] body.rp-readability-body {
-                        padding-right: calc(24px + var(--rp-sidenote-gutter, 316px)) !important;
-                    }
-                    html[data-rp-sidenotes='margin'] body:not(.rp-readability-body) {
-                        margin-right: var(--rp-sidenote-gutter, 316px) !important;
+                    html[data-rp-sidenote-reserved] body {
+                        padding-right: calc(
+                            var(--rp-sidenote-base-padding, 0px) + var(--rp-sidenote-reserve, 0px)
+                        ) !important;
                     }
                     ::highlight(rp-note) {
                         background-color: rgba(230, 170, 60, 0.14);
@@ -1284,10 +1283,21 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
                 );
             };
 
+            // Inline anchors (links, emphasis) do not show where the text column ends.
+            const textBlockFor = element => {
+                let current = element;
+                while (current && current !== document.body &&
+                       getComputedStyle(current).display.startsWith('inline')) {
+                    current = current.parentElement;
+                }
+                return current;
+            };
+
             const resolveAnchor = entry => {
                 const target = window.__rpResolveNoteAnchor?.(entry.note.htmlSelector) || null;
                 const quoteRangeIn = window.__rpQuoteRangeIn;
                 entry.target = target;
+                entry.block = textBlockFor(target);
                 entry.range = null;
                 if (!target || !quoteRangeIn || !entry.note.quote) { return; }
                 entry.range = quoteRangeIn(target, entry.note.quote);
@@ -1475,7 +1485,7 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
 
                 const entry = {
                     id, card, number, remove, body, editor,
-                    note: null, target: null, range: null,
+                    note: null, target: null, block: null, range: null,
                     draft: null, draftCommittedAt: 0, renderedHTML: null
                 };
 
@@ -1517,6 +1527,72 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
                 return entry;
             };
 
+            const textRightEdge = anchored => {
+                let right = -Infinity;
+                for (const entry of anchored) {
+                    for (const element of [entry.block, translationBlockFor(entry.target)]) {
+                        const rect = element?.getBoundingClientRect();
+                        if (rect && rect.width > 0) { right = Math.max(right, rect.right); }
+                    }
+                }
+                if (right > -Infinity) { return right; }
+                return (document.querySelector('.rp-readability-shell') || document.body).getBoundingClientRect().right;
+            };
+
+            const setReserve = value => {
+                const root = document.documentElement;
+                const reserve = Math.max(0, Math.round(value));
+                root.style.setProperty('--rp-sidenote-reserve', `${reserve}px`);
+                if (reserve > 0) {
+                    root.setAttribute('data-rp-sidenote-reserved', 'true');
+                } else {
+                    root.removeAttribute('data-rp-sidenote-reserved');
+                }
+                return reserve;
+            };
+
+            // Finds the smallest right padding on <body> that leaves room for the
+            // note column beside the text. Pages that already have room are not
+            // changed; pages that cap or center their body only give up the width
+            // that is missing. Depending on the page, the text moves 1:1 (left
+            // aligned), 1:2 (centered), or only past some threshold (capped
+            // content-box body), so each step rescales by the observed shift and
+            // grows the step while nothing moves. Returns false when the text
+            // column would get too narrow.
+            const solveReserve = (anchored, viewportWidth) => {
+                setReserve(0);
+                document.documentElement.style.setProperty(
+                    '--rp-sidenote-base-padding',
+                    getComputedStyle(document.body).paddingRight
+                );
+                const required = columnWidth + columnGap + edgeInset;
+                const maximumReserve = viewportWidth * 0.6;
+                const deficit = () => required - (viewportWidth - textRightEdge(anchored));
+                let reserve = 0;
+                let missing = deficit();
+                let shiftPerPixel = 1;
+                for (let attempt = 0; attempt < 8; attempt += 1) {
+                    if (missing <= 0.5 && (missing > -2 || reserve === 0)) { break; }
+                    const target = Math.min(maximumReserve, Math.max(0, reserve + missing / shiftPerPixel));
+                    const nextReserve = setReserve(target);
+                    if (nextReserve === reserve) { break; }
+                    const nextMissing = deficit();
+                    const moved = missing - nextMissing;
+                    const change = nextReserve - reserve;
+                    shiftPerPixel = Math.abs(moved) > 0.5 && moved / change > 0
+                        ? moved / change
+                        : shiftPerPixel / 2;
+                    reserve = nextReserve;
+                    missing = nextMissing;
+                }
+                const column = document.querySelector('.rp-readability-shell') || document.body;
+                if (missing > 1 || column.getBoundingClientRect().width < minTextWidth) {
+                    setReserve(0);
+                    return false;
+                }
+                return true;
+            };
+
             const readingAnchor = () => {
                 if (window.scrollY <= 0) { return null; }
                 const content = document.querySelector('.rp-readability-shell') || document.body;
@@ -1529,20 +1605,37 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
                 return { element, top: element.getBoundingClientRect().top };
             };
 
-            const applyMode = (nextMode, nextColumnWidth) => {
+            // Re-measures only when something that moves the text column changed.
+            const updateMode = (anchored, viewportWidth) => {
                 const root = document.documentElement;
-                if (columnWidth !== nextColumnWidth) {
-                    columnWidth = nextColumnWidth;
-                    root.style.setProperty('--rp-sidenote-gutter', `${nextColumnWidth + columnGap}px`);
-                }
-                if (mode === nextMode) { return; }
+                const nextColumnWidth = Math.round(
+                    Math.min(maxColumnWidth, Math.max(minColumnWidth, viewportWidth * 0.24))
+                );
+                const key = [
+                    viewportWidth,
+                    nextColumnWidth,
+                    root.getAttribute('data-rp-display-mode') || '',
+                    anchored.map(entry => entry.id).sort().join(',')
+                ].join('|');
+                if (key === modeKey) { return; }
+                modeKey = key;
+
                 const anchor = readingAnchor();
-                mode = nextMode;
-                root.setAttribute('data-rp-sidenotes', nextMode);
-                if (nextMode !== 'compact' && openID) {
-                    const id = openID;
-                    openID = null;
-                    cards.get(id)?.card.classList.remove('is-open');
+                columnWidth = nextColumnWidth;
+                let nextMode = 'none';
+                if (anchored.length > 0) {
+                    nextMode = solveReserve(anchored, viewportWidth) ? 'margin' : 'compact';
+                } else {
+                    setReserve(0);
+                }
+                if (mode !== nextMode) {
+                    mode = nextMode;
+                    root.setAttribute('data-rp-sidenotes', nextMode);
+                    if (nextMode !== 'compact' && openID) {
+                        const id = openID;
+                        openID = null;
+                        cards.get(id)?.card.classList.remove('is-open');
+                    }
                 }
                 if (anchor && anchor.element.isConnected) {
                     const delta = anchor.element.getBoundingClientRect().top - anchor.top;
@@ -1568,16 +1661,8 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
                 if (highlightsChanged) { paintHighlights(); }
 
                 const viewportWidth = document.documentElement.clientWidth;
-                const nextColumnWidth = Math.round(
-                    Math.min(maxColumnWidth, Math.max(minColumnWidth, viewportWidth * 0.24))
-                );
                 const anchored = Array.from(cards.values()).filter(entry => entry.target);
-                let nextMode = 'none';
-                if (anchored.length > 0) {
-                    const textWidth = viewportWidth - nextColumnWidth - columnGap - bodyHorizontalPadding;
-                    nextMode = textWidth >= minTextWidth ? 'margin' : 'compact';
-                }
-                applyMode(nextMode, nextColumnWidth);
+                updateMode(anchored, viewportWidth);
 
                 const origin = layer.getBoundingClientRect();
                 const placed = [];
@@ -1593,10 +1678,7 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
                 placed.sort((a, b) => (a.rects[0].top - b.rects[0].top) || (a.rects[0].left - b.rects[0].left));
 
                 if (mode === 'margin') {
-                    const shell = document.querySelector('.rp-readability-shell');
-                    const textRight = shell
-                        ? shell.getBoundingClientRect().right
-                        : viewportWidth - columnWidth - columnGap - edgeInset;
+                    const textRight = textRightEdge(anchored);
                     const left = Math.min(textRight + columnGap, viewportWidth - columnWidth - edgeInset) - origin.left;
                     let cursor = -Infinity;
                     placed.forEach(({ entry, rects }, index) => {
