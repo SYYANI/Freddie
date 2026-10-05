@@ -669,6 +669,139 @@ final class HTMLTranslationPipelineTests: XCTestCase {
     }
 
     @MainActor
+    func testTranslateHTMLRetriesEchoedPromptWithoutNeighborContext() async throws {
+        let environment = try makeEnvironment()
+        defer { try? FileManager.default.removeItem(at: environment.rootURL) }
+        let sourceHTML = """
+        <html><body>
+        <p>The first paragraph describes the scribal school and its many surviving exercises.</p>
+        <p>The second paragraph explains how the empire shaped the curriculum of future elites.</p>
+        </body></html>
+        """
+        try sourceHTML.write(to: environment.attachment.fileURL, atomically: true, encoding: .utf8)
+        let candidates = try HTMLTranslationPipeline.prepareDocument(sourceHTML).candidates
+        XCTAssertEqual(candidates.count, 2)
+        let echoedPrompt = AcademicTranslationPrompt.userPrompt(
+            sourceText: candidates[0].sourceText,
+            context: candidates[0].translationContext(documentTitle: "Pipeline Test", glossary: nil)
+        )
+        let client = MockTranslationLLMClient(responses: [echoedPrompt, "可靠的译文。"])
+        let route = makeRoute(modelID: UUID(), providerID: UUID(), modelName: "unstable-model")
+
+        let outcome = try await HTMLTranslationPipeline(client: client).translateHTML(
+            attachment: environment.attachment,
+            paper: environment.paper,
+            preferences: TranslationPreferencesSnapshot(
+                targetLanguage: "zh-CN",
+                htmlTranslationConcurrency: 1,
+                babelDocQPS: 4,
+                babelDocVersion: "0.5.24"
+            ),
+            route: route,
+            apiKey: "sk-test",
+            modelContext: environment.modelContext
+        )
+
+        XCTAssertEqual(outcome.failedSegments, 0)
+        let requests = await client.currentRequests()
+        XCTAssertEqual(requests.count, 3)
+        XCTAssertNotNil(requests[0].context.nextSegment)
+        XCTAssertNil(requests[1].context.nextSegment)
+        XCTAssertNil(requests[1].context.previousSegment)
+        XCTAssertEqual(requests[1].context.documentTitle, "Pipeline Test")
+
+        let translatedHTML = try String(contentsOf: environment.attachment.fileURL, encoding: .utf8)
+        XCTAssertFalse(translatedHTML.contains("SOURCE_SEGMENT_TO_TRANSLATE"))
+        let cachedTexts = try environment.modelContext.fetch(FetchDescriptor<TranslationSegment>()).map(\.translatedText)
+        XCTAssertEqual(cachedTexts, ["可靠的译文。", "可靠的译文。"])
+    }
+
+    @MainActor
+    func testTranslateHTMLSkipsAndDoesNotCacheSegmentsThatKeepEchoing() async throws {
+        let environment = try makeEnvironment()
+        defer { try? FileManager.default.removeItem(at: environment.rootURL) }
+        let source = "This paragraph keeps coming back from the model without any translation at all."
+        let sourceHTML = "<html><body><p>\(source)</p></body></html>"
+        try sourceHTML.write(to: environment.attachment.fileURL, atomically: true, encoding: .utf8)
+        let client = MockTranslationLLMClient(translatedText: source)
+        var progressUpdates: [Int] = []
+
+        let outcome = try await HTMLTranslationPipeline(client: client).translateHTML(
+            attachment: environment.attachment,
+            paper: environment.paper,
+            preferences: TranslationPreferencesSnapshot(
+                targetLanguage: "zh-CN",
+                htmlTranslationConcurrency: 1,
+                babelDocQPS: 4,
+                babelDocVersion: "0.5.24"
+            ),
+            route: makeRoute(modelID: UUID(), providerID: UUID(), modelName: "unstable-model"),
+            apiKey: "sk-test",
+            modelContext: environment.modelContext,
+            onProgressUpdated: { processed, _ in progressUpdates.append(processed) }
+        )
+
+        XCTAssertEqual(outcome.failedSegments, 1)
+        let callCount = await client.currentCallCount()
+        XCTAssertEqual(callCount, TranslationOutputValidator.maximumAttempts)
+        XCTAssertEqual(progressUpdates.last, 1)
+        let translatedHTML = try String(contentsOf: environment.attachment.fileURL, encoding: .utf8)
+        XCTAssertFalse(translatedHTML.contains("data-rp-translation=\"true\""))
+        XCTAssertTrue(try environment.modelContext.fetch(FetchDescriptor<TranslationSegment>()).isEmpty)
+        let job = try XCTUnwrap(environment.modelContext.fetch(FetchDescriptor<TranslationJob>()).first)
+        XCTAssertEqual(job.state, .completed)
+        XCTAssertNotNil(job.lastError)
+    }
+
+    @MainActor
+    func testTranslateHTMLPurgesCachedPromptEchoAndRetranslates() async throws {
+        let environment = try makeEnvironment()
+        defer { try? FileManager.default.removeItem(at: environment.rootURL) }
+        let sourceHTML = "<html><body><p>This is a long enough paragraph for translation.</p></body></html>"
+        try sourceHTML.write(to: environment.attachment.fileURL, atomically: true, encoding: .utf8)
+        let candidate = try XCTUnwrap(HTMLTranslationPipeline.prepareDocument(sourceHTML).candidates.first)
+        let route = makeRoute(modelID: UUID(), providerID: UUID(), modelName: "cached-model")
+        environment.modelContext.insert(TranslationSegment(
+            paperID: environment.paper.id,
+            sourceType: "html",
+            targetLanguage: "zh-CN",
+            sourceHash: candidate.sourceHash,
+            sourceText: candidate.sourceText,
+            translatedText: AcademicTranslationPrompt.userPrompt(
+                sourceText: candidate.sourceText,
+                context: AcademicTranslationContext(documentTitle: "Pipeline Test")
+            ),
+            providerProfileID: route.providerProfileID,
+            modelProfileID: route.modelProfileID,
+            modelName: route.translationCacheIdentity
+        ))
+        try environment.modelContext.save()
+        let client = MockTranslationLLMClient(translatedText: "新的译文。")
+
+        try await HTMLTranslationPipeline(client: client).translateHTML(
+            attachment: environment.attachment,
+            paper: environment.paper,
+            preferences: TranslationPreferencesSnapshot(
+                targetLanguage: "zh-CN",
+                htmlTranslationConcurrency: 1,
+                babelDocQPS: 4,
+                babelDocVersion: "0.5.24"
+            ),
+            route: route,
+            apiKey: "sk-test",
+            modelContext: environment.modelContext
+        )
+
+        let callCount = await client.currentCallCount()
+        XCTAssertEqual(callCount, 1)
+        let cachedTexts = try environment.modelContext.fetch(FetchDescriptor<TranslationSegment>()).map(\.translatedText)
+        XCTAssertEqual(cachedTexts, ["新的译文。"])
+        let translatedHTML = try String(contentsOf: environment.attachment.fileURL, encoding: .utf8)
+        XCTAssertTrue(translatedHTML.contains("新的译文。"))
+        XCTAssertFalse(translatedHTML.contains("DOCUMENT_TITLE"))
+    }
+
+    @MainActor
     private func makeEnvironment() throws -> HTMLPipelineTestEnvironment {
         let schema = Schema([
             Paper.self,
@@ -746,12 +879,17 @@ private actor MockTranslationLLMClient: TranslationLLMClientProtocol {
         let context: AcademicTranslationContext
     }
 
-    let translatedText: String
+    /// Returned in order; the last response repeats once the list is exhausted.
+    let responses: [String]
     private(set) var callCount = 0
     private(set) var requests: [Request] = []
 
     init(translatedText: String) {
-        self.translatedText = translatedText
+        self.responses = [translatedText]
+    }
+
+    init(responses: [String]) {
+        self.responses = responses
     }
 
     func translate(
@@ -763,7 +901,7 @@ private actor MockTranslationLLMClient: TranslationLLMClientProtocol {
     ) async throws -> String {
         callCount += 1
         requests.append(.init(text: text, context: context))
-        return translatedText
+        return responses[min(callCount, responses.count) - 1]
     }
 
     func currentCallCount() -> Int {

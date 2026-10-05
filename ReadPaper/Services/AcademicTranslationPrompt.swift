@@ -36,6 +36,17 @@ enum AcademicTranslationPrompt {
     /// HTML cache identities include this value so prompt changes never reuse stale output.
     static let version = "academic-v3"
 
+    /// Labels of the user-prompt envelope. Any of them appearing in model output means the
+    /// model echoed the request instead of translating it.
+    static let envelopeLabels = [
+        "DOCUMENT_TITLE",
+        "SECTION_TITLE",
+        "PREVIOUS_SEGMENT",
+        "NEXT_SEGMENT",
+        "OPTIONAL_GLOSSARY",
+        "SOURCE_SEGMENT_TO_TRANSLATE"
+    ]
+
     static func systemPrompt(targetLanguage: String) -> String {
         """
         You are a professional academic translator. Translate only the requested source segment into \(targetLanguage).

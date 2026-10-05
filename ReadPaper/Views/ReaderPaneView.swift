@@ -1671,7 +1671,7 @@ struct ReaderPaneView: View {
                     settings: settings,
                     modelContext: modelContext
                 )
-                try await HTMLTranslationPipeline().translateHTML(
+                let outcome = try await HTMLTranslationPipeline().translateHTML(
                     attachment: htmlAttachment,
                     paper: paper,
                     preferences: preferences,
@@ -1700,7 +1700,9 @@ struct ReaderPaneView: View {
                 try Task.checkCancellation()
                 displayMode = .bilingual
                 translationProgress = nil
-                statusMessage = String(localized: "HTML translation completed.", bundle: bundle)
+                statusMessage = outcome.failedSegments > 0
+                    ? HTMLTranslationPipeline.skippedSegmentsMessage(count: outcome.failedSegments, bundle: bundle)
+                    : String(localized: "HTML translation completed.", bundle: bundle)
             } catch is CancellationError {
                 translationProgress = nil
                 statusMessage = String(localized: "Translation cancelled.", bundle: bundle)
@@ -1813,11 +1815,17 @@ struct ReaderPaneView: View {
                         bundle: bundle
                     )
                     : nil
+                let incompleteUnitsMessage = output.incompleteUnitCount > 0
+                    ? ReadPaperLaTeXTranslationOutput.incompleteUnitsMessage(
+                        count: output.incompleteUnitCount,
+                        bundle: bundle
+                    )
+                    : nil
                 if let storedJob = translationJob(id: jobID) {
                     storedJob.attachmentID = translatedAttachment?.id ?? sourceAttachment.id
                     storedJob.progress = output.pdfCompilationFailed ? 0.92 : 1
                     storedJob.state = output.pdfCompilationFailed ? .failed : .completed
-                    storedJob.lastError = compilationFailureMessage
+                    storedJob.lastError = compilationFailureMessage ?? incompleteUnitsMessage
                     storedJob.modifiedAt = Date()
                 }
                 try modelContext.save()
@@ -1831,6 +1839,7 @@ struct ReaderPaneView: View {
                     pdfReloadToken += 1
                 }
                 statusMessage = compilationFailureMessage
+                    ?? incompleteUnitsMessage
                     ?? String(localized: "LaTeX translation completed.", bundle: bundle)
             } catch is CancellationError {
                 translationProgress = nil

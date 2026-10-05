@@ -47,6 +47,17 @@ final class LaTeXTranslationServiceTests: XCTestCase {
         XCTAssertEqual(recorded.reasoningEffort, .high)
     }
 
+    func testIncompleteUnitCountUsesCompletenessWarningsOnly() {
+        let issues = [
+            ValidationIssue(unitID: "a", severity: .warning, code: ValidationIssue.untranslatedUnitCode, message: ""),
+            ValidationIssue(unitID: "b", severity: .warning, code: ValidationIssue.partiallyTranslatedUnitCode, message: ""),
+            ValidationIssue(unitID: "c", severity: .error, code: "placeholder-mismatch", message: ""),
+        ]
+
+        XCTAssertEqual(ReadPaperLaTeXTranslationOutput.incompleteUnitCount(in: issues), 2)
+        XCTAssertEqual(ReadPaperLaTeXTranslationOutput.incompleteUnitCount(in: []), 0)
+    }
+
     func testProgressMapperProducesMonotonicHostProgress() {
         let events = [
             PipelineEvent(stage: .preparing),
@@ -121,7 +132,7 @@ final class LaTeXTranslationServiceTests: XCTestCase {
 
         let paperID = UUID()
         let support = temporary.url.appendingPathComponent("ApplicationSupport", isDirectory: true)
-        let provider = EchoLLMProvider()
+        let provider = SlotTranslatingLLMProvider()
         let service = ReadPaperLaTeXTranslationService(
             fileStore: PaperFileStore(applicationSupportDirectory: support),
             acquirer: StaticArXivAcquirer(source: .localDirectory(project)),
@@ -150,6 +161,7 @@ final class LaTeXTranslationServiceTests: XCTestCase {
         XCTAssertTrue(output.artifact.projectDirectory.standardizedFileURL.path.hasPrefix(managedRoot + "/"))
         XCTAssertNil(output.artifact.pdfURL)
         XCTAssertFalse(output.pdfCompilationFailed)
+        XCTAssertEqual(output.incompleteUnitCount, 0)
         let translatedMain = output.artifact.projectDirectory.appendingPathComponent("main.tex")
         XCTAssertTrue(FileManager.default.fileExists(atPath: translatedMain.path))
         XCTAssertTrue(try String(contentsOf: translatedMain, encoding: .utf8).contains(
@@ -748,6 +760,30 @@ private actor EchoLLMProvider: ReadPaperLLMCompleting {
             throw LLMProviderError.emptyResponse
         }
         return LLMCompletionResponse(text: source, resolvedEndpoint: nil)
+    }
+}
+
+/// Answers the LaTeXTransKit slot contract with a fixed translation for every slot.
+private actor SlotTranslatingLLMProvider: ReadPaperLLMCompleting {
+    private struct Slot: Decodable {
+        let id: String
+    }
+
+    private struct Completion: Encodable {
+        let id: String
+        let translation: String
+    }
+
+    func complete(request: LLMCompletionRequest) throws -> LLMCompletionResponse {
+        let prompt = request.messages.last?.content ?? ""
+        guard let marker = prompt.range(of: "[Translation slots JSON]\n") else {
+            return LLMCompletionResponse(text: "Summary.", resolvedEndpoint: nil)
+        }
+        let json = String(prompt[marker.upperBound...].prefix { !$0.isNewline })
+        let slots = try JSONDecoder().decode([Slot].self, from: Data(json.utf8))
+        let completions = slots.map { Completion(id: $0.id, translation: "译文") }
+        let text = String(decoding: try JSONEncoder().encode(completions), as: UTF8.self)
+        return LLMCompletionResponse(text: text, resolvedEndpoint: nil)
     }
 }
 
