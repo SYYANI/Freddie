@@ -1815,11 +1815,17 @@ struct ReaderPaneView: View {
                         bundle: bundle
                     )
                     : nil
+                let incompleteUnitsMessage = output.incompleteUnitCount > 0
+                    ? ReadPaperLaTeXTranslationOutput.incompleteUnitsMessage(
+                        count: output.incompleteUnitCount,
+                        bundle: bundle
+                    )
+                    : nil
                 if let storedJob = translationJob(id: jobID) {
                     storedJob.attachmentID = translatedAttachment?.id ?? sourceAttachment.id
                     storedJob.progress = output.pdfCompilationFailed ? 0.92 : 1
                     storedJob.state = output.pdfCompilationFailed ? .failed : .completed
-                    storedJob.lastError = compilationFailureMessage
+                    storedJob.lastError = compilationFailureMessage ?? incompleteUnitsMessage
                     storedJob.modifiedAt = Date()
                 }
                 try modelContext.save()
@@ -1833,6 +1839,7 @@ struct ReaderPaneView: View {
                     pdfReloadToken += 1
                 }
                 statusMessage = compilationFailureMessage
+                    ?? incompleteUnitsMessage
                     ?? String(localized: "LaTeX translation completed.", bundle: bundle)
             } catch is CancellationError {
                 translationProgress = nil

@@ -88,6 +88,28 @@ struct ReadPaperLaTeXTranslationOutput: Sendable {
     var artifact: TranslationArtifact
     var pdfCompilationFailed: Bool
     var failedCompilationAttempts: [CompilationAttempt]
+
+    /// Units that kept some or all source text because the model output was unusable.
+    /// They are not checkpointed, so translating again retries them.
+    var incompleteUnitCount: Int {
+        Self.incompleteUnitCount(in: artifact.validationIssues)
+    }
+
+    static func incompleteUnitCount(in issues: [ValidationIssue]) -> Int {
+        let codes: Set<String> = [
+            ValidationIssue.untranslatedUnitCode,
+            ValidationIssue.partiallyTranslatedUnitCode,
+        ]
+        return Set(issues.filter { codes.contains($0.code) }.map(\.unitID)).count
+    }
+
+    static func incompleteUnitsMessage(count: Int, bundle: Bundle? = nil) -> String {
+        AppLocalization.format(
+            "LaTeX translation completed, but %lld units kept source text because the model returned invalid output. Translate again to retry them.",
+            bundle: bundle,
+            count
+        )
+    }
 }
 
 enum ReadPaperLaTeXToolchainError: Error {

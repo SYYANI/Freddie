@@ -22,6 +22,16 @@
         }
       }
     },
+    "LaTeX translation completed, but %lld units kept source text because the model returned invalid output. Translate again to retry them." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LaTeX 翻译已完成，但有 %lld 个单元因模型返回无效输出而保留了原文。再次翻译即可重试这些单元。"
+          }
+        }
+      }
+    },
     "protected placeholders were lost or duplicated" : {
       "localizations" : {
         "zh-Hans" : {

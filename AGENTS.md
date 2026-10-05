@@ -109,6 +109,7 @@ LLM 配置现已拆成独立 SwiftData 模型：`LLMProviderProfile` 负责 prov
 - HTML 翻译进度在阅读器中优先使用确定型进度条展示；如果已知总段数，至少同时显示线性进度和 `processed/total` 计数，不要只保留 `1/xxx` 这类纯文本进度提示。
 - HTML 翻译会保护 `math`、`.ltx_Math`、`cite`、`code`，生成 `[PROTECTED_N]` 占位符；改 prompt 或渲染时必须保持占位符可恢复。
 - 模型输出不可信：HTML 与摘要翻译统一走 `TranslationLLMClientProtocol.validatedTranslate`，由 `TranslationOutputValidator` 拦截回显 prompt 分隔标记、原样返回原文、复述相邻上下文和异常超长输出（失败会去掉相邻段上下文后重试）。仍无效的 HTML 段落跳过且不写入 `TranslationSegment`，整篇翻译继续并汇报跳过数；读取缓存时也要过同一校验并清除无效条目。改 prompt 分隔标签时同步 `AcademicTranslationPrompt.envelopeLabels`。
+- LaTeX 翻译的输出校验在 `../arxivLatex` 的 `PromptingLaTeXTranslator` 内完成：不可用的槽位响应会按单元重试，只有完整结果才写 checkpoint，未完成单元以 `untranslated-unit` / `partially-translated-unit` warning 返回；ReadPaper 只通过 `ReadPaperLaTeXTranslationOutput.incompleteUnitCount` 汇报数量，不要在 host 侧另写一套 LaTeX 回显检测。
 - PDF 翻译进度在阅读器中也优先使用确定型进度条和阶段文案。当前 `BabelDocRunner` 通过受控 Python bridge 订阅 BabelDOC 内部 progress events，把结构化事件以 JSON line 输出给 Swift 侧解析；不要回退成依赖 rich/tqdm 终端文本渲染结果做正则猜测。
 - 增量 PDF 翻译时，BabelDOC 可能只产出当前批次的译文页，阅读器中的 `translatedPDF` 也可能暂时只覆盖前 N 页。改 BabelDOC 参数、译文合并或阅读器展示时，要保留“partial translation”语义：双栏模式允许原文继续翻到后续页，译文侧只在自己的可用范围内 clamp，并继续支持后续批次合并、刷新和续翻。
 - 设置页中的翻译配置已拆成 `Translation`、`Providers`、`Models` 三个区块。后续扩展优先沿用这个结构，不要再加回“单 Base URL + 三个模型名”的旧表单。
