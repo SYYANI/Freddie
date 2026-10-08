@@ -4,7 +4,7 @@ import SwiftUI
 /// Margin notes beside a single PDF. Each card is aligned with its anchor in
 /// the PDF view and pushed down when it would overlap the previous card.
 struct PDFSidenoteRail: View {
-    static let width: CGFloat = 280
+    nonisolated static let width: CGFloat = 280
     /// Narrowest PDF view that still leaves room for the rail.
     static let minimumReaderWidth: CGFloat = 480
     private static let cardSpacing: CGFloat = 10
