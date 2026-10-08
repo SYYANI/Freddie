@@ -12,7 +12,8 @@ private struct Options {
     var apiKeyEnvironment = "READPAPER_LLM_API_KEY"
     var pages: [Int]?
     var qps = 50.0
-    var temperature = 0.2
+    var apiStyle: BabelDocLLMAPIStyle = .chatCompletions
+    var temperature: Double?
     var topP: Double?
     var maxTokens: Int?
     var thinkingMode: BabelDocThinkingMode?
@@ -122,6 +123,7 @@ private func usage() {
            --openai-base-url <url> --openai-model <model> [options]
 
       --target-language <language>       Default: zh-CN
+      --api-style <chat-completions|anthropic-messages>  Default: chat-completions
       --api-key-environment <name>       Default: READPAPER_LLM_API_KEY
       --pages <first-last>               Translate a 1-based inclusive range
       --only-include-translated-pages    Output only selected pages for incremental merge
@@ -169,6 +171,12 @@ private func parse(_ arguments: [String]) throws -> Options {
                 throw HelperError.argument("--qps requires a positive number.")
             }
             options.qps = parsed
+        case "--api-style":
+            let raw = try value(arguments, &index, for: "--api-style")
+            guard let style = BabelDocLLMAPIStyle(rawValue: raw) else {
+                throw HelperError.argument("--api-style must be chat-completions or anthropic-messages.")
+            }
+            options.apiStyle = style
         case "--temperature":
             guard let parsed = Double(try value(arguments, &index, for: "--temperature")) else {
                 throw HelperError.argument("--temperature requires a number.")
@@ -279,7 +287,11 @@ private enum ReadPaperBabelDocHelperMain {
                     baseURL: baseURL,
                     apiKey: apiKey,
                     model: model,
-                    temperature: options.temperature,
+                    apiStyle: options.apiStyle,
+                    // Current Claude models reject sampling overrides, so only
+                    // Chat Completions keeps the historical 0.2 default.
+                    temperature: options.temperature
+                        ?? (options.apiStyle == .anthropicMessages ? nil : 0.2),
                     topP: options.topP,
                     maxTokens: options.maxTokens,
                     thinkingMode: options.thinkingMode,

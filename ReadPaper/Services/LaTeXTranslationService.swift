@@ -38,7 +38,7 @@ struct ReadPaperLaTeXPromptClient: LaTeXPromptCompleting {
             messages: request.messages.map { message in
                 LLMCompletionMessage(role: message.role.rawValue, content: message.content)
             },
-            temperature: route.temperature ?? request.temperature,
+            temperature: route.temperature ?? route.apiStyle.samplingDefault(request.temperature),
             topP: route.topP,
             maxTokens: route.maxTokens ?? request.maximumOutputTokens,
             thinkingMode: route.thinkingMode,

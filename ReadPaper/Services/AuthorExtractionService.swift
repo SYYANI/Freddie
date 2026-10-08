@@ -116,9 +116,11 @@ struct AuthorExtractionService {
                     LLMCompletionMessage(role: "system", content: Self.authorExtractionPrompt),
                     LLMCompletionMessage(role: "user", content: userContent)
                 ],
-                temperature: 0.1,
+                temperature: route.snapshot.apiStyle.samplingDefault(0.1),
                 topP: nil,
-                maxTokens: 200,
+                // Claude counts thinking toward max_tokens, so a 200-token cap
+                // can end the turn before any visible answer.
+                maxTokens: route.snapshot.apiStyle == .anthropicMessages ? nil : 200,
                 thinkingMode: route.snapshot.thinkingMode,
                 reasoningEffort: route.snapshot.reasoningEffort,
                 timeoutProfile: .translationDefault

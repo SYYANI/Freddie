@@ -103,6 +103,8 @@ LLM 配置现已拆成独立 SwiftData 模型：`LLMProviderProfile` 负责 prov
 - OpenAI-compatible API 已改为多 provider / 多 model profile 结构。API key 仍然存于 Keychain，但通过 provider-specific `apiKeyRef` 关联；日志、错误和测试输出中不要泄露真实 key。
 - `LLMConfigurationBootstrapper` 现在只负责确保 `AppSettings` 行存在，方便应用启动和设置页读取全局翻译偏好；不要再把它扩回 legacy LLM 配置迁移入口。
 - `OpenAICompatibleLLMProvider` 负责 `/chat/completions` 调用，保留代理 base path，识别版本段，并在 `404 + /v1` 场景下尝试去掉尾部版本段回退。`LLMProviderValidationUseCase` 负责 base URL 规范化、模型名校验、连接测试和错误归类。
+- Provider 的 API 协议 `LLMAPIStyle`（`chat-completions` / `responses` / `anthropic-messages`）按 provider 存在 UserDefaults，不进 SwiftData。`anthropic-messages` 由 `OpenAICompatibleLLMProvider` 以原始 HTTP 调用 `POST {base}/v1/messages`（`x-api-key` + `anthropic-version` 头，system 走顶层字段，`max_tokens` 缺省 16000，只取 `text` 块，`refusal` / `max_tokens` stop reason 视为失败）。新 Claude 模型会拒绝 `temperature` / `top_p`，调用方补默认采样值时要走 `LLMAPIStyle.samplingDefault(_:)`，不要直接写死 `?? 0.2`。BabelDOC 与 LaTeX 翻译共用 `resolvePDFRoute`；BabelDOC 通过 `LLMAPIStyle.babelDocAPIStyle` 映射成 helper 的 `--api-style`（macOS）或 `BabelDocOpenAIConfiguration.apiStyle`（iPad 进程内），`responses` 按历史行为走 `chat/completions`，`anthropic-messages` 由 BabelDocKit 的 `OpenAICompatibleILTranslator` 直接发 Messages 请求（语义同上）。helper 在 Anthropic 下不补默认 `temperature`。
+- 阅读助手的实时联网搜索按 `LLMAPIStyle.supportsServerWebSearch` 开放给 `responses`（`web_search` 工具 + `web_search_call` 续答回放）和 `anthropic-messages`（服务端工具 `web_search_20250305`，`max_uses` 5，不强制 `tool_choice` 以兼容 extended thinking）。Anthropic 响应由 `LLMAnthropicMessagesContentAccumulator` 统一处理非流式与 SSE：遇到 `server_tool_use` / `web_search_tool_result` 块时丢弃之前的旁白文本，`web_search_result` 与 `web_search_result_location` citation 都进入 `webSearchSources`，citation URL 在对应文本块结束后追加到正文以便 `SelectionAssistantCitationFormatter` 编号；`pause_turn` 且无答案时报 `webSearchCompletedWithoutAnswer`（暂不回放 paused content）。DeepSeek 结果 URL 带纯数字 fragment（如 `#1`），`LLMWebSearchSource` 会去掉它，格式化器也会吞掉正文里残留的 `#数字`。真实联调可用 DeepSeek 的 Anthropic 兼容端点 `https://api.deepseek.com/anthropic`。
 - `LLMRouteResolver` 从 `AppSettings`、`LLMProviderProfile`、`LLMModelProfile` 和 Keychain 解析 HTML/PDF 两条独立路由。`HTMLTranslationPipeline` 与 `BabelDocRunner` 必须消费 `TranslationPreferencesSnapshot` / `LLMModelRouteSnapshot`，不要再直接从 `AppSettings` 读取 provider base URL、模型名或 API key。
 - `HTMLTranslationPipeline` 只翻译语义块，不翻译整份 HTML 字符串；当前候选选择器包括 `p`、`h1...h6`、`figcaption`、`blockquote`、`li`。
 - HTML 全文翻译必须按语义块增量落盘和刷新展示：每完成一个块（包括缓存命中）就插入 `.rp-translation-block`、写回 `paper.html` 并通知阅读器刷新；不要等所有段落翻译完成后再一次性展示。
@@ -171,7 +173,7 @@ xcodebuild -project ReadPaper.xcodeproj -scheme ReadPaper -destination 'platform
 - BabelDOC 参数、progress bridge、敏感信息遮蔽、子进程输出/取消：`BabelDocRunnerTests`
 - provider 校验、base URL 规范化、连接测试：`LLMProviderValidationUseCaseTests`
 - provider/model route 解析与缺配置错误：`LLMRouteResolverTests`
-- OpenAI-compatible `/v1` 回退与代理路径保留：`OpenAICompatibleLLMProviderTests`
+- OpenAI-compatible `/v1` 回退与代理路径保留、Anthropic Messages 请求/流式解析：`OpenAICompatibleLLMProviderTests`
 - settings 初始化保障：`LLMConfigurationBootstrapperTests`
 - 阅读位置存储与 mode 回退：`ReadingStateStoreTests`
 - 文内查找的文本规范化（PDF 空格/断词/连字容错、短词误命中保护、HTML 分段偏移）：`DocumentTextSearchTests`

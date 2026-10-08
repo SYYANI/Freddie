@@ -1,3 +1,4 @@
+import BabelDocKit
 import Foundation
 
 /// Thinking mode for OpenAI-compatible APIs (e.g. DeepSeek V4).
@@ -23,6 +24,33 @@ enum LLMReasoningEffort: String, CaseIterable, Sendable, Codable {
 enum LLMAPIStyle: String, CaseIterable, Codable, Sendable {
     case chatCompletions = "chat-completions"
     case responses
+    /// Anthropic Messages API (`POST /v1/messages`, `x-api-key` auth).
+    case anthropicMessages = "anthropic-messages"
+
+    /// Returns a caller-chosen sampling default (for example a translation
+    /// temperature) for use when the model profile leaves the value unset.
+    /// Current Claude models reject `temperature` / `top_p`, so the Anthropic
+    /// protocol only sends sampling values the user configured explicitly.
+    func samplingDefault(_ value: Double) -> Double? {
+        self == .anthropicMessages ? nil : value
+    }
+
+    /// Protocols with a provider-executed web search tool: the Responses API
+    /// `web_search` tool and the Anthropic Messages `web_search_20250305`
+    /// server tool. Chat Completions has no server-side search.
+    var supportsServerWebSearch: Bool {
+        self != .chatCompletions
+    }
+
+    /// BabelDOC speaks Chat Completions or Anthropic Messages. OpenAI
+    /// Responses providers also serve `chat/completions`, which BabelDOC has
+    /// always used for them.
+    var babelDocAPIStyle: BabelDocLLMAPIStyle {
+        switch self {
+        case .chatCompletions, .responses: .chatCompletions
+        case .anthropicMessages: .anthropicMessages
+        }
+    }
 }
 
 struct LLMProviderAPIStyleStore {

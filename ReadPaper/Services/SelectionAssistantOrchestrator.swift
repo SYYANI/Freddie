@@ -153,11 +153,11 @@ struct SelectionAssistantOrchestrator {
             } else {
                 onProgress?(.searchingExternalSources)
                 await Task.yield()
-                if route.snapshot.apiStyle == .responses {
+                if route.snapshot.apiStyle.supportsServerWebSearch {
                     webSearchEnabled = true
                 } else {
                     warnings.append(AppLocalization.localized(
-                        "Live web search requires the selected assistant model to use the Responses API."
+                        "Live web search requires the selected assistant model to use the Responses API or the Anthropic Messages API."
                     ))
                 }
             }

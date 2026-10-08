@@ -53,6 +53,48 @@ final class LLMRouteResolverTests: XCTestCase {
     }
 
     @MainActor
+    func testPDFRouteKeepsAnthropicMessagesStyleForBabelDoc() throws {
+        let keychainStore = KeychainStore(
+            service: "LLMRouteResolverTests.\(UUID().uuidString)",
+            accessPolicy: .unprotected
+        )
+        let defaultsSuite = "LLMRouteResolverTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: defaultsSuite))
+        defer { defaults.removePersistentDomain(forName: defaultsSuite) }
+        let apiStyleStore = LLMProviderAPIStyleStore(userDefaults: defaults)
+        let container = try makeContainer()
+        let modelContext = ModelContext(container)
+
+        let provider = LLMProviderProfile(
+            name: "Anthropic",
+            baseURL: "https://api.anthropic.com/v1",
+            apiKeyRef: "anthropic-ref",
+            testModel: "claude-opus-5-5"
+        )
+        let model = LLMModelProfile(providerID: provider.id, name: "Claude", modelName: "claude-opus-5-5")
+        let settings = AppSettings(
+            selectedHTMLModelProfileID: model.id,
+            selectedPDFModelProfileID: model.id
+        )
+        modelContext.insert(provider)
+        modelContext.insert(model)
+        modelContext.insert(settings)
+        try modelContext.save()
+        try keychainStore.save("sk-ant-test", account: provider.apiKeyRef)
+        apiStyleStore.setAPIStyle(.anthropicMessages, for: provider.id)
+
+        let resolver = LLMRouteResolver(keychainStore: keychainStore, apiStyleStore: apiStyleStore)
+
+        // BabelDOC and LaTeX translation share the PDF route; BabelDOC gets
+        // the Anthropic wire protocol instead of being rejected.
+        let pdfRoute = try resolver.resolvePDFRoute(settings: settings, modelContext: modelContext)
+        XCTAssertEqual(pdfRoute.snapshot.apiStyle, .anthropicMessages)
+        XCTAssertEqual(pdfRoute.snapshot.apiStyle.babelDocAPIStyle.rawValue, "anthropic-messages")
+        XCTAssertEqual(LLMAPIStyle.responses.babelDocAPIStyle.rawValue, "chat-completions")
+        XCTAssertEqual(LLMAPIStyle.chatCompletions.babelDocAPIStyle.rawValue, "chat-completions")
+    }
+
+    @MainActor
     func testResolverPassesThinkingModeAndReasoningEffortThroughSnapshot() throws {
         let keychainStore = KeychainStore(
             service: "LLMRouteResolverTests.\(UUID().uuidString)",

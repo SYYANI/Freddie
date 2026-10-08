@@ -372,6 +372,7 @@ struct BabelDocRunner {
             "--runtime-manifest", tool.runtimeManifest.path,
             "--openai-model", route.modelName,
             "--openai-base-url", route.baseURL,
+            "--api-style", route.apiStyle.babelDocAPIStyle.rawValue,
             "--target-language", preferences.targetLanguage,
             "--qps", "\(preferences.babelDocQPS)",
             "--api-key-environment", "READPAPER_LLM_API_KEY",
