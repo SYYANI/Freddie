@@ -278,7 +278,15 @@ private final class ConversationFixture {
         )
         host.sizingOptions = []
         window.isReleasedWhenClosed = false
-        window.contentView = host
+        // Do not make the hosting view the content view: AppKit can then fit the
+        // off-screen window to the root view's ideal size on a later run-loop
+        // pass (seen with multiple displays), collapsing the conversation
+        // viewport. A plain container keeps the window size under test control.
+        let container = NSView(frame: NSRect(x: 0, y: 0, width: 370, height: height))
+        host.frame = container.bounds
+        host.autoresizingMask = [.width, .height]
+        container.addSubview(host)
+        window.contentView = container
         window.orderBack(nil)
     }
 
