@@ -35,10 +35,6 @@ struct ReadPaperApp: App {
                     _, appearance in
                     synchronizeAppearancePreference(with: appearance)
                 }
-                .frame(
-                    minWidth: MainWindowMetrics.minWidth,
-                    minHeight: MainWindowMetrics.minHeight
-                )
         }
         .defaultSize(
             width: MainWindowMetrics.defaultWidth,
@@ -120,7 +116,7 @@ private final class ReadPaperApplicationDelegate: NSObject, NSApplicationDelegat
     }
 }
 
-private enum MainWindowMetrics {
+enum MainWindowMetrics {
     static let defaultWidth: CGFloat = 1220
     static let defaultHeight: CGFloat = 780
     static let minWidth: CGFloat = 1040
