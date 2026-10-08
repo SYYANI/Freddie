@@ -555,6 +555,8 @@ nonisolated struct OpenAICompatibleLLMProvider: Sendable {
             segments.append("completions")
         case .responses:
             segments.append("responses")
+        case .anthropicMessages:
+            segments.append("messages")
         }
 
         components.path = "/" + segments.joined(separator: "/")
@@ -578,14 +580,8 @@ nonisolated struct OpenAICompatibleLLMProvider: Sendable {
 
         var urlRequestBuilder = URLRequest(url: endpoint)
         urlRequestBuilder.httpMethod = "POST"
-        urlRequestBuilder.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        urlRequestBuilder.setValue("Bearer \(request.apiKey)", forHTTPHeaderField: "Authorization")
-        switch request.apiStyle {
-        case .chatCompletions:
-            urlRequestBuilder.httpBody = try JSONEncoder().encode(LLMChatCompletionBody(request: request))
-        case .responses:
-            urlRequestBuilder.httpBody = try JSONEncoder().encode(LLMResponsesRequestBody(request: request))
-        }
+        Self.applyHeaders(to: &urlRequestBuilder, request: request)
+        urlRequestBuilder.httpBody = try Self.encodedBody(for: request, stream: nil)
         let urlRequest = urlRequestBuilder
         await emitTrace(
             request: request,
@@ -641,6 +637,13 @@ nonisolated struct OpenAICompatibleLLMProvider: Sendable {
                     decoded.webSearchSources
                         + request.responsesWebSearchReplay.flatMap(\.webSearchSources)
                 )
+            case .anthropicMessages:
+                let decoded = try JSONDecoder().decode(LLMAnthropicMessagesResponseBody.self, from: data)
+                if let terminalError = decoded.terminalError {
+                    throw terminalError
+                }
+                text = decoded.outputText
+                webSearchSources = []
             }
             return LLMCompletionResponse(
                 text: text,
@@ -669,15 +672,9 @@ nonisolated struct OpenAICompatibleLLMProvider: Sendable {
 
         var urlRequest = URLRequest(url: endpoint)
         urlRequest.httpMethod = "POST"
-        urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        Self.applyHeaders(to: &urlRequest, request: request)
         urlRequest.setValue("text/event-stream", forHTTPHeaderField: "Accept")
-        urlRequest.setValue("Bearer \(request.apiKey)", forHTTPHeaderField: "Authorization")
-        switch request.apiStyle {
-        case .chatCompletions:
-            urlRequest.httpBody = try JSONEncoder().encode(LLMChatCompletionBody(request: request, stream: true))
-        case .responses:
-            urlRequest.httpBody = try JSONEncoder().encode(LLMResponsesRequestBody(request: request, stream: true))
-        }
+        urlRequest.httpBody = try Self.encodedBody(for: request, stream: true)
         await emitTrace(
             request: request,
             message: Self.requestTrace(urlRequest)
@@ -754,6 +751,13 @@ nonisolated struct OpenAICompatibleLLMProvider: Sendable {
                         decoded.webSearchSources
                             + request.responsesWebSearchReplay.flatMap(\.webSearchSources)
                     )
+                case .anthropicMessages:
+                    let decoded = try JSONDecoder().decode(LLMAnthropicMessagesResponseBody.self, from: data)
+                    if let terminalError = decoded.terminalError {
+                        throw terminalError
+                    }
+                    text = decoded.outputText
+                    webSearchSources = []
                 }
                 if text.isEmpty == false {
                     await onPartialText(text)
@@ -772,6 +776,7 @@ nonisolated struct OpenAICompatibleLLMProvider: Sendable {
             var eventName: String?
             var observedWebSearchCalls: [LLMResponsesWebSearchCallItem] = []
             var terminalResponseBody: LLMResponsesResponseBody?
+            var anthropicStopReason: String?
             for try await line in bytes.lines {
                 try Task.checkCancellation()
                 if line.hasPrefix("event:") {
@@ -804,6 +809,16 @@ nonisolated struct OpenAICompatibleLLMProvider: Sendable {
                             LLMResponsesWebSearchCallItem(json: rawItem)
                         )
                     }
+                    if request.apiStyle == .anthropicMessages {
+                        if eventType == "error" {
+                            throw LLMAnthropicMessagesResponseBody.streamError(from: object)
+                        }
+                        if eventType == "message_delta",
+                           let delta = object["delta"] as? [String: Any],
+                           let stopReason = delta["stop_reason"] as? String {
+                            anthropicStopReason = stopReason
+                        }
+                    }
                     if Self.responsesTerminalEventTypes.contains(eventType ?? ""),
                        let response = object["response"],
                        let terminalData = try? JSONSerialization.data(withJSONObject: response) {
@@ -823,7 +838,8 @@ nonisolated struct OpenAICompatibleLLMProvider: Sendable {
                 }
             }
 
-            if let terminalError = terminalResponseBody?.terminalError {
+            if let terminalError = terminalResponseBody?.terminalError
+                ?? LLMAnthropicMessagesResponseBody.terminalError(stopReason: anthropicStopReason) {
                 throw terminalError
             }
 
@@ -897,6 +913,42 @@ nonisolated struct OpenAICompatibleLLMProvider: Sendable {
                 return delta["text"] as? String
             }
             return nil
+        case .anthropicMessages:
+            let type = (object["type"] as? String) ?? eventName
+            guard type == "content_block_delta",
+                  let delta = object["delta"] as? [String: Any],
+                  (delta["type"] as? String) == "text_delta" else { return nil }
+            return delta["text"] as? String
+        }
+    }
+
+    static let anthropicVersion = "2023-06-01"
+
+    private static func applyHeaders(
+        to urlRequest: inout URLRequest,
+        request: LLMCompletionRequest
+    ) {
+        urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        switch request.apiStyle {
+        case .chatCompletions, .responses:
+            urlRequest.setValue("Bearer \(request.apiKey)", forHTTPHeaderField: "Authorization")
+        case .anthropicMessages:
+            urlRequest.setValue(request.apiKey, forHTTPHeaderField: "x-api-key")
+            urlRequest.setValue(anthropicVersion, forHTTPHeaderField: "anthropic-version")
+        }
+    }
+
+    private static func encodedBody(
+        for request: LLMCompletionRequest,
+        stream: Bool?
+    ) throws -> Data {
+        switch request.apiStyle {
+        case .chatCompletions:
+            return try JSONEncoder().encode(LLMChatCompletionBody(request: request, stream: stream))
+        case .responses:
+            return try JSONEncoder().encode(LLMResponsesRequestBody(request: request, stream: stream))
+        case .anthropicMessages:
+            return try JSONEncoder().encode(LLMAnthropicMessagesRequestBody(request: request, stream: stream))
         }
     }
 
@@ -1019,12 +1071,18 @@ nonisolated struct OpenAICompatibleLLMProvider: Sendable {
     private static func headerTrace(_ headers: [String: String]) -> String {
         headers.keys.sorted().map { key in
             let lowercased = key.lowercased()
-            let value = lowercased == "authorization" || lowercased == "set-cookie"
+            let value = Self.redactedTraceHeaders.contains(lowercased)
                 ? "<redacted>"
                 : (headers[key] ?? "")
             return "\(key): \(value)"
         }.joined(separator: "\n")
     }
+
+    private static let redactedTraceHeaders: Set<String> = [
+        "authorization",
+        "x-api-key",
+        "set-cookie"
+    ]
 
     private static func prettyJSON(_ data: Data) -> String {
         guard data.isEmpty == false else { return "<empty>" }
@@ -1561,6 +1619,132 @@ private struct LLMResponsesResponseBody: Decodable {
         case error
         case incompleteDetails = "incomplete_details"
         case output
+    }
+}
+
+private struct LLMAnthropicMessagesRequestBody: Encodable {
+    struct Message: Encodable {
+        let role: String
+        let content: String
+    }
+
+    struct Thinking: Encodable {
+        let type: String
+    }
+
+    struct OutputConfig: Encodable {
+        let effort: String
+    }
+
+    /// The Messages API requires `max_tokens`. Adaptive thinking counts toward
+    /// it, so leave enough room for reasoning plus a long translated block.
+    static let defaultMaxTokens = 16_000
+
+    let model: String
+    let maxTokens: Int
+    let system: String?
+    let messages: [Message]
+    let temperature: Double?
+    let topP: Double?
+    let thinking: Thinking?
+    let outputConfig: OutputConfig?
+    let stream: Bool?
+
+    init(request: LLMCompletionRequest, stream: Bool? = nil) {
+        model = request.model
+        maxTokens = request.maxTokens ?? Self.defaultMaxTokens
+        let systemPrompt = request.messages
+            .filter { $0.role == "system" || $0.role == "developer" }
+            .map(\.content)
+            .filter { $0.isEmpty == false }
+            .joined(separator: "\n\n")
+        system = systemPrompt.isEmpty ? nil : systemPrompt
+        // The Messages API only accepts user/assistant turns; system text
+        // travels in the top-level `system` field instead.
+        messages = request.messages
+            .filter { $0.role != "system" && $0.role != "developer" }
+            .map { Message(role: $0.role == "assistant" ? "assistant" : "user", content: $0.content) }
+        temperature = request.temperature
+        topP = request.topP
+        self.stream = stream
+
+        switch request.thinkingMode {
+        case .disabled:
+            thinking = Thinking(type: "disabled")
+            outputConfig = nil
+        case .enabled:
+            thinking = Thinking(type: "adaptive")
+            outputConfig = request.reasoningEffort.map { OutputConfig(effort: $0.rawValue) }
+        case nil:
+            thinking = nil
+            outputConfig = request.reasoningEffort.map { OutputConfig(effort: $0.rawValue) }
+        }
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case model
+        case maxTokens = "max_tokens"
+        case system
+        case messages
+        case temperature
+        case topP = "top_p"
+        case thinking
+        case outputConfig = "output_config"
+        case stream
+    }
+}
+
+private struct LLMAnthropicMessagesResponseBody: Decodable {
+    struct ContentBlock: Decodable {
+        let type: String?
+        let text: String?
+    }
+
+    let content: [ContentBlock]?
+    let stopReason: String?
+
+    /// Joins the visible `text` blocks; `thinking` blocks are never shown.
+    var outputText: String {
+        (content ?? [])
+            .filter { $0.type == "text" }
+            .compactMap(\.text)
+            .joined()
+    }
+
+    var terminalError: LLMProviderError? {
+        Self.terminalError(stopReason: stopReason)
+    }
+
+    static func terminalError(stopReason: String?) -> LLMProviderError? {
+        switch stopReason {
+        case "refusal":
+            return .network(AppLocalization.localized(
+                "The model declined to answer this request."
+            ))
+        case "max_tokens", "model_context_window_exceeded":
+            return .network(AppLocalization.format(
+                "The provider returned an incomplete response: %@",
+                stopReason ?? ""
+            ))
+        default:
+            return nil
+        }
+    }
+
+    static func streamError(from event: [String: Any]) -> LLMProviderError {
+        let message = ((event["error"] as? [String: Any])?["message"] as? String)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if let message, message.isEmpty == false {
+            return .network(message)
+        }
+        return .network(AppLocalization.localized(
+            "Provider request failed due to a network or server error."
+        ))
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case content
+        case stopReason = "stop_reason"
     }
 }
 

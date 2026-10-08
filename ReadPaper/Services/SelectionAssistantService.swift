@@ -149,7 +149,7 @@ struct SelectionAssistantService: Sendable {
                 sources: effectiveSources,
                 webSearchEnabled: webSearchEnabled
             ),
-            temperature: route.snapshot.temperature ?? 0.2,
+            temperature: route.snapshot.temperature ?? route.snapshot.apiStyle.samplingDefault(0.2),
             topP: route.snapshot.topP,
             maxTokens: route.snapshot.maxTokens,
             thinkingMode: route.snapshot.thinkingMode,

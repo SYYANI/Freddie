@@ -46,7 +46,7 @@ struct TranslationLLMClient: TranslationLLMClientProtocol {
                         content: AcademicTranslationPrompt.userPrompt(sourceText: text, context: context)
                     )
                 ],
-                temperature: route.temperature ?? 0.2,
+                temperature: route.temperature ?? route.apiStyle.samplingDefault(0.2),
                 topP: route.topP,
                 maxTokens: route.maxTokens,
                 thinkingMode: route.thinkingMode,

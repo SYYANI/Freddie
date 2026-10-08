@@ -46,6 +46,8 @@ enum LLMDefaultProfiles {
     static let openAIModelID = UUID(uuidString: "5B97C710-AB92-48A1-93CB-F31BDF4C79A1")!
     static let deepSeekProviderID = UUID(uuidString: "71C0BB1C-D797-431F-8BD0-96E0A8C579B5")!
     static let deepSeekModelID = UUID(uuidString: "6D6E7DC3-FF41-456A-B04D-30B943130968")!
+    static let anthropicProviderID = UUID(uuidString: "E92E2D96-5184-4522-8FB5-DF1FC53621AC")!
+    static let anthropicModelID = UUID(uuidString: "6FCEAC56-F86C-4300-915A-45029950510F")!
 
     static let providers: [ProviderDescriptor] = [
         ProviderDescriptor(
@@ -73,6 +75,22 @@ enum LLMDefaultProfiles {
                 name: "DeepSeek V4 Flash",
                 modelName: "deepseek-v4-flash",
                 thinkingMode: .disabled,
+                reasoningEffort: nil
+            )
+        ),
+        ProviderDescriptor(
+            id: anthropicProviderID,
+            name: "Anthropic",
+            baseURL: "https://api.anthropic.com/v1",
+            testModel: "claude-opus-5-5",
+            apiStyle: .anthropicMessages,
+            model: ModelDescriptor(
+                id: anthropicModelID,
+                name: "Claude Opus 5.5",
+                modelName: "claude-opus-5-5",
+                // Claude Opus 5.5 rejects disabled thinking; leave thinking
+                // and effort at the model defaults.
+                thinkingMode: nil,
                 reasoningEffort: nil
             )
         ),
@@ -214,12 +232,13 @@ struct LLMDefaultRouteActivator {
         models: [LLMModelProfile],
         hasStoredAPIKey: (String) -> Bool
     ) {
-        guard let defaultModelID = LLMDefaultProfiles.defaultModelID(for: providerID),
+        guard let descriptor = LLMDefaultProfiles.provider(for: providerID),
               providers.contains(where: { $0.id == providerID && $0.isEnabled }),
               models.contains(where: {
-                  $0.id == defaultModelID && $0.providerID == providerID && $0.isEnabled
+                  $0.id == descriptor.model.id && $0.providerID == providerID && $0.isEnabled
               })
         else { return }
+        let defaultModelID = descriptor.model.id
 
         if !routeIsReady(
             settings.selectedHTMLModelProfileID,
@@ -230,7 +249,9 @@ struct LLMDefaultRouteActivator {
         ) {
             settings.selectedHTMLModelProfileID = defaultModelID
         }
-        if !routeIsReady(
+        // BabelDOC cannot use an Anthropic Messages provider, so do not make
+        // one the PDF translation default.
+        if descriptor.apiStyle.supportsBabelDoc, !routeIsReady(
             settings.selectedPDFModelProfileID,
             newlyReadyProviderID: providerID,
             providers: providers,

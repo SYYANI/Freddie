@@ -22,6 +22,36 @@
         }
       }
     },
+    "Anthropic Messages API" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Anthropic Messages API"
+          }
+        }
+      }
+    },
+    "BabelDOC PDF translation cannot use the Anthropic Messages API. HTML translation, LaTeX translation and the reading assistant work normally." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "BabelDOC PDF 翻译无法使用 Anthropic Messages API。HTML 翻译、LaTeX 翻译和阅读助手可正常使用。"
+          }
+        }
+      }
+    },
+    "BabelDOC PDF translation needs an OpenAI-compatible provider, but “%@” uses the Anthropic Messages API. Choose a different PDF translation model in Settings." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "BabelDOC PDF 翻译需要 OpenAI 兼容的 Provider，但“%@”使用的是 Anthropic Messages API。请在设置中选择其他 PDF 翻译模型。"
+          }
+        }
+      }
+    },
     "LaTeX translation completed, but %lld units kept source text because the model returned invalid output. Translate again to retry them." : {
       "localizations" : {
         "zh-Hans" : {
@@ -38,6 +68,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "受保护的占位符丢失或重复"
+          }
+        }
+      }
+    },
+    "The model declined to answer this request." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "模型拒绝回答此请求。"
           }
         }
       }
@@ -4125,12 +4165,12 @@
         }
       }
     },
-    "OpenAI and DeepSeek are ready to use after you save an API key. You can also add custom providers and choose either the Responses API or Chat Completions." : {
+    "OpenAI, DeepSeek and Anthropic are ready to use after you save an API key. You can also add custom providers and choose the Responses API, Chat Completions or the Anthropic Messages API." : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "保存 API 密钥后即可使用 OpenAI 和 DeepSeek。你也可以添加自定义 Provider，并选择 Responses API 或 Chat Completions。"
+            "value" : "保存 API 密钥后即可使用 OpenAI、DeepSeek 和 Anthropic。你也可以添加自定义 Provider，并选择 Responses API、Chat Completions 或 Anthropic Messages API。"
           }
         }
       }

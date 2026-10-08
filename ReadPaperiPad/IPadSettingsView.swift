@@ -472,7 +472,7 @@ struct IPadSettingsView: View {
                 }
 
                 Text(
-                    "OpenAI and DeepSeek are ready to use after you save an API key. You can also add custom providers and choose either the Responses API or Chat Completions.",
+                    "OpenAI, DeepSeek and Anthropic are ready to use after you save an API key. You can also add custom providers and choose the Responses API, Chat Completions or the Anthropic Messages API.",
                     bundle: bundle
                 )
                 .font(.footnote)
@@ -496,6 +496,11 @@ struct IPadSettingsView: View {
                     ForEach(LLMAPIStyle.allCases, id: \.self) { style in
                         Text(apiStyleLabel(style)).tag(style)
                     }
+                }
+                if providerAPIStyle == .anthropicMessages {
+                    Text("BabelDOC PDF translation cannot use the Anthropic Messages API. HTML translation, LaTeX translation and the reading assistant work normally.", bundle: bundle)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                 }
                 SecureField(
                     providerHasStoredAPIKey
@@ -755,7 +760,7 @@ struct IPadSettingsView: View {
             VStack(alignment: .leading, spacing: 16) {
                 settingsDetailSection(title: String(localized: "Providers", bundle: bundle)) {
                     Text(
-                        "OpenAI and DeepSeek are ready to use after you save an API key. You can also add custom providers and choose either the Responses API or Chat Completions.",
+                        "OpenAI, DeepSeek and Anthropic are ready to use after you save an API key. You can also add custom providers and choose the Responses API, Chat Completions or the Anthropic Messages API.",
                         bundle: bundle
                     )
                     .fixedSize(horizontal: false, vertical: true)
@@ -791,6 +796,13 @@ struct IPadSettingsView: View {
                         }
                         .labelsHidden()
                         .pickerStyle(.menu)
+                    }
+
+                    if providerAPIStyle == .anthropicMessages {
+                        Text("BabelDOC PDF translation cannot use the Anthropic Messages API. HTML translation, LaTeX translation and the reading assistant work normally.", bundle: bundle)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
 
                     settingsDetailField(String(localized: "API key", bundle: bundle)) {
@@ -1665,6 +1677,8 @@ struct IPadSettingsView: View {
             return String(localized: "Responses API", bundle: bundle)
         case .chatCompletions:
             return String(localized: "Chat Completions", bundle: bundle)
+        case .anthropicMessages:
+            return String(localized: "Anthropic Messages API", bundle: bundle)
         }
     }
 

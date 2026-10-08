@@ -108,7 +108,7 @@ final class LLMDefaultProfilesTests: XCTestCase {
     }
 
     @MainActor
-    func testSeederCreatesOpenAIAndDeepSeekProfilesIdempotently() throws {
+    func testSeederCreatesBuiltInProfilesIdempotently() throws {
         let container = try makeContainer()
         let context = ModelContext(container)
         let styleStore = LLMProviderAPIStyleStore(userDefaults: defaults)
@@ -125,10 +125,12 @@ final class LLMDefaultProfilesTests: XCTestCase {
         XCTAssertEqual(Set(providers.map(\.id)), Set([
             LLMDefaultProfiles.openAIProviderID,
             LLMDefaultProfiles.deepSeekProviderID,
+            LLMDefaultProfiles.anthropicProviderID,
         ]))
         XCTAssertEqual(Set(models.map(\.id)), Set([
             LLMDefaultProfiles.openAIModelID,
             LLMDefaultProfiles.deepSeekModelID,
+            LLMDefaultProfiles.anthropicModelID,
         ]))
         XCTAssertEqual(
             providers.first(where: { $0.id == LLMDefaultProfiles.openAIProviderID })?.baseURL,
@@ -140,6 +142,14 @@ final class LLMDefaultProfilesTests: XCTestCase {
         )
         XCTAssertEqual(styleStore.apiStyle(for: LLMDefaultProfiles.openAIProviderID), .responses)
         XCTAssertEqual(styleStore.apiStyle(for: LLMDefaultProfiles.deepSeekProviderID), .responses)
+        XCTAssertEqual(
+            providers.first(where: { $0.id == LLMDefaultProfiles.anthropicProviderID })?.baseURL,
+            "https://api.anthropic.com/v1"
+        )
+        XCTAssertEqual(
+            styleStore.apiStyle(for: LLMDefaultProfiles.anthropicProviderID),
+            .anthropicMessages
+        )
     }
 
     @MainActor
@@ -168,8 +178,8 @@ final class LLMDefaultProfilesTests: XCTestCase {
 
         let providers = try context.fetch(FetchDescriptor<LLMProviderProfile>())
         let models = try context.fetch(FetchDescriptor<LLMModelProfile>())
-        XCTAssertEqual(providers.count, 3)
-        XCTAssertEqual(models.count, 3)
+        XCTAssertEqual(providers.count, LLMDefaultProfiles.providers.count + 1)
+        XCTAssertEqual(models.count, LLMDefaultProfiles.providers.count + 1)
         XCTAssertTrue(providers.contains(where: { $0.id == customProvider.id }))
         XCTAssertTrue(models.contains(where: { $0.id == customModel.id }))
     }
@@ -249,7 +259,10 @@ final class LLMDefaultProfilesTests: XCTestCase {
         try seeder.ensureDefaults(modelContext: context)
 
         let remainingModels = try context.fetch(FetchDescriptor<LLMModelProfile>())
-        XCTAssertEqual(remainingModels.map(\.id), [LLMDefaultProfiles.openAIModelID])
+        XCTAssertEqual(Set(remainingModels.map(\.id)), [
+            LLMDefaultProfiles.openAIModelID,
+            LLMDefaultProfiles.anthropicModelID,
+        ])
     }
 
     @MainActor
@@ -278,8 +291,14 @@ final class LLMDefaultProfilesTests: XCTestCase {
 
         let remainingProviders = try context.fetch(FetchDescriptor<LLMProviderProfile>())
         let remainingModels = try context.fetch(FetchDescriptor<LLMModelProfile>())
-        XCTAssertEqual(remainingProviders.map(\.id), [LLMDefaultProfiles.deepSeekProviderID])
-        XCTAssertEqual(remainingModels.map(\.id), [LLMDefaultProfiles.deepSeekModelID])
+        XCTAssertEqual(Set(remainingProviders.map(\.id)), [
+            LLMDefaultProfiles.deepSeekProviderID,
+            LLMDefaultProfiles.anthropicProviderID,
+        ])
+        XCTAssertEqual(Set(remainingModels.map(\.id)), [
+            LLMDefaultProfiles.deepSeekModelID,
+            LLMDefaultProfiles.anthropicModelID,
+        ])
     }
 
     @MainActor
@@ -331,6 +350,30 @@ final class LLMDefaultProfilesTests: XCTestCase {
         )
 
         XCTAssertNil(settings.selectedHTMLModelProfileID)
+        XCTAssertNil(settings.selectedPDFModelProfileID)
+    }
+
+    @MainActor
+    func testRouteActivatorDoesNotMakeAnthropicTheBabelDocPDFDefault() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        try LLMDefaultProfileSeeder(
+            apiStyleStore: LLMProviderAPIStyleStore(userDefaults: defaults),
+            deletionStore: LLMDefaultProfileDeletionStore(userDefaults: defaults)
+        ).ensureDefaults(modelContext: context)
+        let providers = try context.fetch(FetchDescriptor<LLMProviderProfile>())
+        let models = try context.fetch(FetchDescriptor<LLMModelProfile>())
+        let settings = AppSettings()
+
+        LLMDefaultRouteActivator().selectRoutesIfNeeded(
+            for: LLMDefaultProfiles.anthropicProviderID,
+            settings: settings,
+            providers: providers,
+            models: models,
+            hasStoredAPIKey: { _ in false }
+        )
+
+        XCTAssertEqual(settings.selectedHTMLModelProfileID, LLMDefaultProfiles.anthropicModelID)
         XCTAssertNil(settings.selectedPDFModelProfileID)
     }
 

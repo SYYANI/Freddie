@@ -53,6 +53,52 @@ final class LLMRouteResolverTests: XCTestCase {
     }
 
     @MainActor
+    func testBabelDocPDFRouteRejectsAnthropicMessagesProvider() throws {
+        let keychainStore = KeychainStore(
+            service: "LLMRouteResolverTests.\(UUID().uuidString)",
+            accessPolicy: .unprotected
+        )
+        let defaultsSuite = "LLMRouteResolverTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: defaultsSuite))
+        defer { defaults.removePersistentDomain(forName: defaultsSuite) }
+        let apiStyleStore = LLMProviderAPIStyleStore(userDefaults: defaults)
+        let container = try makeContainer()
+        let modelContext = ModelContext(container)
+
+        let provider = LLMProviderProfile(
+            name: "Anthropic",
+            baseURL: "https://api.anthropic.com/v1",
+            apiKeyRef: "anthropic-ref",
+            testModel: "claude-opus-5-5"
+        )
+        let model = LLMModelProfile(providerID: provider.id, name: "Claude", modelName: "claude-opus-5-5")
+        let settings = AppSettings(
+            selectedHTMLModelProfileID: model.id,
+            selectedPDFModelProfileID: model.id
+        )
+        modelContext.insert(provider)
+        modelContext.insert(model)
+        modelContext.insert(settings)
+        try modelContext.save()
+        try keychainStore.save("sk-ant-test", account: provider.apiKeyRef)
+        apiStyleStore.setAPIStyle(.anthropicMessages, for: provider.id)
+
+        let resolver = LLMRouteResolver(keychainStore: keychainStore, apiStyleStore: apiStyleStore)
+
+        // LaTeX translation shares the PDF route and still resolves.
+        let pdfRoute = try resolver.resolvePDFRoute(settings: settings, modelContext: modelContext)
+        XCTAssertEqual(pdfRoute.snapshot.apiStyle, .anthropicMessages)
+        XCTAssertThrowsError(
+            try resolver.resolveBabelDocPDFRoute(settings: settings, modelContext: modelContext)
+        ) { error in
+            XCTAssertEqual(
+                error as? LLMRouteError,
+                .babelDocRequiresOpenAICompatibleProvider("Anthropic")
+            )
+        }
+    }
+
+    @MainActor
     func testResolverPassesThinkingModeAndReasoningEffortThroughSnapshot() throws {
         let keychainStore = KeychainStore(
             service: "LLMRouteResolverTests.\(UUID().uuidString)",

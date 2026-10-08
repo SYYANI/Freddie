@@ -23,6 +23,21 @@ enum LLMReasoningEffort: String, CaseIterable, Sendable, Codable {
 enum LLMAPIStyle: String, CaseIterable, Codable, Sendable {
     case chatCompletions = "chat-completions"
     case responses
+    /// Anthropic Messages API (`POST /v1/messages`, `x-api-key` auth).
+    case anthropicMessages = "anthropic-messages"
+
+    /// Returns a caller-chosen sampling default (for example a translation
+    /// temperature) for use when the model profile leaves the value unset.
+    /// Current Claude models reject `temperature` / `top_p`, so the Anthropic
+    /// protocol only sends sampling values the user configured explicitly.
+    func samplingDefault(_ value: Double) -> Double? {
+        self == .anthropicMessages ? nil : value
+    }
+
+    /// BabelDOC only speaks the OpenAI-compatible protocol.
+    var supportsBabelDoc: Bool {
+        self != .anthropicMessages
+    }
 }
 
 struct LLMProviderAPIStyleStore {

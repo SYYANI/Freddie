@@ -643,7 +643,7 @@ struct IPadReaderPaneView: View {
         beginPDFTranslation()
         translationTask = Task { @MainActor in
             do {
-                let resolvedRoute = try LLMRouteResolver().resolvePDFRoute(
+                let resolvedRoute = try LLMRouteResolver().resolveBabelDocPDFRoute(
                     settings: settings,
                     modelContext: modelContext
                 )
@@ -706,7 +706,7 @@ struct IPadReaderPaneView: View {
         beginPDFTranslation()
         translationTask = Task { @MainActor in
             do {
-                let resolvedRoute = try LLMRouteResolver().resolvePDFRoute(
+                let resolvedRoute = try LLMRouteResolver().resolveBabelDocPDFRoute(
                     settings: settings,
                     modelContext: modelContext
                 )

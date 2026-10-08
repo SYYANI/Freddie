@@ -534,6 +534,302 @@ final class OpenAICompatibleLLMProviderTests: XCTestCase {
         XCTAssertEqual(secondInput[1]["id"] as? String, "ws_1")
     }
 
+    func testAnthropicMessagesRequestUsesMessagesEndpointHeadersAndBody() async throws {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [MockURLProtocol.self]
+        MockURLProtocol.requestHandler = { request in
+            XCTAssertEqual(request.value(forHTTPHeaderField: "x-api-key"), "sk-ant-test")
+            XCTAssertEqual(request.value(forHTTPHeaderField: "anthropic-version"), "2023-06-01")
+            XCTAssertNil(request.value(forHTTPHeaderField: "Authorization"))
+            let body = """
+            {
+              "id": "msg_test",
+              "type": "message",
+              "role": "assistant",
+              "model": "claude-opus-5-5",
+              "content": [
+                {"type": "thinking", "thinking": "", "signature": "sig"},
+                {"type": "text", "text": "Hello"},
+                {"type": "text", "text": " world"}
+              ],
+              "stop_reason": "end_turn",
+              "usage": {"input_tokens": 3, "output_tokens": 2}
+            }
+            """
+            return (
+                HTTPURLResponse(
+                    url: try XCTUnwrap(request.url),
+                    statusCode: 200,
+                    httpVersion: nil,
+                    headerFields: ["Content-Type": "application/json"]
+                )!,
+                Data(body.utf8)
+            )
+        }
+        let provider = OpenAICompatibleLLMProvider(sessionConfigurationOverride: configuration)
+
+        let response = try await provider.complete(request: LLMCompletionRequest(
+            baseURL: URL(string: "https://api.anthropic.com/v1")!,
+            apiStyle: .anthropicMessages,
+            apiKey: "sk-ant-test",
+            model: "claude-opus-5-5",
+            messages: [
+                LLMCompletionMessage(role: "system", content: "Translate."),
+                LLMCompletionMessage(role: "user", content: "Bonjour")
+            ],
+            thinkingMode: .enabled,
+            reasoningEffort: .high,
+            timeoutProfile: .validation(timeoutSeconds: 10)
+        ))
+
+        XCTAssertEqual(response.text, "Hello world")
+        XCTAssertEqual(MockURLProtocol.requestPaths, ["/v1/messages"])
+        XCTAssertEqual(response.resolvedEndpoint?.path, "/v1/messages")
+        let body = try XCTUnwrap(MockURLProtocol.requestBodies.last)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
+        XCTAssertEqual(json["model"] as? String, "claude-opus-5-5")
+        XCTAssertEqual(json["max_tokens"] as? Int, 16_000)
+        XCTAssertEqual(json["system"] as? String, "Translate.")
+        let messages = try XCTUnwrap(json["messages"] as? [[String: Any]])
+        XCTAssertEqual(messages.count, 1)
+        XCTAssertEqual(messages.first?["role"] as? String, "user")
+        XCTAssertEqual(messages.first?["content"] as? String, "Bonjour")
+        XCTAssertNil(json["temperature"])
+        XCTAssertNil(json["top_p"])
+        XCTAssertNil(json["stream"])
+        XCTAssertEqual((json["thinking"] as? [String: Any])?["type"] as? String, "adaptive")
+        XCTAssertEqual((json["output_config"] as? [String: Any])?["effort"] as? String, "high")
+    }
+
+    func testAnthropicMessagesRefusalThrowsInsteadOfReturningEmptyText() async throws {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [MockURLProtocol.self]
+        MockURLProtocol.requestHandler = { request in
+            let body = """
+            {"type": "message", "role": "assistant", "content": [], "stop_reason": "refusal"}
+            """
+            return (
+                HTTPURLResponse(
+                    url: try XCTUnwrap(request.url),
+                    statusCode: 200,
+                    httpVersion: nil,
+                    headerFields: ["Content-Type": "application/json"]
+                )!,
+                Data(body.utf8)
+            )
+        }
+        let provider = OpenAICompatibleLLMProvider(sessionConfigurationOverride: configuration)
+
+        do {
+            _ = try await provider.complete(request: LLMCompletionRequest(
+                baseURL: URL(string: "https://api.anthropic.com/v1")!,
+                apiStyle: .anthropicMessages,
+                apiKey: "sk-ant-test",
+                model: "claude-opus-5-5",
+                messages: [LLMCompletionMessage(role: "user", content: "Hi")],
+                timeoutProfile: .validation(timeoutSeconds: 10)
+            ))
+            XCTFail("Expected a refusal error")
+        } catch let error as LLMProviderError {
+            guard case .network = error else {
+                return XCTFail("Unexpected error: \(error)")
+            }
+        }
+    }
+
+    func testAnthropicMessagesRootBaseURLRetriesWithV1On404() async throws {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [MockURLProtocol.self]
+        MockURLProtocol.requestHandler = { request in
+            let url = try XCTUnwrap(request.url)
+            if url.path == "/messages" {
+                let error = #"{"type":"error","error":{"type":"not_found_error","message":"Not found"}}"#
+                return (
+                    HTTPURLResponse(url: url, statusCode: 404, httpVersion: nil, headerFields: nil)!,
+                    Data(error.utf8)
+                )
+            }
+            let body = #"{"content":[{"type":"text","text":"ok"}],"stop_reason":"end_turn"}"#
+            return (
+                HTTPURLResponse(
+                    url: url,
+                    statusCode: 200,
+                    httpVersion: nil,
+                    headerFields: ["Content-Type": "application/json"]
+                )!,
+                Data(body.utf8)
+            )
+        }
+        let provider = OpenAICompatibleLLMProvider(sessionConfigurationOverride: configuration)
+
+        let response = try await provider.complete(request: LLMCompletionRequest(
+            baseURL: URL(string: "https://api.anthropic.com")!,
+            apiStyle: .anthropicMessages,
+            apiKey: "sk-ant-test",
+            model: "claude-opus-5-5",
+            messages: [LLMCompletionMessage(role: "user", content: "Hi")],
+            timeoutProfile: .validation(timeoutSeconds: 10)
+        ))
+
+        XCTAssertEqual(response.text, "ok")
+        XCTAssertEqual(MockURLProtocol.requestPaths, ["/messages", "/v1/messages"])
+    }
+
+    func testAnthropicMessagesStreamingAccumulatesTextDeltasOnly() async throws {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [MockURLProtocol.self]
+        MockURLProtocol.requestHandler = { request in
+            (
+                HTTPURLResponse(
+                    url: try XCTUnwrap(request.url),
+                    statusCode: 200,
+                    httpVersion: nil,
+                    headerFields: ["Content-Type": "text/event-stream"]
+                )!,
+                Data(Self.anthropicStreamBody.utf8)
+            )
+        }
+        let recorder = StreamingTextRecorder()
+        let provider = OpenAICompatibleLLMProvider(sessionConfigurationOverride: configuration)
+
+        let response = try await provider.completeStreaming(
+            request: LLMCompletionRequest(
+                baseURL: URL(string: "https://api.anthropic.com/v1")!,
+                apiStyle: .anthropicMessages,
+                apiKey: "sk-ant-test",
+                model: "claude-opus-5-5",
+                messages: [LLMCompletionMessage(role: "user", content: "Hi")],
+                timeoutProfile: .validation(timeoutSeconds: 10)
+            ),
+            onPartialText: { await recorder.append($0) }
+        )
+
+        XCTAssertEqual(response.text, "Hello")
+        let partialValues = await recorder.values()
+        XCTAssertEqual(partialValues, ["Hel", "Hello"])
+        let body = try XCTUnwrap(MockURLProtocol.requestBodies.last)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
+        XCTAssertEqual(json["stream"] as? Bool, true)
+    }
+
+    func testAnthropicMessagesStreamingErrorEventThrows() async throws {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [MockURLProtocol.self]
+        MockURLProtocol.requestHandler = { request in
+            let body = """
+            event: message_start
+            data: {"type":"message_start","message":{"id":"msg_1","type":"message","role":"assistant","content":[]}}
+
+            event: error
+            data: {"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}
+
+            """
+            return (
+                HTTPURLResponse(
+                    url: try XCTUnwrap(request.url),
+                    statusCode: 200,
+                    httpVersion: nil,
+                    headerFields: ["Content-Type": "text/event-stream"]
+                )!,
+                Data(body.utf8)
+            )
+        }
+        let provider = OpenAICompatibleLLMProvider(sessionConfigurationOverride: configuration)
+
+        do {
+            _ = try await provider.completeStreaming(
+                request: LLMCompletionRequest(
+                    baseURL: URL(string: "https://api.anthropic.com/v1")!,
+                    apiStyle: .anthropicMessages,
+                    apiKey: "sk-ant-test",
+                    model: "claude-opus-5-5",
+                    messages: [LLMCompletionMessage(role: "user", content: "Hi")],
+                    timeoutProfile: .validation(timeoutSeconds: 10)
+                ),
+                onPartialText: { _ in }
+            )
+            XCTFail("Expected the stream error event to throw")
+        } catch let error as LLMProviderError {
+            XCTAssertEqual(error, .network("Overloaded"))
+        }
+    }
+
+    func testTranslationClientOmitsImplicitTemperatureForAnthropicMessages() async throws {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [MockURLProtocol.self]
+        MockURLProtocol.requestHandler = { request in
+            let body = #"{"content":[{"type":"text","text":"你好"}],"stop_reason":"end_turn"}"#
+            return (
+                HTTPURLResponse(
+                    url: try XCTUnwrap(request.url),
+                    statusCode: 200,
+                    httpVersion: nil,
+                    headerFields: ["Content-Type": "application/json"]
+                )!,
+                Data(body.utf8)
+            )
+        }
+        let client = TranslationLLMClient(
+            provider: OpenAICompatibleLLMProvider(sessionConfigurationOverride: configuration)
+        )
+
+        let translated = try await client.translate(
+            "Hello",
+            targetLanguage: "zh-Hans",
+            route: LLMModelRouteSnapshot(
+                providerProfileID: UUID(),
+                providerName: "Anthropic",
+                modelProfileID: UUID(),
+                modelProfileName: "Claude",
+                baseURL: "https://api.anthropic.com/v1",
+                apiStyle: .anthropicMessages,
+                apiKeyRef: "anthropic-ref",
+                modelName: "claude-opus-5-5"
+            ),
+            apiKey: "sk-ant-test",
+            context: AcademicTranslationContext()
+        )
+
+        XCTAssertEqual(translated, "你好")
+        let body = try XCTUnwrap(MockURLProtocol.requestBodies.last)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
+        XCTAssertNil(json["temperature"])
+        XCTAssertNotNil(json["system"] as? String)
+    }
+
+    private static let anthropicStreamBody = """
+    event: message_start
+    data: {"type":"message_start","message":{"id":"msg_1","type":"message","role":"assistant","content":[]}}
+
+    event: content_block_start
+    data: {"type":"content_block_start","index":0,"content_block":{"type":"thinking","thinking":""}}
+
+    event: content_block_delta
+    data: {"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"hidden"}}
+
+    event: content_block_stop
+    data: {"type":"content_block_stop","index":0}
+
+    event: content_block_start
+    data: {"type":"content_block_start","index":1,"content_block":{"type":"text","text":""}}
+
+    event: content_block_delta
+    data: {"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"Hel"}}
+
+    event: content_block_delta
+    data: {"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"lo"}}
+
+    event: content_block_stop
+    data: {"type":"content_block_stop","index":1}
+
+    event: message_delta
+    data: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":5}}
+
+    event: message_stop
+    data: {"type":"message_stop"}
+
+    """
+
     func testResponsesStreamingReplaysCompletedCallsWhenAnotherSearchCallFailed() async throws {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [MockURLProtocol.self]
