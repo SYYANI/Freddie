@@ -341,7 +341,48 @@ final class SelectionAssistantOrchestratorTests: XCTestCase {
     }
 
     @MainActor
-    func testExternalScopeWithoutResponsesRouteAddsWarningAndDoesNotEnableWebSearch() async throws {
+    func testExternalScopeRequestsAnthropicMessagesWebSearchWhenToggleIsOn() async throws {
+        let fixture = try makeFixture()
+        defer { fixture.cleanup() }
+        fixture.userDefaults.set(true, forKey: SelectionAssistantPreferences.externalSearchEnabledKey)
+        let provider = OrchestratorProviderSpy(response: "The repository is linked from the project page.")
+        let orchestrator = SelectionAssistantOrchestrator(
+            assistantService: SelectionAssistantService(provider: provider),
+            fullTextSearchService: PaperFullTextSearchService(fileStore: fixture.fileStore),
+            userDefaults: fixture.userDefaults
+        )
+
+        let result = try await orchestrator.perform(
+            SelectionAssistantRequest(
+                action: .ask,
+                selection: "this conclusion",
+                question: "Find the project's code repository.",
+                scope: .external
+            ),
+            selection: NoteSelectionContext(
+                attachmentID: fixture.attachment.id,
+                quote: "this conclusion",
+                htmlSelector: "rp-anchor:1"
+            ),
+            paper: fixture.paper,
+            attachments: [fixture.attachment],
+            notes: [],
+            targetLanguage: "EN",
+            route: makeRoute(apiStyle: .anthropicMessages, baseURL: "https://api.deepseek.com/anthropic")
+        )
+
+        XCTAssertFalse(result.warnings.contains(AppLocalization.localized(
+            "Live web search requires the selected assistant model to use the Responses API or the Anthropic Messages API."
+        )))
+        XCTAssertEqual(result.sources.first?.id, "live-web-search")
+        let capturedProviderRequest = await provider.lastRequest()
+        let providerRequest = try XCTUnwrap(capturedProviderRequest)
+        XCTAssertEqual(providerRequest.apiStyle, .anthropicMessages)
+        XCTAssertTrue(providerRequest.webSearchEnabled)
+    }
+
+    @MainActor
+    func testExternalScopeWithChatCompletionsRouteAddsWarningAndDoesNotEnableWebSearch() async throws {
         let fixture = try makeFixture()
         defer { fixture.cleanup() }
         fixture.userDefaults.set(true, forKey: SelectionAssistantPreferences.externalSearchEnabledKey)
@@ -372,7 +413,7 @@ final class SelectionAssistantOrchestratorTests: XCTestCase {
         )
 
         XCTAssertTrue(result.warnings.contains(AppLocalization.localized(
-            "Live web search requires the selected assistant model to use the Responses API."
+            "Live web search requires the selected assistant model to use the Responses API or the Anthropic Messages API."
         )))
         XCTAssertFalse(result.sources.contains(where: { $0.id == "live-web-search" }))
         let capturedProviderRequest = await provider.lastRequest()

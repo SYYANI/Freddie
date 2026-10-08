@@ -249,9 +249,7 @@ struct LLMDefaultRouteActivator {
         ) {
             settings.selectedHTMLModelProfileID = defaultModelID
         }
-        // BabelDOC cannot use an Anthropic Messages provider, so do not make
-        // one the PDF translation default.
-        if descriptor.apiStyle.supportsBabelDoc, !routeIsReady(
+        if !routeIsReady(
             settings.selectedPDFModelProfileID,
             newlyReadyProviderID: providerID,
             providers: providers,

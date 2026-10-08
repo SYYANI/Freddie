@@ -32,26 +32,6 @@
         }
       }
     },
-    "BabelDOC PDF translation cannot use the Anthropic Messages API. HTML translation, LaTeX translation and the reading assistant work normally." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "BabelDOC PDF 翻译无法使用 Anthropic Messages API。HTML 翻译、LaTeX 翻译和阅读助手可正常使用。"
-          }
-        }
-      }
-    },
-    "BabelDOC PDF translation needs an OpenAI-compatible provider, but “%@” uses the Anthropic Messages API. Choose a different PDF translation model in Settings." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "BabelDOC PDF 翻译需要 OpenAI 兼容的 Provider，但“%@”使用的是 Anthropic Messages API。请在设置中选择其他 PDF 翻译模型。"
-          }
-        }
-      }
-    },
     "LaTeX translation completed, but %lld units kept source text because the model returned invalid output. Translate again to retry them." : {
       "localizations" : {
         "zh-Hans" : {
@@ -1380,12 +1360,12 @@
         }
       }
     },
-    "Choose separate saved model profiles for translation and reading assistance. When enabled, external questions are answered through the selected model's server-side web search (Responses API), instead of calling academic search services directly." : {
+    "Choose separate saved model profiles for translation and reading assistance. When enabled, external questions are answered through the selected model's server-side web search (Responses API or Anthropic Messages API), instead of calling academic search services directly." : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "可分别为翻译与阅读助手选择已保存的模型配置。启用后，外部资料问题会通过所选模型的 Responses API 服务端联网搜索来回答，不再直接调用学术检索服务。"
+            "value" : "可分别为翻译与阅读助手选择已保存的模型配置。启用后，外部资料问题会通过所选模型的 Responses API 或 Anthropic Messages API 服务端联网搜索来回答，不再直接调用学术检索服务。"
           }
         }
       }
@@ -3453,12 +3433,12 @@
         }
       }
     },
-    "Live web search requires the selected assistant model to use the Responses API." : {
+    "Live web search requires the selected assistant model to use the Responses API or the Anthropic Messages API." : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "当前阅读助手模型不支持实时联网搜索，请选择使用 Responses API 的模型（例如 DeepSeek V4 Flash）。"
+            "value" : "当前阅读助手模型不支持实时联网搜索，请选择使用 Responses API 或 Anthropic Messages API 的模型（例如 DeepSeek V4 Flash）。"
           }
         }
       }
@@ -6893,12 +6873,12 @@
         }
       }
     },
-    "Web search testing requires the Responses API." : {
+    "Web search testing requires the Responses API or the Anthropic Messages API." : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "联网搜索测试要求使用 Responses API。"
+            "value" : "联网搜索测试要求使用 Responses API 或 Anthropic Messages API。"
           }
         }
       }

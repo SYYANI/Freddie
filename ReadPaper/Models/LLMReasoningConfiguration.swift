@@ -1,3 +1,4 @@
+import BabelDocKit
 import Foundation
 
 /// Thinking mode for OpenAI-compatible APIs (e.g. DeepSeek V4).
@@ -34,9 +35,21 @@ enum LLMAPIStyle: String, CaseIterable, Codable, Sendable {
         self == .anthropicMessages ? nil : value
     }
 
-    /// BabelDOC only speaks the OpenAI-compatible protocol.
-    var supportsBabelDoc: Bool {
-        self != .anthropicMessages
+    /// Protocols with a provider-executed web search tool: the Responses API
+    /// `web_search` tool and the Anthropic Messages `web_search_20250305`
+    /// server tool. Chat Completions has no server-side search.
+    var supportsServerWebSearch: Bool {
+        self != .chatCompletions
+    }
+
+    /// BabelDOC speaks Chat Completions or Anthropic Messages. OpenAI
+    /// Responses providers also serve `chat/completions`, which BabelDOC has
+    /// always used for them.
+    var babelDocAPIStyle: BabelDocLLMAPIStyle {
+        switch self {
+        case .chatCompletions, .responses: .chatCompletions
+        case .anthropicMessages: .anthropicMessages
+        }
     }
 }
 

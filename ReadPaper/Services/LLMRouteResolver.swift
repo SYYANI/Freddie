@@ -11,7 +11,6 @@ enum LLMRouteError: LocalizedError, Equatable {
     case providerDisabled(String)
     case missingAPIKey(String)
     case invalidBaseURL(String)
-    case babelDocRequiresOpenAICompatibleProvider(String)
 
     var errorDescription: String? {
         switch self {
@@ -33,11 +32,6 @@ enum LLMRouteError: LocalizedError, Equatable {
             return AppLocalization.format("No API key is saved for provider “%@”.", name)
         case .invalidBaseURL(let value):
             return AppLocalization.format("The provider Base URL is invalid: %@", value)
-        case .babelDocRequiresOpenAICompatibleProvider(let name):
-            return AppLocalization.format(
-                "BabelDOC PDF translation needs an OpenAI-compatible provider, but “%@” uses the Anthropic Messages API. Choose a different PDF translation model in Settings.",
-                name
-            )
         }
     }
 }
@@ -78,20 +72,6 @@ struct LLMRouteResolver {
             missingSelectionError: .pdfModelNotSelected,
             modelContext: modelContext
         )
-    }
-
-    /// Resolves the PDF route for BabelDOC, which only speaks the
-    /// OpenAI-compatible protocol. LaTeX translation shares the PDF route but
-    /// goes through `OpenAICompatibleLLMProvider`, so it uses `resolvePDFRoute`.
-    func resolveBabelDocPDFRoute(
-        settings: AppSettings,
-        modelContext: ModelContext
-    ) throws -> ResolvedLLMModelRoute {
-        let route = try resolvePDFRoute(settings: settings, modelContext: modelContext)
-        guard route.snapshot.apiStyle.supportsBabelDoc else {
-            throw LLMRouteError.babelDocRequiresOpenAICompatibleProvider(route.snapshot.providerName)
-        }
-        return route
     }
 
     func resolveAssistantRoute(

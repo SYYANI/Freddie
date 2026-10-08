@@ -21,7 +21,7 @@ enum LLMProviderValidationError: LocalizedError, Equatable {
     case unsupportedBaseURLScheme
     case emptyModel
     case emptyAPIKey
-    case webSearchRequiresResponsesAPI
+    case webSearchRequiresServerSearchAPI
     case webSearchReturnedNoSources
 
     var errorDescription: String? {
@@ -34,8 +34,8 @@ enum LLMProviderValidationError: LocalizedError, Equatable {
             return AppLocalization.localized("Model name cannot be empty.")
         case .emptyAPIKey:
             return AppLocalization.localized("API key cannot be empty.")
-        case .webSearchRequiresResponsesAPI:
-            return AppLocalization.localized("Web search testing requires the Responses API.")
+        case .webSearchRequiresServerSearchAPI:
+            return AppLocalization.localized("Web search testing requires the Responses API or the Anthropic Messages API.")
         case .webSearchReturnedNoSources:
             return AppLocalization.localized("The model answered, but no web search source URL was returned.")
         }
@@ -121,8 +121,8 @@ struct LLMProviderValidationUseCase {
         timeoutSeconds: TimeInterval = 60,
         onTraceUpdated: (@Sendable ([String]) async -> Void)? = nil
     ) async throws -> LLMProviderWebSearchTestResult {
-        guard apiStyle == .responses else {
-            throw LLMProviderValidationError.webSearchRequiresResponsesAPI
+        guard apiStyle.supportsServerWebSearch else {
+            throw LLMProviderValidationError.webSearchRequiresServerSearchAPI
         }
         let normalizedBaseURL = try normalizedBaseURL(baseURL)
         let validatedModel = try validateModelName(model)
@@ -139,12 +139,12 @@ struct LLMProviderValidationUseCase {
         WEB SEARCH CAPABILITY TEST
         Model: \(validatedModel)
         Base URL: \(normalizedBaseURL)
-        Protocol: Responses API
+        Protocol: \(apiStyle == .anthropicMessages ? "Anthropic Messages API" : "Responses API")
         """)
 
         let request = LLMCompletionRequest(
             baseURL: try validateBaseURLAsURL(baseURL),
-            apiStyle: .responses,
+            apiStyle: apiStyle,
             apiKey: validatedAPIKey,
             model: validatedModel,
             messages: [
@@ -279,8 +279,9 @@ private actor LLMProviderWebSearchTraceRecorder {
         entries.append(numberedEntry)
         pendingEntries.append(numberedEntry)
 
-        // Streaming deltas arrive in tight bursts, so only publish them periodically.
-        let shouldPublish = numberedEntry.contains(".delta") == false
+        // Streaming deltas (Responses `*.delta`, Anthropic `*_delta`) arrive in
+        // tight bursts, so only publish them periodically.
+        let shouldPublish = numberedEntry.contains("delta") == false
             || entries.count.isMultiple(of: 25)
         return drainPendingEntries(if: shouldPublish)
     }

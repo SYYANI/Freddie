@@ -151,6 +151,42 @@ final class SelectionAssistantServiceTests: XCTestCase {
         )
     }
 
+    func testCitationFormatterKeepsBoldBalancedAndAbsorbsResultIndexFragment() {
+        let webSources = [
+            AssistantSource(
+                id: AssistantSource.liveWebSearchResultIDPrefix + "a",
+                kind: .external,
+                title: "arxiv.org",
+                excerpt: "",
+                urlString: "https://arxiv.org/abs/1706.03762"
+            ),
+            AssistantSource(
+                id: AssistantSource.liveWebSearchResultIDPrefix + "b",
+                kind: .external,
+                title: "arxiv.org",
+                excerpt: "",
+                urlString: "https://arxiv.org/html/1706.03762v4"
+            )
+        ]
+        let placeholder = AssistantSource(
+            id: AssistantSource.liveWebSearchID,
+            kind: .external,
+            title: "Live web search",
+            excerpt: ""
+        )
+
+        let answer = SelectionAssistantCitationFormatter.finalize(
+            "Page: **https://arxiv.org/abs/1706.03762**. Code (https://arxiv.org/html/1706.03762v4#3).",
+            originalSources: [placeholder],
+            webResultSources: webSources
+        )
+
+        XCTAssertEqual(
+            answer,
+            "Page: **[S1](https://arxiv.org/abs/1706.03762)**. Code ([S2](https://arxiv.org/html/1706.03762v4))."
+        )
+    }
+
     func testQuestionIsRequiredForAskAction() async {
         let provider = SelectionAssistantProviderSpy(response: "unused")
         let service = SelectionAssistantService(provider: provider)

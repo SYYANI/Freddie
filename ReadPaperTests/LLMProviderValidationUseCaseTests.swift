@@ -46,7 +46,7 @@ final class LLMProviderValidationUseCaseTests: XCTestCase {
         }
     }
 
-    func testWebSearchRequiresResponsesAPI() async {
+    func testWebSearchRequiresServerSearchAPI() async {
         let validator = LLMProviderValidationUseCase()
 
         do {
@@ -56,11 +56,11 @@ final class LLMProviderValidationUseCaseTests: XCTestCase {
                 apiKey: "sk-test",
                 model: "test-model"
             )
-            XCTFail("Expected Responses API validation to fail.")
+            XCTFail("Expected Chat Completions web search validation to fail.")
         } catch {
             XCTAssertEqual(
                 error as? LLMProviderValidationError,
-                .webSearchRequiresResponsesAPI
+                .webSearchRequiresServerSearchAPI
             )
         }
     }
@@ -109,6 +109,56 @@ final class LLMProviderValidationUseCaseTests: XCTestCase {
         let entryCount = await traceRecorder.entryCount
         XCTAssertGreaterThan(batchCount, 1)
         XCTAssertGreaterThan(entryCount, 1)
+    }
+
+    func testWebSearchSupportsAnthropicMessagesServerTool() async throws {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [WebSearchValidationURLProtocol.self]
+        WebSearchValidationURLProtocol.responseBody = """
+        event: content_block_start
+        data: {"type":"content_block_start","index":0,"content_block":{"type":"server_tool_use","id":"call_0","name":"web_search","input":{}}}
+
+        event: content_block_stop
+        data: {"type":"content_block_stop","index":0}
+
+        event: content_block_start
+        data: {"type":"content_block_start","index":1,"content_block":{"type":"web_search_tool_result","tool_use_id":"call_0","content":[{"type":"web_search_result","title":"IANA-managed Reserved Domains","url":"https://www.iana.org/help/example-domains#1"}]}}
+
+        event: content_block_stop
+        data: {"type":"content_block_stop","index":1}
+
+        event: content_block_start
+        data: {"type":"content_block_start","index":2,"content_block":{"type":"text","text":""}}
+
+        event: content_block_delta
+        data: {"type":"content_block_delta","index":2,"delta":{"type":"text_delta","text":"https://www.iana.org/help/example-domains"}}
+
+        event: content_block_stop
+        data: {"type":"content_block_stop","index":2}
+
+        event: message_delta
+        data: {"type":"message_delta","delta":{"stop_reason":"end_turn"}}
+
+        """
+        let provider = OpenAICompatibleLLMProvider(sessionConfigurationOverride: configuration)
+        let validator = LLMProviderValidationUseCase(provider: provider)
+
+        let result = try await validator.testWebSearch(
+            baseURL: "https://api.example.com/anthropic/v1",
+            apiStyle: .anthropicMessages,
+            apiKey: "sk-secret-value",
+            model: "test-model"
+        )
+
+        XCTAssertEqual(result.sources.map(\.urlString), [
+            "https://www.iana.org/help/example-domains"
+        ])
+        XCTAssertEqual(result.sources.first?.title, "IANA-managed Reserved Domains")
+        XCTAssertTrue(result.trace.contains("Protocol: Anthropic Messages API"))
+        XCTAssertTrue(result.trace.contains("REQUEST POST https://api.example.com/anthropic/v1/messages"))
+        XCTAssertTrue(result.trace.contains("web_search_20250305"))
+        XCTAssertTrue(result.trace.contains("x-api-key: <redacted>"))
+        XCTAssertFalse(result.trace.contains("sk-secret-value"))
     }
 }
 

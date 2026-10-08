@@ -35,6 +35,22 @@ final class OpenAICompatibleLLMProviderTests: XCTestCase {
         )
     }
 
+    func testWebSearchSourceDropsNumericResultIndexFragmentAndBoldMarkers() throws {
+        let indexed = try XCTUnwrap(LLMWebSearchSource(
+            urlString: "https://arxiv.org/html/1706.03762v4#3"
+        ))
+        let section = try XCTUnwrap(LLMWebSearchSource(
+            urlString: "https://arxiv.org/html/1706.03762v4#S3"
+        ))
+        let detected = LLMWebSearchSource.detected(
+            in: "论文页面：**https://arxiv.org/abs/1706.03762**"
+        )
+
+        XCTAssertEqual(indexed.urlString, "https://arxiv.org/html/1706.03762v4")
+        XCTAssertEqual(section.urlString, "https://arxiv.org/html/1706.03762v4#S3")
+        XCTAssertEqual(detected.map(\.urlString), ["https://arxiv.org/abs/1706.03762"])
+    }
+
     func testProviderRetriesWithoutV1AndPreservesProxyPath() async throws {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [MockURLProtocol.self]
@@ -599,6 +615,157 @@ final class OpenAICompatibleLLMProviderTests: XCTestCase {
         XCTAssertNil(json["stream"])
         XCTAssertEqual((json["thinking"] as? [String: Any])?["type"] as? String, "adaptive")
         XCTAssertEqual((json["output_config"] as? [String: Any])?["effort"] as? String, "high")
+        XCTAssertNil(json["tools"])
+    }
+
+    func testAnthropicMessagesWebSearchSendsServerToolAndCollectsResultSources() async throws {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [MockURLProtocol.self]
+        MockURLProtocol.requestHandler = { request in
+            // Mirrors DeepSeek's Anthropic endpoint: narration before the
+            // search, `#1` result-index fragments, and bare URLs in the answer.
+            let body = """
+            {
+              "type": "message",
+              "role": "assistant",
+              "content": [
+                {"type": "text", "text": "I'll search the web for that."},
+                {"type": "server_tool_use", "id": "call_0", "name": "web_search", "input": {"query": "ReadPaper repo"}},
+                {"type": "web_search_tool_result", "tool_use_id": "call_0", "content": [
+                  {"type": "web_search_result", "title": "Repo", "url": "https://github.com/example/readpaper#1", "encrypted_content": "x", "page_age": null},
+                  {"type": "web_search_result", "title": "Docs", "url": "https://docs.example.com/readpaper", "encrypted_content": "y"}
+                ]},
+                {"type": "text", "text": "The code is at https://github.com/example/readpaper."},
+                {"type": "text", "text": " It has docs", "citations": [
+                  {"type": "web_search_result_location", "url": "https://docs.example.com/readpaper", "title": "Docs", "cited_text": "docs", "encrypted_index": "z"}
+                ]},
+                {"type": "text", "text": "."}
+              ],
+              "stop_reason": "end_turn",
+              "usage": {"input_tokens": 3, "output_tokens": 2, "server_tool_use": {"web_search_requests": 1}}
+            }
+            """
+            return (
+                HTTPURLResponse(
+                    url: try XCTUnwrap(request.url),
+                    statusCode: 200,
+                    httpVersion: nil,
+                    headerFields: ["Content-Type": "application/json"]
+                )!,
+                Data(body.utf8)
+            )
+        }
+        let provider = OpenAICompatibleLLMProvider(sessionConfigurationOverride: configuration)
+
+        let response = try await provider.complete(request: LLMCompletionRequest(
+            baseURL: URL(string: "https://api.deepseek.com/anthropic/v1")!,
+            apiStyle: .anthropicMessages,
+            apiKey: "sk-test",
+            model: "deepseek-v4-flash",
+            messages: [LLMCompletionMessage(role: "user", content: "Where is the code?")],
+            timeoutProfile: .validation(timeoutSeconds: 10),
+            webSearchEnabled: true
+        ))
+
+        XCTAssertEqual(
+            response.text,
+            "The code is at https://github.com/example/readpaper. It has docs https://docs.example.com/readpaper."
+        )
+        XCTAssertEqual(response.webSearchSources.map(\.urlString), [
+            "https://github.com/example/readpaper",
+            "https://docs.example.com/readpaper"
+        ])
+        XCTAssertEqual(response.webSearchSources.last?.title, "Docs")
+        let body = try XCTUnwrap(MockURLProtocol.requestBodies.last)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
+        let tools = try XCTUnwrap(json["tools"] as? [[String: Any]])
+        XCTAssertEqual(tools.count, 1)
+        XCTAssertEqual(tools.first?["type"] as? String, "web_search_20250305")
+        XCTAssertEqual(tools.first?["name"] as? String, "web_search")
+        XCTAssertEqual(tools.first?["max_uses"] as? Int, 5)
+        XCTAssertNil(json["tool_choice"])
+    }
+
+    func testAnthropicMessagesStreamingWebSearchDropsNarrationAndAppendsCitationURLs() async throws {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [MockURLProtocol.self]
+        MockURLProtocol.requestHandler = { request in
+            (
+                HTTPURLResponse(
+                    url: try XCTUnwrap(request.url),
+                    statusCode: 200,
+                    httpVersion: nil,
+                    headerFields: ["Content-Type": "text/event-stream"]
+                )!,
+                Data(Self.anthropicWebSearchStreamBody.utf8)
+            )
+        }
+        let recorder = StreamingTextRecorder()
+        let provider = OpenAICompatibleLLMProvider(sessionConfigurationOverride: configuration)
+
+        let response = try await provider.completeStreaming(
+            request: LLMCompletionRequest(
+                baseURL: URL(string: "https://api.deepseek.com/anthropic/v1")!,
+                apiStyle: .anthropicMessages,
+                apiKey: "sk-test",
+                model: "deepseek-v4-flash",
+                messages: [LLMCompletionMessage(role: "user", content: "Latest release?")],
+                timeoutProfile: .validation(timeoutSeconds: 10),
+                webSearchEnabled: true
+            ),
+            onPartialText: { await recorder.append($0) }
+        )
+
+        XCTAssertEqual(response.text, "V4 shipped https://news.example.com/v4.")
+        let partialValues = await recorder.values()
+        XCTAssertEqual(partialValues, [
+            "Searching.",
+            "V4 shipped",
+            "V4 shipped https://news.example.com/v4",
+            "V4 shipped https://news.example.com/v4."
+        ])
+        XCTAssertEqual(response.webSearchSources.map(\.urlString), [
+            "https://news.example.com/v4",
+            "https://blog.example.com/post"
+        ])
+    }
+
+    func testAnthropicMessagesPauseTurnWithoutAnswerThrows() async throws {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [MockURLProtocol.self]
+        MockURLProtocol.requestHandler = { request in
+            let body = """
+            {"content": [
+              {"type": "text", "text": "Let me search."},
+              {"type": "server_tool_use", "id": "call_0", "name": "web_search", "input": {"query": "q"}}
+            ], "stop_reason": "pause_turn"}
+            """
+            return (
+                HTTPURLResponse(
+                    url: try XCTUnwrap(request.url),
+                    statusCode: 200,
+                    httpVersion: nil,
+                    headerFields: ["Content-Type": "application/json"]
+                )!,
+                Data(body.utf8)
+            )
+        }
+        let provider = OpenAICompatibleLLMProvider(sessionConfigurationOverride: configuration)
+
+        do {
+            _ = try await provider.complete(request: LLMCompletionRequest(
+                baseURL: URL(string: "https://api.anthropic.com/v1")!,
+                apiStyle: .anthropicMessages,
+                apiKey: "sk-ant-test",
+                model: "claude-opus-5-5",
+                messages: [LLMCompletionMessage(role: "user", content: "Hi")],
+                timeoutProfile: .validation(timeoutSeconds: 10),
+                webSearchEnabled: true
+            ))
+            XCTFail("Expected a paused turn without an answer to throw")
+        } catch let error as LLMProviderError {
+            XCTAssertEqual(error, .webSearchCompletedWithoutAnswer)
+        }
     }
 
     func testAnthropicMessagesRefusalThrowsInsteadOfReturningEmptyText() async throws {
@@ -796,6 +963,63 @@ final class OpenAICompatibleLLMProviderTests: XCTestCase {
         XCTAssertNil(json["temperature"])
         XCTAssertNotNil(json["system"] as? String)
     }
+
+    private static let anthropicWebSearchStreamBody = """
+    event: message_start
+    data: {"type":"message_start","message":{"id":"msg_1","type":"message","role":"assistant","content":[]}}
+
+    event: content_block_start
+    data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}
+
+    event: content_block_delta
+    data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Searching."}}
+
+    event: content_block_stop
+    data: {"type":"content_block_stop","index":0}
+
+    event: content_block_start
+    data: {"type":"content_block_start","index":1,"content_block":{"type":"server_tool_use","id":"call_0","name":"web_search","input":{}}}
+
+    event: content_block_delta
+    data: {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"{\\"query\\":\\"v4\\"}"}}
+
+    event: content_block_stop
+    data: {"type":"content_block_stop","index":1}
+
+    event: content_block_start
+    data: {"type":"content_block_start","index":2,"content_block":{"type":"web_search_tool_result","tool_use_id":"call_0","content":[{"type":"web_search_result","title":"News","url":"https://news.example.com/v4#1"},{"type":"web_search_result","title":"Blog","url":"https://blog.example.com/post"}]}}
+
+    event: content_block_stop
+    data: {"type":"content_block_stop","index":2}
+
+    event: content_block_start
+    data: {"type":"content_block_start","index":3,"content_block":{"type":"text","text":"","citations":[]}}
+
+    event: content_block_delta
+    data: {"type":"content_block_delta","index":3,"delta":{"type":"citations_delta","citation":{"type":"web_search_result_location","url":"https://news.example.com/v4#1","title":"News","cited_text":"V4"}}}
+
+    event: content_block_delta
+    data: {"type":"content_block_delta","index":3,"delta":{"type":"text_delta","text":"V4 shipped"}}
+
+    event: content_block_stop
+    data: {"type":"content_block_stop","index":3}
+
+    event: content_block_start
+    data: {"type":"content_block_start","index":4,"content_block":{"type":"text","text":""}}
+
+    event: content_block_delta
+    data: {"type":"content_block_delta","index":4,"delta":{"type":"text_delta","text":"."}}
+
+    event: content_block_stop
+    data: {"type":"content_block_stop","index":4}
+
+    event: message_delta
+    data: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":5,"server_tool_use":{"web_search_requests":1}}}
+
+    event: message_stop
+    data: {"type":"message_stop"}
+
+    """
 
     private static let anthropicStreamBody = """
     event: message_start

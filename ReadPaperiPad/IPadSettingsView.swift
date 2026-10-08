@@ -497,11 +497,6 @@ struct IPadSettingsView: View {
                         Text(apiStyleLabel(style)).tag(style)
                     }
                 }
-                if providerAPIStyle == .anthropicMessages {
-                    Text("BabelDOC PDF translation cannot use the Anthropic Messages API. HTML translation, LaTeX translation and the reading assistant work normally.", bundle: bundle)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
                 SecureField(
                     providerHasStoredAPIKey
                         ? String(repeating: "•", count: 12)
@@ -796,13 +791,6 @@ struct IPadSettingsView: View {
                         }
                         .labelsHidden()
                         .pickerStyle(.menu)
-                    }
-
-                    if providerAPIStyle == .anthropicMessages {
-                        Text("BabelDOC PDF translation cannot use the Anthropic Messages API. HTML translation, LaTeX translation and the reading assistant work normally.", bundle: bundle)
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
                     }
 
                     settingsDetailField(String(localized: "API key", bundle: bundle)) {

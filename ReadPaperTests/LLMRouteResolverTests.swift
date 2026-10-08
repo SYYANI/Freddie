@@ -53,7 +53,7 @@ final class LLMRouteResolverTests: XCTestCase {
     }
 
     @MainActor
-    func testBabelDocPDFRouteRejectsAnthropicMessagesProvider() throws {
+    func testPDFRouteKeepsAnthropicMessagesStyleForBabelDoc() throws {
         let keychainStore = KeychainStore(
             service: "LLMRouteResolverTests.\(UUID().uuidString)",
             accessPolicy: .unprotected
@@ -85,17 +85,13 @@ final class LLMRouteResolverTests: XCTestCase {
 
         let resolver = LLMRouteResolver(keychainStore: keychainStore, apiStyleStore: apiStyleStore)
 
-        // LaTeX translation shares the PDF route and still resolves.
+        // BabelDOC and LaTeX translation share the PDF route; BabelDOC gets
+        // the Anthropic wire protocol instead of being rejected.
         let pdfRoute = try resolver.resolvePDFRoute(settings: settings, modelContext: modelContext)
         XCTAssertEqual(pdfRoute.snapshot.apiStyle, .anthropicMessages)
-        XCTAssertThrowsError(
-            try resolver.resolveBabelDocPDFRoute(settings: settings, modelContext: modelContext)
-        ) { error in
-            XCTAssertEqual(
-                error as? LLMRouteError,
-                .babelDocRequiresOpenAICompatibleProvider("Anthropic")
-            )
-        }
+        XCTAssertEqual(pdfRoute.snapshot.apiStyle.babelDocAPIStyle.rawValue, "anthropic-messages")
+        XCTAssertEqual(LLMAPIStyle.responses.babelDocAPIStyle.rawValue, "chat-completions")
+        XCTAssertEqual(LLMAPIStyle.chatCompletions.babelDocAPIStyle.rawValue, "chat-completions")
     }
 
     @MainActor

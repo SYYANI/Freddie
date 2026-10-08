@@ -1951,7 +1951,7 @@ struct ReaderPaneView: View {
         translationTask = Task {
             do {
                 try Task.checkCancellation()
-                let resolvedRoute = try LLMRouteResolver().resolveBabelDocPDFRoute(
+                let resolvedRoute = try LLMRouteResolver().resolvePDFRoute(
                     settings: settings,
                     modelContext: modelContext
                 )
@@ -2081,7 +2081,7 @@ struct ReaderPaneView: View {
         translationTask = Task {
             do {
                 try Task.checkCancellation()
-                let resolvedRoute = try LLMRouteResolver().resolveBabelDocPDFRoute(
+                let resolvedRoute = try LLMRouteResolver().resolvePDFRoute(
                     settings: settings,
                     modelContext: modelContext
                 )

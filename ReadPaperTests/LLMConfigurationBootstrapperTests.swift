@@ -354,7 +354,7 @@ final class LLMDefaultProfilesTests: XCTestCase {
     }
 
     @MainActor
-    func testRouteActivatorDoesNotMakeAnthropicTheBabelDocPDFDefault() throws {
+    func testRouteActivatorMakesAnthropicTheHTMLAndPDFDefault() throws {
         let container = try makeContainer()
         let context = ModelContext(container)
         try LLMDefaultProfileSeeder(
@@ -374,7 +374,7 @@ final class LLMDefaultProfilesTests: XCTestCase {
         )
 
         XCTAssertEqual(settings.selectedHTMLModelProfileID, LLMDefaultProfiles.anthropicModelID)
-        XCTAssertNil(settings.selectedPDFModelProfileID)
+        XCTAssertEqual(settings.selectedPDFModelProfileID, LLMDefaultProfiles.anthropicModelID)
     }
 
     func testUnknownProviderDefaultsToChatCompletions() {

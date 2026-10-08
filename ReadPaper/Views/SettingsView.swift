@@ -642,7 +642,7 @@ private struct SettingsForm: View {
                         isOn: $externalAssistantSearchEnabled
                     )
 
-                    Text("Choose separate saved model profiles for translation and reading assistance. When enabled, external questions are answered through the selected model's server-side web search (Responses API), instead of calling academic search services directly.", bundle: bundle)
+                    Text("Choose separate saved model profiles for translation and reading assistance. When enabled, external questions are answered through the selected model's server-side web search (Responses API or Anthropic Messages API), instead of calling academic search services directly.", bundle: bundle)
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
@@ -971,12 +971,6 @@ private struct SettingsForm: View {
                     }
                     .labelsHidden()
                 }
-                if providerAPIStyle == .anthropicMessages {
-                    Text("BabelDOC PDF translation cannot use the Anthropic Messages API. HTML translation, LaTeX translation and the reading assistant work normally.", bundle: bundle)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
                 SettingsFieldRow(String(localized: "API key", bundle: bundle)) {
                     SettingsSecureTextField(text: $providerAPIKey, placeholder: providerAPIKeyPrompt)
                 }
@@ -1024,12 +1018,12 @@ private struct SettingsForm: View {
                     .disabled(
                         isTestingProvider
                             || isTestingProviderWebSearch
-                            || providerAPIStyle != .responses
+                            || providerAPIStyle.supportsServerWebSearch == false
                     )
                     .help(
-                        providerAPIStyle == .responses
+                        providerAPIStyle.supportsServerWebSearch
                             ? String(localized: "Test server-side web search and capture its complete trace.", bundle: bundle)
-                            : String(localized: "Web search testing requires the Responses API.", bundle: bundle)
+                            : String(localized: "Web search testing requires the Responses API or the Anthropic Messages API.", bundle: bundle)
                     )
                 }
 

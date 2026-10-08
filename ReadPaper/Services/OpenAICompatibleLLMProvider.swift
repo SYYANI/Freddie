@@ -50,7 +50,7 @@ struct LLMWebSearchSource: Equatable, Sendable {
               url.host?.isEmpty == false else {
             return nil
         }
-        self.urlString = Self.removingInternalWebSearchCallID(from: url).absoluteString
+        self.urlString = Self.removingInternalFragment(from: url).absoluteString
         let trimmedTitle = title?.trimmingCharacters(in: .whitespacesAndNewlines)
         self.title = trimmedTitle?.isEmpty == false ? trimmedTitle : nil
     }
@@ -64,8 +64,14 @@ struct LLMWebSearchSource: Equatable, Sendable {
         let range = NSRange(text.startIndex..<text.endIndex, in: text)
         var sources: [LLMWebSearchSource] = []
         detector.enumerateMatches(in: text, range: range) { result, _, _ in
+            // Models often bold URLs; the detector keeps the closing `**`
+            // as part of the URL.
             guard let url = result?.url,
-                  let source = LLMWebSearchSource(urlString: url.absoluteString) else {
+                  let source = LLMWebSearchSource(
+                    urlString: url.absoluteString.trimmingCharacters(
+                        in: CharacterSet(charactersIn: "*_~`")
+                    )
+                  ) else {
                 return
             }
             sources.append(source)
@@ -74,11 +80,18 @@ struct LLMWebSearchSource: Equatable, Sendable {
         return sources.filter { seen.insert($0.urlString).inserted }
     }
 
-    private static func removingInternalWebSearchCallID(from url: URL) -> URL {
+    /// Drops search bookkeeping from result URLs: a `ws_call_id` fragment
+    /// parameter, and the purely numeric result-index fragment (`#1`) that
+    /// DeepSeek appends while the model usually cites the bare URL.
+    private static func removingInternalFragment(from url: URL) -> URL {
         guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false),
               let fragment = components.fragment,
               fragment.isEmpty == false else {
             return url
+        }
+        if fragment.allSatisfy({ $0.isASCII && $0.isNumber }) {
+            components.fragment = nil
+            return components.url ?? url
         }
 
         let fragmentComponents = fragment.split(
@@ -638,12 +651,14 @@ nonisolated struct OpenAICompatibleLLMProvider: Sendable {
                         + request.responsesWebSearchReplay.flatMap(\.webSearchSources)
                 )
             case .anthropicMessages:
-                let decoded = try JSONDecoder().decode(LLMAnthropicMessagesResponseBody.self, from: data)
+                let decoded = try LLMAnthropicMessagesResponseBody(data: data)
                 if let terminalError = decoded.terminalError {
                     throw terminalError
                 }
                 text = decoded.outputText
-                webSearchSources = []
+                webSearchSources = Self.uniqueWebSearchSources(
+                    LLMWebSearchSource.detected(in: text) + decoded.content.webSearchSources
+                )
             }
             return LLMCompletionResponse(
                 text: text,
@@ -752,12 +767,14 @@ nonisolated struct OpenAICompatibleLLMProvider: Sendable {
                             + request.responsesWebSearchReplay.flatMap(\.webSearchSources)
                     )
                 case .anthropicMessages:
-                    let decoded = try JSONDecoder().decode(LLMAnthropicMessagesResponseBody.self, from: data)
+                    let decoded = try LLMAnthropicMessagesResponseBody(data: data)
                     if let terminalError = decoded.terminalError {
                         throw terminalError
                     }
                     text = decoded.outputText
-                    webSearchSources = []
+                    webSearchSources = Self.uniqueWebSearchSources(
+                        LLMWebSearchSource.detected(in: text) + decoded.content.webSearchSources
+                    )
                 }
                 if text.isEmpty == false {
                     await onPartialText(text)
@@ -777,6 +794,7 @@ nonisolated struct OpenAICompatibleLLMProvider: Sendable {
             var observedWebSearchCalls: [LLMResponsesWebSearchCallItem] = []
             var terminalResponseBody: LLMResponsesResponseBody?
             var anthropicStopReason: String?
+            var anthropicContent = LLMAnthropicMessagesContentAccumulator()
             for try await line in bytes.lines {
                 try Task.checkCancellation()
                 if line.hasPrefix("event:") {
@@ -818,6 +836,16 @@ nonisolated struct OpenAICompatibleLLMProvider: Sendable {
                            let stopReason = delta["stop_reason"] as? String {
                             anthropicStopReason = stopReason
                         }
+                        // The accumulator owns Anthropic answer text because
+                        // a web search block discards earlier narration,
+                        // which a plain delta append cannot express.
+                        anthropicContent.consume(event: object)
+                        if anthropicContent.text != accumulatedText {
+                            accumulatedText = anthropicContent.text
+                            if accumulatedText.isEmpty == false {
+                                await onPartialText(accumulatedText)
+                            }
+                        }
                     }
                     if Self.responsesTerminalEventTypes.contains(eventType ?? ""),
                        let response = object["response"],
@@ -839,7 +867,10 @@ nonisolated struct OpenAICompatibleLLMProvider: Sendable {
             }
 
             if let terminalError = terminalResponseBody?.terminalError
-                ?? LLMAnthropicMessagesResponseBody.terminalError(stopReason: anthropicStopReason) {
+                ?? LLMAnthropicMessagesResponseBody.terminalError(
+                    stopReason: anthropicStopReason,
+                    outputText: accumulatedText
+                ) {
                 throw terminalError
             }
 
@@ -881,6 +912,7 @@ nonisolated struct OpenAICompatibleLLMProvider: Sendable {
                         + (terminalResponseBody?.webSearchSources ?? [])
                         + request.responsesWebSearchReplay.flatMap(\.webSearchSources)
                         + observedWebSearchCalls.flatMap(\.webSearchSources)
+                        + anthropicContent.webSearchSources
                 )
             )
         }
@@ -914,11 +946,8 @@ nonisolated struct OpenAICompatibleLLMProvider: Sendable {
             }
             return nil
         case .anthropicMessages:
-            let type = (object["type"] as? String) ?? eventName
-            guard type == "content_block_delta",
-                  let delta = object["delta"] as? [String: Any],
-                  (delta["type"] as? String) == "text_delta" else { return nil }
-            return delta["text"] as? String
+            // Handled by `LLMAnthropicMessagesContentAccumulator`.
+            return nil
         }
     }
 
@@ -1019,11 +1048,26 @@ nonisolated struct OpenAICompatibleLLMProvider: Sendable {
         "response.failed"
     ]
 
+    /// Keeps each URL at its first position (URLs cited in the answer come
+    /// first) while letting a later duplicate from the search results supply
+    /// the title that a URL detected in plain text lacks.
     private static func uniqueWebSearchSources(
         _ sources: [LLMWebSearchSource]
     ) -> [LLMWebSearchSource] {
-        var seen = Set<String>()
-        return sources.filter { seen.insert($0.urlString).inserted }
+        var unique: [LLMWebSearchSource] = []
+        var indexByURL: [String: Int] = [:]
+        for source in sources {
+            guard let index = indexByURL[source.urlString] else {
+                indexByURL[source.urlString] = unique.count
+                unique.append(source)
+                continue
+            }
+            if unique[index].title == nil, let title = source.title {
+                unique[index] = LLMWebSearchSource(urlString: source.urlString, title: title)
+                    ?? unique[index]
+            }
+        }
+        return unique
     }
 
     private func emitTrace(
@@ -1636,6 +1680,21 @@ private struct LLMAnthropicMessagesRequestBody: Encodable {
         let effort: String
     }
 
+    /// Server tool: the provider runs the searches itself and returns
+    /// `server_tool_use` / `web_search_tool_result` blocks in the same
+    /// response, so no client-side tool loop is needed.
+    struct WebSearchTool: Encodable {
+        let type = LLMAnthropicWebSearch.toolType
+        let name = LLMAnthropicWebSearch.toolName
+        let maxUses = LLMAnthropicWebSearch.maxUses
+
+        enum CodingKeys: String, CodingKey {
+            case type
+            case name
+            case maxUses = "max_uses"
+        }
+    }
+
     /// The Messages API requires `max_tokens`. Adaptive thinking counts toward
     /// it, so leave enough room for reasoning plus a long translated block.
     static let defaultMaxTokens = 16_000
@@ -1648,6 +1707,7 @@ private struct LLMAnthropicMessagesRequestBody: Encodable {
     let topP: Double?
     let thinking: Thinking?
     let outputConfig: OutputConfig?
+    let tools: [WebSearchTool]?
     let stream: Bool?
 
     init(request: LLMCompletionRequest, stream: Bool? = nil) {
@@ -1666,6 +1726,10 @@ private struct LLMAnthropicMessagesRequestBody: Encodable {
             .map { Message(role: $0.role == "assistant" ? "assistant" : "user", content: $0.content) }
         temperature = request.temperature
         topP = request.topP
+        // `tool_choice` stays at its `auto` default: forcing a tool is
+        // rejected together with extended thinking, and the system prompt
+        // already asks the model to search for external questions.
+        tools = request.webSearchEnabled ? [WebSearchTool()] : nil
         self.stream = stream
 
         switch request.thinkingMode {
@@ -1690,29 +1754,181 @@ private struct LLMAnthropicMessagesRequestBody: Encodable {
         case topP = "top_p"
         case thinking
         case outputConfig = "output_config"
+        case tools
         case stream
     }
 }
 
-private struct LLMAnthropicMessagesResponseBody: Decodable {
-    struct ContentBlock: Decodable {
-        let type: String?
-        let text: String?
+/// Anthropic Messages server-side web search (`web_search_20250305`), as
+/// served by Anthropic and Anthropic-compatible endpoints such as DeepSeek.
+enum LLMAnthropicWebSearch {
+    static let toolType = "web_search_20250305"
+    static let toolName = "web_search"
+    static let maxUses = 5
+
+    /// Blocks that mark the model handing off to the search tool. Text the
+    /// model wrote before one of these is narration ("I'll search…").
+    static let serverToolBlockTypes: Set<String> = [
+        "server_tool_use",
+        "web_search_tool_result"
+    ]
+
+    /// Result URLs from a `web_search_tool_result` block. A failed search
+    /// carries an error object instead of a result list and yields nothing.
+    static func resultSources(from block: [String: Any]) -> [LLMWebSearchSource] {
+        guard let results = block["content"] as? [[String: Any]] else { return [] }
+        return results.compactMap { result in
+            guard (result["type"] as? String) == "web_search_result" else { return nil }
+            return source(from: result)
+        }
     }
 
-    let content: [ContentBlock]?
+    /// A `web_search_result_location` citation attached to a text block.
+    static func citationSource(from citation: [String: Any]) -> LLMWebSearchSource? {
+        guard (citation["type"] as? String) == "web_search_result_location" else { return nil }
+        return source(from: citation)
+    }
+
+    private static func source(from object: [String: Any]) -> LLMWebSearchSource? {
+        guard let url = object["url"] as? String else { return nil }
+        return LLMWebSearchSource(urlString: url, title: object["title"] as? String)
+    }
+}
+
+/// Folds Anthropic Messages content blocks — either a complete `content`
+/// array or the equivalent SSE events — into the visible answer and the web
+/// sources it relies on.
+struct LLMAnthropicMessagesContentAccumulator {
+    /// Visible answer text. Narration written before a web search block is
+    /// discarded, and URLs from `web_search_result_location` citations are
+    /// appended after the cited span so the citation formatter can label them.
+    private(set) var text = ""
+    private(set) var citedSources: [LLMWebSearchSource] = []
+    private(set) var resultSources: [LLMWebSearchSource] = []
+    private var blockTexts: [Int: String] = [:]
+    private var blockCitations: [Int: [LLMWebSearchSource]] = [:]
+
+    var webSearchSources: [LLMWebSearchSource] {
+        citedSources + resultSources
+    }
+
+    init() {}
+
+    init(content: [[String: Any]]) {
+        for (index, block) in content.enumerated() {
+            startBlock(block, at: index)
+            stopBlock(at: index)
+        }
+    }
+
+    /// Applies one SSE event; non-content events are ignored.
+    mutating func consume(event: [String: Any]) {
+        guard let index = event["index"] as? Int else { return }
+        switch event["type"] as? String {
+        case "content_block_start":
+            if let block = event["content_block"] as? [String: Any] {
+                startBlock(block, at: index)
+            }
+        case "content_block_delta":
+            guard let delta = event["delta"] as? [String: Any] else { return }
+            switch delta["type"] as? String {
+            case "text_delta":
+                appendText(delta["text"] as? String ?? "", at: index)
+            case "citations_delta":
+                if let citation = delta["citation"] as? [String: Any] {
+                    addCitation(citation, at: index)
+                }
+            default:
+                break
+            }
+        case "content_block_stop":
+            stopBlock(at: index)
+        default:
+            break
+        }
+    }
+
+    private mutating func startBlock(_ block: [String: Any], at index: Int) {
+        let type = block["type"] as? String ?? ""
+        if LLMAnthropicWebSearch.serverToolBlockTypes.contains(type) {
+            text = ""
+            blockTexts.removeAll()
+            blockCitations.removeAll()
+        }
+        switch type {
+        case "text":
+            appendText(block["text"] as? String ?? "", at: index)
+            for case let citation as [String: Any] in block["citations"] as? [Any] ?? [] {
+                addCitation(citation, at: index)
+            }
+        case "web_search_tool_result":
+            resultSources.append(contentsOf: LLMAnthropicWebSearch.resultSources(from: block))
+        default:
+            break
+        }
+    }
+
+    private mutating func appendText(_ delta: String, at index: Int) {
+        guard delta.isEmpty == false else { return }
+        text += delta
+        blockTexts[index, default: ""] += delta
+    }
+
+    private mutating func addCitation(_ citation: [String: Any], at index: Int) {
+        guard let source = LLMAnthropicWebSearch.citationSource(from: citation) else { return }
+        citedSources.append(source)
+        blockCitations[index, default: []].append(source)
+    }
+
+    /// Citation deltas precede the cited text, so the URLs are appended only
+    /// once the block is complete.
+    private mutating func stopBlock(at index: Int) {
+        let blockText = blockTexts.removeValue(forKey: index) ?? ""
+        guard let citations = blockCitations.removeValue(forKey: index) else { return }
+        var seen = Set<String>()
+        let missingURLs = citations.map(\.urlString).filter { urlString in
+            blockText.contains(urlString) == false && seen.insert(urlString).inserted
+        }
+        guard missingURLs.isEmpty == false else { return }
+        text += " " + missingURLs.joined(separator: " ")
+    }
+}
+
+private struct LLMAnthropicMessagesResponseBody {
     let stopReason: String?
+    let content: LLMAnthropicMessagesContentAccumulator
+
+    init(data: Data) throws {
+        guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw DecodingError.dataCorrupted(DecodingError.Context(
+                codingPath: [],
+                debugDescription: "Anthropic Messages response is not a JSON object."
+            ))
+        }
+        stopReason = object["stop_reason"] as? String
+        content = LLMAnthropicMessagesContentAccumulator(
+            content: object["content"] as? [[String: Any]] ?? []
+        )
+    }
 
     /// Joins the visible `text` blocks; `thinking` blocks are never shown.
     var outputText: String {
-        (content ?? [])
-            .filter { $0.type == "text" }
-            .compactMap(\.text)
-            .joined()
+        content.text
     }
 
     var terminalError: LLMProviderError? {
-        Self.terminalError(stopReason: stopReason)
+        Self.terminalError(stopReason: stopReason, outputText: outputText)
+    }
+
+    /// `pause_turn` means a long server-tool turn was paused mid-way. The
+    /// paused content is not replayed, so it is only usable when the model
+    /// already wrote an answer after its searches.
+    static func terminalError(stopReason: String?, outputText: String) -> LLMProviderError? {
+        if stopReason == "pause_turn",
+           outputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return .webSearchCompletedWithoutAnswer
+        }
+        return terminalError(stopReason: stopReason)
     }
 
     static func terminalError(stopReason: String?) -> LLMProviderError? {
@@ -1740,11 +1956,6 @@ private struct LLMAnthropicMessagesResponseBody: Decodable {
         return .network(AppLocalization.localized(
             "Provider request failed due to a network or server error."
         ))
-    }
-
-    enum CodingKeys: String, CodingKey {
-        case content
-        case stopReason = "stop_reason"
     }
 }
 

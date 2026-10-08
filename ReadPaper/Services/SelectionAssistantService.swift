@@ -271,7 +271,10 @@ enum SelectionAssistantCitationFormatter {
         // link destination cannot become nested Markdown when labels are
         // remapped below.
         for replacement in replacements.sorted(by: { $0.urlString.count > $1.urlString.count }) {
+            // Source URLs drop the provider's numeric result-index fragment
+            // (`#1`), but the model may still copy it into the answer.
             let escapedURL = NSRegularExpression.escapedPattern(for: replacement.urlString)
+                + #"(?:#\d+)?"#
             let markdownLinkPattern = #"\[[^\]\n]+\]\(\s*<?"#
                 + escapedURL
                 + #">?\s*\)"#
@@ -282,7 +285,9 @@ enum SelectionAssistantCitationFormatter {
             output = replacingMatches(in: output, pattern: autolinkPattern) { _, _ in
                 replacement.token
             }
-            output = output.replacingOccurrences(of: replacement.urlString, with: replacement.token)
+            output = replacingMatches(in: output, pattern: escapedURL) { _, _ in
+                replacement.token
+            }
         }
 
         let placeholderLabel = placeholderIndex + 1
