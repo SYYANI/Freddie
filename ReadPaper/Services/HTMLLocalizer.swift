@@ -17,7 +17,7 @@ struct HTMLLocalizer: @unchecked Sendable {
         color: inherit !important;
         text-shadow: none !important;
     }
-    body.rp-readability-body .rp-readability-shell :where(article, section, main, header, footer, aside, div, table, thead, tbody, tfoot, tr, th, td):not(:where(pre *, code *, svg *, math *, .rp-note-anchor-target)) {
+    body.rp-readability-body .rp-readability-shell :where(article, section, main, header, footer, aside, div, p, h1, h2, h3, h4, h5, h6, ul, ol, li, dl, dt, dd, figure, figcaption, table, thead, tbody, tfoot, tr, th, td):not(:where(pre *, code *, svg *, math *, .rp-note-anchor-target, .rp-assistant-history-fallback)) {
         background-color: transparent !important;
     }
     body.rp-readability-body .rp-readability-header,
@@ -41,7 +41,7 @@ struct HTMLLocalizer: @unchecked Sendable {
     // translated sibling at full width. Share this with the reader to repair saved
     // documents as well, without changing the DOM used by note anchors.
     static let readableProseLayoutCSS = """
-    body.rp-readability-body .rp-readability-content :is(p, h1, h2, h3, h4, h5, h6):not(svg *, math *) {
+    body.rp-readability-body :is(.rp-readability-header, .rp-readability-content) :is(p, h1, h2, h3, h4, h5, h6):not(svg *, math *) {
         width: 100% !important;
         min-width: 0 !important;
         max-width: 100% !important;
@@ -374,7 +374,13 @@ struct HTMLLocalizer: @unchecked Sendable {
         let style = try document.createElement("style")
         try style.attr("id", styleID)
         try setRawStyleContent("""
-        body.rp-readability-body { margin: 0; padding: 32px 24px 56px; }
+        /*
+         * Zero specificity: a source theme that caps and centers its body
+         * (`body { max-width: 650px; margin: 0 auto; }`) keeps its column instead
+         * of being pinned to the left edge.
+         */
+        :where(body.rp-readability-body) { margin: 0; }
+        body.rp-readability-body { padding: 32px 24px 56px; }
         .rp-readability-shell { max-width: 980px; margin: 0 auto; }
         .rp-readability-header {
             display: block;
