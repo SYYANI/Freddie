@@ -265,7 +265,7 @@ final class HTMLTranslationPipeline {
             if tagName.hasPrefix("h"), protected.text.isEmpty == false {
                 currentSectionTitle = protected.text
             }
-            guard protected.text.count >= minimumLength else { continue }
+            guard protected.text.count >= minimumLength, !isMathOnly(protected.text) else { continue }
 
             let segmentID = "rp-\(Hashing.sha256Hex(protected.text).prefix(16))-\(candidates.count)"
             try element.attr("data-rp-segment-id", segmentID)
@@ -363,11 +363,23 @@ final class HTMLTranslationPipeline {
             let tagName = descendant.tagName()
             let protected = try protectedText(from: descendant)
             let minimumLength = tagName.hasPrefix("h") ? 2 : 10
-            if protected.text.count >= minimumLength {
+            if protected.text.count >= minimumLength, !isMathOnly(protected.text) {
                 return true
             }
         }
         return false
+    }
+
+    /// Formula-only blocks have nothing to translate; translating them only duplicates the equation.
+    static func isMathOnly(_ text: String) -> Bool {
+        let prose = text
+            .replacingOccurrences(of: #"\[PROTECTED_\d+\]"#, with: " ", options: .regularExpression)
+            .replacingOccurrences(
+                of: #"\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\)|\\begin\{([A-Za-z]+\*?)\}[\s\S]*?\\end\{\1\}"#,
+                with: " ",
+                options: .regularExpression
+            )
+        return !prose.contains { $0.isLetter }
     }
 
     private static func protectedText(from element: Element) throws -> (text: String, fragments: [String]) {

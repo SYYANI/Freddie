@@ -223,6 +223,21 @@ final class HTMLTranslationPipelineTests: XCTestCase {
     }
 
     @MainActor
+    func testFormulaOnlyBlocksAreNotTranslationCandidates() throws {
+        let html = #"""
+        <html><body>
+        <p>\[a_{t+1} \sim \pi_{\theta}(\cdot \mid \mathcal{H}_{&lt;t}, o_t)\]</p>
+        <p>$$x^2 + y^2 = z^2$$</p>
+        <p>\begin{align*} f(x) &amp;= x^2 \\ g(x) &amp;= x^3 \end{align*}</p>
+        <p><math><mi>x</mi><mo>=</mo><mn>1</mn></math> (1)</p>
+        <p>The agent \(\pi_{\theta}\) produces an action \(a_t\) every turn.</p>
+        </body></html>
+        """#
+        let candidates = try HTMLTranslationPipeline.extractCandidates(from: html)
+        XCTAssertEqual(candidates.map(\.sourceText), [#"The agent \(\pi_{\theta}\) produces an action \(a_t\) every turn."#])
+    }
+
+    @MainActor
     func testCandidatesCarrySectionAndNeighborContext() throws {
         let html = """
         <html><body>

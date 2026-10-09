@@ -205,6 +205,15 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
                 forMainFrameOnly: true
             )
         )
+        if !HTMLTeXRendering.userScript.isEmpty {
+            configuration.userContentController.addUserScript(
+                WKUserScript(
+                    source: HTMLTeXRendering.userScript,
+                    injectionTime: .atDocumentEnd,
+                    forMainFrameOnly: true
+                )
+            )
+        }
         configuration.userContentController.addUserScript(
             WKUserScript(
                 source: Coordinator.instrumentationScript,
@@ -449,6 +458,11 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
             const isTranslationElement = element =>
                 !!(element && element.matches && element.matches(translationSelector));
 
+            // Typeset TeX is reader-only DOM; anchors must match the saved document.
+            const renderedMathSelector = '.\(HTMLTeXRendering.wrapperClass)';
+            const isRenderedMathElement = element =>
+                !!(element && element.matches && element.matches(renderedMathSelector));
+
             const translationDisplayCSS = `
                 html[data-rp-display-mode='original'] .rp-translation-block { display: none !important; }
                 html[data-rp-display-mode='translated'] [data-rp-source='true'] { display: none !important; }
@@ -556,7 +570,9 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
             };
 
             const originalChildren = parent =>
-                Array.from(parent?.children || []).filter(child => !isTranslationElement(child));
+                Array.from(parent?.children || []).filter(child =>
+                    !isTranslationElement(child) && !isRenderedMathElement(child)
+                );
 
             const normalizeText = text => (text || '').replace(/\\s+/g, ' ').trim();
 
@@ -601,6 +617,10 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
 
             const anchorElementForSelection = node => {
                 let element = elementFromNode(node);
+                const renderedMath = closestMatching(element, renderedMathSelector);
+                if (renderedMath) {
+                    element = renderedMath.parentElement;
+                }
                 if (!element) { return null; }
 
                 const translatedBlock = closestMatching(
@@ -2192,6 +2212,7 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
                 if (!source) { return; }
                 document.querySelectorAll(\(translationSelector)).forEach(node => node.remove());
                 source.insertAdjacentHTML('afterend', \(translatedHTML));
+                document.querySelectorAll(\(translationSelector)).forEach(node => window.__rpRenderTeX?.(node));
                 window.__rpLayoutSidenotes?.();
             })();
             """
