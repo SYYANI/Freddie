@@ -619,6 +619,12 @@ struct IPadReaderPaneView: View {
               let document = PDFDocument(url: pdfAttachment.fileURL),
               document.pageCount > 0,
               !isFullPDFTranslationComplete else { return }
+        do {
+            try PDFTextLayerInspector().requireExtractableText(at: pdfAttachment.fileURL)
+        } catch {
+            translationStatus = AppLocalization.errorMessage(error, bundle: bundle)
+            return
+        }
         if isPartialPDFTranslation {
             extendPDFTranslation()
         } else if document.pageCount > pdfTranslationBatchSize {

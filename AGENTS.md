@@ -119,6 +119,7 @@ LLM 配置现已拆成独立 SwiftData 模型：`LLMProviderProfile` 负责 prov
 - 设置页中的 BabelDOC 安装源支持官方 PyPI 与清华 TUNA mirror 切换。该偏好当前通过 `BabelDocInstallSource.userDefaultsKey` / `@AppStorage` 落到 UserDefaults，刻意不新增 `AppSettings` SwiftData 字段以降低旧 store 兼容风险。改 BabelDOC 安装链路时，不要重新硬编码单一 PyPI 源；`BabelDocToolManager` 应根据所选源同时切换 latest metadata URL 和 `uv tool install --default-index ... BabelDOC==<version>` 参数，阅读器里的自动安装也应沿用同一默认读取逻辑。
 - macOS 设置页的字符串输入框在快速切换焦点，尤其配合中文输入法或其他有 marked text / suggestions / Writing Tools 参与的输入路径时，可能打出 `NSXPCDecoder validateAllowedClass:forKey:` 且 allowed classes 含 `NSObject` 的系统警告。当前经验判断这更像 AppKit / 输入法 / Writing Tools 的系统日志，而不是项目里某个业务 `NSSecureCoding` 白名单真的写错。遇到这类报错时，先排查是否发生在设置页输入焦点切换，而不要优先沿 SwiftData、Keychain 或业务解码链路误判。
 - Reader 和设置页里的 LLM 错误要尽量按场景区分，例如 HTML 路由缺失、PDF 路由缺失、provider 被禁用、API key 缺失、测试模型不可用，而不是统一报成一个笼统的缺配置错误。
+- 启动 PDF 翻译前，`PDFTextLayerInspector` 会用 CoreGraphics 检查字体：若整份文档没有任何可解码字体（无字体的扫描件，或 dvips/Distiller 那类无 `ToUnicode`、字形名无意义、编码按首次出现编号的 Type3 位图字体），直接以 `PDFTextLayerError.noExtractableText` 提示不支持，不再把乱码送进 BabelDOC/LLM。判定刻意保守：只要有一个可解码字体就放行；pdfTeX 风格（`/a65` 位于 code 65）的 Type3 字体视为可解码。
 - BabelDOC 通过 `BabelDocRunner` 和 `ProcessRunner` 启动外部进程，参数中的模型、base URL 和 API key 来自 PDF route snapshot；API key 要使用现有 redaction 逻辑，不要把外部工具失败吞掉成静默失败。
 - BabelDOC 的 launcher 可能是 `uv tool install` 生成的 `sh` 包装器，第一行 shebang 不一定就是实际 Python 解释器；改启动逻辑时要兼容“同目录 venv `python3`/`python` + shell wrapper `exec .../python3`”这类结构，不要简单假设 `#!/usr/bin/env python3`。
 - ReadPaper 管理的 BabelDOC 安装应优先使用 uv-managed Python 3.13；已遇到 Python 3.14 下 BabelDOC 运行时报 `_WorkItem.__init__` 参数不匹配的兼容性问题。判断 BabelDOC 是否可用时不要只检查 `bin/babeldoc` 是否可执行，还要确认 launcher 背后的 Python 版本可用；如果用户把 `/Users/.../Library/Application Support/ReadPaper/Tools/BabelDOC/bin/babeldoc` 手工改成指向 `~/.local/bin/babeldoc` 一类工作版本的 symlink，后续改安装、探测或移除逻辑时要避免误判为内置版本已经健康。
@@ -170,6 +171,7 @@ xcodebuild -project ReadPaper.xcodeproj -scheme ReadPaper -destination 'platform
 - HTML 导入、本地化与 Readability 回退：`HTMLLocalizerTests`
 - HTML 候选抽取、占位符保护、译文插入：`HTMLTranslationPipelineTests`
 - 翻译输出校验（prompt/原文/上下文回显、重试与回退）：`TranslationOutputValidatorTests`
+- PDF 无文字层检测（Type3 无映射字体、扫描件、glyph name 判定）：`PDFTextLayerInspectorTests`
 - BabelDOC 安装源、latest 版本解析、uv 安装参数：`BabelDocToolManagerTests`
 - BabelDOC 参数、progress bridge、敏感信息遮蔽、子进程输出/取消：`BabelDocRunnerTests`
 - provider 校验、base URL 规范化、连接测试：`LLMProviderValidationUseCaseTests`

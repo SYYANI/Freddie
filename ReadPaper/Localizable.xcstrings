@@ -6179,6 +6179,16 @@
         }
       }
     },
+    "This PDF has no extractable text layer (for example, scanned pages or bitmap fonts without character mapping). PDF translation is not supported for it." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此 PDF 没有可提取的文字层（例如扫描页面，或缺少字符映射的位图字体），暂不支持翻译。"
+          }
+        }
+      }
+    },
     "This PDF links to arXiv %@. Would you like to import it into your library?" : {
       "extractionState" : "stale",
       "localizations" : {

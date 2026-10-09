@@ -1909,6 +1909,13 @@ struct ReaderPaneView: View {
     private func translatePDF() {
         guard let pdfAttachment else { return }
 
+        do {
+            try PDFTextLayerInspector().requireExtractableText(at: pdfAttachment.fileURL)
+        } catch {
+            handleTranslationError(error)
+            return
+        }
+
         if isPartialPDFTranslation {
             extendPDFTranslation()
             return
