@@ -34,6 +34,11 @@ final class HTMLPDFExporter: NSObject, WKNavigationDelegate {
         _ = try Data(contentsOf: sourceURL)
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = .nonPersistent()
+        if !HTMLTeXRendering.userScript.isEmpty {
+            configuration.userContentController.addUserScript(
+                WKUserScript(source: HTMLTeXRendering.userScript, injectionTime: .atDocumentEnd, forMainFrameOnly: true)
+            )
+        }
         let webView = WKWebView(
             frame: NSRect(x: 0, y: 0, width: 720, height: 960),
             configuration: configuration
