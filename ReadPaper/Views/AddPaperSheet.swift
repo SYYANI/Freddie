@@ -30,6 +30,7 @@ struct AddPaperSheet: View {
                     text: $arxivInput
                 )
                     .textFieldStyle(.roundedBorder)
+                    .onSubmit(importArxiv)
                 HStack(alignment: .center, spacing: 12) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Download HTML version", bundle: bundle)
@@ -49,7 +50,7 @@ struct AddPaperSheet: View {
                 Button(String(localized: "Import from arXiv", bundle: bundle)) {
                     importArxiv()
                 }
-                .disabled(arxivInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isImporting)
+                .disabled(!canImportArxiv)
             }
 
             Divider()
@@ -62,10 +63,11 @@ struct AddPaperSheet: View {
                     text: $webPageInput
                 )
                     .textFieldStyle(.roundedBorder)
+                    .onSubmit(importWebPage)
                 Button(String(localized: "Import web page", bundle: bundle)) {
                     importWebPage()
                 }
-                .disabled(webPageInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isImporting)
+                .disabled(!canImportWebPage)
             }
 
             Divider()
@@ -107,7 +109,16 @@ struct AddPaperSheet: View {
         .padding(24)
     }
 
+    private var canImportArxiv: Bool {
+        !isImporting && !arxivInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var canImportWebPage: Bool {
+        !isImporting && !webPageInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
     private func importArxiv() {
+        guard canImportArxiv else { return }
         isImporting = true
         arxivImportProgress = .resolvingInput(includesHTML: includeArxivHTML)
         webPageImportProgress = nil
@@ -134,6 +145,7 @@ struct AddPaperSheet: View {
     }
 
     private func importWebPage() {
+        guard canImportWebPage else { return }
         isImporting = true
         arxivImportProgress = nil
         webPageImportProgress = .validatingURL()

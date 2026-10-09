@@ -2,6 +2,12 @@ import AppKit
 import SwiftData
 import SwiftUI
 
+private enum InspectorColumnMetrics {
+    static let minWidth: CGFloat = 280
+    static let idealWidth: CGFloat = 340
+    static let maxWidth: CGFloat = 420
+}
+
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.localizationBundle) private var bundle
@@ -20,6 +26,7 @@ struct ContentView: View {
     @State private var noteNavigationRequest: NoteNavigationRequest?
     @State private var sidenoteFocusRequest: SidenoteFocusRequest?
     @State private var isPDFSidenoteRailAvailable = false
+    @State private var isPreparingInspectorReveal = false
     @State private var isAddingPaper = false
     @State private var paperPendingDeletion: Paper?
     @State private var deletionErrorMessage: String?
@@ -55,16 +62,8 @@ struct ContentView: View {
     private var inspectorCollapsedBinding: Binding<Bool> {
         Binding(
             get: { isInspectorCollapsed },
-            set: { newValue in
-                if let settings = settings, settings.inspectorCollapsed != newValue {
-                    settings.inspectorCollapsed = newValue
-                    settings.modifiedAt = Date()
-                    do {
-                        try modelContext.save()
-                    } catch {
-                        assertionFailure("Failed to save inspector collapsed state: \(error.localizedDescription)")
-                    }
-                }
+            set: { newValue, transaction in
+                updateInspectorCollapsed(newValue, transaction: transaction)
             }
         )
     }
@@ -72,8 +71,59 @@ struct ContentView: View {
     private var inspectorPresentedBinding: Binding<Bool> {
         Binding(
             get: { !isInspectorCollapsed },
-            set: { inspectorCollapsedBinding.wrappedValue = !$0 }
+            set: { newValue, transaction in
+                updateInspectorCollapsed(!newValue, transaction: transaction)
+            }
         )
+    }
+
+    private var mainWindowMinWidth: CGFloat {
+        isPreparingInspectorReveal
+            ? MainWindowMetrics.minWidth - InspectorColumnMetrics.maxWidth
+            : MainWindowMetrics.minWidth
+    }
+
+    private func updateInspectorCollapsed(_ isCollapsed: Bool, transaction: Transaction) {
+        if #available(macOS 26.0, *), isCollapsed == false, isInspectorCollapsed {
+            revealInspectorWithRelaxedWindowMinimum(transaction: transaction)
+        } else {
+            persistInspectorCollapsed(isCollapsed)
+        }
+    }
+
+    /// On macOS 26 the `.inspector` reveal only shrinks the reader when the window is at
+    /// least the root minimum width plus the inspector width. In narrower windows AppKit
+    /// instead grows the split view past the window edge for the whole reveal animation and
+    /// snaps back at the end, which shows up as a hitch. Lowering the minimum by the widest
+    /// inspector for the run-loop turn in which the reveal starts keeps it on the shrinking
+    /// path; the minimum is restored right after, so the window still cannot get narrower
+    /// than `MainWindowMetrics.minWidth`.
+    private func revealInspectorWithRelaxedWindowMinimum(transaction: Transaction) {
+        guard isPreparingInspectorReveal == false else { return }
+        isPreparingInspectorReveal = true
+
+        // The reveal reads the minimum from the last layout pass, so present the inspector
+        // only after the relaxed minimum has been applied.
+        DispatchQueue.main.async {
+            withTransaction(transaction) {
+                persistInspectorCollapsed(false)
+            }
+            DispatchQueue.main.async {
+                isPreparingInspectorReveal = false
+            }
+        }
+    }
+
+    private func persistInspectorCollapsed(_ isCollapsed: Bool) {
+        if let settings = settings, settings.inspectorCollapsed != isCollapsed {
+            settings.inspectorCollapsed = isCollapsed
+            settings.modifiedAt = Date()
+            do {
+                try modelContext.save()
+            } catch {
+                assertionFailure("Failed to save inspector collapsed state: \(error.localizedDescription)")
+            }
+        }
     }
 
     private var sidebarColumn: some View {
@@ -142,7 +192,11 @@ struct ContentView: View {
                 readerColumn
                     .inspector(isPresented: inspectorPresentedBinding) {
                         inspectorColumn(isCollapsed: false)
-                            .inspectorColumnWidth(min: 280, ideal: 340, max: 420)
+                            .inspectorColumnWidth(
+                                min: InspectorColumnMetrics.minWidth,
+                                ideal: InspectorColumnMetrics.idealWidth,
+                                max: InspectorColumnMetrics.maxWidth
+                            )
                     }
             }
         } else {
@@ -153,9 +207,9 @@ struct ContentView: View {
             } detail: {
                 inspectorColumn(isCollapsed: isInspectorCollapsed)
                     .navigationSplitViewColumnWidth(
-                        min: isInspectorCollapsed ? 0 : 280,
-                        ideal: isInspectorCollapsed ? 0 : 340,
-                        max: isInspectorCollapsed ? 0 : 420
+                        min: isInspectorCollapsed ? 0 : InspectorColumnMetrics.minWidth,
+                        ideal: isInspectorCollapsed ? 0 : InspectorColumnMetrics.idealWidth,
+                        max: isInspectorCollapsed ? 0 : InspectorColumnMetrics.maxWidth
                     )
             }
         }
@@ -163,6 +217,7 @@ struct ContentView: View {
 
     var body: some View {
         mainNavigation
+        .frame(minWidth: mainWindowMinWidth, minHeight: MainWindowMetrics.minHeight)
         .background {
             ZStack {
                 if isPaperAppearance {

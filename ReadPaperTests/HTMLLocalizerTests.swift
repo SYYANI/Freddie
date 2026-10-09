@@ -97,6 +97,47 @@ final class HTMLLocalizerTests: XCTestCase {
         ))
     }
 
+    func testReadabilityStylesKeepSourceThemeCenteredBody() throws {
+        let paragraph = String(repeating: "This newsletter copy should sit in a centered reading column. ", count: 12)
+        let html = """
+        <html>
+        <head>
+        <style>
+        body { display: flex; flex-direction: column; margin: 0; }
+        body, p { margin-left: auto; margin-right: auto; max-width: 650px; background-color: #ffffff !important; }
+        h1 { margin-left: auto; margin-right: auto; max-width: 650px; }
+        </style>
+        </head>
+        <body>
+        <article>
+        <h1>Readable Title</h1>
+        <p>\(paragraph)</p>
+        </article>
+        </body>
+        </html>
+        """
+
+        let document = try HTMLLocalizer().makeDocumentForLocalization(
+            html: html,
+            sourceURL: URL(string: "https://example.com/archive/post")!
+        )
+
+        let style = try XCTUnwrap(try document.getElementById("rp-readability-style"))
+        let readabilityCSS = style.data()
+        // Our reset must not outrank the theme's `margin: auto`, or the capped body
+        // is pinned to the left edge.
+        XCTAssertTrue(readabilityCSS.contains(":where(body.rp-readability-body) { margin: 0; }"))
+        XCTAssertNil(readabilityCSS.range(
+            of: #"(^|\n)\s*body\.rp-readability-body\s*\{[^}]*margin"#,
+            options: .regularExpression
+        ))
+        XCTAssertTrue(readabilityCSS.contains(":is(.rp-readability-header, .rp-readability-content) :is(p, h1, h2, h3, h4, h5, h6)"))
+        XCTAssertNotNil(readabilityCSS.range(
+            of: #":where\([^)]*\bp, h1,[^)]*\)[^{]*\{\s*background-color:\s*transparent\s*!important;"#,
+            options: .regularExpression
+        ))
+    }
+
     func testReadabilityStylesRestoreNormalFlowForAnimatedArticleContent() throws {
         let paragraph = String(repeating: "This article copy must remain in normal document flow. ", count: 8)
         let html = """
