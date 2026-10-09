@@ -434,16 +434,6 @@
         }
       }
     },
-    "Adding the PDF files to your library." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "正在将 PDF 文件添加到你的资料库。"
-          }
-        }
-      }
-    },
     "Adds a localized HTML copy for HTML reading and translation. Import may take longer." : {
       "localizations" : {
         "zh-Hans" : {
@@ -4899,16 +4889,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "重新生成"
-          }
-        }
-      }
-    },
-    "Release to add the PDF files to your library." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "松开即可将 PDF 文件添加到你的资料库。"
           }
         }
       }

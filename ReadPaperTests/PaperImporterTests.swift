@@ -1,5 +1,8 @@
+import AppKit
 import Foundation
+import PDFKit
 import SwiftData
+import WebKit
 import XCTest
 @testable import ReadPaper
 
@@ -60,6 +63,23 @@ final class PaperImporterTests: XCTestCase {
             ),
             [pdf]
         )
+    }
+
+    @MainActor
+    func testReaderViewsDoNotClaimFinderFileDrags() {
+        // Pasteboard types of a PDF dragged from Finder.
+        let finderDragTypes: Set<NSPasteboard.PasteboardType> = [
+            .fileURL,
+            NSPasteboard.PasteboardType("NSFilenamesPboardType"),
+            NSPasteboard.PasteboardType("Apple URL pasteboard type"),
+            NSPasteboard.PasteboardType("com.apple.finder.node"),
+        ]
+        let readerDragTypes = PDFView().registeredDraggedTypes + WKWebView().registeredDraggedTypes
+        XCTAssertFalse(Set(readerDragTypes).isDisjoint(with: finderDragTypes))
+
+        let filtered = ReaderFileDropPassthrough.filteringDraggedTypes(readerDragTypes)
+        XCTAssertTrue(Set(filtered).isDisjoint(with: finderDragTypes))
+        XCTAssertTrue(filtered.contains(NSPasteboard.PasteboardType("NSStringPboardType")))
     }
 
     @MainActor

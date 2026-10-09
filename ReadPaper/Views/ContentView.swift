@@ -234,11 +234,18 @@ struct ContentView: View {
             .ignoresSafeArea()
         }
         .overlay {
-            if isPDFDropTargeted || isImportingDroppedPDFs {
-                PDFDropOverlay(isImporting: isImportingDroppedPDFs)
-                    .allowsHitTesting(false)
-                    .transition(.opacity.combined(with: .scale(scale: 0.98)))
+            // Ignore the safe area on a container that is always present: applied inside the
+            // transitioning view, it only takes effect once the insertion finishes, so the card
+            // would first appear centered below the toolbar and then jump up.
+            ZStack {
+                if isPDFDropTargeted || isImportingDroppedPDFs {
+                    PDFDropOverlay(isImporting: isImportingDroppedPDFs)
+                        .transition(.opacity.combined(with: .scale(scale: 0.98)))
+                }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .ignoresSafeArea()
+            .allowsHitTesting(false)
         }
         .dropDestination(for: URL.self) { urls, _ in
             importDroppedPDFs(urls)
@@ -632,16 +639,6 @@ private struct PDFDropOverlay: View {
                     }
                 }
                 .font(.title2.weight(.semibold))
-
-                Group {
-                    if isImporting {
-                        Text("Adding the PDF files to your library.", bundle: bundle)
-                    } else {
-                        Text("Release to add the PDF files to your library.", bundle: bundle)
-                    }
-                }
-                .font(.callout)
-                .foregroundStyle(.secondary)
             }
             .multilineTextAlignment(.center)
             .padding(.horizontal, 44)
@@ -656,7 +653,6 @@ private struct PDFDropOverlay: View {
             }
             .shadow(color: .black.opacity(0.16), radius: 24, y: 10)
         }
-        .ignoresSafeArea()
         .accessibilityElement(children: .combine)
     }
 }

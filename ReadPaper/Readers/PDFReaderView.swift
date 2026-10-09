@@ -1907,6 +1907,10 @@ private final class InteractivePDFView: PDFView {
         installInteractionOverlay()
     }
 
+    override func registerForDraggedTypes(_ newTypes: [NSPasteboard.PasteboardType]) {
+        super.registerForDraggedTypes(ReaderFileDropPassthrough.filteringDraggedTypes(newTypes))
+    }
+
     override func resetCursorRects() {
         super.resetCursorRects()
         switch interactionMode {
@@ -2148,6 +2152,28 @@ private final class PDFInteractionOverlayView: NSView {
         inkPath.lineWidth = inkLineWidth
         inkColor.setStroke()
         inkPath.stroke()
+    }
+}
+#endif
+
+#if os(macOS)
+/// AppKit hands a drag to the innermost view registered for one of its pasteboard types and
+/// never bubbles it up to ancestors. `PDFView` and `WKWebView` both register for file and URL
+/// drags, so an open reader would swallow PDFs dragged from Finder before the window-level
+/// `dropDestination` in `ContentView` sees them. Readers opt out of those types instead.
+enum ReaderFileDropPassthrough {
+    static let excludedDraggedTypes: Set<NSPasteboard.PasteboardType> = Set(
+        [
+            .fileURL,
+            .URL,
+            NSPasteboard.PasteboardType("NSFilenamesPboardType"),
+            NSPasteboard.PasteboardType("Apple URL pasteboard type"),
+            NSPasteboard.PasteboardType("Apple files promise pasteboard type"),
+        ] + NSFilePromiseReceiver.readableDraggedTypes.map { NSPasteboard.PasteboardType($0) }
+    )
+
+    static func filteringDraggedTypes(_ types: [NSPasteboard.PasteboardType]) -> [NSPasteboard.PasteboardType] {
+        types.filter { !excludedDraggedTypes.contains($0) }
     }
 }
 #endif
