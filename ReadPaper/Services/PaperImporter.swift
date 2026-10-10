@@ -65,6 +65,29 @@ final class PaperImporter {
         paper.localDirectoryPath = try fileStore.directory(for: paper.id).path
         modelContext.insert(paper)
 
+        do {
+            try await downloadArxivAttachments(
+                for: paper,
+                metadata: metadata,
+                modelContext: modelContext,
+                includeHTML: includeHTML,
+                onProgress: onProgress
+            )
+        } catch {
+            discardUnsavedPaper(paper, modelContext: modelContext)
+            throw error
+        }
+        AuthorExtractionService.extractAuthorsIfNeeded(for: paper, modelContext: modelContext)
+        return paper
+    }
+
+    private func downloadArxivAttachments(
+        for paper: Paper,
+        metadata: ArxivPaperMetadata,
+        modelContext: ModelContext,
+        includeHTML: Bool,
+        onProgress: ((ArxivImportProgress) -> Void)?
+    ) async throws {
         if let pdfURL = metadata.pdfURL ?? URL(string: "https://arxiv.org/pdf/\(metadata.arxivID)") {
             onProgress?(.downloadingPDF(for: metadata.arxivID, includesHTML: includeHTML))
             let request = BrowserRequestHeaders.request(for: pdfURL, accept: .resource)
@@ -92,10 +115,22 @@ final class PaperImporter {
         } else {
             htmlImported = false
         }
+        try Task.checkCancellation()
         onProgress?(.finalizing(htmlImported: htmlImported, includesHTML: includeHTML))
         try modelContext.save()
-        AuthorExtractionService.extractAuthorsIfNeeded(for: paper, modelContext: modelContext)
-        return paper
+    }
+
+    /// Rolls back a paper that was inserted during an import that later failed or was cancelled,
+    /// including any attachments (some may already have been saved by intermediate steps).
+    private func discardUnsavedPaper(_ paper: Paper, modelContext: ModelContext) {
+        let paperID = paper.id
+        let attachments = (try? modelContext.fetch(FetchDescriptor<PaperAttachment>(
+            predicate: #Predicate { $0.paperID == paperID }
+        ))) ?? []
+        attachments.forEach(modelContext.delete)
+        modelContext.delete(paper)
+        try? modelContext.save()
+        try? fileStore.removeDirectory(for: paperID)
     }
 
     func importLocalPDF(_ url: URL, modelContext: ModelContext) throws -> Paper {
@@ -213,6 +248,7 @@ final class PaperImporter {
                 outputURL: outputURL,
                 resourcesDirectory: resourcesDirectory
             )
+            try Task.checkCancellation()
             paper.title = Self.extractHTMLTitle(from: htmlURL) ?? paper.title
             onProgress?(.creatingLibraryEntry(title: paper.title))
 
@@ -251,6 +287,7 @@ final class PaperImporter {
         modelContext: ModelContext,
         onProgress: ((WebPageImportProgress) -> Void)?
     ) async throws -> Paper {
+        try Task.checkCancellation()
         onProgress?(.downloadingPDF(from: sourceURL))
 
         let pdfFile = try fileStore.write(data, named: "paper.pdf", for: paper.id)
@@ -278,6 +315,7 @@ final class PaperImporter {
             }
         }
 
+        try Task.checkCancellation()
         onProgress?(.creatingLibraryEntry(title: paper.title))
 
         if insertPaper {
@@ -397,6 +435,7 @@ final class PaperImporter {
                 try? modelContext.save()
                 return true
             } catch {
+                if Task.isCancelled { return false }
                 continue
             }
         }

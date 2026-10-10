@@ -3,6 +3,14 @@ import Readability
 import SwiftSoup
 
 struct HTMLLocalizer: @unchecked Sendable {
+    private static let maxConcurrentResourceDownloads = 6
+    private static let maxStylesheetDownloads = 16
+    private static let maxCSSResourceDownloads = 24
+    private static let maxImageDownloads = 96
+    private static let maxSourceSetDownloads = 32
+    private static let resourceRequestTimeout: TimeInterval = 8
+    static let defaultResourceTimeBudget: Duration = .seconds(30)
+
     // Extracted articles use our reading surface, so their prose must use the
     // matching palette too. Keep source styles for code, formulas, and graphics.
     // Also inject this in the reader to repair saved HTML without moving nodes
@@ -40,7 +48,13 @@ struct HTMLLocalizer: @unchecked Sendable {
     // constrain only the original (e.g. a centered 640px paragraph), leaving its
     // translated sibling at full width. Share this with the reader to repair saved
     // documents as well, without changing the DOM used by note anchors.
+    // A source cap on the root (mandoc.css: `html { max-width: 65em; }`) pins the
+    // whole page to the left and confines the sidenote reserve, so lift it; the
+    // shell already caps and centers the column.
     static let readableProseLayoutCSS = """
+    html:has(> body.rp-readability-body) {
+        max-width: none !important;
+    }
     body.rp-readability-body :is(.rp-readability-header, .rp-readability-content) :is(p, h1, h2, h3, h4, h5, h6):not(svg *, math *) {
         width: 100% !important;
         min-width: 0 !important;
@@ -53,10 +67,18 @@ struct HTMLLocalizer: @unchecked Sendable {
 
     let session: URLSession
     let fileManager: FileManager
+    /// Wall-clock budget for downloading page resources. Once it runs out no new requests
+    /// start; in-flight ones finish within `resourceRequestTimeout`.
+    let resourceTimeBudget: Duration
 
-    init(session: URLSession = .shared, fileManager: FileManager = .default) {
+    init(
+        session: URLSession = .shared,
+        fileManager: FileManager = .default,
+        resourceTimeBudget: Duration = HTMLLocalizer.defaultResourceTimeBudget
+    ) {
         self.session = session
         self.fileManager = fileManager
+        self.resourceTimeBudget = resourceTimeBudget
     }
 
     func fetchAndLocalize(from sourceURL: URL, outputURL: URL, resourcesDirectory: URL) async throws -> URL {
@@ -76,40 +98,101 @@ struct HTMLLocalizer: @unchecked Sendable {
         let html = String(data: htmlData, encoding: .utf8) ?? String(decoding: htmlData, as: UTF8.self)
         let document = try makeDocumentForLocalization(html: html, sourceURL: sourceURL)
         try document.select("script[src]").remove()
+        try removeArchiveReplayChromeResources(from: document, sourceURL: sourceURL)
 
+        // One wall-clock budget covers every resource download, so a slow host (Wayback replay,
+        // archive mirrors, throttled CDNs) degrades to online fallbacks instead of stalling
+        // import. Downloads run in two waves split only by real dependencies; within a wave the
+        // sliding window starts URLs in list order: layout CSS, article images, then decoration.
+        let resourceDeadline = ContinuousClock.now + resourceTimeBudget
+
+        var stylesheetTargets: [(element: Element, url: URL)] = []
         for link in try document.select("link[rel=stylesheet][href]").array() {
             let href = try link.attr("href")
             guard let resourceURL = resolve(href, relativeTo: sourceURL) else { continue }
-            do {
-                let css = try await downloadText(from: resourceURL)
-                let rewritten = try await rewriteCSS(css, baseURL: resourceURL, resourcesDirectory: resourcesDirectory)
-                let filename = try writeResource(Data(rewritten.utf8), originalURL: resourceURL, resourcesDirectory: resourcesDirectory, preferredExtension: "css")
-                try link.tagName("style")
-                try link.removeAttr("href")
-                try link.removeAttr("rel")
-                try setRawStyleContent("/* \(filename) */\n\(rewritten)", on: link)
-            } catch {
-                continue
-            }
+            // If this stylesheet falls outside the localization budget or its download
+            // fails, keep an absolute online fallback instead of a broken file-relative URL.
+            try link.attr("href", resourceURL.absoluteString)
+            stylesheetTargets.append((link, resourceURL))
         }
 
+        var imageTargets: [(element: Element, url: URL)] = []
         for image in try document.select("img[src]").array() {
             let source = try image.attr("src")
             guard let resourceURL = resolve(source, relativeTo: sourceURL) else { continue }
+            // Same online fallback as stylesheets for images outside the budget or failed downloads.
+            try image.attr("src", resourceURL.absoluteString)
+            imageTargets.append((image, resourceURL))
+        }
+
+        // Wave 1: stylesheets and article images do not depend on each other.
+        let localizedStylesheets = Array(stylesheetTargets.prefix(Self.maxStylesheetDownloads))
+        let stylesheetURLs = uniqueDownloadURLs(localizedStylesheets.map(\.url))
+        let stylesheetURLSet = Set(stylesheetURLs)
+        // Budget distinct images, so repeated avatars or spacers do not crowd out figures.
+        let imageURLs = uniqueDownloadURLs(imageTargets.map(\.url))
+            .filter { !stylesheetURLSet.contains($0) }
+            .prefix(Self.maxImageDownloads)
+        let firstWave = try await downloadResources(
+            stylesheetURLs + imageURLs,
+            deadline: resourceDeadline
+        ) { url, data -> LocalizedResource? in
+            if stylesheetURLSet.contains(url) {
+                return .stylesheet(String(data: data, encoding: .utf8) ?? String(decoding: data, as: UTF8.self))
+            }
+            return (try? writeResource(data, originalURL: url, resourcesDirectory: resourcesDirectory)).map { .file($0) }
+        }
+        let stylesheetTextByURL = firstWave.compactMapValues(\.stylesheetText)
+        var localizedFilenames = firstWave.compactMapValues(\.filename)
+
+        for target in imageTargets {
+            guard let filename = localizedFilenames[normalizedDownloadURL(target.url)] else { continue }
+            try target.element.attr("src", localizedReference(filename, for: target.url))
+            try preferLocalizedImageSource(for: target.element)
+        }
+
+        // Wave 2: what is left to fetch depends on wave 1 — <source> candidates only for images
+        // that stayed online (localized ones dropped their <source> nodes), and url(...) entries
+        // only for stylesheets that arrived. The two sets are independent of each other.
+        var sourceSetURLs: [URL] = []
+        for source in try document.select("source[srcset]").array() {
+            sourceSetURLs.append(contentsOf: srcsetCandidates(try source.attr("srcset"), baseURL: sourceURL).compactMap(\.url))
+        }
+        var nestedCSSResourceURLs: [URL] = []
+        for target in localizedStylesheets {
+            guard let css = stylesheetTextByURL[normalizedDownloadURL(target.url)] else { continue }
+            nestedCSSResourceURLs.append(contentsOf: try cssURLReferences(in: css, baseURL: target.url).map(\.url))
+        }
+        let pendingSourceSetURLs = uniqueDownloadURLs(sourceSetURLs)
+            .filter { localizedFilenames[$0] == nil }
+            .prefix(Self.maxSourceSetDownloads)
+        let pendingCSSResourceURLs = uniqueDownloadURLs(nestedCSSResourceURLs)
+            .filter { localizedFilenames[$0] == nil }
+            .prefix(Self.maxCSSResourceDownloads)
+        let secondWave = try await downloadResourceFiles(
+            Array(pendingSourceSetURLs) + Array(pendingCSSResourceURLs),
+            into: resourcesDirectory,
+            deadline: resourceDeadline
+        )
+        localizedFilenames.merge(secondWave) { existing, _ in existing }
+
+        for element in try document.select("img[srcset], source[srcset]").array() {
+            let srcset = try element.attr("srcset")
+            try element.attr("srcset", rewriteSrcset(srcset, baseURL: sourceURL, localizedFilenames: localizedFilenames))
+        }
+
+        for target in localizedStylesheets {
+            guard let css = stylesheetTextByURL[normalizedDownloadURL(target.url)] else { continue }
             do {
-                let data = try await downloadData(from: resourceURL)
-                let filename = try writeResource(data, originalURL: resourceURL, resourcesDirectory: resourcesDirectory)
-                try image.attr("src", "Resources/\(filename)")
-                try preferLocalizedImageSource(for: image)
+                let rewritten = try rewriteCSS(css, baseURL: target.url, localizedFilenames: localizedFilenames)
+                let filename = try writeResource(Data(rewritten.utf8), originalURL: target.url, resourcesDirectory: resourcesDirectory, preferredExtension: "css")
+                try target.element.tagName("style")
+                try target.element.removeAttr("href")
+                try target.element.removeAttr("rel")
+                try setRawStyleContent("/* \(filename) */\n\(rewritten)", on: target.element)
             } catch {
                 continue
             }
-        }
-
-        for source in try document.select("source[srcset]").array() {
-            let srcset = try source.attr("srcset")
-            let rewritten = try await rewriteSrcset(srcset, baseURL: sourceURL, resourcesDirectory: resourcesDirectory)
-            try source.attr("srcset", rewritten)
         }
 
         try tuneEmbeddedMediaLoading(in: document)
@@ -154,50 +237,174 @@ struct HTMLLocalizer: @unchecked Sendable {
         visibleBodyTextLength(in: html) >= 40 && !needsXPostParagraphRepair(html)
     }
 
-    func rewriteCSS(_ css: String, baseURL: URL, resourcesDirectory: URL) async throws -> String {
-        var rewritten = css
-        let pattern = #"url\(([^)]+)\)"#
-        let regex = try NSRegularExpression(pattern: pattern)
-        let matches = regex.matches(in: css, range: NSRange(css.startIndex..., in: css)).reversed()
-
-        for match in matches {
-            guard let valueRange = Range(match.range(at: 1), in: css) else { continue }
-            let rawValue = String(css[valueRange]).trimmingCharacters(in: CharacterSet(charactersIn: " \"'"))
-            guard !rawValue.hasPrefix("data:"), let resourceURL = resolve(rawValue, relativeTo: baseURL) else { continue }
-            do {
-                let data = try await downloadData(from: resourceURL)
-                let filename = try writeResource(data, originalURL: resourceURL, resourcesDirectory: resourcesDirectory)
-                if let fullRange = Range(match.range(at: 0), in: rewritten) {
-                    rewritten.replaceSubrange(fullRange, with: "url('Resources/\(filename)')")
-                }
-            } catch {
-                continue
-            }
+    func rewriteCSS(_ css: String, baseURL: URL, localizedFilenames: [URL: String]) throws -> String {
+        var rewritten = ""
+        var cursor = css.startIndex
+        for reference in try cssURLReferences(in: css, baseURL: baseURL) {
+            let target = localizedFilenames[normalizedDownloadURL(reference.url)]
+                .map { localizedReference($0, for: reference.url) } ?? reference.url.absoluteString
+            rewritten += css[cursor..<reference.range.lowerBound]
+            rewritten += "url('\(escapedCSSURL(target))')"
+            cursor = reference.range.upperBound
         }
+        rewritten += css[cursor...]
         return rewritten
     }
 
-    private func rewriteSrcset(_ srcset: String, baseURL: URL, resourcesDirectory: URL) async throws -> String {
-        var rewrittenItems: [String] = []
-        for item in srcset.split(separator: ",") {
-            let parts = item.split(separator: " ", maxSplits: 1).map(String.init)
-            guard let first = parts.first, let resourceURL = resolve(first, relativeTo: baseURL) else {
-                rewrittenItems.append(String(item))
+    private func rewriteSrcset(_ srcset: String, baseURL: URL, localizedFilenames: [URL: String]) -> String {
+        srcsetCandidates(srcset, baseURL: baseURL).map { candidate in
+            guard let url = candidate.url else { return candidate.raw }
+            let target = localizedFilenames[normalizedDownloadURL(url)]
+                .map { localizedReference($0, for: url) } ?? url.absoluteString
+            return candidate.descriptor.map { "\(target) \($0)" } ?? target
+        }.joined(separator: ", ")
+    }
+
+    // Content cleanup, not a speed workaround: the Wayback toolbar styles would otherwise be
+    // inlined into the saved article. Download time is bounded by `resourceTimeBudget`.
+    private func removeArchiveReplayChromeResources(from document: Document, sourceURL: URL) throws {
+        let archiveHosts: Set<String> = ["web.archive.org", "web-static.archive.org"]
+        guard let sourceHost = sourceURL.host?.lowercased(), archiveHosts.contains(sourceHost) else { return }
+
+        for link in try document.select("link[rel=stylesheet][href]").array() {
+            let href = try link.attr("href")
+            guard let url = resolve(href, relativeTo: sourceURL),
+                  let host = url.host?.lowercased(), archiveHosts.contains(host),
+                  url.path.hasPrefix("/_static/") else {
                 continue
             }
-            do {
-                let data = try await downloadData(from: resourceURL)
-                let filename = try writeResource(data, originalURL: resourceURL, resourcesDirectory: resourcesDirectory)
-                if parts.count == 2 {
-                    rewrittenItems.append("Resources/\(filename) \(parts[1])")
-                } else {
-                    rewrittenItems.append("Resources/\(filename)")
-                }
-            } catch {
-                rewrittenItems.append(String(item))
-            }
+            try link.remove()
         }
-        return rewrittenItems.joined(separator: ", ")
+
+        // Readability normally drops these nodes with the rest of the navigation chrome.
+        // Remove them as a fallback for pages whose article extraction is intentionally skipped.
+        try document.select("#wm-ipp-base, #wm-ipp-print").remove()
+    }
+
+    private func cssURLReferences(in css: String, baseURL: URL) throws -> [(range: Range<String.Index>, url: URL)] {
+        let regex = try NSRegularExpression(pattern: #"url\(([^)]+)\)"#)
+        return regex.matches(in: css, range: NSRange(css.startIndex..., in: css)).compactMap { match in
+            guard let fullRange = Range(match.range(at: 0), in: css),
+                  let valueRange = Range(match.range(at: 1), in: css),
+                  let resourceURL = resolve(String(css[valueRange]), relativeTo: baseURL) else {
+                return nil
+            }
+            return (fullRange, resourceURL)
+        }
+    }
+
+    private func srcsetCandidates(_ srcset: String, baseURL: URL) -> [(raw: String, url: URL?, descriptor: String?)] {
+        srcset.split(separator: ",").map { item in
+            let raw = item.trimmingCharacters(in: .whitespacesAndNewlines)
+            let parts = raw.split(separator: " ", maxSplits: 1).map(String.init)
+            let url = parts.first.flatMap { resolve($0, relativeTo: baseURL) }
+            return (raw, url, parts.count == 2 ? parts[1] : nil)
+        }
+    }
+
+    private func localizedReference(_ filename: String, for url: URL) -> String {
+        let fragment = url.fragment.map { "#\($0)" } ?? ""
+        return "Resources/\(filename)\(fragment)"
+    }
+
+    private func uniqueDownloadURLs(_ urls: [URL]) -> [URL] {
+        var seen: Set<URL> = []
+        return urls.compactMap { url in
+            let normalized = normalizedDownloadURL(url)
+            return seen.insert(normalized).inserted ? normalized : nil
+        }
+    }
+
+    private func normalizedDownloadURL(_ url: URL) -> URL {
+        guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              components.fragment != nil else {
+            return url
+        }
+        components.fragment = nil
+        return components.url ?? url
+    }
+
+    private func escapedCSSURL(_ value: String) -> String {
+        value
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "'", with: "\\'")
+    }
+
+    private enum LocalizedResource: Sendable {
+        case stylesheet(String)
+        case file(String)
+
+        var stylesheetText: String? {
+            if case .stylesheet(let text) = self { text } else { nil }
+        }
+
+        var filename: String? {
+            if case .file(let filename) = self { filename } else { nil }
+        }
+    }
+
+    private struct ResourceDownloadResult: Sendable {
+        let url: URL
+        let data: Data?
+    }
+
+    private func downloadResourceFiles(
+        _ urls: [URL],
+        into resourcesDirectory: URL,
+        deadline: ContinuousClock.Instant
+    ) async throws -> [URL: String] {
+        try await downloadResources(urls, deadline: deadline) { url, data in
+            try? writeResource(data, originalURL: url, resourcesDirectory: resourcesDirectory)
+        }
+    }
+
+    /// Downloads with a sliding window of `maxConcurrentResourceDownloads` requests and hands
+    /// each payload to `handle` as soon as it arrives, so callers can write it out instead of
+    /// buffering every resource. Failed downloads are omitted; cancellation propagates.
+    /// No request starts after `deadline`; URLs not yet started are simply left out.
+    private func downloadResources<Value: Sendable>(
+        _ urls: [URL],
+        deadline: ContinuousClock.Instant,
+        handle: (URL, Data) -> Value?
+    ) async throws -> [URL: Value] {
+        let uniqueURLs = uniqueDownloadURLs(urls)
+        guard !uniqueURLs.isEmpty else { return [:] }
+
+        return try await withThrowingTaskGroup(of: ResourceDownloadResult.self) { group in
+            var nextIndex = 0
+            while nextIndex < min(Self.maxConcurrentResourceDownloads, uniqueURLs.count),
+                  ContinuousClock.now < deadline {
+                let url = uniqueURLs[nextIndex]
+                group.addTask { try await fetchResource(url) }
+                nextIndex += 1
+            }
+
+            var resolved: [URL: Value] = [:]
+            while let result = try await group.next() {
+                if let data = result.data, let value = handle(result.url, data) {
+                    resolved[result.url] = value
+                }
+                if nextIndex < uniqueURLs.count, ContinuousClock.now < deadline {
+                    try Task.checkCancellation()
+                    let url = uniqueURLs[nextIndex]
+                    group.addTask { try await fetchResource(url) }
+                    nextIndex += 1
+                }
+            }
+            return resolved
+        }
+    }
+
+    private func fetchResource(_ url: URL) async throws -> ResourceDownloadResult {
+        do {
+            let data = try await downloadData(from: url, timeoutInterval: Self.resourceRequestTimeout)
+            return ResourceDownloadResult(url: url, data: data)
+        } catch {
+            if Task.isCancelled {
+                throw CancellationError()
+            }
+            return ResourceDownloadResult(url: url, data: nil)
+        }
     }
 
     private func makeReadableDocument(from html: String, sourceURL: URL, fallback document: Document) throws -> Document? {
@@ -643,13 +850,11 @@ struct HTMLLocalizer: @unchecked Sendable {
         return URL(string: trimmed, relativeTo: baseURL)?.absoluteURL
     }
 
-    private func downloadText(from url: URL) async throws -> String {
-        let data = try await downloadData(from: url)
-        return String(data: data, encoding: .utf8) ?? String(decoding: data, as: UTF8.self)
-    }
-
-    private func downloadData(from url: URL) async throws -> Data {
-        let request = BrowserRequestHeaders.request(for: url, accept: .resource)
+    private func downloadData(from url: URL, timeoutInterval: TimeInterval? = nil) async throws -> Data {
+        var request = BrowserRequestHeaders.request(for: url, accept: .resource)
+        if let timeoutInterval {
+            request.timeoutInterval = timeoutInterval
+        }
         let (data, response) = try await session.data(for: request)
         if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
             throw URLError(.badServerResponse)

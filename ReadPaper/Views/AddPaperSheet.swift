@@ -16,6 +16,7 @@ struct AddPaperSheet: View {
     @State private var arxivImportProgress: ArxivImportProgress?
     @State private var webPageImportProgress: WebPageImportProgress?
     @State private var errorMessage: String?
+    @State private var importTask: Task<Void, Never>?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -99,14 +100,23 @@ struct AddPaperSheet: View {
 
             HStack {
                 Spacer()
-                Button(String(localized: "Close", bundle: bundle)) {
+                // Stays enabled while importing so Esc cancels the import task
+                // instead of falling through to the sheet's default dismissal.
+                Button(
+                    isImporting
+                        ? String(localized: "Cancel", bundle: bundle)
+                        : String(localized: "Close", bundle: bundle)
+                ) {
+                    importTask?.cancel()
                     isPresented = false
                 }
-                .disabled(isImporting)
                 .keyboardShortcut(.cancelAction)
             }
         }
         .padding(24)
+        .onDisappear {
+            importTask?.cancel()
+        }
     }
 
     private var canImportArxiv: Bool {
@@ -125,7 +135,7 @@ struct AddPaperSheet: View {
         errorMessage = nil
         let input = arxivInput
         let includeHTML = includeArxivHTML
-        Task {
+        importTask = Task {
             do {
                 let paper = try await PaperImporter().importArxiv(
                     input,
@@ -134,13 +144,18 @@ struct AddPaperSheet: View {
                 ) { progress in
                     arxivImportProgress = progress
                 }
-                selectedPaperID = paper.id
-                isPresented = false
+                if !Task.isCancelled {
+                    selectedPaperID = paper.id
+                    isPresented = false
+                }
             } catch {
-                errorMessage = error.localizedDescription
+                if !Task.isCancelled {
+                    errorMessage = error.localizedDescription
+                }
             }
             isImporting = false
             arxivImportProgress = nil
+            importTask = nil
         }
     }
 
@@ -151,7 +166,7 @@ struct AddPaperSheet: View {
         webPageImportProgress = .validatingURL()
         errorMessage = nil
         let input = webPageInput
-        Task {
+        importTask = Task {
             do {
                 let paper = try await PaperImporter().importWebPage(
                     input,
@@ -159,13 +174,18 @@ struct AddPaperSheet: View {
                 ) { progress in
                     webPageImportProgress = progress
                 }
-                selectedPaperID = paper.id
-                isPresented = false
+                if !Task.isCancelled {
+                    selectedPaperID = paper.id
+                    isPresented = false
+                }
             } catch {
-                errorMessage = error.localizedDescription
+                if !Task.isCancelled {
+                    errorMessage = error.localizedDescription
+                }
             }
             isImporting = false
             webPageImportProgress = nil
+            importTask = nil
         }
     }
 
