@@ -193,19 +193,21 @@ struct PDFDropOverlay: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    /// Washes the window toward its own surface color so the card reads as the focus without
-    /// tinting the reader in a color the rest of the app does not use.
+    /// Blurs the content behind the drop target, then adds a restrained appearance-aware wash
+    /// so the floating card reads as the focus without replacing the window with a solid color.
     private var veil: some View {
-        Group {
-            if isPaperAppearance {
-                ReadPaperTheme.surfaceColor(.reader, scheme: colorScheme)
-                    .opacity(0.42)
-            } else {
-                Color(nsColor: .windowBackgroundColor)
-                    .opacity(0.34)
+        Rectangle()
+            .fill(.ultraThinMaterial)
+            .overlay {
+                if isPaperAppearance {
+                    ReadPaperTheme.surfaceColor(.reader, scheme: colorScheme)
+                        .opacity(0.28)
+                } else {
+                    Color.black
+                        .opacity(colorScheme == .dark ? 0.10 : 0.035)
+                }
             }
-        }
-        .accessibilityHidden(true)
+            .accessibilityHidden(true)
     }
 
     private var card: some View {
