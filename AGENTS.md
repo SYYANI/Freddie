@@ -139,6 +139,7 @@ LLM 配置现已拆成独立 SwiftData 模型：`LLMProviderProfile` 负责 prov
 - 阅读器不同模式的缺失态/空状态要保持一致的视觉语义；例如缺少 HTML、PDF 或翻译 PDF 时，优先复用统一的居中 unavailable 组件，不要一处是完整空状态卡片、另一处只显示一行占位文字。
 - 与阅读模式切换相邻、语义上属于“二选一 / 多选一”或并列主操作的按钮，视觉上优先向阅读器里的 `htmlDisplayPicker` / segmented control 靠拢：保持紧凑、等权、成组展示，必要时使用共享圆角底板和分隔线；避免混入单个过强的 `.borderedProminent` 按钮破坏整组节奏。空状态里的并列 action 也优先遵循这套样式，并预留足够宽度保证文案完整展示。
 - 文内查找（⌘F）的匹配逻辑统一在 `DocumentTextSearch`：PDF 与 HTML 共用同一套"忽略空白/连字符后匹配，再按空白布局区分 exact / spacing-tolerant"的规则，不要在 JS 或各阅读器里另写一套规范化。HTML 高亮只用 CSS Custom Highlight API，不要用 `<mark>` 等方式改 DOM，否则会破坏按子元素下标计算的笔记锚点；PDF 高亮用 `PDFView.highlightedSelections`，不要改成写入 `PDFAnnotation` 或设置 `currentSelection`（会触发选区助手）。
+- 拖入 PDF 导入统一走 `ContentView` 上的 `pdfFileDropTarget`：AppKit 视图 `PDFFileDropCatcherView` 叠在整个窗口（含工具栏区域）最上层，只注册文件 URL 类型，`hitTest` 返回 nil，所以点击和滚动照常落到下层视图。不要改回 SwiftUI `dropDestination`，也不要改成给各阅读器过滤拖拽类型：AppKit 把拖拽交给最前面的已注册视图且不会向后传递，而 `WKWebView` 会认领自身范围内的所有拖拽，HTML 阅读时遮罩就不会出现。遮罩样式沿用阅读器浮层（玻璃卡片加发丝描边），纸张外观改用纸面底色和衬线字体。
 - 网页源站常用外链 MathJax/KaTeX 排版 `\(...\)` / `\[...\]` / `$$...$$` / AMS 环境，而 `HTMLLocalizer` 会移除 `script[src]`，所以 `paper.html` 里只剩 TeX 源码。公式由阅读器注入的 `HTMLTeXRendering` user script（内置 Temml，输出原生 MathML，资源在 `ReadPaper/Resources/Temml/`）在 WebView 内渲染，`HTMLPDFExporter` 同样注入；不要把渲染结果写回 `paper.html`。渲染产物包在 `.rp-tex-math` 中，`instrumentationScript` 构建/解析 `rp-anchor:` 路径时必须跳过它（与 `.rp-translation-block` 同理）；增量插入译文块后要调用 `window.__rpRenderTeX(node)`。单个 `$` 刻意不作为定界符。Temml 的全局 `math` 样式只在页面确实渲染了 TeX 时注入，避免影响 arXiv 原生 MathML。纯公式段落（去掉 TeX 与 `[PROTECTED_N]` 后没有字母）不进入 HTML 翻译候选。
 - 页边笔记（旁注）：HTML 旁注由 `HTMLReaderView.Coordinator.sidenoteScript` 渲染，卡片层挂在 `<html>` 下、`<body>` 之外，原文高亮只用 CSS Custom Highlight API，不要把旁注写进 `paper.html` 或 `<body>` DOM，否则会破坏 `rp-anchor:` 笔记锚点和查找；页边空间通过只补足缺口的 body 右内边距获得，不要回退成固定预留整列宽度（站点限宽 body 时会把正文挤窄）。PDF 旁注只在单栏 PDF（原文/纯译文）显示，位置由 `PDFReaderView` 写入 `PDFSidenoteLayoutModel`、由 `PDFSidenoteRail` 排版；笔记原文高亮与划词助手历史下划线一样是内存中的临时 `PDFAnnotation`（导出会从磁盘重新打开 PDF，橡皮擦只处理用户批注记录），这与文内查找必须用 `highlightedSelections` 的约定不冲突。
 - `DualPDFReaderView` 的双向页码同步要区分“共享的原文阅读位置”和“译文侧可显示范围”。如果翻译 PDF 只是 partial 文档，译文侧 `translatedPageIndex` 可以 clamp 到当前最大可用页，但不要把原文侧共享的 `pageIndex` 反向夹回 partial 范围，否则会导致 original PDF 无法翻到后续未翻译页面。
@@ -181,6 +182,7 @@ xcodebuild -project ReadPaper.xcodeproj -scheme ReadPaper -destination 'platform
 - settings 初始化保障：`LLMConfigurationBootstrapperTests`
 - 阅读位置存储与 mode 回退：`ReadingStateStoreTests`
 - 文内查找的文本规范化（PDF 空格/断词/连字容错、短词误命中保护、HTML 分段偏移）：`DocumentTextSearchTests`
+- 拖入 PDF 的整窗接收、PDF 过滤、导入中拒收，以及 `WKWebView` 上方的拖拽归属：`PDFDropTargetTests`
 - 运行时语言选择、bundle 规范化/回退、代表性本地化行为：`LanguageManagerTests`、`LocalizationBehaviorTests`
 
 涉及真实网络、OpenAI API、BabelDOC 安装或真实 PDF 翻译的测试不要默认加入单元测试；优先用可注入依赖、临时目录和小样本文本覆盖行为。
