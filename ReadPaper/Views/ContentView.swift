@@ -233,27 +233,11 @@ struct ContentView: View {
             }
             .ignoresSafeArea()
         }
-        .overlay {
-            // Ignore the safe area on a container that is always present: applied inside the
-            // transitioning view, it only takes effect once the insertion finishes, so the card
-            // would first appear centered below the toolbar and then jump up.
-            ZStack {
-                if isPDFDropTargeted || isImportingDroppedPDFs {
-                    PDFDropOverlay(isImporting: isImportingDroppedPDFs)
-                        .transition(.opacity.combined(with: .scale(scale: 0.98)))
-                }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .ignoresSafeArea()
-            .allowsHitTesting(false)
-        }
-        .dropDestination(for: URL.self) { urls, _ in
-            importDroppedPDFs(urls)
-        } isTargeted: { isTargeted in
-            withAnimation(.easeInOut(duration: 0.16)) {
-                isPDFDropTargeted = isTargeted
-            }
-        }
+        .pdfFileDropTarget(
+            isTargeted: $isPDFDropTargeted,
+            isImporting: isImportingDroppedPDFs,
+            perform: importDroppedPDFs
+        )
         // .tint(isPaperAppearance ? ReadPaperTheme.accentColor : nil)
         .sheet(isPresented: $isAddingPaper) {
             AddPaperSheet(isPresented: $isAddingPaper, selectedPaperID: $selectedPaperID)
@@ -613,48 +597,6 @@ struct ContentView: View {
         return true
     }
 
-}
-
-private struct PDFDropOverlay: View {
-    @Environment(\.localizationBundle) private var bundle
-
-    let isImporting: Bool
-
-    var body: some View {
-        ZStack {
-            Color.accentColor.opacity(0.09)
-
-            VStack(spacing: 14) {
-                Image(systemName: isImporting ? "doc.text" : "arrow.down.doc")
-                    .font(.system(size: 40, weight: .semibold))
-                    .symbolRenderingMode(.hierarchical)
-                    .foregroundStyle(Color.accentColor)
-                    .accessibilityHidden(true)
-
-                Group {
-                    if isImporting {
-                        Text("Importing PDFs…", bundle: bundle)
-                    } else {
-                        Text("Drop PDFs to Import", bundle: bundle)
-                    }
-                }
-                .font(.title2.weight(.semibold))
-            }
-            .multilineTextAlignment(.center)
-            .padding(.horizontal, 44)
-            .padding(.vertical, 32)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(
-                        Color.accentColor.opacity(0.8),
-                        style: StrokeStyle(lineWidth: 2, dash: [8, 6])
-                    )
-            }
-            .shadow(color: .black.opacity(0.16), radius: 24, y: 10)
-        }
-        .accessibilityElement(children: .combine)
-    }
 }
 
 private struct ArxivLinkImportStatusSheet: View {

@@ -235,11 +235,7 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
                 forMainFrameOnly: true
             )
         )
-        #if os(macOS)
-        let view = HTMLReaderWebView(frame: .zero, configuration: configuration)
-        #else
         let view = WKWebView(frame: .zero, configuration: configuration)
-        #endif
         view.navigationDelegate = context.coordinator
         applyHostDisplayAppearance(displayAppearance, to: view)
         return view
@@ -2578,13 +2574,3 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
         }
     }
 }
-
-#if os(macOS)
-/// Lets file drags fall through to the window-level PDF import drop target; see
-/// `ReaderFileDropPassthrough`.
-private final class HTMLReaderWebView: WKWebView {
-    override func registerForDraggedTypes(_ newTypes: [NSPasteboard.PasteboardType]) {
-        super.registerForDraggedTypes(ReaderFileDropPassthrough.filteringDraggedTypes(newTypes))
-    }
-}
-#endif
