@@ -506,6 +506,68 @@ final class PaperImporterTests: XCTestCase {
     }
 
     @MainActor
+    func testImportWebPageCancelledMidImportDoesNotCreatePaper() async throws {
+        let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: rootURL) }
+
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [MockPaperImporterURLProtocol.self]
+        let session = URLSession(configuration: configuration)
+        let sourceURL = try XCTUnwrap(URL(string: "https://example.com/blog/cancelled-article"))
+        let shellHTML = """
+        <!doctype html>
+        <html>
+        <head><script type="module" src="/assets/article.js"></script></head>
+        <body><div id="root"></div></body>
+        </html>
+        """
+        let paragraph = String(repeating: "This article finished rendering after the user cancelled. ", count: 12)
+        let renderedHTML = """
+        <html>
+        <head><title>Cancelled Article</title></head>
+        <body><div id="root"><article><h1>Cancelled Article</h1><p>\(paragraph)</p></article></div></body>
+        </html>
+        """
+        // Simulates the user dismissing the sheet while a step that ignores cancellation is running.
+        let renderer = MockWebPageHTMLRenderer(renderedHTML: renderedHTML, cancelsCurrentTask: true)
+
+        MockPaperImporterURLProtocol.requestHandler = { request in
+            let url = try XCTUnwrap(request.url)
+            return (
+                HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: ["Content-Type": "text/html"])!,
+                Data(shellHTML.utf8)
+            )
+        }
+
+        let importer = PaperImporter(
+            fileStore: PaperFileStore(applicationSupportDirectory: rootURL),
+            htmlLocalizer: HTMLLocalizer(session: session, fileManager: .default),
+            webPageHTMLRenderer: renderer,
+            session: session
+        )
+        let modelContext = ModelContext(try makeContainer())
+
+        let task = Task { @MainActor () -> Error? in
+            do {
+                _ = try await importer.importWebPage(sourceURL.absoluteString, modelContext: modelContext)
+                return nil
+            } catch {
+                return error
+            }
+        }
+        let error = await task.value
+        XCTAssertTrue(error is CancellationError, "Unexpected result: \(String(describing: error))")
+
+        XCTAssertEqual(renderer.renderedRequests.map(\.url), [sourceURL])
+        XCTAssertTrue(try modelContext.fetch(FetchDescriptor<Paper>()).isEmpty)
+        XCTAssertTrue(try modelContext.fetch(FetchDescriptor<PaperAttachment>()).isEmpty)
+        let leftoverHTML = FileManager.default.enumerator(at: rootURL, includingPropertiesForKeys: nil)?
+            .compactMap { $0 as? URL }
+            .filter { $0.lastPathComponent == "paper.html" } ?? []
+        XCTAssertTrue(leftoverHTML.isEmpty)
+    }
+
+    @MainActor
     func testImportWebPageRepairsExistingBlankJavaScriptImport() async throws {
         let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: rootURL) }
@@ -715,14 +777,19 @@ private final class MockPaperImporterURLProtocol: URLProtocol {
 @MainActor
 private final class MockWebPageHTMLRenderer: WebPageHTMLRendering {
     let renderedHTML: String
+    let cancelsCurrentTask: Bool
     private(set) var renderedRequests: [URLRequest] = []
 
-    init(renderedHTML: String) {
+    init(renderedHTML: String, cancelsCurrentTask: Bool = false) {
         self.renderedHTML = renderedHTML
+        self.cancelsCurrentTask = cancelsCurrentTask
     }
 
     func renderHTML(for request: URLRequest) async throws -> String {
         renderedRequests.append(request)
+        if cancelsCurrentTask {
+            withUnsafeCurrentTask { $0?.cancel() }
+        }
         return renderedHTML
     }
 }
