@@ -167,8 +167,8 @@ struct InProcessBabelDocRunner {
         } else if let report = result.semanticEnrichmentReport {
             message = AppLocalization.format(
                 "LaTeX structure matched %d/%d PDF paragraphs; translated %d/%d text blocks.",
-                report.matchedPDFParagraphCount,
-                report.pdfParagraphCount,
+                report.matchedFlowPDFParagraphCount,
+                report.flowPDFParagraphCount,
                 result.translationDiagnostics.translatedCount,
                 result.translationDiagnostics.candidateCount
             )

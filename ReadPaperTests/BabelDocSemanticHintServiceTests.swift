@@ -171,7 +171,7 @@ final class BabelDocSemanticHintServiceTests: XCTestCase {
 
         XCTAssertEqual(acquisitionCount, 1)
         XCTAssertEqual(artifacts.0.document, artifacts.1.document)
-        XCTAssertEqual(BabelDocSemanticHintService.extractorAlgorithmVersion, 2)
+        XCTAssertEqual(BabelDocSemanticHintService.extractorAlgorithmVersion, 3)
     }
 
     func testFixedVersionPaperCorpusPreservesExpectedSemanticsAndPlaceholders() throws {
