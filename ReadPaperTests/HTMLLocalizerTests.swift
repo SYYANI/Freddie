@@ -261,6 +261,316 @@ final class HTMLLocalizerTests: XCTestCase {
         XCTAssertFalse(try downloadedStyle.outerHtml().contains("&gt;"))
     }
 
+    func testLocalizeBoundsAndDeduplicatesNestedCSSResources() async throws {
+        let paragraph = String(repeating: "This archived article should import without an unbounded resource waterfall. ", count: 12)
+        let generatedRules = (0..<40).map { index in
+            ".asset-\(index) { background-image: url('/asset-\(index).png'); }"
+        }.joined(separator: "\n")
+        let stylesheet = """
+        .shared-a { background-image: url('/shared.png'); }
+        .shared-b { background-image: url('/shared.png'); }
+        \(generatedRules)
+        """
+        let html = """
+        <html>
+        <head><link rel="stylesheet" href="/style.css"></head>
+        <body><article><h1>Archived Article</h1><p>\(paragraph)</p></article></body>
+        </html>
+        """
+
+        let lock = NSLock()
+        nonisolated(unsafe) var requestedPaths: [String] = []
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [MockHTMLLocalizerURLProtocol.self]
+        let session = URLSession(configuration: configuration)
+        MockHTMLLocalizerURLProtocol.requestHandler = { request in
+            let url = try XCTUnwrap(request.url)
+            lock.withLock {
+                requestedPaths.append(url.path)
+            }
+
+            if url.path == "/style.css" {
+                return (
+                    HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: ["Content-Type": "text/css"])!,
+                    Data(stylesheet.utf8)
+                )
+            }
+            return (
+                HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: ["Content-Type": "image/png"])!,
+                Data([0x89, 0x50, 0x4E, 0x47])
+            )
+        }
+
+        let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: rootURL) }
+        let resourcesURL = rootURL.appendingPathComponent("Resources", isDirectory: true)
+        let outputURL = rootURL.appendingPathComponent("paper.html")
+
+        _ = try await HTMLLocalizer(session: session).localize(
+            htmlData: Data(html.utf8),
+            sourceURL: URL(string: "https://example.com/article")!,
+            outputURL: outputURL,
+            resourcesDirectory: resourcesURL
+        )
+
+        let capturedPaths = lock.withLock { requestedPaths }
+        let nestedPaths = capturedPaths.filter { $0 != "/style.css" }
+        XCTAssertEqual(nestedPaths.count, 24)
+        XCTAssertEqual(Set(nestedPaths).count, nestedPaths.count)
+        XCTAssertEqual(nestedPaths.filter { $0 == "/shared.png" }.count, 1)
+
+        let output = try String(contentsOf: outputURL, encoding: .utf8)
+        XCTAssertTrue(output.contains("Resources/"))
+        XCTAssertTrue(output.contains("https://example.com/asset-39.png"))
+    }
+
+    func testLocalizeDropsWaybackReplayChromeStylesheet() async throws {
+        let paragraph = String(repeating: "This archived article body remains readable after replay chrome is removed. ", count: 10)
+        let html = """
+        <html>
+        <head>
+        <link rel="stylesheet" href="https://web-static.archive.org/_static/css/banner-styles.css">
+        <link rel="stylesheet" href="/_static/css/iconochive.css">
+        <link rel="stylesheet" href="https://web.archive.org/web/20170615060422cs_/https://example.com/article.css">
+        </head>
+        <body>
+        <div id="wm-ipp-base">Wayback toolbar</div>
+        <article><h1>Archived Article</h1><p>\(paragraph)</p></article>
+        </body>
+        </html>
+        """
+
+        let lock = NSLock()
+        nonisolated(unsafe) var requestedURLs: [URL] = []
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [MockHTMLLocalizerURLProtocol.self]
+        let session = URLSession(configuration: configuration)
+        MockHTMLLocalizerURLProtocol.requestHandler = { request in
+            let url = try XCTUnwrap(request.url)
+            lock.withLock {
+                requestedURLs.append(url)
+            }
+            if url.pathExtension == "png" {
+                return (
+                    HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: ["Content-Type": "image/png"])!,
+                    Data([0x89, 0x50, 0x4E, 0x47])
+                )
+            }
+            return (
+                HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: ["Content-Type": "text/css"])!,
+                Data("article { color: black; background-image: url('/archived-background.png'); }".utf8)
+            )
+        }
+
+        let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: rootURL) }
+        let resourcesURL = rootURL.appendingPathComponent("Resources", isDirectory: true)
+        let outputURL = rootURL.appendingPathComponent("paper.html")
+
+        _ = try await HTMLLocalizer(session: session).localize(
+            htmlData: Data(html.utf8),
+            sourceURL: URL(string: "https://web.archive.org/web/20170615060422/https://example.com/article")!,
+            outputURL: outputURL,
+            resourcesDirectory: resourcesURL
+        )
+
+        let capturedURLs = lock.withLock { requestedURLs }
+        XCTAssertFalse(capturedURLs.contains { $0.path.hasPrefix("/_static/") })
+        XCTAssertEqual(Set(capturedURLs.map(\.path)), ["/web/20170615060422cs_/https://example.com/article.css", "/archived-background.png"])
+
+        let output = try String(contentsOf: outputURL, encoding: .utf8)
+        XCTAssertFalse(output.contains("banner-styles.css"))
+        XCTAssertFalse(output.contains("iconochive.css"))
+        XCTAssertFalse(output.contains("wm-ipp-base"))
+        XCTAssertTrue(output.contains("article { color: black; background-image: url('Resources/"))
+    }
+
+    func testLocalizeKeepsAbsoluteFallbackForImagesThatStayOnline() async throws {
+        let paragraph = String(repeating: "Figures should survive offline when localized and stay reachable online otherwise. ", count: 10)
+        let html = """
+        <html>
+        <body><article>
+        <h1>Figure Article</h1>
+        <p>\(paragraph)</p>
+        <figure><img src="/figs/ok.png" alt="ok"></figure>
+        <figure><img src="/figs/ok.png" alt="ok again"></figure>
+        <figure><img src="/icons.svg#search" alt="icon"></figure>
+        <figure><img src="/figs/missing.png" srcset="/figs/missing@2x.png 2x" alt="missing"></figure>
+        <figure><picture><source srcset="/figs/wide.webp 2x, /figs/gone.webp 1x"><img src="/figs/fallback-missing.png" alt="picture"></picture></figure>
+        <p>\(paragraph)</p>
+        </article></body>
+        </html>
+        """
+
+        let lock = NSLock()
+        nonisolated(unsafe) var requestedPaths: [String] = []
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [MockHTMLLocalizerURLProtocol.self]
+        let session = URLSession(configuration: configuration)
+        MockHTMLLocalizerURLProtocol.requestHandler = { request in
+            let url = try XCTUnwrap(request.url)
+            lock.withLock {
+                requestedPaths.append(url.path)
+            }
+            let statusCode = url.path.contains("missing") || url.path.contains("gone") ? 404 : 200
+            return (
+                HTTPURLResponse(url: url, statusCode: statusCode, httpVersion: nil, headerFields: nil)!,
+                Data([0x89, 0x50, 0x4E, 0x47])
+            )
+        }
+
+        let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: rootURL) }
+        let resourcesURL = rootURL.appendingPathComponent("Resources", isDirectory: true)
+        let outputURL = rootURL.appendingPathComponent("paper.html")
+
+        _ = try await HTMLLocalizer(session: session).localize(
+            htmlData: Data(html.utf8),
+            sourceURL: URL(string: "https://example.com/post")!,
+            outputURL: outputURL,
+            resourcesDirectory: resourcesURL
+        )
+
+        let capturedPaths = lock.withLock { requestedPaths }
+        XCTAssertEqual(capturedPaths.filter { $0 == "/figs/ok.png" }.count, 1)
+        XCTAssertEqual(capturedPaths.filter { $0 == "/icons.svg" }.count, 1)
+        XCTAssertFalse(capturedPaths.contains("/figs/missing@2x.png"))
+
+        let output = try String(contentsOf: outputURL, encoding: .utf8)
+        let document = try SwiftSoup.parse(output)
+        let sources = try document.select("img").array().map { try $0.attr("src") }
+        XCTAssertEqual(sources.filter { $0.hasPrefix("Resources/") && $0.hasSuffix(".png") }.count, 2)
+        XCTAssertTrue(sources.contains { $0.hasPrefix("Resources/") && $0.hasSuffix(".svg#search") })
+        XCTAssertTrue(sources.contains("https://example.com/figs/missing.png"))
+        XCTAssertTrue(sources.contains("https://example.com/figs/fallback-missing.png"))
+        XCTAssertFalse(sources.contains { $0.hasPrefix("/") })
+
+        let srcsets = try document.select("img[srcset], source[srcset]").array().map { try $0.attr("srcset") }
+        XCTAssertTrue(srcsets.contains("https://example.com/figs/missing@2x.png 2x"))
+        XCTAssertTrue(srcsets.contains { $0.hasPrefix("Resources/") && $0.hasSuffix(".webp 2x, https://example.com/figs/gone.webp 1x") })
+    }
+
+    func testLocalizeSkipsResourceDownloadsOnceTimeBudgetIsSpent() async throws {
+        let paragraph = String(repeating: "A slow host should fall back to online resources instead of stalling import. ", count: 10)
+        let figures = (0..<12).map { "<figure><img src=\"/figs/\($0).png\" alt=\"figure \($0)\"></figure>" }.joined()
+        let html = """
+        <html>
+        <head><link rel="stylesheet" href="/style.css"></head>
+        <body><article><h1>Slow Host Article</h1><p>\(paragraph)</p>\(figures)<p>\(paragraph)</p></article></body>
+        </html>
+        """
+
+        let lock = NSLock()
+        nonisolated(unsafe) var requestedPaths: [String] = []
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [MockHTMLLocalizerURLProtocol.self]
+        let session = URLSession(configuration: configuration)
+        MockHTMLLocalizerURLProtocol.responseDelay = { _ in 0.3 }
+        MockHTMLLocalizerURLProtocol.requestHandler = { request in
+            let url = try XCTUnwrap(request.url)
+            lock.withLock {
+                requestedPaths.append(url.path)
+            }
+            if url.path == "/style.css" {
+                return (
+                    HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: ["Content-Type": "text/css"])!,
+                    Data("article { background-image: url('/texture.png'); }".utf8)
+                )
+            }
+            return (
+                HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: ["Content-Type": "image/png"])!,
+                Data([0x89, 0x50, 0x4E, 0x47])
+            )
+        }
+
+        let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: rootURL) }
+        let resourcesURL = rootURL.appendingPathComponent("Resources", isDirectory: true)
+        let outputURL = rootURL.appendingPathComponent("paper.html")
+
+        _ = try await HTMLLocalizer(session: session, resourceTimeBudget: .milliseconds(100)).localize(
+            htmlData: Data(html.utf8),
+            sourceURL: URL(string: "https://slow.example.com/article")!,
+            outputURL: outputURL,
+            resourcesDirectory: resourcesURL
+        )
+
+        // Only the first window (stylesheet + 5 figures) started inside the budget. Those
+        // in-flight requests finish and are used, but nothing new starts afterwards.
+        let expectedPaths = ["/style.css"] + (0..<5).map { "/figs/\($0).png" }
+        XCTAssertEqual(Set(lock.withLock { requestedPaths }), Set(expectedPaths))
+
+        let output = try String(contentsOf: outputURL, encoding: .utf8)
+        let document = try SwiftSoup.parse(output)
+        let sources = try document.select("img").array().map { try $0.attr("src") }
+        XCTAssertEqual(sources.count, 12)
+        XCTAssertEqual(sources.filter { $0.hasPrefix("Resources/") }.count, 5)
+        XCTAssertEqual(sources.filter { $0.hasPrefix("https://slow.example.com/figs/") }.count, 7)
+        XCTAssertTrue(output.contains("url('https://slow.example.com/texture.png')"))
+    }
+
+    func testLocalizeStartsImageDownloadsWithoutWaitingForStylesheets() async throws {
+        let paragraph = String(repeating: "Article figures should not queue behind a slow stylesheet download. ", count: 10)
+        let html = """
+        <html>
+        <head><link rel="stylesheet" href="/slow.css"></head>
+        <body><article><h1>Parallel Article</h1><p>\(paragraph)</p>
+        <figure><img src="/figs/plot.png" alt="plot"></figure>
+        <p>\(paragraph)</p></article></body>
+        </html>
+        """
+
+        let lock = NSLock()
+        nonisolated(unsafe) var events: [String] = []
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [MockHTMLLocalizerURLProtocol.self]
+        let session = URLSession(configuration: configuration)
+        MockHTMLLocalizerURLProtocol.responseDelay = { request in
+            request.url?.path == "/slow.css" ? 0.3 : 0
+        }
+        MockHTMLLocalizerURLProtocol.requestHandler = { request in
+            let url = try XCTUnwrap(request.url)
+            // With a delay the handler runs at delivery time, so log the stylesheet as finished.
+            lock.withLock {
+                events.append(url.path == "/slow.css" ? "finished /slow.css" : "requested \(url.path)")
+            }
+            if url.path == "/slow.css" {
+                return (
+                    HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: ["Content-Type": "text/css"])!,
+                    Data("article { background-image: url('/texture.png'); }".utf8)
+                )
+            }
+            return (
+                HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: ["Content-Type": "image/png"])!,
+                Data([0x89, 0x50, 0x4E, 0x47])
+            )
+        }
+
+        let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: rootURL) }
+        let resourcesURL = rootURL.appendingPathComponent("Resources", isDirectory: true)
+        let outputURL = rootURL.appendingPathComponent("paper.html")
+
+        _ = try await HTMLLocalizer(session: session).localize(
+            htmlData: Data(html.utf8),
+            sourceURL: URL(string: "https://example.com/article")!,
+            outputURL: outputURL,
+            resourcesDirectory: resourcesURL
+        )
+
+        let capturedEvents = lock.withLock { events }
+        let imageRequest = try XCTUnwrap(capturedEvents.firstIndex(of: "requested /figs/plot.png"))
+        let stylesheetFinished = try XCTUnwrap(capturedEvents.firstIndex(of: "finished /slow.css"))
+        let nestedRequest = try XCTUnwrap(capturedEvents.firstIndex(of: "requested /texture.png"))
+        XCTAssertLessThan(imageRequest, stylesheetFinished)
+        XCTAssertGreaterThan(nestedRequest, stylesheetFinished)
+
+        let output = try String(contentsOf: outputURL, encoding: .utf8)
+        XCTAssertTrue(output.contains("url('Resources/"))
+        let source = try XCTUnwrap(SwiftSoup.parse(output).select("img").first()).attr("src")
+        XCTAssertTrue(source.hasPrefix("Resources/"))
+    }
+
     func testLocalizeSplitsReadabilityMarkdownPreIntoParagraphs() async throws {
         let firstParagraph = String(repeating: "DwarfStar local inference prose with a preserved link. ", count: 8)
         let secondParagraph = String(repeating: "Follow-up prose should become a separate translatable paragraph. ", count: 8)
@@ -566,9 +876,13 @@ final class HTMLLocalizerTests: XCTestCase {
 
 private final class MockHTMLLocalizerURLProtocol: URLProtocol {
     nonisolated(unsafe) static var requestHandler: ((URLRequest) throws -> (HTTPURLResponse, Data))?
+    /// Delivers the response later without blocking the loading thread, so concurrent
+    /// requests stay observable.
+    nonisolated(unsafe) static var responseDelay: ((URLRequest) -> TimeInterval)?
 
     static func reset() {
         requestHandler = nil
+        responseDelay = nil
     }
 
     override class func canInit(with request: URLRequest) -> Bool {
@@ -585,13 +899,20 @@ private final class MockHTMLLocalizerURLProtocol: URLProtocol {
             return
         }
 
-        do {
-            let (response, data) = try requestHandler(request)
-            client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
-            client?.urlProtocol(self, didLoad: data)
-            client?.urlProtocolDidFinishLoading(self)
-        } catch {
-            client?.urlProtocol(self, didFailWithError: error)
+        let deliver = { [self] in
+            do {
+                let (response, data) = try requestHandler(request)
+                client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+                client?.urlProtocol(self, didLoad: data)
+                client?.urlProtocolDidFinishLoading(self)
+            } catch {
+                client?.urlProtocol(self, didFailWithError: error)
+            }
+        }
+        if let delay = Self.responseDelay?(request), delay > 0 {
+            DispatchQueue.global().asyncAfter(deadline: .now() + delay, execute: deliver)
+        } else {
+            deliver()
         }
     }
 
