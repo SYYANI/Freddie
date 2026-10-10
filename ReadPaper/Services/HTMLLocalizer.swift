@@ -40,7 +40,13 @@ struct HTMLLocalizer: @unchecked Sendable {
     // constrain only the original (e.g. a centered 640px paragraph), leaving its
     // translated sibling at full width. Share this with the reader to repair saved
     // documents as well, without changing the DOM used by note anchors.
+    // A source cap on the root (mandoc.css: `html { max-width: 65em; }`) pins the
+    // whole page to the left and confines the sidenote reserve, so lift it; the
+    // shell already caps and centers the column.
     static let readableProseLayoutCSS = """
+    html:has(> body.rp-readability-body) {
+        max-width: none !important;
+    }
     body.rp-readability-body :is(.rp-readability-header, .rp-readability-content) :is(p, h1, h2, h3, h4, h5, h6):not(svg *, math *) {
         width: 100% !important;
         min-width: 0 !important;

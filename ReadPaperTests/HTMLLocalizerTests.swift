@@ -138,6 +138,39 @@ final class HTMLLocalizerTests: XCTestCase {
         ))
     }
 
+    func testReadabilityStylesLiftSourceRootWidthCap() throws {
+        let paragraph = String(repeating: "This manual page copy should sit in a centered reading column. ", count: 12)
+        let html = """
+        <html>
+        <head>
+        <style>
+        html { max-width: 65em; }
+        body { display: flex; min-height: 100vh; }
+        main { margin-left: 3.8em; }
+        </style>
+        </head>
+        <body>
+        <main class="content">
+        <h1>Readable Title</h1>
+        <p>\(paragraph)</p>
+        </main>
+        </body>
+        </html>
+        """
+
+        let document = try HTMLLocalizer().makeDocumentForLocalization(
+            html: html,
+            sourceURL: URL(string: "https://example.com/words/problem.html")!
+        )
+
+        let style = try XCTUnwrap(try document.getElementById("rp-readability-style"))
+        XCTAssertNotNil(style.data().range(
+            of: #"html:has\(> body\.rp-readability-body\)\s*\{\s*max-width:\s*none\s*!important;"#,
+            options: .regularExpression
+        ))
+        XCTAssertTrue(HTMLLocalizer.readableProseLayoutCSS.contains("html:has(> body.rp-readability-body)"))
+    }
+
     func testReadabilityStylesRestoreNormalFlowForAnimatedArticleContent() throws {
         let paragraph = String(repeating: "This article copy must remain in normal document flow. ", count: 8)
         let html = """
