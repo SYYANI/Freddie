@@ -23,6 +23,9 @@ final class HTMLPDFExporterTests: XCTestCase {
         <p data-rp-source="true">OriginalOnlyMarker</p>
         <p class="rp-translation-block">TranslationOnlyMarker</p>
         <img loading="lazy" src="Resources/figure.svg" width="100" height="100">
+        <div data-rp-region-hidden="true"><p>HiddenRegionMarker</p></div>
+        <p data-rp-source="true" data-rp-region-hidden="true">HiddenSourceMarker</p>
+        <p class="rp-translation-block">HiddenTranslationMarker</p>
         \(paragraphs)<p>EndOfDocumentMarker</p>
         </body></html>
         """
@@ -39,6 +42,9 @@ final class HTMLPDFExporterTests: XCTestCase {
             XCTAssertTrue(text.contains("EndOfDocumentMarker"))
             XCTAssertEqual(text.contains("OriginalOnlyMarker"), mode != .translated)
             XCTAssertEqual(text.contains("TranslationOnlyMarker"), mode != .original)
+            for marker in ["HiddenRegionMarker", "HiddenSourceMarker", "HiddenTranslationMarker"] {
+                XCTAssertFalse(text.contains(marker), "Hidden regions must not be exported (\(mode.rawValue))")
+            }
             let firstPage = try XCTUnwrap(pdf.page(at: 0))
             XCTAssertEqual(firstPage.bounds(for: .mediaBox).height, 841.89, accuracy: 1)
             let preview = firstPage.thumbnail(of: NSSize(width: 300, height: 425), for: .mediaBox)

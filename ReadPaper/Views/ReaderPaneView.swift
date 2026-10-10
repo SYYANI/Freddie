@@ -51,6 +51,14 @@ struct ReaderPaneView: View {
         case allPages
     }
 
+    private struct PendingHTMLRegionChanges {
+        var fileURL: URL
+        /// Each change sets an element's final state, so the latest one per element wins.
+        var changesByPath: [String: HTMLRegionChange] = [:]
+    }
+
+    private static let htmlRegionSaveDelay: Duration = .milliseconds(400)
+
     @Environment(\.modelContext) private var modelContext
     @Environment(\.localizationBundle) private var bundle
     @Environment(\.colorScheme) private var colorScheme
@@ -136,6 +144,11 @@ struct ReaderPaneView: View {
     @State private var findStatus: DocumentFindStatus?
     @State private var findFocusToken = 0
     @State private var bilingualFindTarget: DualPDFSelectionSource = .original
+    @State private var isEditingHTMLRegions = false
+    @State private var htmlRegionEditUpdate: HTMLRegionEditUpdate?
+    @State private var htmlRegionEditCommand: HTMLRegionEditCommand?
+    @State private var pendingHTMLRegionChanges: PendingHTMLRegionChanges?
+    @State private var htmlRegionSaveTask: Task<Void, Never>?
 
     private var pdfAttachment: PaperAttachment? {
         attachments.first { $0.kind == .pdf }
@@ -202,7 +215,8 @@ struct ReaderPaneView: View {
     }
 
     private var translationControlsDisabled: Bool {
-        isWorking || (!canTranslateHTML && !canTranslatePDF && !canTranslateLaTeX)
+        // Translation rewrites paper.html, so it waits until region editing ends.
+        isWorking || isEditingHTMLRegions || (!canTranslateHTML && !canTranslatePDF && !canTranslateLaTeX)
     }
 
     private var readerAvailability: ReaderAvailability {
@@ -324,6 +338,7 @@ struct ReaderPaneView: View {
                 await refreshOriginalPDFPageCount(for: originalPDFPageCountRequest)
             }
             .onChange(of: paper?.id) { _, _ in
+                finishHTMLRegionEditing()
                 flushPendingReadingStatePersistence()
                 deactivatePDFTranslationDebugMode()
                 pdfAnnotationSession.resetForDocumentChange()
@@ -332,7 +347,10 @@ struct ReaderPaneView: View {
                 restoreReadingStateForCurrentPaper()
                 refreshSelectionAssistantHistoryAnchors()
             }
-            .onChange(of: readerAvailability) { _, _ in
+            .onChange(of: readerAvailability) { _, newValue in
+                if newValue.hasHTML == false {
+                    finishHTMLRegionEditing()
+                }
                 syncReaderModeWithAvailableContent()
                 restorePDFTranslationDiagnostics()
             }
@@ -340,6 +358,7 @@ struct ReaderPaneView: View {
                 noteSelectionContext = nil
                 clearSelectionAssistant()
                 if newValue != .html {
+                    finishHTMLRegionEditing()
                     lastPDFReaderMode = normalizedPDFReaderMode(newValue)
                 }
                 persistReadingStateImmediatelyIfNeeded()
@@ -358,7 +377,11 @@ struct ReaderPaneView: View {
                     pdfAnnotationNoteText = ""
                 }
             }
+            .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
+                flushHTMLRegionChanges()
+            }
             .onDisappear {
+                finishHTMLRegionEditing()
                 flushReadingStatePersistence()
                 deactivatePDFTranslationDebugMode()
                 clearSelectionAssistant()
@@ -546,6 +569,19 @@ struct ReaderPaneView: View {
                     )
                     Divider()
                 }
+
+                if isEditingHTMLRegions {
+                    HTMLRegionEditBar(
+                        hiddenRegionCount: htmlRegionEditUpdate?.hiddenRegionCount ?? 0,
+                        canUndo: htmlRegionEditUpdate?.canUndo ?? false,
+                        canRedo: htmlRegionEditUpdate?.canRedo ?? false,
+                        onUndo: { htmlRegionEditCommand = HTMLRegionEditCommand(action: .undo) },
+                        onRedo: { htmlRegionEditCommand = HTMLRegionEditCommand(action: .redo) },
+                        onRestoreAll: { htmlRegionEditCommand = HTMLRegionEditCommand(action: .restoreAll) },
+                        onDone: finishHTMLRegionEditing
+                    )
+                    Divider()
+                }
             }
 
             if isWorking || statusMessage != nil {
@@ -599,6 +635,9 @@ struct ReaderPaneView: View {
                 }
                 ToolbarItem(placement: .primaryAction) {
                     htmlTypographyMenu
+                }
+                ToolbarItem(placement: .primaryAction) {
+                    htmlRegionEditButton
                 }
             } else {
                 ToolbarItem(placement: .primaryAction) {
@@ -795,6 +834,125 @@ struct ReaderPaneView: View {
                 Int(HTMLReaderTypography.clampFontSize(htmlReaderFontSize).rounded())
             )
         )
+    }
+
+    private var htmlRegionEditButton: some View {
+        Button {
+            toggleHTMLRegionEditing()
+        } label: {
+            Label(String(localized: "Edit Regions", bundle: bundle), systemImage: "rectangle.dashed")
+                .labelStyle(.iconOnly)
+                .foregroundStyle(isEditingHTMLRegions ? Color.accentColor : Color.primary)
+        }
+        .disabled(htmlAttachment == nil || (isWorking && isEditingHTMLRegions == false))
+        .help(htmlRegionEditHelpText)
+    }
+
+    private var htmlRegionEditHelpText: String {
+        if isEditingHTMLRegions {
+            return String(localized: "Finish Editing Regions", bundle: bundle)
+        }
+        if isWorking {
+            return String(localized: "Regions can't be edited while a translation is running.", bundle: bundle)
+        }
+        return String(localized: "Hide or restore parts of this page", bundle: bundle)
+    }
+
+    private var htmlRegionEditLabels: HTMLRegionEditLabels {
+        HTMLRegionEditLabels(
+            hide: String(localized: "Hide", bundle: bundle),
+            restore: String(localized: "Restore", bundle: bundle)
+        )
+    }
+
+    private func toggleHTMLRegionEditing() {
+        if isEditingHTMLRegions {
+            finishHTMLRegionEditing()
+            return
+        }
+        guard readerMode == .html, htmlAttachment != nil, isWorking == false else { return }
+        noteSelectionContext = nil
+        clearSelectionAssistant()
+        htmlRegionEditUpdate = nil
+        htmlRegionEditCommand = nil
+        isEditingHTMLRegions = true
+    }
+
+    private func finishHTMLRegionEditing() {
+        isEditingHTMLRegions = false
+        htmlRegionEditUpdate = nil
+        // A recreated reader would otherwise replay the last bar command in the next session.
+        htmlRegionEditCommand = nil
+        flushHTMLRegionChanges()
+    }
+
+    private func handleHTMLRegionEditEvent(_ event: HTMLRegionEditEvent) {
+        switch event {
+        case .exitRequested:
+            finishHTMLRegionEditing()
+        case let .updated(update):
+            // Only the page currently shown may change its own file.
+            guard let fileURL = htmlAttachment?.fileURL,
+                  Self.isFile(fileURL, sameAs: update.documentURL) else { return }
+            if isEditingHTMLRegions {
+                htmlRegionEditUpdate = update
+            }
+            if update.changes.isEmpty == false {
+                queueHTMLRegionChanges(update.changes, for: fileURL)
+            }
+        }
+    }
+
+    private func queueHTMLRegionChanges(_ changes: [HTMLRegionChange], for fileURL: URL) {
+        if let pending = pendingHTMLRegionChanges, pending.fileURL != fileURL {
+            flushHTMLRegionChanges()
+        }
+        var pending = pendingHTMLRegionChanges ?? PendingHTMLRegionChanges(fileURL: fileURL)
+        for change in changes {
+            pending.changesByPath[change.path] = change
+        }
+        pendingHTMLRegionChanges = pending
+        // Rewriting paper.html parses the whole page, so quick successive edits are saved together.
+        htmlRegionSaveTask?.cancel()
+        htmlRegionSaveTask = Task { @MainActor in
+            try? await Task.sleep(for: Self.htmlRegionSaveDelay)
+            guard Task.isCancelled == false else { return }
+            flushHTMLRegionChanges()
+        }
+    }
+
+    private func flushHTMLRegionChanges() {
+        htmlRegionSaveTask?.cancel()
+        htmlRegionSaveTask = nil
+        guard let pending = pendingHTMLRegionChanges else { return }
+        pendingHTMLRegionChanges = nil
+        do {
+            let update = try HTMLRegionVisibility.apply(
+                Array(pending.changesByPath.values),
+                toFileAt: pending.fileURL
+            )
+            guard update.unmatchedChanges.isEmpty == false else { return }
+            statusMessage = AppLocalization.format(
+                "%lld region changes could not be matched to the saved page and were not saved.",
+                bundle: bundle,
+                update.unmatchedChanges.count
+            )
+        } catch {
+            statusMessage = AppLocalization.errorMessage(error, bundle: bundle)
+        }
+        // Show what was actually saved.
+        if htmlAttachment?.fileURL == pending.fileURL {
+            htmlReloadToken += 1
+        }
+    }
+
+    private static func isFile(_ fileURL: URL, sameAs documentURLString: String?) -> Bool {
+        guard let documentURLString,
+              let documentURL = URL(string: documentURLString),
+              documentURL.isFileURL else {
+            return false
+        }
+        return documentURL.standardizedFileURL.path == fileURL.standardizedFileURL.path
     }
 
     private func decreaseHTMLReaderFontSize() {
@@ -1206,6 +1364,7 @@ struct ReaderPaneView: View {
         panel.message = String(localized: "Export the HTML using the current original, bilingual, or translated display mode.", bundle: bundle)
         guard panel.runModal() == .OK, let destinationURL = panel.url else { return }
 
+        flushHTMLRegionChanges()
         let sourceURL = attachment.fileURL
         let exportDisplayMode = displayMode
         let exportFontSize = htmlReaderFontSize
@@ -1430,7 +1589,11 @@ struct ReaderPaneView: View {
                                 renderSidenoteMarkdown: NoteMarkdownRenderer.html,
                                 sidenoteFocusRequest: sidenoteFocusRequest,
                                 onSidenoteEvent: handleSidenoteEvent,
-                                onSidenoteFocusHandled: handleSidenoteFocusHandled
+                                onSidenoteFocusHandled: handleSidenoteFocusHandled,
+                                isRegionEditing: isEditingHTMLRegions,
+                                regionEditLabels: htmlRegionEditLabels,
+                                regionEditCommand: htmlRegionEditCommand,
+                                onRegionEditEvent: handleHTMLRegionEditEvent
                             )
                         } else {
                             centeredUnavailableView(
@@ -1655,6 +1818,7 @@ struct ReaderPaneView: View {
 
     private func translateHTML() {
         guard let paper, let htmlAttachment, let settings else { return }
+        flushHTMLRegionChanges()
         let preferences = TranslationPreferencesSnapshot(settings)
         htmlSegmentUpdate = nil
         translationProgress = nil

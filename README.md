@@ -15,6 +15,7 @@ It focuses on three practical reading workflows:
 - arXiv import with step-by-step progress feedback
 - arXiv HTML fallback chain: `arxiv.org/html/{id}` first, then `ar5iv`
 - Readability-based HTML extraction and localization for a cleaner reading view
+- Reversible region editing for imported HTML: hide leftover navigation, share bars, or other clutter, and restore it any time
 - Incremental HTML translation with per-block persistence and refresh
 - Multi-provider, multi-model OpenAI-compatible routing
 - Full PDF translation via BabelDOC with structured progress reporting

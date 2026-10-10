@@ -353,7 +353,7 @@ final class HTMLTranslationPipeline {
         if element.parents().hasClass("rp-translation-block") {
             return true
         }
-        return false
+        return HTMLRegionVisibility.isWithinHiddenRegion(element)
     }
 
     private static func hasTranslatableDescendant(in element: Element) throws -> Bool {
@@ -384,6 +384,7 @@ final class HTMLTranslationPipeline {
 
     private static func protectedText(from element: Element) throws -> (text: String, fragments: [String]) {
         let clone = element.copy() as! Element
+        try HTMLRegionVisibility.removeHiddenRegions(in: clone)
         var fragments: [String] = []
         for protectedNode in try clone.select("math, .ltx_Math, cite, code").array() {
             let placeholder = "[PROTECTED_\(fragments.count)]"

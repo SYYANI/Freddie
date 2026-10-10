@@ -90,6 +90,8 @@ SwiftData schema 变更要特别谨慎：历史上已经出现过“新版本删
 
 `paper.html` 当前默认保存的是适合阅读和翻译的本地化 HTML；对于 arXiv/ar5iv 导入，它通常是 `swift-readability` 提炼后的正文包装页，而不是原站完整页面快照。对于网页导入，同样走 `swift-readability` 提炼正文后以本地化 HTML 保存，与 arXiv HTML 共用同一套展示和翻译管线。若网页 URL 响应的 `Content-Type` 为 `application/pdf`，则不生成 `paper.html`，而是将 PDF 数据写入 `paper.pdf` 并以 PDF 附件形式入库。改导入链路时要注意这一展示语义。
 
+用户在阅读器里“调整区域”隐藏的内容，以 `data-rp-region-hidden="true"` 属性留在 `paper.html` 原元素上，并配一份 `#rp-region-visibility-style` 隐藏样式；元素从不删除，所以随时可恢复。
+
 `paper.html` 必须带有正确的 `<meta charset="UTF-8">` 声明。`HTMLLocalizer.makeDocumentForLocalization` 在解析 HTML 后会通过 `reconcileCharsetDeclaration` 移除旧的 `http-equiv="content-type"` meta 标签并插入 `<meta charset="UTF-8">`，因为源 HTML 的 charset 声明（如 `ISO-8859-1`）在翻译管道注入 UTF-8 多字节文本后会导致乱码。如果在 `HTMLLocalizer` 之外重建或覆写 `paper.html`，也要确保写入 UTF-8 charset 声明。
 
 附件通过 `PaperAttachment` 记录，类型包括 `pdf`、`html`、`translatedPDF` 和 `resource`，来源包括 `arxivPDF`、`arxivHTML`、`localImport`、`webPage`、`babeldoc` 和 `generated`。`translatedPDF` 在增量翻译路径下还会用 `translatedLastPage` 表示当前已覆盖到原文的最后一页；改文件写入、合并续翻或替换译文文件时，要同时维护附件记录、`translatedLastPage` 语义和 SwiftData 保存时机。
@@ -142,6 +144,7 @@ LLM 配置现已拆成独立 SwiftData 模型：`LLMProviderProfile` 负责 prov
 - 拖入 PDF 导入统一走 `ContentView` 上的 `pdfFileDropTarget`：AppKit 视图 `PDFFileDropCatcherView` 叠在整个窗口（含工具栏区域）最上层，只注册文件 URL 类型，`hitTest` 返回 nil，所以点击和滚动照常落到下层视图。不要改回 SwiftUI `dropDestination`，也不要改成给各阅读器过滤拖拽类型：AppKit 把拖拽交给最前面的已注册视图且不会向后传递，而 `WKWebView` 会认领自身范围内的所有拖拽，HTML 阅读时遮罩就不会出现。遮罩样式沿用阅读器浮层（玻璃卡片加发丝描边），纸张外观改用纸面底色和衬线字体。
 - 网页源站常用外链 MathJax/KaTeX 排版 `\(...\)` / `\[...\]` / `$$...$$` / AMS 环境，而 `HTMLLocalizer` 会移除 `script[src]`，所以 `paper.html` 里只剩 TeX 源码。公式由阅读器注入的 `HTMLTeXRendering` user script（内置 Temml，输出原生 MathML，资源在 `ReadPaper/Resources/Temml/`）在 WebView 内渲染，`HTMLPDFExporter` 同样注入；不要把渲染结果写回 `paper.html`。渲染产物包在 `.rp-tex-math` 中，`instrumentationScript` 构建/解析 `rp-anchor:` 路径时必须跳过它（与 `.rp-translation-block` 同理）；增量插入译文块后要调用 `window.__rpRenderTeX(node)`。单个 `$` 刻意不作为定界符。Temml 的全局 `math` 样式只在页面确实渲染了 TeX 时注入，避免影响 arXiv 原生 MathML。纯公式段落（去掉 TeX 与 `[PROTECTED_N]` 后没有字母）不进入 HTML 翻译候选。
 - 页边笔记（旁注）：HTML 旁注由 `HTMLReaderView.Coordinator.sidenoteScript` 渲染，卡片层挂在 `<html>` 下、`<body>` 之外，原文高亮只用 CSS Custom Highlight API，不要把旁注写进 `paper.html` 或 `<body>` DOM，否则会破坏 `rp-anchor:` 笔记锚点和查找；页边空间通过只补足缺口的 body 右内边距获得，不要回退成固定预留整列宽度（站点限宽 body 时会把正文挤窄）。PDF 旁注只在单栏 PDF（原文/纯译文）显示，位置由 `PDFReaderView` 写入 `PDFSidenoteLayoutModel`、由 `PDFSidenoteRail` 排版；笔记原文高亮与划词助手历史下划线一样是内存中的临时 `PDFAnnotation`（导出会从磁盘重新打开 PDF，橡皮擦只处理用户批注记录），这与文内查找必须用 `highlightedSelections` 的约定不冲突。
+- HTML 区域调整（工具栏“调整区域”）：`HTMLRegionEditing` 注入脚本负责悬停描边、↑/↓ 扩大或缩小到父/子块、点击隐藏或恢复、页内撤销/重做；它只切换 `HTMLRegionVisibility.hiddenAttribute`，描边层挂在 `<html>` 下，不要改成删除节点或往 `<body>` 插 DOM，否则会破坏 `rp-anchor:` 笔记锚点。脚本用 instrumentation 暴露的 `__rpBuildNoteAnchor` / `__rpOriginalChildren` 生成路径，Swift 侧 `HTMLAnchorPath` 必须与之保持同一规则（跳过 `.rp-translation-block` 和 `.rp-tex-math`），并用 tag/id/子元素签名校验，签名不符的修改拒绝写入而不是误隐藏。修改由 `ReaderPaneView` 防抖后经 `HTMLRegionVisibility.apply` 写回 `paper.html`，离开编辑、切换论文/模式、开始翻译、导出和退出应用前都会先落盘；编辑期间禁用翻译，因为翻译管线会整份重写 `paper.html`。隐藏区域不进入 HTML 翻译候选、阅读助手全文索引、文内查找和 HTML 导出 PDF。
 - `DualPDFReaderView` 的双向页码同步要区分“共享的原文阅读位置”和“译文侧可显示范围”。如果翻译 PDF 只是 partial 文档，译文侧 `translatedPageIndex` 可以 clamp 到当前最大可用页，但不要把原文侧共享的 `pageIndex` 反向夹回 partial 范围，否则会导致 original PDF 无法翻到后续未翻译页面。
 - PDF 阅读位置恢复与持久化时，`ReadingState` 中保存的 `pageIndex` 仍应表达用户在原文坐标系里的上次位置。双栏或纯译文视图在打开时，以及 translated page count 发生变化时，应把译文侧位置同步到 `min(savedOriginalPageIndex, translatedLastAvailablePage)`；但不要因此把 original `pageIndex` 改写成更小值。关闭应用后二次打开时，至少要保证译文侧落到与上次阅读位置对应的可用页，而不是回到首页。
 - arXiv 导入进度要尽量使用确定型、分步骤的状态反馈；如果链路已知关键阶段，至少同时展示当前步骤标题和阶段性说明，不要退回成只有转圈、没有上下文的等待态。若 HTML 主源失败并回退到备用源，也要把“正在尝试备用源”明确告诉用户。
@@ -172,6 +175,7 @@ xcodebuild -project ReadPaper.xcodeproj -scheme ReadPaper -destination 'platform
 - 本地 PDF 导入、arXiv ID 误判回归、arXiv 导入进度阶段、网页导入与 Readability 正文抽取：`PaperImporterTests`
 - HTML 导入、本地化与 Readability 回退：`HTMLLocalizerTests`
 - HTML 候选抽取、占位符保护、译文插入：`HTMLTranslationPipelineTests`
+- HTML 区域调整（JS 与 Swift 路径一致性、隐藏/恢复落盘、签名校验）：`HTMLRegionVisibilityTests`
 - 翻译输出校验（prompt/原文/上下文回显、重试与回退）：`TranslationOutputValidatorTests`
 - PDF 无文字层检测（Type3 无映射字体、扫描件、glyph name 判定）：`PDFTextLayerInspectorTests`
 - BabelDOC 安装源、latest 版本解析、uv 安装参数：`BabelDocToolManagerTests`

@@ -374,6 +374,27 @@ final class HTMLTranslationPipelineTests: XCTestCase {
     }
 
     @MainActor
+    func testHiddenRegionsAreNotTranslated() throws {
+        let html = """
+        <html><body>
+        <div data-rp-region-hidden="true"><p>Subscribe to our newsletter for weekly updates.</p></div>
+        <p data-rp-region-hidden="true" data-rp-segment-id="old" data-rp-source="true">Hidden paragraph with stale source markers.</p>
+        <p>Visible paragraph that should still be translated.</p>
+        <ul><li>Visible list text <p data-rp-region-hidden="true">Hidden nested paragraph text.</p></li></ul>
+        </body></html>
+        """
+        let prepared = try HTMLTranslationPipeline.prepareDocument(html)
+
+        XCTAssertEqual(prepared.candidates.map(\.sourceText), [
+            "Visible paragraph that should still be translated.",
+            "Visible list text",
+        ])
+        let document = try SwiftSoup.parse(prepared.preparedHTML)
+        XCTAssertEqual(try document.select("[data-rp-region-hidden=true][data-rp-source]").count, 0)
+        XCTAssertEqual(try document.select("[data-rp-region-hidden=true]").count, 3, "Hidden markers must survive translation")
+    }
+
+    @MainActor
     func testPrepareDocumentClearsStaleSourceMarkersFromSkippedContainers() throws {
         let html = """
         <html><body>

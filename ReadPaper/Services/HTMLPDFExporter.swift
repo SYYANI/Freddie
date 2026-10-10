@@ -137,6 +137,7 @@ final class HTMLPDFExporter: NSObject, WKNavigationDelegate {
         \(HTMLReaderTypography.css(fontSize: fontSize))
         html[data-rp-display-mode='original'] .rp-translation-block { display: none !important; }
         html[data-rp-display-mode='translated'] [data-rp-source='true'] { display: none !important; }
+        \(HTMLRegionVisibility.hiddenRegionCSS)
         :root { color-scheme: light; }
         html, body { background: white !important; color: black !important; }
         body { margin: 0 !important; }

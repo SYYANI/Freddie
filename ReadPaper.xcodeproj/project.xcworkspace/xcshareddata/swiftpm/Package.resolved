@@ -1,15 +1,5 @@
 {
-  "originHash" : "4ec4b384ce9687267439fb28b20878150000526b88864f584904737379f25869",
   "pins" : [
-    {
-      "identity" : "arxivlatex",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/SYYANI/arxivLatex.git",
-      "state" : {
-        "branch" : "main",
-        "revision" : "c993ce025400e186e3cb3078e61cb7ded9fce4cc"
-      }
-    },
     {
       "identity" : "async-http-client",
       "kind" : "remoteSourceControl",
@@ -17,15 +7,6 @@
       "state" : {
         "revision" : "3a5b74a58782c3b4c1f0bc75e9b67b10c2494e8f",
         "version" : "1.33.1"
-      }
-    },
-    {
-      "identity" : "babeldoc",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/SYYANI/BabelDOC.git",
-      "state" : {
-        "branch" : "dev_package_catal",
-        "revision" : "e33b82f46c1f82a065b2e55e0b782e5e9a774290"
       }
     },
     {
@@ -123,6 +104,15 @@
       "state" : {
         "revision" : "bb4ba815dab96d4edc1e0b86d7b9acf9ff973a84",
         "version" : "4.3.1"
+      }
+    },
+    {
+      "identity" : "swift-custom-dump",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/pointfreeco/swift-custom-dump",
+      "state" : {
+        "revision" : "4fb9e7cbb4b8f5a7354005db39447f570d6b3e19",
+        "version" : "1.7.3"
       }
     },
     {
@@ -225,15 +215,6 @@
       }
     },
     {
-      "identity" : "swift-readability",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/SYYANI/swift-readability.git",
-      "state" : {
-        "branch" : "main",
-        "revision" : "b4f50fa764f23bb61ec26693ebc2152dc46250e8"
-      }
-    },
-    {
       "identity" : "swift-service-context",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-service-context.git",
@@ -249,6 +230,24 @@
       "state" : {
         "revision" : "9829955b385e5bb88128b73f1b8389e9b9c3191a",
         "version" : "2.11.0"
+      }
+    },
+    {
+      "identity" : "swift-snapshot-testing",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/pointfreeco/swift-snapshot-testing",
+      "state" : {
+        "revision" : "59a99c458de4d2dee580529b61b4f78dca7b7fa6",
+        "version" : "1.19.4"
+      }
+    },
+    {
+      "identity" : "swift-syntax",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/swiftlang/swift-syntax",
+      "state" : {
+        "revision" : "050f1a346fbbac0ca2cfb15a95274f7bd1cf0ccf",
+        "version" : "604.0.0"
       }
     },
     {
@@ -279,15 +278,6 @@
       }
     },
     {
-      "identity" : "swiftstreamingmarkdown",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/SYYANI/SwiftStreamingMarkdown.git",
-      "state" : {
-        "branch" : "main",
-        "revision" : "384756890240b243b120b80c18e0fd3d516cf4bb"
-      }
-    },
-    {
       "identity" : "swiftui-shimmer",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/markiv/SwiftUI-Shimmer",
@@ -295,7 +285,16 @@
         "revision" : "0226e21f9bf355d40e07e5f5e1c33679d50e167f",
         "version" : "1.5.1"
       }
+    },
+    {
+      "identity" : "xctest-dynamic-overlay",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/pointfreeco/xctest-dynamic-overlay",
+      "state" : {
+        "revision" : "d9308ad679143c26a30dec52daefe82f54af2b82",
+        "version" : "1.13.1"
+      }
     }
   ],
-  "version" : 3
+  "version" : 2
 }
