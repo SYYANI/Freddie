@@ -124,6 +124,7 @@ LLM 配置现已拆成独立 SwiftData 模型：`LLMProviderProfile` 负责 prov
 - BabelDOC 的 launcher 可能是 `uv tool install` 生成的 `sh` 包装器，第一行 shebang 不一定就是实际 Python 解释器；改启动逻辑时要兼容“同目录 venv `python3`/`python` + shell wrapper `exec .../python3`”这类结构，不要简单假设 `#!/usr/bin/env python3`。
 - ReadPaper 管理的 BabelDOC 安装应优先使用 uv-managed Python 3.13；已遇到 Python 3.14 下 BabelDOC 运行时报 `_WorkItem.__init__` 参数不匹配的兼容性问题。判断 BabelDOC 是否可用时不要只检查 `bin/babeldoc` 是否可执行，还要确认 launcher 背后的 Python 版本可用；如果用户把 `/Users/.../Library/Application Support/ReadPaper/Tools/BabelDOC/bin/babeldoc` 手工改成指向 `~/.local/bin/babeldoc` 一类工作版本的 symlink，后续改安装、探测或移除逻辑时要避免误判为内置版本已经健康。
 - `ProcessRunner` 需要持续 draining stdout/stderr，并正确响应取消；改动时保留大输出和取消相关测试。
+- arXiv 论文做 PDF 翻译时，`BabelDocSemanticHintService` 会下载 LaTeX 源码（含 `.bbl`），用 LaTeXTransKit 生成语义 sidecar 交给 BabelDOC 对齐。sidecar 按 `extractorAlgorithmVersion` 缓存在论文目录 `Resources/LaTeXSemantic/`；`../arxivLatex` 的语义抽取输出一旦变化，必须递增该版本，否则会继续命中旧 sidecar。helper 的 `translation_diagnostics` 事件里 `semantic_pdf_paragraphs` / `semantic_matched_pdf_paragraphs` 只统计正文流段落（不含表格、图内文字、fallback 行），状态文案也按这个口径展示。
 
 ## 实现约定
 

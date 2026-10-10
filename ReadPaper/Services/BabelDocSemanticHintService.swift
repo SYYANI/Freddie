@@ -46,7 +46,9 @@ actor BabelDocSemanticHintService {
     typealias StatusHandler = @Sendable (BabelDocSemanticHintStatus) -> Void
 
     static let cacheSchemaVersion = 1
-    static let extractorAlgorithmVersion = 2
+    /// Bump whenever LaTeXTransKit's semantic extraction output changes so cached
+    /// sidecars are regenerated. 3: command spacing, footnotes, inline math, `.bbl`.
+    static let extractorAlgorithmVersion = 3
     private static let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "ReadPaper",
         category: "BabelDocSemanticHints"
