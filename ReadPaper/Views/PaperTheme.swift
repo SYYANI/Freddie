@@ -215,8 +215,8 @@ private struct ReadPaperGrain: View {
 struct ReadPaperReaderMaterialSurface: NSViewRepresentable {
     func makeNSView(context: Context) -> NSView {
         if #available(macOS 26.0, *) {
-            let view = NSGlassEffectView()
-            configureGlass(view)
+            let view = ReaderGlassSurfaceView()
+            configureGlass(view.glassView)
             return view
         }
 
@@ -226,8 +226,8 @@ struct ReadPaperReaderMaterialSurface: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: NSView, context: Context) {
-        if #available(macOS 26.0, *), let view = nsView as? NSGlassEffectView {
-            configureGlass(view)
+        if #available(macOS 26.0, *), let view = nsView as? ReaderGlassSurfaceView {
+            configureGlass(view.glassView)
         } else if let view = nsView as? NSVisualEffectView {
             configureLegacyMaterial(view)
         }
@@ -255,6 +255,108 @@ struct ReadPaperReaderMaterialSurface: NSViewRepresentable {
         view.blendingMode = .behindWindow
         view.material = .underWindowBackground
         view.state = .followsWindowActiveState
+    }
+}
+
+/// The reader glass shows whatever lies behind the clear-backed main window.
+/// Mission Control draws an inactive window without that backdrop, glass tint
+/// included, so the column used to show the wallpaper straight through. Like
+/// the legacy material's `.followsWindowActiveState` and the system sidebar,
+/// the column falls back to the window background while the window is
+/// inactive.
+@available(macOS 26.0, *)
+final class ReaderGlassSurfaceView: NSView {
+    private static let activeStateNotifications: [Notification.Name] = [
+        NSWindow.didBecomeKeyNotification,
+        NSWindow.didResignKeyNotification,
+        NSWindow.didBecomeMainNotification,
+        NSWindow.didResignMainNotification,
+    ]
+
+    let glassView = NSGlassEffectView()
+    let inactiveFillView = WindowBackgroundFillView()
+
+    /// Replaced in tests, where the host app cannot reliably become active.
+    var isWindowActive: (NSWindow) -> Bool = { window in
+        NSApp.isActive && (window.isKeyWindow || window.isMainWindow)
+    } {
+        didSet { updateInactiveFill() }
+    }
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+
+        for view in [inactiveFillView, glassView] as [NSView] {
+            view.frame = bounds
+            view.autoresizingMask = [.width, .height]
+            addSubview(view)
+        }
+
+        let center = NotificationCenter.default
+        let selector = #selector(windowActiveStateDidChange(_:))
+        center.addObserver(self, selector: selector, name: NSApplication.didBecomeActiveNotification, object: nil)
+        center.addObserver(self, selector: selector, name: NSApplication.didResignActiveNotification, object: nil)
+        updateInactiveFill()
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func viewWillMove(toWindow newWindow: NSWindow?) {
+        super.viewWillMove(toWindow: newWindow)
+
+        let center = NotificationCenter.default
+        if let window {
+            for name in Self.activeStateNotifications {
+                center.removeObserver(self, name: name, object: window)
+            }
+        }
+        if let newWindow {
+            for name in Self.activeStateNotifications {
+                center.addObserver(
+                    self,
+                    selector: #selector(windowActiveStateDidChange(_:)),
+                    name: name,
+                    object: newWindow
+                )
+            }
+        }
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        updateInactiveFill()
+    }
+
+    @objc private func windowActiveStateDidChange(_ notification: Notification) {
+        updateInactiveFill()
+    }
+
+    private func updateInactiveFill() {
+        inactiveFillView.isHidden = window.map(isWindowActive) ?? false
+    }
+}
+
+final class WindowBackgroundFillView: NSView {
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override var wantsUpdateLayer: Bool {
+        true
+    }
+
+    override func updateLayer() {
+        // Resolved here so the dynamic color follows the view's appearance.
+        layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
     }
 }
 
