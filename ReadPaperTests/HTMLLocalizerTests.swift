@@ -9,6 +9,71 @@ final class HTMLLocalizerTests: XCTestCase {
         super.tearDown()
     }
 
+    func testBrowserRequestHeadersUseChromeDefaultUserAgent() {
+        let request = BrowserRequestHeaders.request(
+            for: URL(string: "https://example.com/article")!,
+            accept: .document
+        )
+
+        XCTAssertEqual(
+            request.value(forHTTPHeaderField: "User-Agent"),
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36"
+        )
+    }
+
+    func testMakeDocumentRecoversExplicitArticleBodyFromHiddenStreamingContainer() throws {
+        let paragraph = String(repeating: "This complete server-rendered article paragraph must survive extraction. ", count: 20)
+        let html = """
+        <html>
+        <head>
+          <title>Streaming Article</title>
+          <meta name="description" content="A short loading-shell summary.">
+        </head>
+        <body>
+          <p>x</p>
+          <div hidden id="S:4">
+            <div class="post-content instapaper_body">
+              <h2>Recovered section</h2>
+              <p>\(paragraph)</p>
+              <p>Final sentence from the complete article.</p>
+            </div>
+          </div>
+          <div class="comments"><p>This comment must not be imported.</p></div>
+        </body>
+        </html>
+        """
+
+        let document = try HTMLLocalizer().makeDocumentForLocalization(
+            html: html,
+            sourceURL: URL(string: "https://example.com/streaming-article")!
+        )
+        let content = try XCTUnwrap(try document.select(".rp-readability-content").first())
+        let contentText = try content.text()
+
+        XCTAssertTrue(contentText.contains("Recovered section"))
+        XCTAssertTrue(contentText.contains("Final sentence from the complete article."))
+        XCTAssertFalse(contentText.contains("This comment must not be imported."))
+        XCTAssertGreaterThan(contentText.count, 1_000)
+    }
+
+    func testMeaningfulHTMLContentRejectsMetadataOnlyReadabilityResult() {
+        let html = """
+        <html><body class="rp-readability-body">
+          <main class="rp-readability-shell">
+            <div class="rp-readability-header">
+              <h1>A descriptive article title</h1>
+              <p class="rp-readability-excerpt">A long excerpt that makes the page shell look nonempty.</p>
+            </div>
+            <article class="rp-readability-content">
+              <div id="readability-page-1"><p>x</p><title>A descriptive article title</title><meta name="description" content="summary"></div>
+            </article>
+          </main>
+        </body></html>
+        """
+
+        XCTAssertFalse(HTMLLocalizer().hasMeaningfulHTMLContent(html))
+    }
+
     func testMakeDocumentForLocalizationUsesReadabilityContent() throws {
         let paragraph = String(repeating: "This is article content that should survive readability extraction. ", count: 12)
         let html = """
