@@ -890,8 +890,7 @@ struct ReaderPaneView: View {
                 "block": String(localized: "Block", bundle: bundle),
             ],
             // The page script fills in the placeholders.
-            regions: AppLocalization.format("%@ regions", bundle: bundle, "{count}"),
-            share: AppLocalization.format("%@ of the text", bundle: bundle, "{share}")
+            regions: AppLocalization.format("%@ regions", bundle: bundle, "{count}")
         )
     }
 

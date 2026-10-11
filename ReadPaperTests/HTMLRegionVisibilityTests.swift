@@ -302,9 +302,6 @@ final class HTMLRegionVisibilityTests: XCTestCase {
         try await hover("#short", in: webView)
         var state = try await editState(in: webView)
         XCTAssertEqual(state["kind"] as? String, "Paragraph")
-        XCTAssertEqual(state["hint"] as? String, "p#short")
-        XCTAssertTrue((state["share"] as? String)?.hasSuffix("% of the text") == true)
-        XCTAssertEqual(state["largeShare"] as? Bool, false)
         XCTAssertEqual(state["parentOutlineVisible"] as? Bool, false)
 
         // A wrapper exactly as large as its paragraph adds no step; hiding it leaves no empty margins.
@@ -312,7 +309,6 @@ final class HTMLRegionVisibilityTests: XCTestCase {
         state = try await editState(in: webView)
         XCTAssertEqual(state["selectedTag"] as? String, "div")
         XCTAssertEqual(state["kind"] as? String, "Paragraph")
-        XCTAssertEqual(state["hint"] as? String, "div.frame")
 
         // The dashed outline shows what ↑ selects next.
         try await hover("#bio-title", in: webView)
@@ -322,12 +318,7 @@ final class HTMLRegionVisibilityTests: XCTestCase {
         try await press(["key": "ArrowUp"], in: webView)
         state = try await editState(in: webView)
         XCTAssertEqual(state["kind"] as? String, "Block")
-        XCTAssertEqual(state["hint"] as? String, "section.author-box")
         XCTAssertEqual(state["parentOutlineVisible"] as? Bool, false)
-
-        try await hover("#long", in: webView)
-        state = try await editState(in: webView)
-        XCTAssertEqual(state["largeShare"] as? Bool, true, "Hiding most of the page's text is flagged")
 
         // The translated display mode hides sources; a translation still outlines its own source.
         _ = try await webView.evaluateJavaScript("document.documentElement.setAttribute('data-rp-display-mode', 'translated'); true")
@@ -438,8 +429,7 @@ final class HTMLRegionVisibilityTests: XCTestCase {
         hide: "Hide",
         restore: "Restore",
         kinds: ["paragraph": "Paragraph", "heading": "Heading", "block": "Block"],
-        regions: "{count} regions",
-        share: "{share} of the text"
+        regions: "{count} regions"
     )
 
     private static let outlineHTML = #"""
@@ -455,7 +445,6 @@ final class HTMLRegionVisibilityTests: XCTestCase {
     <p id="short">A short paragraph.</p>
     <div class="frame"><p id="framed">A paragraph in a wrapper of the same size.</p></div>
     <section class="author-box"><h2 id="bio-title">About the author</h2><p>Bio.</p></section>
-    <p id="long">Long body text that holds most of the page. Long body text that holds most of the page. Long body text that holds most of the page. Long body text that holds most of the page. Long body text that holds most of the page. Long body text that holds most of the page. Long body text that holds most of the page. Long body text that holds most of the page. Long body text that holds most of the page. Long body text that holds most of the page. Long body text that holds most of the page. Long body text that holds most of the page.</p>
     <p id="hidden-note" data-rp-region-hidden="true">Hidden before editing.</p>
     <section id="translated"><p id="source" data-rp-segment-id="s1" data-rp-source="true">Source paragraph.</p><p class="rp-translation-block" data-rp-translation="true" data-rp-source-segment-id="s1">译文段落。</p><p>Other paragraph.</p></section>
     </div></div></article>

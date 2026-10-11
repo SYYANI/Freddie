@@ -155,17 +155,6 @@
         }
       }
     },
-    "%@ of the text" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "占正文 %@"
-          }
-        }
-      }
-    },
     "Paragraph" : {
       "extractionState" : "stale",
       "localizations" : {

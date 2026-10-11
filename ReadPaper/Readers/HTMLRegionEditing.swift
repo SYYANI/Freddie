@@ -37,8 +37,6 @@ enum HTMLRegionEditing {
         const outlineInset = 3;
         // A wrapper this close to the box of what it wraps adds no visible step.
         const sameBoundsTolerance = 2;
-        // Hiding this much of the page's text turns the badge into a warning.
-        const largeShare = 0.3;
         const summaryLength = 80;
 
         let enabled = false;
@@ -48,8 +46,6 @@ enum HTMLRegionEditing {
         let parentBox = null;
         let actionLabel = null;
         let kindLabel = null;
-        let hintLabel = null;
-        let shareLabel = null;
         let roots = new Set();
         // Outline steps under the pointer, innermost first; see `levelsFor`.
         let levels = [];
@@ -66,7 +62,6 @@ enum HTMLRegionEditing {
         // Bumped when hidden regions or the layout change, which invalidates `rangeCache`.
         let generation = 0;
         let textLengths = new WeakMap();
-        let totalTextLength = 0;
 
         const post = payload => {
             try { window.webkit?.messageHandlers?.\(messageHandlerName)?.postMessage(JSON.stringify(payload)); } catch {}
@@ -93,11 +88,7 @@ enum HTMLRegionEditing {
             actionLabel = document.createElement('span');
             actionLabel.className = 'rp-region-edit-action';
             kindLabel = document.createElement('span');
-            hintLabel = document.createElement('span');
-            hintLabel.className = 'rp-region-edit-tag';
-            shareLabel = document.createElement('span');
-            shareLabel.className = 'rp-region-edit-share';
-            badge.append(actionLabel, kindLabel, hintLabel, shareLabel);
+            badge.append(actionLabel, kindLabel);
             box.appendChild(badge);
             layer.append(parentBox, box);
             document.documentElement.appendChild(layer);
@@ -255,8 +246,7 @@ enum HTMLRegionEditing {
                 levels[levels.length - 1];
         };
 
-        // Page text in an element, without translations: a hidden source takes its
-        // translation along, so a region's share is the same in every display mode.
+        // Page text in an element, without translations, so the result is the same in every display mode.
         const textLengthOf = element => {
             let length = textLengths.get(element);
             if (length !== undefined) { return length; }
@@ -272,10 +262,6 @@ enum HTMLRegionEditing {
             textLengths.set(element, length);
             return length;
         };
-
-        const shareOf = elements => totalTextLength > 0
-            ? elements.reduce((sum, element) => sum + textLengthOf(element), 0) / totalTextLength
-            : 0;
 
         // What an element shows, as a key of `labels.kinds`.
         const kindOf = element => {
@@ -305,15 +291,6 @@ enum HTMLRegionEditing {
             const level = levels[levelIndexOf(element)];
             const kinds = (level ? level.members : [element]).map(kindOf);
             return labels.kinds?.[kinds.find(kind => kind !== 'block') || 'block'] || '';
-        };
-
-        // `tag.class` (else `tag#id`) from the source page, which often says what a block is for.
-        const hintFor = element => {
-            const tag = tagFor(element);
-            const className = Array.from(element.classList).find(name => !name.startsWith('rp-'));
-            if (className) { return `${tag}.${className}`; }
-            const id = element.getAttribute('id') || '';
-            return id && !id.startsWith('rp-') ? `${tag}#${id}` : tag;
         };
 
         // Looks through `display: contents` wrappers, which have no box of their own.
@@ -399,10 +376,6 @@ enum HTMLRegionEditing {
             element.style.height = `${bounds.bottom - bounds.top + outlineInset * 2}px`;
         };
 
-        const formatShare = share => share < 0.01
-            ? ''
-            : (labels.share || '{share}').replace('{share}', `${Math.round(share * 100)}%`);
-
         const render = () => {
             if (!box) { return; }
             const preview = currentPreview();
@@ -415,16 +388,12 @@ enum HTMLRegionEditing {
             const origin = layer.getBoundingClientRect();
             place(box, bounds, origin);
             const restoring = !preview.hidden;
-            const share = shareOf(preview.targets);
             box.classList.toggle('is-restore', restoring);
-            box.classList.toggle('is-large', !restoring && share >= largeShare);
             box.classList.add('is-visible');
             actionLabel.textContent = (restoring ? labels.restore : labels.hide) || '';
             kindLabel.textContent = preview.isRange
                 ? (labels.regions || '{count}').replace('{count}', String(preview.targets.length))
                 : kindLabelFor(selected);
-            hintLabel.textContent = preview.isRange ? '' : hintFor(selected);
-            shareLabel.textContent = formatShare(share);
             // Above the outline when there is room; otherwise inside it, kept on screen.
             const top = bounds.top - outlineInset;
             const height = bounds.bottom - bounds.top + outlineInset * 2;
@@ -671,7 +640,6 @@ enum HTMLRegionEditing {
             if (enabled) {
                 roots = computeRoots();
                 textLengths = new WeakMap();
-                totalTextLength = textLengthOf(document.body);
                 window.getSelection()?.removeAllRanges();
                 report([]);
             }
@@ -704,9 +672,6 @@ enum HTMLRegionEditing {
                 parentOutlineVisible: !!parentBox && parentBox.classList.contains('is-visible'),
                 action: actionLabel ? actionLabel.textContent : '',
                 kind: kindLabel ? kindLabel.textContent : '',
-                hint: hintLabel ? hintLabel.textContent : '',
-                share: shareLabel ? shareLabel.textContent : '',
-                largeShare: !!box && box.classList.contains('is-large'),
                 rangeCount: preview?.isRange ? preview.targets.length : 0,
                 hiddenRegionCount: hiddenRegionCount(),
                 canUndo: undoStack.length > 0,
@@ -882,23 +847,6 @@ enum HTMLRegionEditing {
     .rp-region-edit-box.is-restore .rp-region-edit-badge { background: rgba(36, 138, 84, 0.95); }
     .rp-region-edit-badge > span:empty { display: none; }
     .rp-region-edit-action { font-weight: 700; }
-    .rp-region-edit-tag {
-        max-width: 18em;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        font: 500 10.5px/18px ui-monospace, SFMono-Regular, Menlo, monospace;
-        opacity: 0.85;
-    }
-    .rp-region-edit-share {
-        padding: 0 5px;
-        border-radius: 4px;
-        background: rgba(255, 255, 255, 0.22);
-        font-weight: 600;
-    }
-    .rp-region-edit-box.is-large .rp-region-edit-share {
-        color: #3d2c00;
-        background: #ffd60a;
-    }
     """
 
     private static func javaScriptStringLiteral(_ value: String) -> String {
@@ -918,8 +866,6 @@ struct HTMLRegionEditLabels: Codable, Equatable, Sendable {
     var kinds: [String: String] = [:]
     /// "{count} regions", for an outline that spans several regions.
     var regions = ""
-    /// "{share} of the text": the part of the page's text inside an outline.
-    var share = ""
 }
 
 /// A hidden region as the edit bar lists it.
