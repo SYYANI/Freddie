@@ -115,6 +115,38 @@ final class HTMLLocalizerTests: XCTestCase {
         XCTAssertFalse(try style.outerHtml().contains("&gt;"))
     }
 
+    func testMakeDocumentForLocalizationDropsExcerptTruncatedFromTheOpeningParagraph() throws {
+        let opening = "Anyone who works in the agency business has heard these words from a prospective client"
+        let paragraph = String(repeating: "This is article content that should survive readability extraction. ", count: 12)
+        func excerpts(description: String) throws -> [String] {
+            let html = """
+            <html>
+            <head>
+            <title>Readable Title</title>
+            <meta name="description" content="\(description)">
+            </head>
+            <body>
+            <article>
+            <p>\(opening), and the paragraph goes on from there. \(paragraph)</p>
+            <p>\(paragraph)</p>
+            </article>
+            </body>
+            </html>
+            """
+            let document = try HTMLLocalizer().makeDocumentForLocalization(
+                html: html,
+                sourceURL: URL(string: "https://example.com/article")!
+            )
+            return try document.select(".rp-readability-excerpt").array().map { try $0.text() }
+        }
+
+        XCTAssertEqual(try excerpts(description: "A summary written for search results."), ["A summary written for search results."])
+        // WordPress and similar sites cut the description from the opening paragraph and mark the cut.
+        XCTAssertEqual(try excerpts(description: "\(opening) […]"), [])
+        XCTAssertEqual(try excerpts(description: "\(opening) [...]"), [])
+        XCTAssertEqual(try excerpts(description: "\(opening)…"), [])
+    }
+
     func testReadabilityStylesResetKnownLayoutWrappers() throws {
         let paragraph = String(repeating: "This is article content that should remain in one readable column. ", count: 12)
         let html = """

@@ -146,6 +146,8 @@ struct ReaderPaneView: View {
     @State private var bilingualFindTarget: DualPDFSelectionSource = .original
     @State private var isEditingHTMLRegions = false
     @State private var htmlRegionEditUpdate: HTMLRegionEditUpdate?
+    /// Hidden regions on the page shown, reported on every load and edit.
+    @State private var htmlHiddenRegionCount = 0
     @State private var htmlRegionEditCommand: HTMLRegionEditCommand?
     @State private var pendingHTMLRegionChanges: PendingHTMLRegionChanges?
     @State private var htmlRegionSaveTask: Task<Void, Never>?
@@ -339,6 +341,7 @@ struct ReaderPaneView: View {
             }
             .onChange(of: paper?.id) { _, _ in
                 finishHTMLRegionEditing()
+                htmlHiddenRegionCount = 0
                 flushPendingReadingStatePersistence()
                 deactivatePDFTranslationDebugMode()
                 pdfAnnotationSession.resetForDocumentChange()
@@ -379,6 +382,7 @@ struct ReaderPaneView: View {
             }
             .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
                 flushHTMLRegionChanges()
+                HTMLRegionWriter.shared.finishBeforeTermination()
             }
             .onDisappear {
                 finishHTMLRegionEditing()
@@ -573,8 +577,10 @@ struct ReaderPaneView: View {
                 if isEditingHTMLRegions {
                     HTMLRegionEditBar(
                         hiddenRegionCount: htmlRegionEditUpdate?.hiddenRegionCount ?? 0,
+                        hiddenRegions: htmlRegionEditUpdate?.hiddenRegions ?? [],
                         canUndo: htmlRegionEditUpdate?.canUndo ?? false,
                         canRedo: htmlRegionEditUpdate?.canRedo ?? false,
+                        onReveal: { path in htmlRegionEditCommand = HTMLRegionEditCommand(action: .reveal(path: path)) },
                         onUndo: { htmlRegionEditCommand = HTMLRegionEditCommand(action: .undo) },
                         onRedo: { htmlRegionEditCommand = HTMLRegionEditCommand(action: .redo) },
                         onRestoreAll: { htmlRegionEditCommand = HTMLRegionEditCommand(action: .restoreAll) },
@@ -840,7 +846,10 @@ struct ReaderPaneView: View {
         Button {
             toggleHTMLRegionEditing()
         } label: {
-            Label(String(localized: "Edit Regions", bundle: bundle), systemImage: "rectangle.dashed")
+            Label(
+                String(localized: "Edit Regions", bundle: bundle),
+                systemImage: "rectangle.and.pencil.and.ellipsis"
+            )
                 .labelStyle(.iconOnly)
                 .foregroundStyle(isEditingHTMLRegions ? Color.accentColor : Color.primary)
         }
@@ -855,13 +864,34 @@ struct ReaderPaneView: View {
         if isWorking {
             return String(localized: "Regions can't be edited while a translation is running.", bundle: bundle)
         }
+        if htmlHiddenRegionCount > 0 {
+            return AppLocalization.format("Hide or restore parts of this page (%lld hidden)", bundle: bundle, htmlHiddenRegionCount)
+        }
         return String(localized: "Hide or restore parts of this page", bundle: bundle)
     }
 
     private var htmlRegionEditLabels: HTMLRegionEditLabels {
         HTMLRegionEditLabels(
             hide: String(localized: "Hide", bundle: bundle),
-            restore: String(localized: "Restore", bundle: bundle)
+            restore: String(localized: "Restore", bundle: bundle),
+            kinds: [
+                "paragraph": String(localized: "Paragraph", bundle: bundle),
+                "heading": String(localized: "Heading", bundle: bundle),
+                "list": String(localized: "List", bundle: bundle),
+                "listItem": String(localized: "List Item", bundle: bundle),
+                "quote": String(localized: "Quote", bundle: bundle),
+                "code": String(localized: "Code", bundle: bundle),
+                "formula": String(localized: "Formula", bundle: bundle),
+                "table": String(localized: "Table", bundle: bundle),
+                "image": String(localized: "Image", bundle: bundle),
+                "media": String(localized: "Media", bundle: bundle),
+                "link": String(localized: "Link", bundle: bundle),
+                "text": String(localized: "Text", bundle: bundle),
+                "block": String(localized: "Block", bundle: bundle),
+            ],
+            // The page script fills in the placeholders.
+            regions: AppLocalization.format("%@ regions", bundle: bundle, "{count}"),
+            share: AppLocalization.format("%@ of the text", bundle: bundle, "{share}")
         )
     }
 
@@ -890,10 +920,15 @@ struct ReaderPaneView: View {
         switch event {
         case .exitRequested:
             finishHTMLRegionEditing()
+        case let .loaded(documentURL, hiddenRegionCount):
+            guard let fileURL = htmlAttachment?.fileURL,
+                  Self.isFile(fileURL, sameAs: documentURL) else { return }
+            htmlHiddenRegionCount = hiddenRegionCount
         case let .updated(update):
             // Only the page currently shown may change its own file.
             guard let fileURL = htmlAttachment?.fileURL,
                   Self.isFile(fileURL, sameAs: update.documentURL) else { return }
+            htmlHiddenRegionCount = update.hiddenRegionCount
             if isEditingHTMLRegions {
                 htmlRegionEditUpdate = update
             }
@@ -926,23 +961,23 @@ struct ReaderPaneView: View {
         htmlRegionSaveTask = nil
         guard let pending = pendingHTMLRegionChanges else { return }
         pendingHTMLRegionChanges = nil
-        do {
-            let update = try HTMLRegionVisibility.apply(
-                Array(pending.changesByPath.values),
-                toFileAt: pending.fileURL
-            )
-            guard update.unmatchedChanges.isEmpty == false else { return }
-            statusMessage = AppLocalization.format(
-                "%lld region changes could not be matched to the saved page and were not saved.",
-                bundle: bundle,
-                update.unmatchedChanges.count
-            )
-        } catch {
-            statusMessage = AppLocalization.errorMessage(error, bundle: bundle)
-        }
-        // Show what was actually saved.
-        if htmlAttachment?.fileURL == pending.fileURL {
-            htmlReloadToken += 1
+        let fileURL = pending.fileURL
+        HTMLRegionWriter.shared.write(Array(pending.changesByPath.values), toFileAt: fileURL) { result in
+            switch result {
+            case let .success(update):
+                guard update.unmatchedChanges.isEmpty == false else { return }
+                statusMessage = AppLocalization.format(
+                    "%lld region changes could not be matched to the saved page and were not saved.",
+                    bundle: bundle,
+                    update.unmatchedChanges.count
+                )
+            case let .failure(error):
+                statusMessage = AppLocalization.errorMessage(error, bundle: bundle)
+            }
+            // Show what was actually saved.
+            if htmlAttachment?.fileURL == fileURL {
+                htmlReloadToken += 1
+            }
         }
     }
 
@@ -1371,6 +1406,7 @@ struct ReaderPaneView: View {
         isExportingHTMLPDF = true
         Task { @MainActor in
             defer { isExportingHTMLPDF = false }
+            await HTMLRegionWriter.shared.waitForQueuedWrites()
             do {
                 try await HTMLPDFExporter().export(
                     sourceURL: sourceURL,
@@ -1829,6 +1865,8 @@ struct ReaderPaneView: View {
         isCancelling = false
         statusMessage = String(localized: "Translating HTML...", bundle: bundle)
         translationTask = Task {
+            // Translation rewrites paper.html, so region edits must be on disk first.
+            await HTMLRegionWriter.shared.waitForQueuedWrites()
             do {
                 try Task.checkCancellation()
                 let resolvedRoute = try LLMRouteResolver().resolveHTMLRoute(

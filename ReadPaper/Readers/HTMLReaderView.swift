@@ -2548,12 +2548,13 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
                   command.id != lastHandledRegionEditCommandID,
                   isDocumentReady,
                   isLoading == false,
-                  appliedRegionEditing == true,
-                  let actionLiteral = javaScriptStringLiteral(command.action.rawValue) else {
+                  appliedRegionEditing == true else {
                 return
             }
+            let arguments = command.action.scriptArguments.compactMap(javaScriptStringLiteral)
+            guard arguments.count == command.action.scriptArguments.count else { return }
             lastHandledRegionEditCommandID = command.id
-            runJavaScript("window.__rpRegionEditPerform?.(\(actionLiteral));", in: webView)
+            runJavaScript("window.__rpRegionEditPerform?.(\(arguments.joined(separator: ", ")));", in: webView)
         }
 
         private func handleRegionEditMessage(_ message: WKScriptMessage) {
@@ -2566,6 +2567,13 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
                 return
             }
             switch kind.type {
+            case "loaded":
+                struct Loaded: Decodable {
+                    var documentURL: String?
+                    var hiddenRegionCount: Int
+                }
+                guard let loaded = try? JSONDecoder().decode(Loaded.self, from: data) else { return }
+                onRegionEditEvent?(.loaded(documentURL: loaded.documentURL, hiddenRegionCount: loaded.hiddenRegionCount))
             case "update":
                 guard let update = try? JSONDecoder().decode(HTMLRegionEditUpdate.self, from: data) else { return }
                 if update.changes.isEmpty == false {

@@ -1,6 +1,182 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "Block" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "区块"
+          }
+        }
+      }
+    },
+    "Click" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "点击"
+          }
+        }
+      }
+    },
+    "⇧ Click" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "⇧ 点击"
+          }
+        }
+      }
+    },
+    "Click a region to hide it, or a faded region to restore it. Shift-click another region to make the same change to everything in between. Press ↑ or ↓ to resize the outline and Esc to finish." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "点击区域即可隐藏，点击半透明区域可恢复。按住 ⇧ 点击另一处，可对两者之间的内容做同样的调整。按 ↑ 或 ↓ 调整选框大小，按 Esc 完成。"
+          }
+        }
+      }
+    },
+    "Code" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "代码"
+          }
+        }
+      }
+    },
+    "Formula" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "公式"
+          }
+        }
+      }
+    },
+    "Heading" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "标题"
+          }
+        }
+      }
+    },
+    "Hide or restore parts of this page (%lld hidden)" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "隐藏或恢复页面中的部分区域（已隐藏 %lld 处）"
+          }
+        }
+      }
+    },
+    "Hide/Restore" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "隐藏/恢复"
+          }
+        }
+      }
+    },
+    "Image" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "图片"
+          }
+        }
+      }
+    },
+    "Link" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "链接"
+          }
+        }
+      }
+    },
+    "List" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "列表"
+          }
+        }
+      }
+    },
+    "List Item" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "列表项"
+          }
+        }
+      }
+    },
+    "Media" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "媒体"
+          }
+        }
+      }
+    },
+    "%@ of the text" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "占正文 %@"
+          }
+        }
+      }
+    },
+    "Paragraph" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "段落"
+          }
+        }
+      }
+    },
     " (part %d/%d)" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1373,17 +1549,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "清除查找内容"
-          }
-        }
-      }
-    },
-    "Click a region to hide it, or a faded region to restore it. Press ↑ or ↓ to resize the outline and Esc to finish." : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "点击区域即可隐藏，点击半透明区域可恢复。按 ↑ 或 ↓ 调整选框大小，按 Esc 完成。"
           }
         }
       }
@@ -4797,6 +4962,28 @@
         }
       }
     },
+    "Quote" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "引用"
+          }
+        }
+      }
+    },
+    "Range" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "连选"
+          }
+        }
+      }
+    },
     "Read" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -4938,6 +5125,17 @@
         }
       }
     },
+    "%@ regions" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 个区块"
+          }
+        }
+      }
+    },
     "Regions can't be edited while a translation is running." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -5010,6 +5208,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "重置字号"
+          }
+        }
+      }
+    },
+    "Resize" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "扩大/缩小"
           }
         }
       }
@@ -5498,6 +5707,17 @@
         }
       }
     },
+    "Show a hidden region on the page" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在页面中定位已隐藏的区域"
+          }
+        }
+      }
+    },
     "Show BabelDOC Log" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -5654,6 +5874,17 @@
         }
       }
     },
+    "Table" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "表格"
+          }
+        }
+      }
+    },
     "Target language" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -5782,6 +6013,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在测试..."
+          }
+        }
+      }
+    },
+    "Text" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "文字"
           }
         }
       }
@@ -6822,6 +7064,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在结合上下文理解所选文字…"
+          }
+        }
+      }
+    },
+    "Undo" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "撤销"
           }
         }
       }

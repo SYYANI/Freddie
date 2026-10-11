@@ -101,7 +101,7 @@ enum HTMLRegionVisibility {
         )
     }
 
-    @MainActor
+    /// Parses and rewrites the whole page, so callers on the main actor go through `HTMLRegionWriter`.
     @discardableResult
     static func apply(_ changes: [HTMLRegionChange], toFileAt url: URL) throws -> HTMLRegionVisibilityUpdate {
         let html = try String(contentsOf: url, encoding: .utf8)
@@ -152,6 +152,67 @@ enum HTMLRegionVisibility {
         let declaration = try document.createElement("meta")
         try declaration.attr("charset", "UTF-8")
         try head.prependChild(declaration)
+    }
+}
+
+/// Writes region edits to `paper.html` off the main actor, in the order they were made.
+///
+/// Each write parses and rewrites the whole page, which takes tens of milliseconds on a large
+/// page (several times that in Debug builds). Writes run one at a time, so a later edit is never
+/// overwritten by an earlier one.
+@MainActor
+final class HTMLRegionWriter {
+    static let shared = HTMLRegionWriter()
+
+    private struct Write {
+        let id = UUID()
+        var changes: [HTMLRegionChange]
+        var fileURL: URL
+    }
+
+    /// Writes whose turn has not come yet.
+    private var queued: [Write] = []
+    private var lastWrite: Task<Void, Never>?
+    /// Entered while a write runs in the background, so termination can wait for it.
+    private let writing = DispatchGroup()
+
+    /// Queues a write behind the earlier ones; `completion` receives its outcome.
+    func write(
+        _ changes: [HTMLRegionChange],
+        toFileAt fileURL: URL,
+        completion: @escaping @MainActor (Result<HTMLRegionVisibilityUpdate, any Error>) -> Void
+    ) {
+        let write = Write(changes: changes, fileURL: fileURL)
+        queued.append(write)
+        let previous = lastWrite
+        lastWrite = Task { @MainActor in
+            await previous?.value
+            // `finishBeforeTermination` may have written it already.
+            guard let index = queued.firstIndex(where: { $0.id == write.id }) else { return }
+            queued.remove(at: index)
+            let writing = writing
+            writing.enter()
+            let result = await Task.detached(priority: .userInitiated) {
+                defer { writing.leave() }
+                return Result { try HTMLRegionVisibility.apply(write.changes, toFileAt: write.fileURL) }
+            }.value
+            completion(result)
+        }
+    }
+
+    /// Returns once the writes queued so far are on disk, e.g. before the page is read or rewritten.
+    func waitForQueuedWrites() async {
+        await lastWrite?.value
+    }
+
+    /// The app is about to exit and cannot wait for tasks: finish the running write, then the rest here.
+    func finishBeforeTermination() {
+        let remaining = queued
+        queued = []
+        _ = writing.wait(timeout: .now() + 10)
+        for write in remaining {
+            _ = try? HTMLRegionVisibility.apply(write.changes, toFileAt: write.fileURL)
+        }
     }
 }
 

@@ -841,7 +841,12 @@ struct HTMLLocalizer: @unchecked Sendable {
     }
 
     private func shouldRenderExcerpt(_ excerpt: String, contentHTML: String) -> Bool {
-        let normalizedExcerpt = normalizeVisibleText(excerpt)
+        // A description cut from the opening paragraph ends in a mark ("…", "[…]") the article lacks.
+        let normalizedExcerpt = normalizeVisibleText(excerpt.replacingOccurrences(
+            of: #"\s*(?:\[\s*(?:…|\.{3})\s*\]|…|\.{3})\s*$"#,
+            with: "",
+            options: .regularExpression
+        ))
         guard !normalizedExcerpt.isEmpty else {
             return false
         }
