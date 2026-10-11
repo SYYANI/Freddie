@@ -172,6 +172,10 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
     var sidenoteFocusRequest: SidenoteFocusRequest? = nil
     var onSidenoteEvent: ((HTMLSidenoteEvent) -> Void)? = nil
     var onSidenoteFocusHandled: ((SidenoteFocusRequest) -> Void)? = nil
+    var isRegionEditing = false
+    var regionEditLabels = HTMLRegionEditLabels()
+    var regionEditCommand: HTMLRegionEditCommand? = nil
+    var onRegionEditEvent: ((HTMLRegionEditEvent) -> Void)? = nil
 
     #if os(macOS)
     func makeNSView(context: Context) -> WKWebView {
@@ -192,12 +196,25 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
     #endif
 
     private func makeView(context: Context) -> WKWebView {
+        let view = WKWebView(frame: .zero, configuration: Self.makeConfiguration(coordinator: context.coordinator))
+        view.navigationDelegate = context.coordinator
+        applyHostDisplayAppearance(displayAppearance, to: view)
+        return view
+    }
+
+    /// Saved pages are only read, so their own JavaScript (inline scripts, event handler
+    /// attributes, `javascript:` links, iframe scripts) never runs. The reader's user scripts
+    /// and `evaluateJavaScript` are unaffected by `allowsContentJavaScript`.
+    @MainActor
+    static func makeConfiguration(coordinator: Coordinator) -> WKWebViewConfiguration {
         let configuration = WKWebViewConfiguration()
         configuration.preferences.javaScriptCanOpenWindowsAutomatically = false
-        configuration.userContentController.add(context.coordinator, name: Coordinator.scrollMessageHandlerName)
-        configuration.userContentController.add(context.coordinator, name: Coordinator.selectionMessageHandlerName)
-        configuration.userContentController.add(context.coordinator, name: Coordinator.selectionResetMessageHandlerName)
-        configuration.userContentController.add(context.coordinator, name: Coordinator.sidenoteMessageHandlerName)
+        configuration.defaultWebpagePreferences.allowsContentJavaScript = false
+        configuration.userContentController.add(coordinator, name: Coordinator.scrollMessageHandlerName)
+        configuration.userContentController.add(coordinator, name: Coordinator.selectionMessageHandlerName)
+        configuration.userContentController.add(coordinator, name: Coordinator.selectionResetMessageHandlerName)
+        configuration.userContentController.add(coordinator, name: Coordinator.sidenoteMessageHandlerName)
+        configuration.userContentController.add(coordinator, name: HTMLRegionEditing.messageHandlerName)
         configuration.userContentController.addUserScript(
             WKUserScript(
                 source: Coordinator.mediaPreparationScript,
@@ -235,10 +252,14 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
                 forMainFrameOnly: true
             )
         )
-        let view = WKWebView(frame: .zero, configuration: configuration)
-        view.navigationDelegate = context.coordinator
-        applyHostDisplayAppearance(displayAppearance, to: view)
-        return view
+        configuration.userContentController.addUserScript(
+            WKUserScript(
+                source: HTMLRegionEditing.script,
+                injectionTime: .atDocumentEnd,
+                forMainFrameOnly: true
+            )
+        )
+        return configuration
     }
 
     private func updateView(_ view: WKWebView, context: Context) {
@@ -258,6 +279,10 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
         context.coordinator.sidenoteFocusRequest = sidenoteFocusRequest
         context.coordinator.onSidenoteEvent = onSidenoteEvent
         context.coordinator.onSidenoteFocusHandled = onSidenoteFocusHandled
+        context.coordinator.isRegionEditing = isRegionEditing
+        context.coordinator.regionEditLabels = regionEditLabels
+        context.coordinator.regionEditCommand = regionEditCommand
+        context.coordinator.onRegionEditEvent = onRegionEditEvent
         applyHostDisplayAppearance(displayAppearance, to: view)
         context.coordinator.clearSelectionHighlightIfNeeded(
             resetToken: selectionHighlightResetToken,
@@ -301,6 +326,8 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
         context.coordinator.applySidenotes(to: view)
         context.coordinator.applySidenoteFocusIfNeeded(to: view)
         context.coordinator.applyNoteNavigationIfNeeded(noteNavigationRequest, to: view)
+        context.coordinator.applyRegionEditing(to: view)
+        context.coordinator.applyRegionEditCommandIfNeeded(to: view)
         context.coordinator.applyFindRequestIfNeeded(to: view)
     }
 
@@ -656,6 +683,9 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
                     return null;
                 }
             };
+            // Region editing addresses elements with the same paths as note anchors.
+            window.__rpBuildNoteAnchor = buildOriginalPathAnchor;
+            window.__rpOriginalChildren = originalChildren;
 
             ensureTranslationDisplayStyle();
             ensureReadabilityLayoutRepairStyle();
@@ -865,6 +895,10 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
 
             let selectionTimer = null;
             const reportSelection = () => {
+                if (document.documentElement.getAttribute('\(HTMLRegionVisibility.editingAttribute)') === 'true') {
+                    window.webkit.messageHandlers.rpSelection.postMessage(null);
+                    return;
+                }
                 const selection = window.getSelection();
                 const quote = normalizeText(selection ? selection.toString() : '');
                 if (!quote) {
@@ -1872,6 +1906,13 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
         var sidenoteFocusRequest: SidenoteFocusRequest?
         var onSidenoteEvent: ((HTMLSidenoteEvent) -> Void)?
         var onSidenoteFocusHandled: ((SidenoteFocusRequest) -> Void)?
+        var isRegionEditing = false
+        var regionEditLabels = HTMLRegionEditLabels()
+        var regionEditCommand: HTMLRegionEditCommand?
+        var onRegionEditEvent: ((HTMLRegionEditEvent) -> Void)?
+        private var appliedRegionEditing: Bool?
+        private var appliedRegionEditLabels: HTMLRegionEditLabels?
+        private var lastHandledRegionEditCommandID: UUID?
         private var appliedSidenotes: [HTMLSidenote]?
         private var appliedSidenoteLabels: HTMLSidenoteLabels?
         private var renderedSidenoteHTML: [UUID: (markdown: String, html: String)] = [:]
@@ -1923,6 +1964,7 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
             lastAppliedNoteNavigationID = nil
             lastSelectionAssistantHistorySignature = nil
             appliedSidenotes = nil
+            appliedRegionEditing = nil
             isLoading = false
             isDocumentReady = false
             invalidateFindText(keepingPosition: false)
@@ -1960,6 +2002,7 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
             isDocumentReady = false
             lastSelectionAssistantHistorySignature = nil
             appliedSidenotes = nil
+            appliedRegionEditing = nil
             invalidateFindText(keepingPosition: request.preserveScrollPosition)
             currentRequest = request
             pendingSegmentUpdates = []
@@ -2062,6 +2105,7 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
             flushPendingNoteNavigationIfNeeded(in: webView)
             applySidenoteFocusIfNeeded(to: webView)
             finishLoadIfNeeded(in: webView)
+            applyRegionEditing(to: webView)
             applyFindRequestIfNeeded(to: webView)
         }
 
@@ -2107,6 +2151,8 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
                 onSelectionAssistantDismissed?()
             case Self.sidenoteMessageHandlerName:
                 handleSidenoteMessage(message)
+            case HTMLRegionEditing.messageHandlerName:
+                handleRegionEditMessage(message)
             default:
                 return
             }
@@ -2467,6 +2513,77 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
             // Defer so SwiftUI state is not mutated during a view update.
             Task { @MainActor [weak self] in
                 self?.onSidenoteFocusHandled?(request)
+            }
+        }
+
+        func applyRegionEditing(to webView: WKWebView) {
+            guard isDocumentReady, isLoading == false else { return }
+            if appliedRegionEditing == nil, isRegionEditing == false {
+                // A freshly loaded page starts outside edit mode.
+                appliedRegionEditing = false
+                return
+            }
+            guard appliedRegionEditing != isRegionEditing ||
+                    (isRegionEditing && appliedRegionEditLabels != regionEditLabels),
+                  let labelsData = try? JSONEncoder().encode(regionEditLabels),
+                  let labelsJSON = String(data: labelsData, encoding: .utf8) else {
+                return
+            }
+            let isEntering = isRegionEditing && appliedRegionEditing != true
+            runJavaScript("window.__rpSetRegionEditing?.(\(isRegionEditing), \(labelsJSON));", in: webView)
+            appliedRegionEditing = isRegionEditing
+            appliedRegionEditLabels = regionEditLabels
+            // Faded hidden regions change what is visible to find.
+            invalidateFindText(keepingPosition: true)
+            #if os(macOS)
+            // Arrow keys resize the outline, so they must reach the page, not the library list.
+            if isEntering, let window = webView.window, window.firstResponder !== webView {
+                window.makeFirstResponder(webView)
+            }
+            #endif
+        }
+
+        func applyRegionEditCommandIfNeeded(to webView: WKWebView) {
+            guard let command = regionEditCommand,
+                  command.id != lastHandledRegionEditCommandID,
+                  isDocumentReady,
+                  isLoading == false,
+                  appliedRegionEditing == true else {
+                return
+            }
+            let arguments = command.action.scriptArguments.compactMap(javaScriptStringLiteral)
+            guard arguments.count == command.action.scriptArguments.count else { return }
+            lastHandledRegionEditCommandID = command.id
+            runJavaScript("window.__rpRegionEditPerform?.(\(arguments.joined(separator: ", ")));", in: webView)
+        }
+
+        private func handleRegionEditMessage(_ message: WKScriptMessage) {
+            struct Message: Decodable {
+                var type: String
+            }
+            guard let json = message.body as? String,
+                  let data = json.data(using: .utf8),
+                  let kind = try? JSONDecoder().decode(Message.self, from: data) else {
+                return
+            }
+            switch kind.type {
+            case "loaded":
+                struct Loaded: Decodable {
+                    var documentURL: String?
+                    var hiddenRegionCount: Int
+                }
+                guard let loaded = try? JSONDecoder().decode(Loaded.self, from: data) else { return }
+                onRegionEditEvent?(.loaded(documentURL: loaded.documentURL, hiddenRegionCount: loaded.hiddenRegionCount))
+            case "update":
+                guard let update = try? JSONDecoder().decode(HTMLRegionEditUpdate.self, from: data) else { return }
+                if update.changes.isEmpty == false {
+                    invalidateFindText(keepingPosition: true)
+                }
+                onRegionEditEvent?(.updated(update))
+            case "exit":
+                onRegionEditEvent?(.exitRequested)
+            default:
+                return
             }
         }
 

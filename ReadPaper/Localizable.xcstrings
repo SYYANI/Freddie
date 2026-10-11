@@ -1,6 +1,171 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "Block" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "区块"
+          }
+        }
+      }
+    },
+    "Click" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "点击"
+          }
+        }
+      }
+    },
+    "⇧ Click" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "⇧ 点击"
+          }
+        }
+      }
+    },
+    "Click a region to hide it, or a faded region to restore it. Shift-click another region to make the same change to everything in between. Press ↑ or ↓ to resize the outline and Esc to finish." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "点击区域即可隐藏，点击半透明区域可恢复。按住 ⇧ 点击另一处，可对两者之间的内容做同样的调整。按 ↑ 或 ↓ 调整选框大小，按 Esc 完成。"
+          }
+        }
+      }
+    },
+    "Code" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "代码"
+          }
+        }
+      }
+    },
+    "Formula" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "公式"
+          }
+        }
+      }
+    },
+    "Heading" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "标题"
+          }
+        }
+      }
+    },
+    "Hide or restore parts of this page (%lld hidden)" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "隐藏或恢复页面中的部分区域（已隐藏 %lld 处）"
+          }
+        }
+      }
+    },
+    "Hide/Restore" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "隐藏/恢复"
+          }
+        }
+      }
+    },
+    "Image" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "图片"
+          }
+        }
+      }
+    },
+    "Link" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "链接"
+          }
+        }
+      }
+    },
+    "List" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "列表"
+          }
+        }
+      }
+    },
+    "List Item" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "列表项"
+          }
+        }
+      }
+    },
+    "Media" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "媒体"
+          }
+        }
+      }
+    },
+    "Paragraph" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "段落"
+          }
+        }
+      }
+    },
     " (part %d/%d)" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -8,106 +173,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "（第 %1$d/%2$d 部分）"
-          }
-        }
-      }
-    },
-    "%lld segments were skipped because the model returned invalid output. Translate again to retry them." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "有 %lld 个段落因模型返回无效输出而被跳过。再次翻译即可重试这些段落。"
-          }
-        }
-      }
-    },
-    "Anthropic Messages API" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Anthropic Messages API"
-          }
-        }
-      }
-    },
-    "LaTeX translation completed, but %lld units kept source text because the model returned invalid output. Translate again to retry them." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "LaTeX 翻译已完成，但有 %lld 个单元因模型返回无效输出而保留了原文。再次翻译即可重试这些单元。"
-          }
-        }
-      }
-    },
-    "protected placeholders were lost or duplicated" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "受保护的占位符丢失或重复"
-          }
-        }
-      }
-    },
-    "The model declined to answer this request." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "模型拒绝回答此请求。"
-          }
-        }
-      }
-    },
-    "the model repeated neighboring context" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "模型复述了相邻段落的上下文"
-          }
-        }
-      }
-    },
-    "the model repeated the translation prompt" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "模型复述了翻译提示词"
-          }
-        }
-      }
-    },
-    "The model returned an invalid translation after %lld attempts: %@." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "模型在 %1$lld 次尝试后仍返回无效译文：%2$@。"
-          }
-        }
-      }
-    },
-    "the model returned the source text untranslated" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "模型原样返回了未翻译的原文"
-          }
-        }
-      }
-    },
-    "the output was far longer than the source" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "输出远长于原文"
           }
         }
       }
@@ -212,6 +277,27 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%1$d/%2$d"
+          }
+        }
+      }
+    },
+    "%lld region changes could not be matched to the saved page and were not saved." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "有 %lld 处区域调整无法与已保存的页面对应，未能保存。"
+          }
+        }
+      }
+    },
+    "%lld segments were skipped because the model returned invalid output. Translate again to retry them." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "有 %lld 个段落因模型返回无效输出而被跳过。再次翻译即可重试这些段落。"
           }
         }
       }
@@ -515,6 +601,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "标注颜色"
+          }
+        }
+      }
+    },
+    "Anthropic Messages API" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Anthropic Messages API"
           }
         }
       }
@@ -2098,6 +2194,17 @@
         }
       }
     },
+    "Edit Regions" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "调整区域"
+          }
+        }
+      }
+    },
     "Enable arXiv LaTeX translation" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2505,6 +2612,17 @@
         }
       }
     },
+    "Finish Editing Regions" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "完成区域调整"
+          }
+        }
+      }
+    },
     "First %d Pages" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2721,6 +2839,28 @@
         }
       }
     },
+    "Hidden: %lld" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已隐藏：%lld"
+          }
+        }
+      }
+    },
+    "Hide" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "隐藏"
+          }
+        }
+      }
+    },
     "Hide Inspector" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2728,6 +2868,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "隐藏检查器"
+          }
+        }
+      }
+    },
+    "Hide or restore parts of this page" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "隐藏或恢复页面中的部分区域"
           }
         }
       }
@@ -3356,6 +3507,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "LaTeX 翻译"
+          }
+        }
+      }
+    },
+    "LaTeX translation completed, but %lld units kept source text because the model returned invalid output. Translate again to retry them." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LaTeX 翻译已完成，但有 %lld 个单元因模型返回无效输出而保留了原文。再次翻译即可重试这些单元。"
           }
         }
       }
@@ -4145,6 +4306,23 @@
         }
       }
     },
+    "Opening web page in browser" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opening web page in browser"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在浏览器中打开网页"
+          }
+        }
+      }
+    },
     "Optional glossary" : {
       "localizations" : {
         "zh-Hans" : {
@@ -4620,6 +4798,16 @@
         }
       }
     },
+    "protected placeholders were lost or duplicated" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "受保护的占位符丢失或重复"
+          }
+        }
+      }
+    },
     "Provider" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -4763,6 +4951,28 @@
         }
       }
     },
+    "Quote" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "引用"
+          }
+        }
+      }
+    },
+    "Range" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "连选"
+          }
+        }
+      }
+    },
     "Read" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -4871,6 +5081,17 @@
         }
       }
     },
+    "Redo Region Change" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重做区域调整"
+          }
+        }
+      }
+    },
     "Refresh" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -4889,6 +5110,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "重新生成"
+          }
+        }
+      }
+    },
+    "%@ regions" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 个区块"
+          }
+        }
+      }
+    },
+    "Regions can't be edited while a translation is running." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "翻译进行中，暂时无法调整区域。"
           }
         }
       }
@@ -4958,6 +5201,17 @@
         }
       }
     },
+    "Resize" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "扩大/缩小"
+          }
+        }
+      }
+    },
     "Resize AI window" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -4975,6 +5229,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Responses API"
+          }
+        }
+      }
+    },
+    "Restore" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "恢复"
+          }
+        }
+      }
+    },
+    "Restore All" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "全部恢复"
           }
         }
       }
@@ -5420,6 +5696,17 @@
         }
       }
     },
+    "Show a hidden region on the page" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在页面中定位已隐藏的区域"
+          }
+        }
+      }
+    },
     "Show BabelDOC Log" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -5576,6 +5863,17 @@
         }
       }
     },
+    "Table" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "表格"
+          }
+        }
+      }
+    },
     "Target language" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -5704,6 +6002,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在测试..."
+          }
+        }
+      }
+    },
+    "Text" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "文字"
           }
         }
       }
@@ -5847,12 +6156,72 @@
         }
       }
     },
+    "The model declined to answer this request." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "模型拒绝回答此请求。"
+          }
+        }
+      }
+    },
+    "the model repeated neighboring context" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "模型复述了相邻段落的上下文"
+          }
+        }
+      }
+    },
+    "the model repeated the translation prompt" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "模型复述了翻译提示词"
+          }
+        }
+      }
+    },
     "The model returned an invalid LaTeX translation." : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "模型返回了无效的 LaTeX 译文。"
+          }
+        }
+      }
+    },
+    "The model returned an invalid translation after %lld attempts: %@." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "模型在 %1$lld 次尝试后仍返回无效译文：%2$@。"
+          }
+        }
+      }
+    },
+    "the model returned the source text untranslated" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "模型原样返回了未翻译的原文"
+          }
+        }
+      }
+    },
+    "the output was far longer than the source" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "输出远长于原文"
           }
         }
       }
@@ -6035,6 +6404,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "找不到所选翻译 provider。"
+          }
+        }
+      }
+    },
+    "The server returned HTTP 403. Retrying %@ with the built-in browser." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The server returned HTTP 403. Retrying %@ with the built-in browser."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "服务器返回了 HTTP 403。正在使用内置浏览器重试 %@。"
           }
         }
       }
@@ -6671,6 +7057,17 @@
         }
       }
     },
+    "Undo" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "撤销"
+          }
+        }
+      }
+    },
     "Undo PDF Annotation" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -6678,6 +7075,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "撤销 PDF 标注"
+          }
+        }
+      }
+    },
+    "Undo Region Change" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "撤销区域调整"
           }
         }
       }

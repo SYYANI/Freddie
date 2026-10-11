@@ -220,7 +220,9 @@ struct PaperFullTextSearchService {
         var didModifyDocument = false
 
         for element in elements {
-            if try Self.isTranslationElement(element) || Self.hasSemanticDescendant(element) {
+            if try Self.isTranslationElement(element) ||
+                HTMLRegionVisibility.isWithinHiddenRegion(element) ||
+                Self.hasSemanticDescendant(element) {
                 continue
             }
             let text = try Self.normalizedVisibleText(element)
@@ -337,7 +339,9 @@ struct PaperFullTextSearchService {
     private static func hasSemanticDescendant(_ element: Element) -> Bool {
         guard let descendants = try? element.select(htmlSemanticSelector).array() else { return false }
         return descendants.contains { descendant in
-            descendant !== element && ((try? isTranslationElement(descendant)) == false)
+            descendant !== element &&
+                ((try? isTranslationElement(descendant)) == false) &&
+                !HTMLRegionVisibility.isWithinHiddenRegion(descendant)
         }
     }
 
@@ -346,6 +350,7 @@ struct PaperFullTextSearchService {
         for translated in try clone.select(".rp-translation-block, [data-rp-translation=true]").array() {
             try translated.remove()
         }
+        try HTMLRegionVisibility.removeHiddenRegions(in: clone)
         return normalizedWhitespace(try clone.text())
     }
 

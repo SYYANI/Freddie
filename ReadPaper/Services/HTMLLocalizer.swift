@@ -97,7 +97,7 @@ struct HTMLLocalizer: @unchecked Sendable {
 
         let html = String(data: htmlData, encoding: .utf8) ?? String(decoding: htmlData, as: UTF8.self)
         let document = try makeDocumentForLocalization(html: html, sourceURL: sourceURL)
-        try document.select("script[src]").remove()
+        try removeActiveContent(from: document)
         try removeArchiveReplayChromeResources(from: document, sourceURL: sourceURL)
 
         // One wall-clock budget covers every resource download, so a slow host (Wayback replay,
@@ -234,7 +234,13 @@ struct HTMLLocalizer: @unchecked Sendable {
     }
 
     func hasMeaningfulHTMLContent(_ html: String) -> Bool {
-        visibleBodyTextLength(in: html) >= 40 && !needsXPostParagraphRepair(html)
+        guard let document = try? SwiftSoup.parse(html),
+              let body = document.body() else {
+            return false
+        }
+        let content = (try? document.select(".rp-readability-content").first()) ?? body
+        return ((try? meaningfulText(in: content).count) ?? 0) >= 40 &&
+            !needsXPostParagraphRepair(html)
     }
 
     func rewriteCSS(_ css: String, baseURL: URL, localizedFilenames: [URL: String]) throws -> String {
@@ -258,6 +264,51 @@ struct HTMLLocalizer: @unchecked Sendable {
                 .map { localizedReference($0, for: url) } ?? url.absoluteString
             return candidate.descriptor.map { "\(target) \($0)" } ?? target
         }.joined(separator: ", ")
+    }
+
+    // Saved pages are only read (the reader also turns page JavaScript off), so drop code and
+    // resource hints that would contact third parties. Inert data blocks stay: JSON-LD
+    // metadata and MathJax `math/tex` formula source.
+    func removeActiveContent(from document: Document) throws {
+        for script in try document.select("script").array() {
+            let type = ((try? script.attr("type")) ?? "").trimmingCharacters(in: .whitespaces).lowercased()
+            guard type != "application/ld+json", !type.hasPrefix("math/tex") else { continue }
+            try script.remove()
+        }
+        for meta in try document.select("meta[http-equiv]").array()
+        where (try? meta.attr("http-equiv"))?.lowercased() == "refresh" {
+            try meta.remove()
+        }
+        let resourceHints: Set<String> = ["preload", "prefetch", "preconnect", "dns-prefetch", "modulepreload", "prerender"]
+        for link in try document.select("link[rel]").array() {
+            let relations = Set(((try? link.attr("rel")) ?? "").lowercased().split(whereSeparator: \.isWhitespace).map(String.init))
+            if !relations.contains("stylesheet"), !relations.isDisjoint(with: resourceHints) {
+                try link.remove()
+            }
+        }
+        let urlAttributes: Set<String> = ["href", "src", "action", "formaction", "xlink:href"]
+        for element in try document.getAllElements().array() {
+            guard let attributes = element.getAttributes() else { continue }
+            let activeKeys = attributes.compactMap { attribute -> String? in
+                let key = attribute.getKey().lowercased()
+                let isEventHandler = key.hasPrefix("on")
+                let isScriptURL = urlAttributes.contains(key) && isJavaScriptURL(attribute.getValue())
+                return isEventHandler || isScriptURL ? attribute.getKey() : nil
+            }
+            for key in activeKeys {
+                try element.removeAttr(key)
+            }
+        }
+    }
+
+    // Browsers ignore whitespace and control characters inside the scheme (`java\tscript:`).
+    private func isJavaScriptURL(_ value: String) -> Bool {
+        value.unicodeScalars
+            .filter { !CharacterSet.whitespacesAndNewlines.contains($0) && !CharacterSet.controlCharacters.contains($0) }
+            .map(String.init)
+            .joined()
+            .lowercased()
+            .hasPrefix("javascript:")
     }
 
     // Content cleanup, not a speed workaround: the Wayback toolbar styles would otherwise be
@@ -414,7 +465,11 @@ struct HTMLLocalizer: @unchecked Sendable {
                 baseURL: sourceURL,
                 options: ReadabilityOptions(keepClasses: true)
             )
-            let result = try readability.parse()
+            let parsedResult = try readability.parse()
+            let result = try recoverExplicitArticleBodyIfNeeded(
+                from: parsedResult,
+                in: document
+            )
             guard try shouldUseReadabilityResult(result) else {
                 return nil
             }
@@ -427,8 +482,56 @@ struct HTMLLocalizer: @unchecked Sendable {
 
     private func shouldUseReadabilityResult(_ result: ReadabilityResult) throws -> Bool {
         let contentDocument = try SwiftSoup.parseBodyFragment(result.content)
-        let visibleText = try contentDocument.text().trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let body = contentDocument.body() else { return false }
+        let visibleText = try meaningfulText(in: body)
         return visibleText.count >= 40
+    }
+
+    /// Streaming SSR frameworks can ship the complete article inside a temporary hidden
+    /// container and move it into place with JavaScript. Readability correctly ignores that
+    /// hidden subtree, but static parsing then sees only the loading shell. Explicit article
+    /// markers are a stronger signal than such a tiny extraction, so recover their content
+    /// directly without depending on the page's hydration scripts.
+    private func recoverExplicitArticleBodyIfNeeded(
+        from result: ReadabilityResult,
+        in document: Document
+    ) throws -> ReadabilityResult {
+        let resultDocument = try SwiftSoup.parseBodyFragment(result.content)
+        let resultTextLength = try resultDocument.body().map { try meaningfulText(in: $0).count } ?? 0
+
+        var bestCandidate: (element: Element, text: String)?
+        for candidate in try document.select("[itemprop=articleBody], .instapaper_body").array() {
+            let text = try meaningfulText(in: candidate)
+            if text.count > (bestCandidate?.text.count ?? 0) {
+                bestCandidate = (candidate, text)
+            }
+        }
+
+        guard let bestCandidate,
+              bestCandidate.text.count >= 400,
+              resultTextLength * 5 < bestCandidate.text.count else {
+            return result
+        }
+
+        return ReadabilityResult(
+            title: result.title,
+            byline: result.byline,
+            dir: result.dir,
+            lang: result.lang,
+            content: try bestCandidate.element.outerHtml(),
+            textContent: bestCandidate.text,
+            excerpt: result.excerpt,
+            siteName: result.siteName,
+            publishedTime: result.publishedTime
+        )
+    }
+
+    private func meaningfulText(in element: Element) throws -> String {
+        guard let copy = element.copy() as? Element else {
+            return try element.text().trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        try copy.select("title, meta, link, style, script, noscript").remove()
+        return try copy.text().trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private func applyReadabilityResult(_ result: ReadabilityResult, to document: Document) throws {
@@ -738,7 +841,12 @@ struct HTMLLocalizer: @unchecked Sendable {
     }
 
     private func shouldRenderExcerpt(_ excerpt: String, contentHTML: String) -> Bool {
-        let normalizedExcerpt = normalizeVisibleText(excerpt)
+        // A description cut from the opening paragraph ends in a mark ("…", "[…]") the article lacks.
+        let normalizedExcerpt = normalizeVisibleText(excerpt.replacingOccurrences(
+            of: #"\s*(?:\[\s*(?:…|\.{3})\s*\]|…|\.{3})\s*$"#,
+            with: "",
+            options: .regularExpression
+        ))
         guard !normalizedExcerpt.isEmpty else {
             return false
         }
@@ -892,7 +1000,10 @@ struct HTMLLocalizer: @unchecked Sendable {
 }
 
 enum BrowserRequestHeaders {
-    static let chromeUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    // Chrome's reduced default macOS user agent keeps the OS and minor browser
+    // versions frozen while exposing the current major version. Keep this current:
+    // stale browser claims can be rejected by bot protection before HTML is served.
+    static let chromeUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36"
     static let englishAcceptLanguage = "en-US,en;q=0.9"
 
     enum Accept {

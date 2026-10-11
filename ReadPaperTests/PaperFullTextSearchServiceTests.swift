@@ -38,6 +38,37 @@ final class PaperFullTextSearchServiceTests: XCTestCase {
     }
 
     @MainActor
+    func testHTMLIndexLeavesOutHiddenRegions() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("PaperFullTextSearchHiddenTests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let fileStore = PaperFileStore(applicationSupportDirectory: root)
+        let paper = Paper(title: "Edited Page")
+        paper.localDirectoryPath = try fileStore.directory(for: paper.id).path
+        let html = """
+        <!doctype html>
+        <html><head><meta charset="UTF-8"></head><body>
+          <h1>Results</h1>
+          <div data-rp-region-hidden="true"><p>Subscribe for weekly updates.</p></div>
+          <p>The decoder improves accuracy.</p>
+          <ul><li>Ablation summary <p data-rp-region-hidden="true">Related posts you may like.</p></li></ul>
+        </body></html>
+        """
+        let htmlURL = try fileStore.write(Data(html.utf8), named: "paper.html", for: paper.id)
+        let attachment = PaperAttachment(
+            paperID: paper.id,
+            kind: .html,
+            source: .webPage,
+            filename: "paper.html",
+            filePath: htmlURL.path
+        )
+
+        let index = try XCTUnwrap(PaperFullTextSearchService(fileStore: fileStore).rebuild(paper: paper, attachments: [attachment]))
+
+        XCTAssertEqual(index.blocks.map(\.text), ["Results", "The decoder improves accuracy.", "Ablation summary"])
+    }
+
+    @MainActor
     func testLoadOrRebuildUsesPersistedSidecarUntilSourceChanges() throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("PaperFullTextSearchCacheTests-\(UUID().uuidString)", isDirectory: true)

@@ -9,6 +9,71 @@ final class HTMLLocalizerTests: XCTestCase {
         super.tearDown()
     }
 
+    func testBrowserRequestHeadersUseChromeDefaultUserAgent() {
+        let request = BrowserRequestHeaders.request(
+            for: URL(string: "https://example.com/article")!,
+            accept: .document
+        )
+
+        XCTAssertEqual(
+            request.value(forHTTPHeaderField: "User-Agent"),
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36"
+        )
+    }
+
+    func testMakeDocumentRecoversExplicitArticleBodyFromHiddenStreamingContainer() throws {
+        let paragraph = String(repeating: "This complete server-rendered article paragraph must survive extraction. ", count: 20)
+        let html = """
+        <html>
+        <head>
+          <title>Streaming Article</title>
+          <meta name="description" content="A short loading-shell summary.">
+        </head>
+        <body>
+          <p>x</p>
+          <div hidden id="S:4">
+            <div class="post-content instapaper_body">
+              <h2>Recovered section</h2>
+              <p>\(paragraph)</p>
+              <p>Final sentence from the complete article.</p>
+            </div>
+          </div>
+          <div class="comments"><p>This comment must not be imported.</p></div>
+        </body>
+        </html>
+        """
+
+        let document = try HTMLLocalizer().makeDocumentForLocalization(
+            html: html,
+            sourceURL: URL(string: "https://example.com/streaming-article")!
+        )
+        let content = try XCTUnwrap(try document.select(".rp-readability-content").first())
+        let contentText = try content.text()
+
+        XCTAssertTrue(contentText.contains("Recovered section"))
+        XCTAssertTrue(contentText.contains("Final sentence from the complete article."))
+        XCTAssertFalse(contentText.contains("This comment must not be imported."))
+        XCTAssertGreaterThan(contentText.count, 1_000)
+    }
+
+    func testMeaningfulHTMLContentRejectsMetadataOnlyReadabilityResult() {
+        let html = """
+        <html><body class="rp-readability-body">
+          <main class="rp-readability-shell">
+            <div class="rp-readability-header">
+              <h1>A descriptive article title</h1>
+              <p class="rp-readability-excerpt">A long excerpt that makes the page shell look nonempty.</p>
+            </div>
+            <article class="rp-readability-content">
+              <div id="readability-page-1"><p>x</p><title>A descriptive article title</title><meta name="description" content="summary"></div>
+            </article>
+          </main>
+        </body></html>
+        """
+
+        XCTAssertFalse(HTMLLocalizer().hasMeaningfulHTMLContent(html))
+    }
+
     func testMakeDocumentForLocalizationUsesReadabilityContent() throws {
         let paragraph = String(repeating: "This is article content that should survive readability extraction. ", count: 12)
         let html = """
@@ -48,6 +113,38 @@ final class HTMLLocalizerTests: XCTestCase {
         let readabilityCSS = style.data()
         XCTAssertTrue(readabilityCSS.contains(".rp-readability-content .grid > *"))
         XCTAssertFalse(try style.outerHtml().contains("&gt;"))
+    }
+
+    func testMakeDocumentForLocalizationDropsExcerptTruncatedFromTheOpeningParagraph() throws {
+        let opening = "Anyone who works in the agency business has heard these words from a prospective client"
+        let paragraph = String(repeating: "This is article content that should survive readability extraction. ", count: 12)
+        func excerpts(description: String) throws -> [String] {
+            let html = """
+            <html>
+            <head>
+            <title>Readable Title</title>
+            <meta name="description" content="\(description)">
+            </head>
+            <body>
+            <article>
+            <p>\(opening), and the paragraph goes on from there. \(paragraph)</p>
+            <p>\(paragraph)</p>
+            </article>
+            </body>
+            </html>
+            """
+            let document = try HTMLLocalizer().makeDocumentForLocalization(
+                html: html,
+                sourceURL: URL(string: "https://example.com/article")!
+            )
+            return try document.select(".rp-readability-excerpt").array().map { try $0.text() }
+        }
+
+        XCTAssertEqual(try excerpts(description: "A summary written for search results."), ["A summary written for search results."])
+        // WordPress and similar sites cut the description from the opening paragraph and mark the cut.
+        XCTAssertEqual(try excerpts(description: "\(opening) […]"), [])
+        XCTAssertEqual(try excerpts(description: "\(opening) [...]"), [])
+        XCTAssertEqual(try excerpts(description: "\(opening)…"), [])
     }
 
     func testReadabilityStylesResetKnownLayoutWrappers() throws {
@@ -871,6 +968,78 @@ final class HTMLLocalizerTests: XCTestCase {
         """
 
         XCTAssertFalse(HTMLLocalizer().requiresBrowserRendering(html))
+    }
+
+    func testActiveContentRemovalDropsPageCodeButKeepsDataAndContent() throws {
+        let document = try SwiftSoup.parse("""
+        <html><head>
+        <meta http-equiv="refresh" content="0; url=https://example.com/elsewhere">
+        <link rel="preconnect" href="https://www.googletagmanager.com">
+        <link rel="dns-prefetch" href="//static.hotjar.com">
+        <link rel="preload" as="script" href="https://cdn.example.com/app.js" onload="track()">
+        <link rel="stylesheet" href="https://example.com/site.css">
+        <script>(function(h,o,t,j){ h.hj = 1; })(window, document);</script>
+        <script type="text/javascript">window.dataLayer = [];</script>
+        <script type="module">import 'https://cdn.example.com/m.js';</script>
+        <script type="speculationrules">{"prerender":[{"source":"list","urls":["/next"]}]}</script>
+        <script type="application/ld+json">{"@type":"Article","author":"Ada"}</script>
+        </head><body onload="track()">
+        <p onclick="track()" ONMOUSEOVER="track()" data-note="kept">Readable paragraph.</p>
+        <p><a href="javascript:void(track())">Share</a> <a href=" Java&#9;Script:alert(1)">Tricky</a> <a href="https://example.com/ok">Fine</a></p>
+        <p>Formula <script type="math/tex; mode=display">x^2</script> stays.</p>
+        <form action="javascript:track()"><button formaction="javascript:track()">Go</button></form>
+        <svg><a xlink:href="javascript:track()"><text>svg</text></a><script>track()</script></svg>
+        <script src="https://cdn.example.com/analytics.js"></script>
+        </body></html>
+        """)
+
+        try HTMLLocalizer().removeActiveContent(from: document)
+
+        XCTAssertEqual(try document.select("script").array().map { try $0.attr("type") }, ["application/ld+json", "math/tex; mode=display"])
+        XCTAssertEqual(try document.select("link").array().map { try $0.attr("rel") }, ["stylesheet"])
+        XCTAssertEqual(try document.select("meta[http-equiv]").count, 0)
+        let html = try document.outerHtml().lowercased()
+        XCTAssertFalse(html.contains("javascript:"))
+        XCTAssertFalse(html.contains("track()"))
+        XCTAssertFalse(html.contains("onclick") || html.contains("onmouseover") || html.contains("onload"))
+        XCTAssertEqual(try document.select("p[data-note=kept]").text(), "Readable paragraph.")
+        XCTAssertEqual(try document.select("a[href]").array().map { try $0.attr("href") }, ["https://example.com/ok"])
+        XCTAssertEqual(try document.select("a").count, 4, "Links keep their text when their script URL is dropped")
+    }
+
+    func testLocalizeSavesArticlesWithoutTrackingScripts() async throws {
+        let paragraph = String(repeating: "The article body must stay readable after page scripts are removed. ", count: 8)
+        let html = """
+        <html>
+        <head>
+        <title>Script Free</title>
+        <script>(function(h,o,t,j,a,r){ a=o.createElement('script'); a.src=t+h.hjid+j; o.head.appendChild(a); })(window,document,'https://static.hotjar.com/c/hotjar-','.js');</script>
+        <script type="application/ld+json">{"@type":"Article","author":"Ada Lovelace"}</script>
+        <link rel="preconnect" href="https://www.googletagmanager.com">
+        </head>
+        <body>
+        <article><h1>Script Free</h1><p>\(paragraph)</p><p>\(paragraph)</p></article>
+        <script>var _hsq = window._hsq = [];</script>
+        </body>
+        </html>
+        """
+        let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: rootURL) }
+        let outputURL = rootURL.appendingPathComponent("paper.html")
+
+        _ = try await HTMLLocalizer().localize(
+            htmlData: Data(html.utf8),
+            sourceURL: URL(string: "https://example.com/post")!,
+            outputURL: outputURL,
+            resourcesDirectory: rootURL.appendingPathComponent("Resources", isDirectory: true)
+        )
+
+        let output = try String(contentsOf: outputURL, encoding: .utf8)
+        let document = try SwiftSoup.parse(output)
+        XCTAssertEqual(try document.select("script").array().map { try $0.attr("type") }, ["application/ld+json"])
+        XCTAssertFalse(output.contains("hotjar"))
+        XCTAssertFalse(output.contains("googletagmanager"))
+        XCTAssertTrue(try document.select(".rp-readability-content").text().contains("The article body must stay readable"))
     }
 }
 
