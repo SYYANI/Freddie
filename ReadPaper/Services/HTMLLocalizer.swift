@@ -97,7 +97,7 @@ struct HTMLLocalizer: @unchecked Sendable {
 
         let html = String(data: htmlData, encoding: .utf8) ?? String(decoding: htmlData, as: UTF8.self)
         let document = try makeDocumentForLocalization(html: html, sourceURL: sourceURL)
-        try document.select("script[src]").remove()
+        try removeActiveContent(from: document)
         try removeArchiveReplayChromeResources(from: document, sourceURL: sourceURL)
 
         // One wall-clock budget covers every resource download, so a slow host (Wayback replay,
@@ -258,6 +258,51 @@ struct HTMLLocalizer: @unchecked Sendable {
                 .map { localizedReference($0, for: url) } ?? url.absoluteString
             return candidate.descriptor.map { "\(target) \($0)" } ?? target
         }.joined(separator: ", ")
+    }
+
+    // Saved pages are only read (the reader also turns page JavaScript off), so drop code and
+    // resource hints that would contact third parties. Inert data blocks stay: JSON-LD
+    // metadata and MathJax `math/tex` formula source.
+    func removeActiveContent(from document: Document) throws {
+        for script in try document.select("script").array() {
+            let type = ((try? script.attr("type")) ?? "").trimmingCharacters(in: .whitespaces).lowercased()
+            guard type != "application/ld+json", !type.hasPrefix("math/tex") else { continue }
+            try script.remove()
+        }
+        for meta in try document.select("meta[http-equiv]").array()
+        where (try? meta.attr("http-equiv"))?.lowercased() == "refresh" {
+            try meta.remove()
+        }
+        let resourceHints: Set<String> = ["preload", "prefetch", "preconnect", "dns-prefetch", "modulepreload", "prerender"]
+        for link in try document.select("link[rel]").array() {
+            let relations = Set(((try? link.attr("rel")) ?? "").lowercased().split(whereSeparator: \.isWhitespace).map(String.init))
+            if !relations.contains("stylesheet"), !relations.isDisjoint(with: resourceHints) {
+                try link.remove()
+            }
+        }
+        let urlAttributes: Set<String> = ["href", "src", "action", "formaction", "xlink:href"]
+        for element in try document.getAllElements().array() {
+            guard let attributes = element.getAttributes() else { continue }
+            let activeKeys = attributes.compactMap { attribute -> String? in
+                let key = attribute.getKey().lowercased()
+                let isEventHandler = key.hasPrefix("on")
+                let isScriptURL = urlAttributes.contains(key) && isJavaScriptURL(attribute.getValue())
+                return isEventHandler || isScriptURL ? attribute.getKey() : nil
+            }
+            for key in activeKeys {
+                try element.removeAttr(key)
+            }
+        }
+    }
+
+    // Browsers ignore whitespace and control characters inside the scheme (`java\tscript:`).
+    private func isJavaScriptURL(_ value: String) -> Bool {
+        value.unicodeScalars
+            .filter { !CharacterSet.whitespacesAndNewlines.contains($0) && !CharacterSet.controlCharacters.contains($0) }
+            .map(String.init)
+            .joined()
+            .lowercased()
+            .hasPrefix("javascript:")
     }
 
     // Content cleanup, not a speed workaround: the Wayback toolbar styles would otherwise be

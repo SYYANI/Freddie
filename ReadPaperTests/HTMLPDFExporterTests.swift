@@ -26,6 +26,7 @@ final class HTMLPDFExporterTests: XCTestCase {
         <div data-rp-region-hidden="true"><p>HiddenRegionMarker</p></div>
         <p data-rp-source="true" data-rp-region-hidden="true">HiddenSourceMarker</p>
         <p class="rp-translation-block">HiddenTranslationMarker</p>
+        <script>document.body.insertAdjacentHTML('beforeend', '<p>PageScriptMarker</p>');</script>
         \(paragraphs)<p>EndOfDocumentMarker</p>
         </body></html>
         """
@@ -45,6 +46,7 @@ final class HTMLPDFExporterTests: XCTestCase {
             for marker in ["HiddenRegionMarker", "HiddenSourceMarker", "HiddenTranslationMarker"] {
                 XCTAssertFalse(text.contains(marker), "Hidden regions must not be exported (\(mode.rawValue))")
             }
+            XCTAssertFalse(text.contains("PageScriptMarker"), "The saved page's own scripts must not run")
             let firstPage = try XCTUnwrap(pdf.page(at: 0))
             XCTAssertEqual(firstPage.bounds(for: .mediaBox).height, 841.89, accuracy: 1)
             let preview = firstPage.thumbnail(of: NSSize(width: 300, height: 425), for: .mediaBox)

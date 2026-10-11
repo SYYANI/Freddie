@@ -34,6 +34,8 @@ final class HTMLPDFExporter: NSObject, WKNavigationDelegate {
         _ = try Data(contentsOf: sourceURL)
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = .nonPersistent()
+        // Like the reader, never run the saved page's own scripts; the injected ones still run.
+        configuration.defaultWebpagePreferences.allowsContentJavaScript = false
         if !HTMLTeXRendering.userScript.isEmpty {
             configuration.userContentController.addUserScript(
                 WKUserScript(source: HTMLTeXRendering.userScript, injectionTime: .atDocumentEnd, forMainFrameOnly: true)

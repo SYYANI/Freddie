@@ -196,13 +196,25 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
     #endif
 
     private func makeView(context: Context) -> WKWebView {
+        let view = WKWebView(frame: .zero, configuration: Self.makeConfiguration(coordinator: context.coordinator))
+        view.navigationDelegate = context.coordinator
+        applyHostDisplayAppearance(displayAppearance, to: view)
+        return view
+    }
+
+    /// Saved pages are only read, so their own JavaScript (inline scripts, event handler
+    /// attributes, `javascript:` links, iframe scripts) never runs. The reader's user scripts
+    /// and `evaluateJavaScript` are unaffected by `allowsContentJavaScript`.
+    @MainActor
+    static func makeConfiguration(coordinator: Coordinator) -> WKWebViewConfiguration {
         let configuration = WKWebViewConfiguration()
         configuration.preferences.javaScriptCanOpenWindowsAutomatically = false
-        configuration.userContentController.add(context.coordinator, name: Coordinator.scrollMessageHandlerName)
-        configuration.userContentController.add(context.coordinator, name: Coordinator.selectionMessageHandlerName)
-        configuration.userContentController.add(context.coordinator, name: Coordinator.selectionResetMessageHandlerName)
-        configuration.userContentController.add(context.coordinator, name: Coordinator.sidenoteMessageHandlerName)
-        configuration.userContentController.add(context.coordinator, name: HTMLRegionEditing.messageHandlerName)
+        configuration.defaultWebpagePreferences.allowsContentJavaScript = false
+        configuration.userContentController.add(coordinator, name: Coordinator.scrollMessageHandlerName)
+        configuration.userContentController.add(coordinator, name: Coordinator.selectionMessageHandlerName)
+        configuration.userContentController.add(coordinator, name: Coordinator.selectionResetMessageHandlerName)
+        configuration.userContentController.add(coordinator, name: Coordinator.sidenoteMessageHandlerName)
+        configuration.userContentController.add(coordinator, name: HTMLRegionEditing.messageHandlerName)
         configuration.userContentController.addUserScript(
             WKUserScript(
                 source: Coordinator.mediaPreparationScript,
@@ -247,10 +259,7 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
                 forMainFrameOnly: true
             )
         )
-        let view = WKWebView(frame: .zero, configuration: configuration)
-        view.navigationDelegate = context.coordinator
-        applyHostDisplayAppearance(displayAppearance, to: view)
-        return view
+        return configuration
     }
 
     private func updateView(_ view: WKWebView, context: Context) {

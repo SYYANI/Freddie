@@ -872,6 +872,78 @@ final class HTMLLocalizerTests: XCTestCase {
 
         XCTAssertFalse(HTMLLocalizer().requiresBrowserRendering(html))
     }
+
+    func testActiveContentRemovalDropsPageCodeButKeepsDataAndContent() throws {
+        let document = try SwiftSoup.parse("""
+        <html><head>
+        <meta http-equiv="refresh" content="0; url=https://example.com/elsewhere">
+        <link rel="preconnect" href="https://www.googletagmanager.com">
+        <link rel="dns-prefetch" href="//static.hotjar.com">
+        <link rel="preload" as="script" href="https://cdn.example.com/app.js" onload="track()">
+        <link rel="stylesheet" href="https://example.com/site.css">
+        <script>(function(h,o,t,j){ h.hj = 1; })(window, document);</script>
+        <script type="text/javascript">window.dataLayer = [];</script>
+        <script type="module">import 'https://cdn.example.com/m.js';</script>
+        <script type="speculationrules">{"prerender":[{"source":"list","urls":["/next"]}]}</script>
+        <script type="application/ld+json">{"@type":"Article","author":"Ada"}</script>
+        </head><body onload="track()">
+        <p onclick="track()" ONMOUSEOVER="track()" data-note="kept">Readable paragraph.</p>
+        <p><a href="javascript:void(track())">Share</a> <a href=" Java&#9;Script:alert(1)">Tricky</a> <a href="https://example.com/ok">Fine</a></p>
+        <p>Formula <script type="math/tex; mode=display">x^2</script> stays.</p>
+        <form action="javascript:track()"><button formaction="javascript:track()">Go</button></form>
+        <svg><a xlink:href="javascript:track()"><text>svg</text></a><script>track()</script></svg>
+        <script src="https://cdn.example.com/analytics.js"></script>
+        </body></html>
+        """)
+
+        try HTMLLocalizer().removeActiveContent(from: document)
+
+        XCTAssertEqual(try document.select("script").array().map { try $0.attr("type") }, ["application/ld+json", "math/tex; mode=display"])
+        XCTAssertEqual(try document.select("link").array().map { try $0.attr("rel") }, ["stylesheet"])
+        XCTAssertEqual(try document.select("meta[http-equiv]").count, 0)
+        let html = try document.outerHtml().lowercased()
+        XCTAssertFalse(html.contains("javascript:"))
+        XCTAssertFalse(html.contains("track()"))
+        XCTAssertFalse(html.contains("onclick") || html.contains("onmouseover") || html.contains("onload"))
+        XCTAssertEqual(try document.select("p[data-note=kept]").text(), "Readable paragraph.")
+        XCTAssertEqual(try document.select("a[href]").array().map { try $0.attr("href") }, ["https://example.com/ok"])
+        XCTAssertEqual(try document.select("a").count, 4, "Links keep their text when their script URL is dropped")
+    }
+
+    func testLocalizeSavesArticlesWithoutTrackingScripts() async throws {
+        let paragraph = String(repeating: "The article body must stay readable after page scripts are removed. ", count: 8)
+        let html = """
+        <html>
+        <head>
+        <title>Script Free</title>
+        <script>(function(h,o,t,j,a,r){ a=o.createElement('script'); a.src=t+h.hjid+j; o.head.appendChild(a); })(window,document,'https://static.hotjar.com/c/hotjar-','.js');</script>
+        <script type="application/ld+json">{"@type":"Article","author":"Ada Lovelace"}</script>
+        <link rel="preconnect" href="https://www.googletagmanager.com">
+        </head>
+        <body>
+        <article><h1>Script Free</h1><p>\(paragraph)</p><p>\(paragraph)</p></article>
+        <script>var _hsq = window._hsq = [];</script>
+        </body>
+        </html>
+        """
+        let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: rootURL) }
+        let outputURL = rootURL.appendingPathComponent("paper.html")
+
+        _ = try await HTMLLocalizer().localize(
+            htmlData: Data(html.utf8),
+            sourceURL: URL(string: "https://example.com/post")!,
+            outputURL: outputURL,
+            resourcesDirectory: rootURL.appendingPathComponent("Resources", isDirectory: true)
+        )
+
+        let output = try String(contentsOf: outputURL, encoding: .utf8)
+        let document = try SwiftSoup.parse(output)
+        XCTAssertEqual(try document.select("script").array().map { try $0.attr("type") }, ["application/ld+json"])
+        XCTAssertFalse(output.contains("hotjar"))
+        XCTAssertFalse(output.contains("googletagmanager"))
+        XCTAssertTrue(try document.select(".rp-readability-content").text().contains("The article body must stay readable"))
+    }
 }
 
 private final class MockHTMLLocalizerURLProtocol: URLProtocol {
