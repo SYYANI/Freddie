@@ -127,6 +127,7 @@ LLM 配置现已拆成独立 SwiftData 模型：`LLMProviderProfile` 负责 prov
 - ReadPaper 管理的 BabelDOC 安装应优先使用 uv-managed Python 3.13；已遇到 Python 3.14 下 BabelDOC 运行时报 `_WorkItem.__init__` 参数不匹配的兼容性问题。判断 BabelDOC 是否可用时不要只检查 `bin/babeldoc` 是否可执行，还要确认 launcher 背后的 Python 版本可用；如果用户把 `/Users/.../Library/Application Support/ReadPaper/Tools/BabelDOC/bin/babeldoc` 手工改成指向 `~/.local/bin/babeldoc` 一类工作版本的 symlink，后续改安装、探测或移除逻辑时要避免误判为内置版本已经健康。
 - `ProcessRunner` 需要持续 draining stdout/stderr，并正确响应取消；改动时保留大输出和取消相关测试。
 - arXiv 论文做 PDF 翻译时，`BabelDocSemanticHintService` 会下载 LaTeX 源码（含 `.bbl`），用 LaTeXTransKit 生成语义 sidecar 交给 BabelDOC 对齐。sidecar 按 `extractorAlgorithmVersion` 缓存在论文目录 `Resources/LaTeXSemantic/`；`../arxivLatex` 的语义抽取输出一旦变化，必须递增该版本，否则会继续命中旧 sidecar。helper 的 `translation_diagnostics` 事件里 `semantic_pdf_paragraphs` / `semantic_matched_pdf_paragraphs` 只统计正文流段落（不含表格、图内文字、fallback 行），状态文案也按这个口径展示。
+- layout model 把高而窄的算法清单识别成 `plain text` 时，原生段落阶段会用至少 8 条物理行、多次函数调用以及控制流/赋值信号保守识别伪代码并标为 `code`；这类块不进入正文翻译或 LaTeX reading-flow 对齐，Typesetting 必须逐字符保留源坐标、缩进、换行和公式对象。证据不足的短代码与普通多行正文继续走原流程，不要只凭公式字体或单个运算符扩大识别范围。
 
 ## 实现约定
 
