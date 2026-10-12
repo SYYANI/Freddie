@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from pathlib import Path
 import stat
 import subprocess
@@ -44,6 +45,16 @@ def main() -> None:
 '''
     if source.count(strict_check) != 1:
         raise SystemExit("BabelDOC model conversion check changed; review the upstream script")
+    compile_step = '  python3 "$root/tools/compile_layout_model.py" --root "$root" --models-root "$models_root"\n'
+    if source.count(compile_step) != 1:
+        raise SystemExit("BabelDOC model compilation step changed; review the upstream script")
+
+    # Compilation validates the source hash against the model manifest. Defer
+    # it until the generated source hash is recorded, retaining the upstream
+    # compiled-file pins so unexpected model/compiler changes still fail.
+    source = source.replace(strict_check, size_check).replace(
+        compile_step, '  : # ReadPaper compiles after updating the source manifest.\n'
+    )
 
     # The temporary script stays beside the original so its relative source
     # paths still resolve to the package checkout. The pinned checkpoint and
@@ -52,7 +63,7 @@ def main() -> None:
         mode="w", encoding="utf-8", prefix=".readpaper-coreml-", suffix=".sh",
         dir=tools, delete=False,
     ) as handle:
-        handle.write(source.replace(strict_check, size_check))
+        handle.write(source)
         temporary_script = Path(handle.name)
     temporary_script.chmod(stat.S_IMODE(source_script.stat().st_mode))
     try:
@@ -74,8 +85,26 @@ def main() -> None:
     if len(assets) != 1 or assets[0].get("size") != model_size:
         raise SystemExit("Generated BabelDOC model does not match manifest structure")
     assets[0]["sha256"] = model_sha256
-    manifest_path.chmod(stat.S_IMODE(manifest_path.stat().st_mode) | stat.S_IWUSR)
-    manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    # SwiftPM can make tracked files read-only; replace the manifest atomically
+    # rather than writing into its existing inode (as with the runtime manifest).
+    for path in (manifest_path.parent, manifest_path):
+        subprocess.run(["chflags", "nouchg", str(path)], check=True)
+        path.chmod(stat.S_IMODE(path.stat().st_mode) | stat.S_IWUSR)
+    with tempfile.NamedTemporaryFile(
+        mode="w", encoding="utf-8", prefix=".readpaper-model-manifest-",
+        suffix=".json", dir=manifest_path.parent, delete=False,
+    ) as handle:
+        temporary_manifest = Path(handle.name)
+        handle.write(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n")
+    try:
+        os.replace(temporary_manifest, manifest_path)
+    finally:
+        temporary_manifest.unlink(missing_ok=True)
+    subprocess.run(
+        [sys.executable, str(tools / "compile_layout_model.py"), "--root", str(root),
+         "--models-root", str(model_path.parent)],
+        check=True,
+    )
     subprocess.run([sys.executable, str(verifier)], check=True)
     print(f"Generated BabelDOC Core ML model SHA-256: {model_sha256}")
 
