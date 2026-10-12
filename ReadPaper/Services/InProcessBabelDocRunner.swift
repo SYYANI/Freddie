@@ -106,8 +106,10 @@ struct InProcessBabelDocRunner {
         ) else {
             throw InProcessBabelDocError.missingRuntimeDirectory
         }
+        // The embedded runtime ships the layout model precompiled (runtime manifest schema 2).
         let model = root.appendingPathComponent(
-            "models/doclayout_yolo_docstructbench_imgsz1024.mlmodel"
+            "models/doclayout_yolo_docstructbench_imgsz1024.mlmodelc",
+            isDirectory: true
         )
         let fonts = root.appendingPathComponent("fonts", isDirectory: true)
         guard fileManager.fileExists(atPath: model.path) else {
