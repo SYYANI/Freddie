@@ -24,11 +24,16 @@ final class WritingWindowState {
     /// Changing it moves keyboard focus into the window's editor.
     private(set) var focusRequest = 0
 
+    @ObservationIgnored private var focusesEditorOnAppear = false
     @ObservationIgnored private weak var window: NSWindow?
     @ObservationIgnored private var closeObserver: NSObjectProtocol?
 
     func windowDidAppear() {
         isOpen = true
+        if focusesEditorOnAppear {
+            focusesEditorOnAppear = false
+            requestFocus()
+        }
     }
 
     /// Only a hidden window counts as closed; closing is reported by the window itself.
@@ -58,10 +63,20 @@ final class WritingWindowState {
     func requestFocus() {
         focusRequest &+= 1
     }
+
+    /// Moves keyboard focus into the window's editor now, or once a window being opened appears.
+    func focusEditorWhenShown() {
+        if isOpen {
+            requestFocus()
+        } else {
+            focusesEditorOnAppear = true
+        }
+    }
 }
 
 struct WritingWindowView: View {
     @Environment(\.localizationBundle) private var bundle
+    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.pdfDisplayAppearance) private var displayAppearance
     @Environment(\.openWindow) private var openWindow
     var center: WritingDocumentCenter = .shared
@@ -87,23 +102,30 @@ struct WritingWindowView: View {
         )
         .frame(minWidth: WritingWindowScene.minWidth, minHeight: WritingWindowScene.minHeight)
         .background {
-            Group {
+            // The same backdrop as the main window's reader column: glass over a clear
+            // window, or paper with a matching opaque window.
+            ZStack {
                 if displayAppearance == .paper {
                     ReadPaperSurface(role: .reader)
                 } else {
-                    Color(nsColor: .textBackgroundColor)
+                    ReadPaperReaderMaterialSurface()
                 }
+                ReadPaperWindowChrome(
+                    colorScheme: colorScheme,
+                    isPaperEnabled: displayAppearance == .paper
+                )
+                .frame(width: 0, height: 0)
+                HostingWindowReader { window in
+                    state.track(window)
+                }
+                .frame(width: 0, height: 0)
             }
             .ignoresSafeArea()
         }
-        .background {
-            HostingWindowReader { window in
-                state.track(window)
-            }
-            .frame(width: 0, height: 0)
-        }
         .fontDesign(displayAppearance == .paper ? .serif : .default)
+        // Still names the window in the Window menu; the toolbar shows the title instead.
         .navigationTitle(title)
+        .modifier(WritingWindowTitleBarStyle())
         .focusedSceneValue(\.newWritingAction, NewWritingAction { createWriting() })
         .onAppear {
             state.windowDidAppear()
@@ -138,6 +160,20 @@ struct WritingWindowView: View {
             state.requestFocus()
         } catch {
             errorMessage = error.localizedDescription
+        }
+    }
+}
+
+/// The writing switcher in the toolbar already names the writing, and the window's glass
+/// or paper continues under the title bar.
+private struct WritingWindowTitleBarStyle: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(macOS 15.0, *) {
+            content
+                .toolbar(removing: .title)
+                .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
+        } else {
+            content
         }
     }
 }

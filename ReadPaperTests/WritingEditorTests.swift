@@ -351,6 +351,48 @@ final class WritingEditorTests: XCTestCase {
         try await waitUntil { hasEditor(contentView) }
     }
 
+    /// A new writing opens the writing window, ready to type in.
+    func testWritingWindowOpenedForANewWritingFocusesTheEditor() async throws {
+        let library = try makeLibrary()
+        _ = try library.createWriting()
+        let center = WritingDocumentCenter(library: library)
+        let state = WritingWindowState()
+        state.focusEditorWhenShown()
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 500, height: 500), styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        defer { window.close() }
+        window.contentView = NSHostingView(rootView: WritingWindowView(center: center, state: state)
+            .frame(width: 500, height: 500))
+        window.makeKeyAndOrderFront(nil)
+
+        try await waitUntil { window.firstResponder is WritingTextView }
+        XCTAssertTrue(state.isOpen)
+    }
+
+    /// The writing window is translucent like the main window, not an opaque sheet.
+    func testWritingWindowSharesTheMainWindowsGlass() async throws {
+        let library = try makeLibrary()
+        _ = try library.createWriting(markdown: "Hello")
+        let center = WritingDocumentCenter(library: library)
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 500, height: 500), styleMask: [.titled, .closable, .resizable], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        defer { window.close() }
+        window.contentView = NSHostingView(rootView: WritingWindowView(center: center, state: WritingWindowState())
+            .environment(\.pdfDisplayAppearance, .defaultMode)
+            .frame(width: 500, height: 500))
+        window.makeKeyAndOrderFront(nil)
+
+        try await waitUntil { window.isOpaque == false }
+        XCTAssertEqual(window.backgroundColor, .clear)
+        XCTAssertTrue(window.titlebarAppearsTransparent)
+        XCTAssertTrue(window.styleMask.contains(.fullSizeContentView))
+        func hasMaterial(_ view: NSView) -> Bool {
+            if #available(macOS 26.0, *), view is ReaderGlassSurfaceView { return true }
+            return view is NSVisualEffectView || view.subviews.contains(where: hasMaterial)
+        }
+        XCTAssertTrue(hasMaterial(try XCTUnwrap(window.contentView)))
+    }
+
     private func waitUntil(timeout: Duration = .seconds(3), _ condition: @MainActor () -> Bool) async throws {
         let deadline = ContinuousClock.now + timeout
         while condition() == false {

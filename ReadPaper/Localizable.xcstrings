@@ -12,16 +12,6 @@
         }
       }
     },
-    "Long notes across papers. Quotes link back to the source." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "跨论文的长篇笔记，引文可跳回原处。"
-          }
-        }
-      }
-    },
     "“%@” and all of its local files, notes, reading state, and translation cache will be removed." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -5998,6 +5988,28 @@
         }
       }
     },
+    "Rename Writing" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重命名写作稿"
+          }
+        }
+      }
+    },
+    "Rename…" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重命名…"
+          }
+        }
+      }
+    },
     "Report" : {
       "comment" : "Bibliographic item type (Zotero item type name)",
       "localizations" : {
@@ -7342,6 +7354,16 @@
         }
       }
     },
+    "The title is the writing’s first line, so renaming changes that line." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "写作稿的标题就是正文第一行，重命名会修改这一行。"
+          }
+        }
+      }
+    },
     "The translated PDF could not be opened for debug export." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -7370,16 +7392,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "网页服务器返回了错误（状态码 %d）。"
-          }
-        }
-      }
-    },
-    "The writing is open in its own window. Quotes from the reader go there." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "写作稿已在单独的窗口中打开，从阅读器引用的内容会插入那里。"
           }
         }
       }
@@ -7530,6 +7542,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "此 PDF 链接到 arXiv %@。要将其导入资料库吗？"
+          }
+        }
+      }
+    },
+    "Title" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "标题"
           }
         }
       }
@@ -8459,7 +8482,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "写作稿在单独窗口中"
+            "value" : "独立窗口中写作"
           }
         }
       }

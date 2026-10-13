@@ -34,6 +34,8 @@ struct WritingPaneView: View {
 
     @State private var localFocusRequest = 0
     @State private var writingPendingDeletion: WritingMetadata?
+    @State private var writingBeingRenamed: WritingMetadata?
+    @State private var newTitle = ""
     @State private var errorMessage: String?
 
     private var library: WritingLibrary {
@@ -54,8 +56,11 @@ struct WritingPaneView: View {
             if showsWindowPlaceholder {
                 windowPlaceholder
             } else if let writing = library.currentWriting {
-                header(writing)
-                Divider()
+                // The writing window shows these controls in its title bar.
+                if presentation == .inspector {
+                    header(writing)
+                    Divider()
+                }
                 if let document = try? center.document(for: writing.id) {
                     WritingEditorView(
                         document: document,
@@ -84,6 +89,9 @@ struct WritingPaneView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .toolbar {
+            windowToolbar
+        }
         .onAppear {
             library.loadIfNeeded()
             center.typography = typography
@@ -115,6 +123,27 @@ struct WritingPaneView: View {
             ))
         }
         .alert(
+            String(localized: "Rename Writing", bundle: bundle),
+            isPresented: Binding(
+                get: { writingBeingRenamed != nil },
+                set: { isPresented in
+                    if isPresented == false {
+                        writingBeingRenamed = nil
+                    }
+                }
+            ),
+            presenting: writingBeingRenamed
+        ) { writing in
+            TextField(String(localized: "Title", bundle: bundle), text: $newTitle)
+            Button(String(localized: "Rename", bundle: bundle)) {
+                rename(writing, to: newTitle)
+            }
+            .keyboardShortcut(.defaultAction)
+            Button(String(localized: "Cancel", bundle: bundle), role: .cancel) {}
+        } message: { _ in
+            Text("The title is the writing’s first line, so renaming changes that line.", bundle: bundle)
+        }
+        .alert(
             String(localized: "Unable to Update Writing", bundle: bundle),
             isPresented: Binding(
                 get: { errorMessage != nil },
@@ -133,82 +162,120 @@ struct WritingPaneView: View {
 
     private func header(_ writing: WritingMetadata) -> some View {
         HStack(spacing: 8) {
-            Menu {
-                ForEach(library.writings) { item in
-                    Toggle(displayTitle(of: item), isOn: Binding(
-                        get: { item.id == writing.id },
-                        set: { isOn in
-                            if isOn {
-                                library.selectWriting(item.id)
-                            }
-                        }
-                    ))
-                }
-                Divider()
-                Button(String(localized: "New Writing", bundle: bundle)) {
-                    createWriting()
-                }
-            } label: {
-                HStack(spacing: 4) {
-                    Text(displayTitle(of: writing))
-                        .font(.headline)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundStyle(.secondary)
-                }
-                .contentShape(Rectangle())
-            }
-            .menuStyle(.button)
-            .buttonStyle(.plain)
-            .menuIndicator(.hidden)
-            .help(String(localized: "Switch Writing", bundle: bundle))
+            writingSwitcher(writing)
 
             Spacer(minLength: 8)
 
+            newWritingButton
+                .buttonStyle(.borderless)
+
             Button {
-                createWriting()
+                openWindow(id: WritingWindowScene.id)
             } label: {
-                Label(String(localized: "New Writing", bundle: bundle), systemImage: "square.and.pencil")
+                Label(String(localized: "Open in Separate Window", bundle: bundle), systemImage: "macwindow")
                     .labelStyle(.iconOnly)
             }
             .buttonStyle(.borderless)
-            .help(String(localized: "New Writing", bundle: bundle))
+            .help(String(localized: "Open in Separate Window", bundle: bundle))
 
-            if presentation == .inspector {
-                Button {
-                    openWindow(id: WritingWindowScene.id)
-                } label: {
-                    Label(String(localized: "Open in Separate Window", bundle: bundle), systemImage: "macwindow")
-                        .labelStyle(.iconOnly)
-                }
-                .buttonStyle(.borderless)
-                .help(String(localized: "Open in Separate Window", bundle: bundle))
-            }
-
-            Menu {
-                Button(String(localized: "Insert Image…", bundle: bundle)) {
-                    chooseImages(for: writing)
-                }
-                Button(String(localized: "Show in Finder", bundle: bundle)) {
-                    showInFinder(writing)
-                }
-                Divider()
-                Button(String(localized: "Delete Writing…", bundle: bundle), role: .destructive) {
-                    writingPendingDeletion = writing
-                }
-            } label: {
-                Label(String(localized: "More", bundle: bundle), systemImage: "ellipsis.circle")
-                    .labelStyle(.iconOnly)
-            }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
-            .fixedSize()
-            .help(String(localized: "More", bundle: bundle))
+            moreMenu(writing)
+                .menuStyle(.borderlessButton)
+                .fixedSize()
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
+    }
+
+    /// The header's controls in the writing window's title bar, so the window has one
+    /// translucent bar like the main window instead of a title bar above a header row.
+    @ToolbarContentBuilder
+    private var windowToolbar: some ToolbarContent {
+        if presentation == .window {
+            if let writing = library.currentWriting {
+                ToolbarItem(placement: .navigation) {
+                    writingSwitcher(writing)
+                        .padding(.horizontal, 6)
+                }
+            }
+            // Without a title, a window's toolbar packs its items at the leading edge.
+            if #available(macOS 26.0, *) {
+                ToolbarSpacer(.flexible)
+            }
+            ToolbarItemGroup {
+                newWritingButton
+                if let writing = library.currentWriting {
+                    moreMenu(writing)
+                }
+            }
+        }
+    }
+
+    private func writingSwitcher(_ writing: WritingMetadata) -> some View {
+        Menu {
+            ForEach(library.writings) { item in
+                Toggle(displayTitle(of: item), isOn: Binding(
+                    get: { item.id == writing.id },
+                    set: { isOn in
+                        if isOn {
+                            library.selectWriting(item.id)
+                        }
+                    }
+                ))
+            }
+            Divider()
+            Button(String(localized: "New Writing", bundle: bundle)) {
+                createWriting()
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Text(displayTitle(of: writing))
+                    .font(.headline)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(.secondary)
+            }
+            .contentShape(Rectangle())
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .help(String(localized: "Switch Writing", bundle: bundle))
+    }
+
+    private var newWritingButton: some View {
+        Button {
+            createWriting()
+        } label: {
+            Label(String(localized: "New Writing", bundle: bundle), systemImage: "square.and.pencil")
+                .labelStyle(.iconOnly)
+        }
+        .help(String(localized: "New Writing", bundle: bundle))
+    }
+
+    private func moreMenu(_ writing: WritingMetadata) -> some View {
+        Menu {
+            Button(String(localized: "Rename…", bundle: bundle)) {
+                newTitle = writing.title
+                writingBeingRenamed = writing
+            }
+            Button(String(localized: "Insert Image…", bundle: bundle)) {
+                chooseImages(for: writing)
+            }
+            Button(String(localized: "Show in Finder", bundle: bundle)) {
+                showInFinder(writing)
+            }
+            Divider()
+            Button(String(localized: "Delete Writing…", bundle: bundle), role: .destructive) {
+                writingPendingDeletion = writing
+            }
+        } label: {
+            Label(String(localized: "More", bundle: bundle), systemImage: "ellipsis.circle")
+                .labelStyle(.iconOnly)
+        }
+        .menuIndicator(.hidden)
+        .help(String(localized: "More", bundle: bundle))
     }
 
     private func footer(_ writing: WritingMetadata) -> some View {
@@ -235,8 +302,6 @@ struct WritingPaneView: View {
     private var emptyState: some View {
         ContentUnavailableView {
             Label(String(localized: "No Writings Yet", bundle: bundle), systemImage: "square.and.pencil")
-        } description: {
-            Text("Long notes across papers. Quotes link back to the source.", bundle: bundle)
         } actions: {
             Button(String(localized: "New Writing", bundle: bundle)) {
                 createWriting()
@@ -247,9 +312,12 @@ struct WritingPaneView: View {
 
     private var windowPlaceholder: some View {
         ContentUnavailableView {
-            Label(String(localized: "Writing in a Separate Window", bundle: bundle), systemImage: "macwindow")
-        } description: {
-            Text("The writing is open in its own window. Quotes from the reader go there.", bundle: bundle)
+            // Only the icon: the buttons say what the placeholder is for.
+            Image(systemName: "macwindow")
+                .font(.system(size: 40))
+                .foregroundStyle(.secondary)
+                .padding(.bottom, 4)
+                .accessibilityLabel(String(localized: "Writing in a Separate Window", bundle: bundle))
         } actions: {
             HStack(spacing: 8) {
                 Button(String(localized: "Show Window", bundle: bundle)) {
@@ -277,11 +345,34 @@ struct WritingPaneView: View {
         writing.title.isEmpty ? String(localized: "Untitled Writing", bundle: bundle) : writing.title
     }
 
+    /// A new writing opens in the writing window.
     private func createWriting() {
         do {
             center.saveAll()
             try library.createWriting()
-            localFocusRequest &+= 1
+            if presentation == .inspector {
+                windowState.focusEditorWhenShown()
+                openWindow(id: WritingWindowScene.id)
+            } else {
+                localFocusRequest &+= 1
+            }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func rename(_ writing: WritingMetadata, to title: String) {
+        writingBeingRenamed = nil
+        do {
+            let document = try center.document(for: writing.id)
+            guard let edit = WritingTitle.renaming(
+                document.textStorage.string,
+                to: title,
+                selection: document.currentSelection
+            ) else { return }
+            document.apply(edit)
+            // Saving updates the title in the list and the window's toolbar right away.
+            document.save()
         } catch {
             errorMessage = error.localizedDescription
         }

@@ -290,6 +290,33 @@ final class WritingStoreTests: XCTestCase {
         XCTAssertEqual(WritingTitle.derive(from: String(repeating: "长", count: 100)).count, WritingTitle.maximumLength + 1)
     }
 
+    func testRenamingRewritesTheTitleHeadingOrAddsOne() throws {
+        func renamed(_ markdown: String, to title: String, caret: Int = 0) throws -> (String, NSRange) {
+            let edit = try XCTUnwrap(WritingTitle.renaming(markdown, to: title, selection: NSRange(location: caret, length: 0)))
+            let result = (markdown as NSString).replacingCharacters(in: edit.range, with: edit.replacement)
+            return (result, edit.selectionAfter)
+        }
+
+        // A heading keeps its level; the text below and the caret's place in it stay.
+        let (heading, caret) = try renamed("\n## Old **title** ##\nBody", to: "注意力 笔记", caret: 22)
+        XCTAssertEqual(heading, "\n## 注意力 笔记\nBody")
+        XCTAssertEqual((heading as NSString).substring(from: caret.location), "ody")
+        XCTAssertEqual(WritingTitle.derive(from: heading), "注意力 笔记")
+
+        // Body text that names the writing stays; a heading goes on top.
+        XCTAssertEqual(try renamed("First paragraph\n", to: "Notes").0, "# Notes\n\nFirst paragraph\n")
+        XCTAssertEqual(try renamed("```\ncode\n```", to: "Notes").0, "# Notes\n\n```\ncode\n```")
+        XCTAssertEqual(try renamed("> # Quoted heading", to: "Notes").0, "# Notes\n\n> # Quoted heading")
+        XCTAssertEqual(try renamed("", to: "Notes").0, "# Notes\n\n")
+
+        // The title reads back as typed: syntax is escaped and line breaks become spaces.
+        let (escaped, _) = try renamed("# Old", to: "  a*b*\n [c] $5  ")
+        XCTAssertEqual(WritingTitle.derive(from: escaped), "a*b* [c] $5")
+
+        XCTAssertNil(WritingTitle.renaming("# Same", to: " Same ", selection: NSRange(location: 0, length: 0)))
+        XCTAssertNil(WritingTitle.renaming("# Old", to: " \n ", selection: NSRange(location: 0, length: 0)))
+    }
+
     func testWordCountMixesCJKCharactersAndLatinWords() {
         XCTAssertEqual(WritingStatistics.wordCount(in: "Attention is all you need"), 5)
         XCTAssertEqual(WritingStatistics.wordCount(in: "注意力机制 is key"), 7)

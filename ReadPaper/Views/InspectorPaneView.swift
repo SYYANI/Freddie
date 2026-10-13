@@ -27,8 +27,6 @@ struct InspectorPaneView: View {
     @Binding var focusedNoteID: UUID?
     @Binding var mode: InspectorMode
     var writingCenter: WritingDocumentCenter = .shared
-    /// Changing it moves keyboard focus into the writing editor.
-    var writingFocusRequest: Int
     var onCreateNote: () -> Void
     var onOpenNoteAnchor: (Note) -> Void
     var onOpenCitation: (PaperCitation, String?) -> Void
@@ -89,7 +87,7 @@ struct InspectorPaneView: View {
             case .writing:
                 WritingPaneView(
                     center: writingCenter,
-                    focusRequest: writingFocusRequest,
+                    focusRequest: 0,
                     onOpenCitation: onOpenCitation
                 )
             }
@@ -97,19 +95,41 @@ struct InspectorPaneView: View {
         .fontDesign(displayAppearance == .paper ? .serif : .default)
     }
 
+    /// A segmented picker outside the toolbar gets the accent-filled content style, so this
+    /// draws the toolbar look (glass capsule, gray selected segment) to match the reader pickers.
     private var modePicker: some View {
-        Picker(String(localized: "Inspector", bundle: bundle), selection: $mode) {
-            Text("Paper", bundle: bundle)
-                .tag(InspectorMode.paper)
-            Text("Writing", bundle: bundle)
-                .tag(InspectorMode.writing)
+        HStack(spacing: 2) {
+            modePickerSegment(.paper, title: String(localized: "Paper", bundle: bundle))
+            modePickerSegment(.writing, title: String(localized: "Writing", bundle: bundle))
         }
-        .pickerStyle(.segmented)
-        .labelsHidden()
-        .fixedSize()
+        .padding(3)
+        .readPaperGlassEffect(in: Capsule())
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(String(localized: "Inspector", bundle: bundle))
         .frame(maxWidth: .infinity)
         .padding(.top, 10)
         .padding(.bottom, 6)
+    }
+
+    private func modePickerSegment(_ segmentMode: InspectorMode, title: String) -> some View {
+        let isSelected = mode == segmentMode
+        return Button {
+            mode = segmentMode
+        } label: {
+            Text(title)
+                .font(.system(size: 13))
+                .foregroundStyle(.primary)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 5)
+                .background {
+                    if isSelected {
+                        Capsule().fill(Color.primary.opacity(0.1))
+                    }
+                }
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     private func metadataSection(_ paper: Paper) -> some View {
