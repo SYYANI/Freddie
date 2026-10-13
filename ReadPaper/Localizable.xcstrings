@@ -1,171 +1,6 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
-    "Block" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "区块"
-          }
-        }
-      }
-    },
-    "Click" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "点击"
-          }
-        }
-      }
-    },
-    "⇧ Click" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "⇧ 点击"
-          }
-        }
-      }
-    },
-    "Click a region to hide it, or a faded region to restore it. Shift-click another region to make the same change to everything in between. Press ↑ or ↓ to resize the outline and Esc to finish." : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "点击区域即可隐藏，点击半透明区域可恢复。按住 ⇧ 点击另一处，可对两者之间的内容做同样的调整。按 ↑ 或 ↓ 调整选框大小，按 Esc 完成。"
-          }
-        }
-      }
-    },
-    "Code" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "代码"
-          }
-        }
-      }
-    },
-    "Formula" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "公式"
-          }
-        }
-      }
-    },
-    "Heading" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "标题"
-          }
-        }
-      }
-    },
-    "Hide or restore parts of this page (%lld hidden)" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "隐藏或恢复页面中的部分区域（已隐藏 %lld 处）"
-          }
-        }
-      }
-    },
-    "Hide/Restore" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "隐藏/恢复"
-          }
-        }
-      }
-    },
-    "Image" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "图片"
-          }
-        }
-      }
-    },
-    "Link" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "链接"
-          }
-        }
-      }
-    },
-    "List" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "列表"
-          }
-        }
-      }
-    },
-    "List Item" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "列表项"
-          }
-        }
-      }
-    },
-    "Media" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "媒体"
-          }
-        }
-      }
-    },
-    "Paragraph" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "段落"
-          }
-        }
-      }
-    },
     " (part %d/%d)" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -209,6 +44,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%1$@ 必须是整数。"
+          }
+        }
+      }
+    },
+    "%@ regions" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 个区块"
           }
         }
       }
@@ -304,6 +150,17 @@
     },
     "•" : {
 
+    },
+    "⇧ Click" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "⇧ 点击"
+          }
+        }
+      }
     },
     "1. Save a provider API key" : {
       "extractionState" : "stale",
@@ -1165,6 +1022,17 @@
         }
       }
     },
+    "Block" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "区块"
+          }
+        }
+      }
+    },
     "Blue" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1542,6 +1410,28 @@
         }
       }
     },
+    "Click" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "点击"
+          }
+        }
+      }
+    },
+    "Click a region to hide it, or a faded region to restore it. Shift-click another region to make the same change to everything in between. Press ↑ or ↓ to resize the outline and Esc to finish." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "点击区域即可隐藏，点击半透明区域可恢复。按住 ⇧ 点击另一处，可对两者之间的内容做同样的调整。按 ↑ 或 ↓ 调整选框大小，按 Esc 完成。"
+          }
+        }
+      }
+    },
     "Click to edit note" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1558,6 +1448,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "关闭"
+          }
+        }
+      }
+    },
+    "Code" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "代码"
           }
         }
       }
@@ -1740,6 +1641,17 @@
         }
       }
     },
+    "Create" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "创建"
+          }
+        }
+      }
+    },
     "Create a note from the current PDF or HTML selection, or start a blank note." : {
       "localizations" : {
         "zh-Hans" : {
@@ -1885,6 +1797,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "删除"
+          }
+        }
+      }
+    },
+    "Delete Folder?" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "删除文件夹？"
+          }
+        }
+      }
+    },
+    "Delete Folder…" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "删除文件夹…"
           }
         }
       }
@@ -2655,6 +2589,17 @@
         }
       }
     },
+    "Folder Name" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "文件夹名称"
+          }
+        }
+      }
+    },
     "Follow System" : {
       "localizations" : {
         "zh-Hans" : {
@@ -2683,6 +2628,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "常见配置方式是：填写服务 base URL，粘贴 API key，设置一个轻量测试模型，然后点击 Save 和 Test。"
+          }
+        }
+      }
+    },
+    "Formula" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "公式"
           }
         }
       }
@@ -2839,6 +2795,17 @@
         }
       }
     },
+    "Heading" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "标题"
+          }
+        }
+      }
+    },
     "Hidden: %lld" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2879,6 +2846,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "隐藏或恢复页面中的部分区域"
+          }
+        }
+      }
+    },
+    "Hide or restore parts of this page (%lld hidden)" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "隐藏或恢复页面中的部分区域（已隐藏 %lld 处）"
+          }
+        }
+      }
+    },
+    "Hide/Restore" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "隐藏/恢复"
           }
         }
       }
@@ -3098,6 +3087,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "如果尚未安装 TeX 发行版，推荐使用 MacTeX。该发行版独立于 Freddie 安装和维护。"
+          }
+        }
+      }
+    },
+    "Image" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "图片"
           }
         }
       }
@@ -3552,6 +3552,17 @@
         }
       }
     },
+    "Link" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "链接"
+          }
+        }
+      }
+    },
     "Link Copied" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -3570,6 +3581,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "链接已复制到剪贴板。"
+          }
+        }
+      }
+    },
+    "List" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "列表"
+          }
+        }
+      }
+    },
+    "List Item" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "列表项"
           }
         }
       }
@@ -3720,6 +3753,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Max tokens"
+          }
+        }
+      }
+    },
+    "Media" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "媒体"
           }
         }
       }
@@ -3877,6 +3921,17 @@
         }
       }
     },
+    "Move to Folder" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "移到文件夹"
+          }
+        }
+      }
+    },
     "Nearby" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -3895,6 +3950,27 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "新建"
+          }
+        }
+      }
+    },
+    "New Folder" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "新建文件夹"
+          }
+        }
+      }
+    },
+    "New Folder…" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "新建文件夹…"
           }
         }
       }
@@ -4000,6 +4076,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "未选择论文"
+          }
+        }
+      }
+    },
+    "No Papers" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "暂无论文"
           }
         }
       }
@@ -4412,6 +4498,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "纸质"
+          }
+        }
+      }
+    },
+    "Papers in “%@” will move to Unfiled. No papers are deleted." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“%1$@”中的论文将移至“未归档”，不会删除任何论文。"
+          }
+        }
+      }
+    },
+    "Paragraph" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "段落"
           }
         }
       }
@@ -5114,17 +5222,6 @@
         }
       }
     },
-    "%@ regions" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ 个区块"
-          }
-        }
-      }
-    },
     "Regions can't be edited while a translation is running." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -5147,6 +5244,17 @@
         }
       }
     },
+    "Remove from Folder" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "移出文件夹"
+          }
+        }
+      }
+    },
     "Removed BabelDOC." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -5165,6 +5273,39 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在移除 BabelDOC..."
+          }
+        }
+      }
+    },
+    "Rename" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重命名"
+          }
+        }
+      }
+    },
+    "Rename Folder" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重命名文件夹"
+          }
+        }
+      }
+    },
+    "Rename Folder…" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重命名文件夹…"
           }
         }
       }
@@ -7024,6 +7165,17 @@
         }
       }
     },
+    "Unable to Update Folder" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法更新文件夹"
+          }
+        }
+      }
+    },
     "Unavailable" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -7086,6 +7238,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "撤销区域调整"
+          }
+        }
+      }
+    },
+    "Unfiled" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未归档"
           }
         }
       }
@@ -7340,156 +7502,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "黄色"
-          }
-        }
-      }
-    },
-    "New Folder" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "新建文件夹"
-          }
-        }
-      }
-    },
-    "New Folder…" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "新建文件夹…"
-          }
-        }
-      }
-    },
-    "Move to Folder" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "移到文件夹"
-          }
-        }
-      }
-    },
-    "Remove from Folder" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "移出文件夹"
-          }
-        }
-      }
-    },
-    "Rename Folder…" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "重命名文件夹…"
-          }
-        }
-      }
-    },
-    "Rename Folder" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "重命名文件夹"
-          }
-        }
-      }
-    },
-    "Delete Folder…" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "删除文件夹…"
-          }
-        }
-      }
-    },
-    "Delete Folder?" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "删除文件夹？"
-          }
-        }
-      }
-    },
-    "Papers in “%@” will move to Unfiled. No papers are deleted." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "“%1$@”中的论文将移至“未归档”，不会删除任何论文。"
-          }
-        }
-      }
-    },
-    "Unfiled" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "未归档"
-          }
-        }
-      }
-    },
-    "No Papers" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "暂无论文"
-          }
-        }
-      }
-    },
-    "Folder Name" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "文件夹名称"
-          }
-        }
-      }
-    },
-    "Create" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "创建"
-          }
-        }
-      }
-    },
-    "Rename" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "重命名"
-          }
-        }
-      }
-    },
-    "Unable to Update Folder" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "无法更新文件夹"
           }
         }
       }
