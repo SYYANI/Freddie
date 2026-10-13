@@ -115,6 +115,7 @@ struct ReaderPaneView: View {
     @State private var digestNoticeMessage: String?
     @State private var digestNoticeTitle: String?
     @State private var digestErrorMessage: String?
+    @State private var writingQuoteErrorMessage: String?
     @State private var isExportingHTMLPDF = false
     @State private var htmlPDFExportError: String?
     @State private var copyToastMessage: String?
@@ -348,6 +349,7 @@ struct ReaderPaneView: View {
                 noteSelectionContext = nil
                 clearSelectionAssistant()
                 restoreReadingStateForCurrentPaper()
+                revealNavigationArrivingWithPaper()
                 refreshSelectionAssistantHistoryAnchors()
             }
             .onChange(of: readerAvailability) { _, newValue in
@@ -446,6 +448,10 @@ struct ReaderPaneView: View {
 
     var body: some View {
         readerBody
+            .modifier(WritingQuoteSupport(
+                errorMessage: $writingQuoteErrorMessage,
+                action: quoteInWritingAction
+            ))
             .task(id: findQuery) {
                 await commitFindQueryAfterTyping()
             }
@@ -1491,6 +1497,43 @@ struct ReaderPaneView: View {
         showCopyToast(message: String(localized: "Link copied to the clipboard.", bundle: bundle))
     }
 
+    private var quoteInWritingAction: QuoteInWritingAction? {
+        guard paper != nil, let selection = noteSelectionContext, selection.trimmedQuote != nil else {
+            return nil
+        }
+        return QuoteInWritingAction {
+            quoteInWriting(selection, citeOnly: false)
+        }
+    }
+
+    /// Adds the selected passage to the writing open in the inspector's Writing tab, as
+    /// a block quote with a citation linking back here, or with `citeOnly` just the citation.
+    @MainActor
+    private func quoteInWriting(_ selection: NoteSelectionContext, citeOnly: Bool) {
+        guard let paper, let quote = selection.trimmedQuote else { return }
+        let label = PaperCitation.label(
+            authors: paper.authors,
+            title: paper.title,
+            year: paper.publishedAt.map { Calendar(identifier: .gregorian).component(.year, from: $0) },
+            pageIndex: selection.pageIndex
+        )
+        do {
+            let title = try WritingDocumentCenter.shared.insertCitation(
+                PaperCitation(paperID: paper.id, selection: selection),
+                label: label,
+                quote: citeOnly ? nil : quote
+            )
+            clearSelectionAssistant()
+            showCopyToast(message: AppLocalization.format(
+                citeOnly ? "Cited in “%@”." : "Quoted in “%@”.",
+                bundle: bundle,
+                title.isEmpty ? String(localized: "Untitled Writing", bundle: bundle) : title
+            ))
+        } catch {
+            writingQuoteErrorMessage = error.localizedDescription
+        }
+    }
+
     private func showCopyToast(message: String) {
         copyToastDismissTask?.cancel()
         copyToastMessage = message
@@ -1704,7 +1747,8 @@ struct ReaderPaneView: View {
                     onSourceActivated: activateSelectionAssistantSource,
                     onConversationChanged: persistSelectionAssistantConversation,
                     onInteractionBegan: pinSelectionAssistant,
-                    onDismiss: clearSelectionAssistant
+                    onDismiss: clearSelectionAssistant,
+                    quoteInWriting: quoteInWriting
                 )
                 .transition(.move(edge: .bottom).combined(with: .opacity))
                 .zIndex(10)
@@ -2872,6 +2916,13 @@ struct ReaderPaneView: View {
         htmlSelectionHighlightResetToken &+= 1
     }
 
+    /// A citation opened from a writing arrives together with its paper. Going to it after
+    /// the paper's reading position is restored works whichever change SwiftUI handles first.
+    private func revealNavigationArrivingWithPaper() {
+        guard let targetPaperID = noteNavigationRequest?.paperID, targetPaperID == paper?.id else { return }
+        revealNoteAnchorIfNeeded()
+    }
+
     private func revealNoteAnchorIfNeeded() {
         guard let request = noteNavigationRequest else { return }
 
@@ -3078,5 +3129,32 @@ struct ReaderPaneView: View {
         DispatchQueue.main.async {
             suspendReadingStatePersistence = false
         }
+    }
+}
+
+/// The reader's part of "Quote in Writing": the menu command and its error alert.
+private struct WritingQuoteSupport: ViewModifier {
+    @Environment(\.localizationBundle) private var bundle
+    @Binding var errorMessage: String?
+    var action: QuoteInWritingAction?
+
+    func body(content: Content) -> some View {
+        content
+            .focusedSceneValue(\.quoteInWritingAction, action)
+            .alert(
+                String(localized: "Unable to Quote in Writing", bundle: bundle),
+                isPresented: Binding(
+                    get: { errorMessage != nil },
+                    set: { isPresented in
+                        if !isPresented {
+                            errorMessage = nil
+                        }
+                    }
+                )
+            ) {
+                Button(String(localized: "OK", bundle: bundle), role: .cancel) {}
+            } message: {
+                Text(errorMessage ?? "")
+            }
     }
 }

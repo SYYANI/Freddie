@@ -25,8 +25,15 @@ struct InspectorPaneView: View {
     var isCollapsed: Bool
     var currentSelectionContext: NoteSelectionContext?
     @Binding var focusedNoteID: UUID?
+    @Binding var mode: InspectorMode
+    var writingCenter: WritingDocumentCenter = .shared
+    /// Changing it moves keyboard focus into the writing editor.
+    var writingFocusRequest: Int
     var onCreateNote: () -> Void
     var onOpenNoteAnchor: (Note) -> Void
+    var onOpenCitation: (PaperCitation, String?) -> Void
+    var onOpenWriting: (UUID) -> Void
+    var onCreateWritingAboutPaper: (Paper) -> Void
 
     var body: some View {
         Group {
@@ -58,12 +65,20 @@ struct InspectorPaneView: View {
 
     private var expandedInspectorPane: some View {
         VStack(spacing: 0) {
-            Group {
+            modePicker
+            switch mode {
+            case .paper:
                 if let paper {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 18) {
                             metadataSection(paper)
                             notesSection()
+                            PaperWritingsSection(
+                                library: writingCenter.library,
+                                paperID: paper.id,
+                                onOpenWriting: onOpenWriting,
+                                onCreateWriting: { onCreateWritingAboutPaper(paper) }
+                            )
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(16)
@@ -71,9 +86,30 @@ struct InspectorPaneView: View {
                 } else {
                     emptyInspectorState
                 }
+            case .writing:
+                WritingPaneView(
+                    center: writingCenter,
+                    focusRequest: writingFocusRequest,
+                    onOpenCitation: onOpenCitation
+                )
             }
         }
         .fontDesign(displayAppearance == .paper ? .serif : .default)
+    }
+
+    private var modePicker: some View {
+        Picker(String(localized: "Inspector", bundle: bundle), selection: $mode) {
+            Text("Paper", bundle: bundle)
+                .tag(InspectorMode.paper)
+            Text("Writing", bundle: bundle)
+                .tag(InspectorMode.writing)
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .fixedSize()
+        .frame(maxWidth: .infinity)
+        .padding(.top, 10)
+        .padding(.bottom, 6)
     }
 
     private func metadataSection(_ paper: Paper) -> some View {

@@ -303,6 +303,7 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
                 targetScrollRatio: initialScrollRatio,
                 in: view
             )
+            context.coordinator.queueNoteNavigationForNewDocument(noteNavigationRequest)
             return
         }
 
@@ -2100,11 +2101,18 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
             applyDisplayAppearance(to: webView)
             applySelectionAssistantHistoryAnchors(to: webView)
             applySidenotes(to: webView)
+            // A navigation that came with the page, such as a citation opened from a
+            // writing, replaces the restored reading position.
+            if pendingNoteNavigationRequest != nil {
+                pendingScrollRatio = nil
+            }
             restoreScrollRatioIfNeeded(in: webView)
             flushPendingSegmentUpdates(in: webView)
-            flushPendingNoteNavigationIfNeeded(in: webView)
             applySidenoteFocusIfNeeded(to: webView)
             finishLoadIfNeeded(in: webView)
+            // After the load is finished, or the navigation would only be queued again; when
+            // `finishLoadIfNeeded` started loading another page, it waits for that page.
+            flushPendingNoteNavigationIfNeeded(in: webView)
             applyRegionEditing(to: webView)
             applyFindRequestIfNeeded(to: webView)
         }
@@ -2419,6 +2427,16 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
             Task { @MainActor [weak self] in
                 self?.onFindStatusChanged?(status)
             }
+        }
+
+        /// A request that arrives together with a new page waits for the page to load;
+        /// one left over from the previous page is dropped.
+        func queueNoteNavigationForNewDocument(_ request: NoteNavigationRequest?) {
+            guard let request, request.htmlSelector != nil, request.id != lastAppliedNoteNavigationID else {
+                pendingNoteNavigationRequest = nil
+                return
+            }
+            pendingNoteNavigationRequest = request
         }
 
         func applyNoteNavigationIfNeeded(_ request: NoteNavigationRequest?, to webView: WKWebView) {

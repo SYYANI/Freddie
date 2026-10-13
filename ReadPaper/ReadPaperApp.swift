@@ -45,6 +45,7 @@ struct ReadPaperApp: App {
         .commands {
             AboutFreddieCommands()
             LibraryFolderCommands()
+            WritingCommands()
         }
 
         Window("About Freddie", id: AboutFreddieCommands.windowID) {
@@ -117,7 +118,38 @@ private struct LibraryFolderCommands: Commands {
     }
 }
 
+private struct WritingCommands: Commands {
+    @FocusedValue(\.newWritingAction) private var newWritingAction
+    @FocusedValue(\.quoteInWritingAction) private var quoteInWritingAction
+
+    var body: some Commands {
+        CommandGroup(after: .newItem) {
+            Button(String(localized: "New Writing", bundle: LanguageManager.shared.bundle)) {
+                newWritingAction?.perform()
+            }
+            .keyboardShortcut("n", modifiers: [.command, .option])
+            .disabled(newWritingAction == nil)
+        }
+        CommandGroup(after: .pasteboard) {
+            Divider()
+            Button(String(localized: "Quote in Writing", bundle: LanguageManager.shared.bundle)) {
+                quoteInWritingAction?.perform()
+            }
+            .keyboardShortcut("e", modifiers: [.command, .shift])
+            .disabled(quoteInWritingAction == nil)
+        }
+    }
+}
+
 private final class ReadPaperApplicationDelegate: NSObject, NSApplicationDelegate {
+    func applicationWillTerminate(_ notification: Notification) {
+        WritingDocumentCenter.shared.saveAll()
+    }
+
+    func applicationDidResignActive(_ notification: Notification) {
+        WritingDocumentCenter.shared.saveAll()
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         guard #unavailable(macOS 26.0) else {
             return

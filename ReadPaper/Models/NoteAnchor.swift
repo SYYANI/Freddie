@@ -54,6 +54,9 @@ struct NoteSelectionContext: Equatable {
 
 struct NoteNavigationRequest: Equatable, Identifiable {
     let id: UUID
+    /// Set when the request opens another paper, e.g. a citation in a writing. Switching
+    /// papers keeps a request aimed at the new paper and drops any other.
+    var paperID: UUID?
     var attachmentID: UUID?
     var pageIndex: Int?
     var htmlSelector: String?
@@ -61,12 +64,14 @@ struct NoteNavigationRequest: Equatable, Identifiable {
 
     init(
         id: UUID = UUID(),
+        paperID: UUID? = nil,
         attachmentID: UUID? = nil,
         pageIndex: Int? = nil,
         htmlSelector: String? = nil,
         quote: String? = nil
     ) {
         self.id = id
+        self.paperID = paperID
         self.attachmentID = attachmentID
         self.pageIndex = pageIndex.map { max(0, $0) }
         self.htmlSelector = htmlSelector?.trimmingCharacters(in: .whitespacesAndNewlines)

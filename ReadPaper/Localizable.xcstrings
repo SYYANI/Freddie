@@ -23,6 +23,17 @@
         }
       }
     },
+    "“%@” will be moved to the Trash." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“%@”将被移到废纸篓。"
+          }
+        }
+      }
+    },
     "%@" : {
 
     },
@@ -1488,6 +1499,28 @@
         }
       }
     },
+    "Cited in “%@”." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已将引用插入“%@”。"
+          }
+        }
+      }
+    },
+    "Cited papers: %lld" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "引用论文：%lld"
+          }
+        }
+      }
+    },
     "Clear" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2017,6 +2050,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "删除论文？"
+          }
+        }
+      }
+    },
+    "Delete Writing?" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "删除写作稿？"
+          }
+        }
+      }
+    },
+    "Delete Writing…" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "删除写作稿…"
           }
         }
       }
@@ -4305,6 +4360,17 @@
         }
       }
     },
+    "Move to Trash" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "移到废纸篓"
+          }
+        }
+      }
+    },
     "Nearby" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -4375,6 +4441,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "新 Provider"
+          }
+        }
+      }
+    },
+    "New Writing" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "新建写作稿"
+          }
+        }
+      }
+    },
+    "New Writing About This Paper" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "为本文新建写作稿"
           }
         }
       }
@@ -4547,6 +4635,27 @@
         }
       }
     },
+    "No writings cite this paper yet." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "还没有写作稿引用这篇论文。"
+          }
+        }
+      }
+    },
+    "No Writings Yet" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "还没有写作稿"
+          }
+        }
+      }
+    },
     "Normalized to %@ and checking whether it already exists in your library." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -4710,6 +4819,17 @@
         }
       }
     },
+    "Open in the Writing Tab" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在“写作”页中打开"
+          }
+        }
+      }
+    },
     "Open Models" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -4845,7 +4965,6 @@
       }
     },
     "Paper" : {
-      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -5504,6 +5623,39 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "引用"
+          }
+        }
+      }
+    },
+    "Quote in Writing" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "引用到写作稿"
+          }
+        }
+      }
+    },
+    "Quote in Writing (Option-click to add only the citation)" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "引用到写作稿（按住 Option 点按则只插入引用）"
+          }
+        }
+      }
+    },
+    "Quoted in “%@”." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已将引文插入“%@”。"
           }
         }
       }
@@ -6341,6 +6493,17 @@
         }
       }
     },
+    "Show in Finder" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在访达中显示"
+          }
+        }
+      }
+    },
     "Show Inspector" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -6494,6 +6657,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "在本地化 HTML、原始 PDF、翻译 PDF，以及左右并排 PDF 对照之间切换。"
+          }
+        }
+      }
+    },
+    "Switch Writing" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "切换写作稿"
           }
         }
       }
@@ -6688,6 +6862,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "arXiv 源码响应不是有效归档。"
+          }
+        }
+      }
+    },
+    "The cited paper is no longer in your library." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "引用的论文已不在论文库中。"
           }
         }
       }
@@ -7098,6 +7283,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "网页服务器返回了错误（状态码 %d）。"
+          }
+        }
+      }
+    },
+    "The writing’s file could not be read." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法读取写作稿文件。"
           }
         }
       }
@@ -7664,6 +7859,27 @@
         }
       }
     },
+    "Unable to load writings: %@" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法载入写作稿：%@"
+          }
+        }
+      }
+    },
+    "Unable to Quote in Writing" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法引用到写作稿"
+          }
+        }
+      }
+    },
     "Unable to render the HTML content as a PDF." : {
       "localizations" : {
         "en" : {
@@ -7691,6 +7907,16 @@
         }
       }
     },
+    "Unable to save the writing: %@" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法保存写作稿：%@"
+          }
+        }
+      }
+    },
     "Unable to Update Folder" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -7709,6 +7935,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "无法更新论文"
+          }
+        }
+      }
+    },
+    "Unable to Update Writing" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法更新写作稿"
           }
         }
       }
@@ -7851,6 +8088,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "未命名网页"
+          }
+        }
+      }
+    },
+    "Untitled Writing" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未命名写作稿"
           }
         }
       }
@@ -8044,6 +8292,17 @@
         }
       }
     },
+    "Words: %lld" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "字数：%lld"
+          }
+        }
+      }
+    },
     "Working..." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -8061,6 +8320,58 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "写点笔记…"
+          }
+        }
+      }
+    },
+    "Write long notes that draw on several papers. Select text in a paper and choose Quote in Writing to add the passage with a link back to it." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在这里写跨越多篇论文的长篇笔记。在论文中选中文字后选择“引用到写作稿”，即可插入这段原文和指回原处的链接。"
+          }
+        }
+      }
+    },
+    "Writing" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "写作"
+          }
+        }
+      }
+    },
+    "Writing Unavailable" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "写作稿无法打开"
+          }
+        }
+      }
+    },
+    "Writings" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "写作稿"
+          }
+        }
+      }
+    },
+    "Writings citing this paper: %lld. Their text stays, but its citations will no longer open the paper." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "有 %lld 篇写作稿引用了这篇论文。写作稿的文字会保留，但其中的引用将无法再打开这篇论文。"
           }
         }
       }

@@ -5,7 +5,8 @@ import SwiftUI
 private enum InspectorColumnMetrics {
     static let minWidth: CGFloat = 280
     static let idealWidth: CGFloat = 340
-    static let maxWidth: CGFloat = 420
+    /// Wide enough for the Writing tab; the Paper tab opens at the ideal width.
+    static let maxWidth: CGFloat = 640
 }
 
 struct ContentView: View {
@@ -20,6 +21,7 @@ struct ContentView: View {
     @Query private var folderMemberships: [PaperFolderMembership]
     @Query private var itemTypeAssignments: [PaperItemTypeAssignment]
     @Query private var settingsRows: [AppSettings]
+    @AppStorage(InspectorMode.userDefaultsKey) private var inspectorModeRawValue = InspectorMode.paper.rawValue
 
     @State private var selectedPaperID: UUID?
     @State private var readerMode: ReaderMode = .pdf
@@ -44,6 +46,8 @@ struct ContentView: View {
     @State private var droppedPDFImportErrorMessage: String?
     @State private var libraryFilter = PaperLibraryFilter()
     @State private var htmlTranslatedPaperIDs: Set<UUID> = []
+    @State private var writingFocusRequest = 0
+    @State private var writingErrorMessage: String?
 
     private var settings: AppSettings? {
         settingsRows.first
@@ -91,6 +95,13 @@ struct ContentView: View {
 
     private var isInspectorCollapsed: Bool {
         settings?.resolvedInspectorCollapsed ?? false
+    }
+
+    private var inspectorModeBinding: Binding<InspectorMode> {
+        Binding(
+            get: { InspectorMode(rawValue: inspectorModeRawValue) ?? .paper },
+            set: { inspectorModeRawValue = $0.rawValue }
+        )
     }
 
     private var inspectorCollapsedBinding: Binding<Bool> {
@@ -222,8 +233,13 @@ struct ContentView: View {
             isCollapsed: isCollapsed,
             currentSelectionContext: noteSelectionContext,
             focusedNoteID: $focusedNoteID,
+            mode: inspectorModeBinding,
+            writingFocusRequest: writingFocusRequest,
             onCreateNote: createNoteFromCurrentSelection,
-            onOpenNoteAnchor: openNoteAnchor
+            onOpenNoteAnchor: openNoteAnchor,
+            onOpenCitation: openCitation,
+            onOpenWriting: openWriting,
+            onCreateWritingAboutPaper: createWriting(about:)
         )
     }
 
@@ -284,6 +300,19 @@ struct ContentView: View {
             isImporting: isImportingDroppedPDFs,
             perform: importDroppedPDFs
         )
+        .focusedSceneValue(\.newWritingAction, NewWritingAction { createWriting() })
+        .alert(String(localized: "Unable to Update Writing", bundle: bundle), isPresented: Binding(
+            get: { writingErrorMessage != nil },
+            set: { isPresented in
+                if !isPresented {
+                    writingErrorMessage = nil
+                }
+            }
+        )) {
+            Button(String(localized: "OK", bundle: bundle), role: .cancel) {}
+        } message: {
+            Text(writingErrorMessage ?? "")
+        }
         // .tint(isPaperAppearance ? ReadPaperTheme.accentColor : nil)
         .sheet(isPresented: $isAddingPaper) {
             AddPaperSheet(isPresented: $isAddingPaper, selectedPaperID: $selectedPaperID)
@@ -343,12 +372,7 @@ struct ContentView: View {
             }
             Button(String(localized: "Cancel", bundle: bundle), role: .cancel) {}
         } message: { paper in
-            Text(
-                String(
-                    format: String(localized: "“%@” and all of its local files, notes, reading state, and translation cache will be removed.", bundle: bundle),
-                    paper.title
-                )
-            )
+            Text(deletionMessage(for: paper))
         }
         .alert(String(localized: "Unable to Delete Paper", bundle: bundle), isPresented: Binding(
             get: { deletionErrorMessage != nil },
@@ -375,6 +399,7 @@ struct ContentView: View {
             Text(droppedPDFImportErrorMessage ?? "")
         }
         .onAppear {
+            WritingLibrary.shared.loadIfNeeded()
             let restoredSettings = ensureSettings()
             restoreSelection(preferredPaperID: restoredSettings?.lastOpenedPaperID)
             persistSelectedPaperIDIfNeeded(selectedPaperID, using: restoredSettings)
@@ -385,7 +410,12 @@ struct ContentView: View {
         .onChange(of: selectedPaperID) { _, newValue in
             noteSelectionContext = nil
             focusedNoteID = nil
-            noteNavigationRequest = nil
+            // A citation opened from a writing switches papers and navigates in one step.
+            let isOpeningCitation = noteNavigationRequest?.paperID != nil
+                && noteNavigationRequest?.paperID == newValue
+            if isOpeningCitation == false {
+                noteNavigationRequest = nil
+            }
             sidenoteFocusRequest = nil
             persistSelectedPaperIDIfNeeded(newValue)
         }
@@ -566,6 +596,77 @@ struct ContentView: View {
 
     private func openNoteAnchor(_ note: Note) {
         noteNavigationRequest = note.navigationRequest
+    }
+
+    private func deletionMessage(for paper: Paper) -> String {
+        let message = String(
+            format: String(localized: "“%@” and all of its local files, notes, reading state, and translation cache will be removed.", bundle: bundle),
+            paper.title
+        )
+        let citingWritings = WritingLibrary.shared.writings(citing: paper.id).count
+        guard citingWritings > 0 else { return message }
+        return message + "\n\n" + AppLocalization.format(
+            "Writings citing this paper: %lld. Their text stays, but its citations will no longer open the paper.",
+            bundle: bundle,
+            citingWritings
+        )
+    }
+
+    /// Opens the cited paper at the cited passage. Switching papers and navigating
+    /// happen together: the request carries the paper, so the switch keeps it.
+    private func openCitation(_ citation: PaperCitation, quote: String?) {
+        guard papers.contains(where: { $0.id == citation.paperID }) else {
+            writingErrorMessage = String(localized: "The cited paper is no longer in your library.", bundle: bundle)
+            return
+        }
+        noteNavigationRequest = citation.navigationRequest(quote: quote)
+        if selectedPaperID != citation.paperID {
+            selectedPaperID = citation.paperID
+        }
+    }
+
+    private func showWritingPane() {
+        inspectorModeRawValue = InspectorMode.writing.rawValue
+        if isInspectorCollapsed {
+            inspectorCollapsedBinding.wrappedValue = false
+        }
+    }
+
+    private func openWriting(_ id: UUID) {
+        WritingLibrary.shared.selectWriting(id)
+        showWritingPane()
+    }
+
+    /// Creates a writing, optionally starting with markdown, and opens it with the keyboard
+    /// focus in the editor.
+    private func createWriting(markdown: String = "") {
+        do {
+            WritingDocumentCenter.shared.saveAll()
+            try WritingLibrary.shared.createWriting(markdown: markdown)
+            showWritingPane()
+            writingFocusRequest &+= 1
+        } catch {
+            writingErrorMessage = error.localizedDescription
+        }
+    }
+
+    /// A writing about one paper: its title as the heading and a citation of the paper.
+    private func createWriting(about paper: Paper) {
+        let citation = PaperCitation(paperID: paper.id)
+        let label = PaperCitation.label(
+            authors: paper.authors,
+            title: paper.title,
+            year: paper.publishedAt.map { Calendar(identifier: .gregorian).component(.year, from: $0) },
+            pageIndex: nil
+        )
+        let heading = paper.title
+            .components(separatedBy: .whitespacesAndNewlines)
+            .filter { $0.isEmpty == false }
+            .joined(separator: " ")
+        let markdown = "# \(MarkdownEscaping.escapedInlineText(heading))\n\n"
+            + PaperCitation.inlineMarkdown(label: label, citation: citation)
+            + "\n\n"
+        createWriting(markdown: markdown)
     }
 
     private func handleArxivLinkActivation(_ url: URL) {

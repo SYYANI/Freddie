@@ -406,10 +406,14 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
             context.coordinator.loadedPaperID != paperID ||
             context.coordinator.loadedAttachmentID != attachmentID
         if shouldReloadDocument {
-            let restorePosition = context.coordinator.readingPosition(
-                fallbackPageIndex: pageIndex,
-                in: view
-            )
+            // Only a reload of the same attachment keeps the current scroll position, also when
+            // a translation update writes a new file. Another paper opens at `pageIndex`: its
+            // restored page, or the page of a citation opened from a writing.
+            let isSameDocument = context.coordinator.loadedPaperID == paperID &&
+                context.coordinator.loadedAttachmentID == attachmentID
+            let restorePosition = isSameDocument
+                ? context.coordinator.readingPosition(fallbackPageIndex: pageIndex, in: view)
+                : PDFReadingPosition(pageIndex: pageIndex)
             context.coordinator.prepareForProgrammaticPageRestore(to: restorePosition)
             context.coordinator.clearSelectionAssistantHistoryAnnotations()
             context.coordinator.invalidateFindDocument(
