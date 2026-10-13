@@ -9,6 +9,7 @@ struct LibrarySidebarView: View {
     @AppStorage(LibraryFolderExpansion.userDefaultsKey) private var collapsedFolderIDsStorage = ""
     var papers: [Paper]
     var grouping: PaperLibraryGrouping
+    var itemTypes: PaperItemTypeResolution
     @Binding var filter: PaperLibraryFilter
     var selectedPaper: Paper?
     @Binding var selectedPaperID: UUID?
@@ -20,7 +21,7 @@ struct LibrarySidebarView: View {
     @State private var folderPendingDeletion: PaperFolder?
     @State private var folderErrorMessage: String?
     @State private var dropTarget: FolderDropTarget?
-    @State private var favoriteErrorMessage: String?
+    @State private var paperUpdateErrorMessage: String?
 
     private var isPaperAppearance: Bool {
         displayAppearance == .paper
@@ -122,16 +123,16 @@ struct LibrarySidebarView: View {
             ))
         }
         .alert(String(localized: "Unable to Update Paper", bundle: bundle), isPresented: Binding(
-            get: { favoriteErrorMessage != nil },
+            get: { paperUpdateErrorMessage != nil },
             set: { isPresented in
                 if !isPresented {
-                    favoriteErrorMessage = nil
+                    paperUpdateErrorMessage = nil
                 }
             }
         )) {
             Button(String(localized: "OK", bundle: bundle), role: .cancel) {}
         } message: {
-            Text(favoriteErrorMessage ?? "")
+            Text(paperUpdateErrorMessage ?? "")
         }
         .alert(String(localized: "Unable to Update Folder", bundle: bundle), isPresented: Binding(
             get: { folderErrorMessage != nil },
@@ -324,6 +325,19 @@ struct LibrarySidebarView: View {
                     }
                 }
 
+                Section(String(localized: "Item Type", bundle: bundle)) {
+                    ForEach(filterableItemTypes, id: \.itemType) { entry in
+                        Toggle(isOn: itemTypeFilterBinding(entry.itemType)) {
+                            Text(AppLocalization.format(
+                                "%1$@ (%2$lld)",
+                                bundle: bundle,
+                                entry.title,
+                                entry.count
+                            ))
+                        }
+                    }
+                }
+
                 if filter.isActive {
                     Divider()
 
@@ -402,6 +416,27 @@ struct LibrarySidebarView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
+    /// Types present in the library, plus any selected type that no longer has
+    /// papers so it can still be turned off.
+    private var filterableItemTypes: [(itemType: PaperItemType, title: String, count: Int)] {
+        let counts = itemTypes.counts(in: papers)
+        return PaperItemType.sortedByTitle(Set(counts.keys).union(filter.itemTypes), bundle: bundle)
+            .map { (itemType: $0.itemType, title: $0.title, count: counts[$0.itemType] ?? 0) }
+    }
+
+    private func itemTypeFilterBinding(_ itemType: PaperItemType) -> Binding<Bool> {
+        Binding(
+            get: { filter.itemTypes.contains(itemType) },
+            set: { isOn in
+                if isOn {
+                    filter.itemTypes.insert(itemType)
+                } else {
+                    filter.itemTypes.remove(itemType)
+                }
+            }
+        )
+    }
+
     private func criterionBinding(_ criterion: PaperLibraryFilter.Criterion) -> Binding<Bool> {
         Binding(
             get: { filter.criteria.contains(criterion) },
@@ -422,7 +457,7 @@ struct LibrarySidebarView: View {
             try modelContext.save()
         } catch {
             modelContext.rollback()
-            favoriteErrorMessage = error.localizedDescription
+            paperUpdateErrorMessage = error.localizedDescription
         }
     }
 

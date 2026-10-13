@@ -73,6 +73,8 @@ final class PaperDeletionServiceTests: XCTestCase {
         ))
         modelContext.insert(TranslationJob(paperID: targetPaper.id, kind: "html"))
         modelContext.insert(TranslationJob(paperID: otherPaper.id, kind: "html"))
+        modelContext.insert(PaperItemTypeAssignment(paperID: targetPaper.id, itemType: .thesis))
+        modelContext.insert(PaperItemTypeAssignment(paperID: otherPaper.id, itemType: .report))
         try modelContext.save()
 
         XCTAssertTrue(FileManager.default.fileExists(atPath: targetPaper.localDirectoryPath))
@@ -87,6 +89,7 @@ final class PaperDeletionServiceTests: XCTestCase {
         XCTAssertEqual(try relatedReadingStatePaperIDs(in: modelContext), [otherPaper.id])
         XCTAssertEqual(try relatedSegmentPaperIDs(in: modelContext), [otherPaper.id])
         XCTAssertEqual(try relatedJobPaperIDs(in: modelContext), [otherPaper.id])
+        XCTAssertEqual(try modelContext.fetch(FetchDescriptor<PaperItemTypeAssignment>()).map(\.paperID), [otherPaper.id])
         XCTAssertEqual(try modelContext.fetch(FetchDescriptor<LLMProviderProfile>()).map(\.id), [provider.id])
         XCTAssertEqual(try modelContext.fetch(FetchDescriptor<LLMModelProfile>()).map(\.id), [model.id])
     }
@@ -98,6 +101,7 @@ final class PaperDeletionServiceTests: XCTestCase {
             PaperAttachment.self,
             PaperFolder.self,
             PaperFolderMembership.self,
+            PaperItemTypeAssignment.self,
             ReadingState.self,
             Note.self,
             TranslationSegment.self,

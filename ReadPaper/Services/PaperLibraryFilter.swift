@@ -16,17 +16,25 @@ struct PaperLibraryFilter: Equatable {
     struct Facts {
         var translatedPaperIDs: Set<UUID> = []
         var notedPaperIDs: Set<UUID> = []
+        var itemTypes: PaperItemTypeResolution?
     }
 
     var criteria: Set<Criterion> = []
+    var itemTypes: Set<PaperItemType> = []
 
     var isActive: Bool {
-        !criteria.isEmpty
+        !criteria.isEmpty || !itemTypes.isEmpty
     }
 
-    /// A paper must meet every selected criterion.
+    /// A paper must meet every selected criterion and be one of the selected
+    /// item types, if any are selected.
     func matches(_ paper: Paper, facts: Facts) -> Bool {
-        criteria.allSatisfy { criterion in
+        if !itemTypes.isEmpty {
+            let itemType = facts.itemTypes?.itemType(of: paper.id) ?? .document
+            guard itemTypes.contains(itemType) else { return false }
+        }
+
+        return criteria.allSatisfy { criterion in
             switch criterion {
             case .favorites:
                 return paper.isFavorite

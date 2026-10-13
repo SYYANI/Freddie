@@ -18,6 +18,7 @@ struct ContentView: View {
     @Query(sort: \Note.modifiedAt, order: .reverse) private var notes: [Note]
     @Query private var folders: [PaperFolder]
     @Query private var folderMemberships: [PaperFolderMembership]
+    @Query private var itemTypeAssignments: [PaperItemTypeAssignment]
     @Query private var settingsRows: [AppSettings]
 
     @State private var selectedPaperID: UUID?
@@ -56,10 +57,14 @@ struct ContentView: View {
         PaperLibraryGrouping(papers: papers, folders: folders, memberships: folderMemberships)
     }
 
+    private var itemTypeResolution: PaperItemTypeResolution {
+        PaperItemTypeResolution(papers: papers, attachments: attachments, assignments: itemTypeAssignments)
+    }
+
     /// The grouping the sidebar shows. The open paper stays listed even when it
     /// stops matching, so unfavoriting it does not pull the row out from under
     /// the pointer.
-    private var visibleLibraryGrouping: PaperLibraryGrouping {
+    private func visibleLibraryGrouping(itemTypes: PaperItemTypeResolution) -> PaperLibraryGrouping {
         let grouping = libraryGrouping
         guard libraryFilter.isActive else { return grouping }
 
@@ -68,7 +73,8 @@ struct ContentView: View {
                 attachments: attachments,
                 htmlTranslatedPaperIDs: htmlTranslatedPaperIDs
             ),
-            notedPaperIDs: Set(notes.map(\.paperID))
+            notedPaperIDs: Set(notes.map(\.paperID)),
+            itemTypes: itemTypes
         )
         let pinnedPaperID = selectedPaper?.id
         return grouping.filtered { paper in
@@ -154,10 +160,11 @@ struct ContentView: View {
         }
     }
 
-    private var sidebarColumn: some View {
+    private func sidebarColumn(itemTypes: PaperItemTypeResolution) -> some View {
         LibrarySidebarView(
             papers: papers,
-            grouping: visibleLibraryGrouping,
+            grouping: visibleLibraryGrouping(itemTypes: itemTypes),
+            itemTypes: itemTypes,
             filter: $libraryFilter,
             selectedPaper: selectedPaper,
             selectedPaperID: $selectedPaperID,
@@ -207,9 +214,10 @@ struct ContentView: View {
         }
     }
 
-    private func inspectorColumn(isCollapsed: Bool) -> some View {
+    private func inspectorColumn(isCollapsed: Bool, itemTypes: PaperItemTypeResolution) -> some View {
         InspectorPaneView(
             paper: selectedPaper,
+            itemType: selectedPaper.map { itemTypes.selection(for: $0.id) },
             notes: notes.filter { $0.paperID == selectedPaper?.id },
             isCollapsed: isCollapsed,
             currentSelectionContext: noteSelectionContext,
@@ -221,13 +229,15 @@ struct ContentView: View {
 
     @ViewBuilder
     private var mainNavigation: some View {
+        let itemTypes = itemTypeResolution
+
         if #available(macOS 26.0, *) {
             NavigationSplitView {
-                sidebarColumn
+                sidebarColumn(itemTypes: itemTypes)
             } detail: {
                 readerColumn
                     .inspector(isPresented: inspectorPresentedBinding) {
-                        inspectorColumn(isCollapsed: false)
+                        inspectorColumn(isCollapsed: false, itemTypes: itemTypes)
                             .inspectorColumnWidth(
                                 min: InspectorColumnMetrics.minWidth,
                                 ideal: InspectorColumnMetrics.idealWidth,
@@ -237,11 +247,11 @@ struct ContentView: View {
             }
         } else {
             NavigationSplitView {
-                sidebarColumn
+                sidebarColumn(itemTypes: itemTypes)
             } content: {
                 readerColumn
             } detail: {
-                inspectorColumn(isCollapsed: isInspectorCollapsed)
+                inspectorColumn(isCollapsed: isInspectorCollapsed, itemTypes: itemTypes)
                     .navigationSplitViewColumnWidth(
                         min: isInspectorCollapsed ? 0 : InspectorColumnMetrics.minWidth,
                         ideal: isInspectorCollapsed ? 0 : InspectorColumnMetrics.idealWidth,
@@ -423,7 +433,7 @@ struct ContentView: View {
     /// Follows the sidebar's display order, which groups papers by folder and
     /// leaves out papers hidden by the filter.
     private func nextSelectionAfterDeletingPaper(withID paperID: UUID) -> UUID? {
-        let orderedPaperIDs = visibleLibraryGrouping.orderedPaperIDs
+        let orderedPaperIDs = visibleLibraryGrouping(itemTypes: itemTypeResolution).orderedPaperIDs
         let remainingPaperIDs = orderedPaperIDs.filter { $0 != paperID }
         guard !remainingPaperIDs.isEmpty else { return nil }
 

@@ -12,6 +12,7 @@ struct InspectorPaneView: View {
     @Environment(\.pdfDisplayAppearance) private var displayAppearance
     @State private var notePendingDeletion: Note?
     @State private var authorsSaveErrorMessage: String?
+    @State private var itemTypeSaveErrorMessage: String?
     @State private var isAbstractExpanded = false
     @State private var abstractTranslationState = AbstractTranslationPresentationState()
     @State private var abstractTranslationTask: Task<Void, Never>?
@@ -19,6 +20,7 @@ struct InspectorPaneView: View {
     @State private var authorsDraft = ""
     @FocusState private var focusedMetadataField: MetadataField?
     var paper: Paper?
+    var itemType: PaperItemTypeSelection?
     var notes: [Note]
     var isCollapsed: Bool
     var currentSelectionContext: NoteSelectionContext?
@@ -76,6 +78,11 @@ struct InspectorPaneView: View {
 
     private func metadataSection(_ paper: Paper) -> some View {
         VStack(alignment: .leading, spacing: 8) {
+            if let itemType {
+                PaperItemTypePicker(selection: itemType) { newItemType in
+                    setItemType(newItemType, for: paper, selection: itemType)
+                }
+            }
             Text(paper.title)
                 .font(.title3.weight(.semibold))
                 .textSelection(.enabled)
@@ -88,6 +95,11 @@ struct InspectorPaneView: View {
             }
             if let authorsSaveErrorMessage {
                 Text(authorsSaveErrorMessage)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+            if let itemTypeSaveErrorMessage {
+                Text(itemTypeSaveErrorMessage)
                     .font(.caption)
                     .foregroundStyle(.red)
             }
@@ -332,8 +344,23 @@ struct InspectorPaneView: View {
         }
     }
 
+    private func setItemType(_ newItemType: PaperItemType?, for paper: Paper, selection: PaperItemTypeSelection) {
+        do {
+            try PaperItemTypeService().setItemType(
+                newItemType,
+                for: paper.id,
+                detectedType: selection.detectedType,
+                modelContext: modelContext
+            )
+            itemTypeSaveErrorMessage = nil
+        } catch {
+            itemTypeSaveErrorMessage = error.localizedDescription
+        }
+    }
+
     private func syncMetadataEditorState(with paper: Paper?) {
         authorsSaveErrorMessage = nil
+        itemTypeSaveErrorMessage = nil
         isEditingAuthors = false
         focusedMetadataField = nil
         authorsDraft = paper.map { Paper.editableAuthorsText($0.authors) } ?? ""
@@ -1025,5 +1052,71 @@ private struct InsetTextView: NSViewRepresentable {
                 NSEvent.removeMonitor(outsideClickMonitor)
             }
         }
+    }
+}
+
+/// The paper's item type above its title; choosing another type is the only
+/// place to change it. Kept out of the library rows' context menus on purpose:
+/// SwiftUI builds those menus for every visible row on every sidebar update,
+/// and a 37-type submenu per row made each update about five times slower.
+private struct PaperItemTypePicker: View {
+    @Environment(\.localizationBundle) private var bundle
+    var selection: PaperItemTypeSelection
+    var onSelect: (PaperItemType?) -> Void
+
+    var body: some View {
+        let title = selection.itemType.title(bundle: bundle)
+
+        Menu {
+            ForEach(PaperItemType.common) { itemType in
+                toggle(itemType, title: itemType.title(bundle: bundle))
+            }
+
+            Menu(String(localized: "More Types", bundle: bundle)) {
+                let otherTypes = PaperItemType.allCases.filter { !PaperItemType.common.contains($0) }
+                ForEach(PaperItemType.sortedByTitle(otherTypes, bundle: bundle), id: \.itemType) { entry in
+                    toggle(entry.itemType, title: entry.title)
+                }
+            }
+
+            if selection.isAssigned {
+                Divider()
+
+                Button(AppLocalization.format(
+                    "Use Detected Type (%@)",
+                    bundle: bundle,
+                    selection.detectedType.title(bundle: bundle)
+                )) {
+                    onSelect(nil)
+                }
+            }
+        } label: {
+            HStack(spacing: 3) {
+                Text(title)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 8, weight: .bold))
+            }
+            .font(.caption.weight(.medium))
+            .foregroundStyle(.secondary)
+            .contentShape(Rectangle())
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help(String(localized: "Item Type", bundle: bundle))
+        .accessibilityLabel(String(localized: "Item Type", bundle: bundle))
+        .accessibilityValue(title)
+    }
+
+    private func toggle(_ itemType: PaperItemType, title: String) -> some View {
+        Toggle(title, isOn: Binding(
+            get: { selection.itemType == itemType },
+            set: { isOn in
+                if isOn {
+                    onSelect(itemType)
+                }
+            }
+        ))
     }
 }

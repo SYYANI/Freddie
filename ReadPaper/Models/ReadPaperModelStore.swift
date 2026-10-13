@@ -8,6 +8,7 @@ enum ReadPaperModelStore {
         PaperAttachment.self,
         PaperFolder.self,
         PaperFolderMembership.self,
+        PaperItemTypeAssignment.self,
         ReadingState.self,
         Note.self,
         TranslationSegment.self,
