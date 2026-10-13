@@ -12,16 +12,6 @@
         }
       }
     },
-    "Long notes across papers. Quotes link back to the source." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "跨论文的长篇笔记，引文可跳回原处。"
-          }
-        }
-      }
-    },
     "“%@” and all of its local files, notes, reading state, and translation cache will be removed." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -7374,16 +7364,6 @@
         }
       }
     },
-    "The writing is open in its own window. Quotes from the reader go there." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "写作稿已在单独的窗口中打开，从阅读器引用的内容会插入那里。"
-          }
-        }
-      }
-    },
     "The writing’s file could not be read." : {
       "localizations" : {
         "zh-Hans" : {
@@ -8459,7 +8439,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "写作稿在单独窗口中"
+            "value" : "独立窗口中写作"
           }
         }
       }

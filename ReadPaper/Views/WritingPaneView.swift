@@ -235,8 +235,6 @@ struct WritingPaneView: View {
     private var emptyState: some View {
         ContentUnavailableView {
             Label(String(localized: "No Writings Yet", bundle: bundle), systemImage: "square.and.pencil")
-        } description: {
-            Text("Long notes across papers. Quotes link back to the source.", bundle: bundle)
         } actions: {
             Button(String(localized: "New Writing", bundle: bundle)) {
                 createWriting()
@@ -247,9 +245,12 @@ struct WritingPaneView: View {
 
     private var windowPlaceholder: some View {
         ContentUnavailableView {
-            Label(String(localized: "Writing in a Separate Window", bundle: bundle), systemImage: "macwindow")
-        } description: {
-            Text("The writing is open in its own window. Quotes from the reader go there.", bundle: bundle)
+            // Only the icon: the buttons say what the placeholder is for.
+            Image(systemName: "macwindow")
+                .font(.system(size: 40))
+                .foregroundStyle(.secondary)
+                .padding(.bottom, 4)
+                .accessibilityLabel(String(localized: "Writing in a Separate Window", bundle: bundle))
         } actions: {
             HStack(spacing: 8) {
                 Button(String(localized: "Show Window", bundle: bundle)) {
@@ -277,11 +278,17 @@ struct WritingPaneView: View {
         writing.title.isEmpty ? String(localized: "Untitled Writing", bundle: bundle) : writing.title
     }
 
+    /// A new writing opens in the writing window.
     private func createWriting() {
         do {
             center.saveAll()
             try library.createWriting()
-            localFocusRequest &+= 1
+            if presentation == .inspector {
+                windowState.focusEditorWhenShown()
+                openWindow(id: WritingWindowScene.id)
+            } else {
+                localFocusRequest &+= 1
+            }
         } catch {
             errorMessage = error.localizedDescription
         }

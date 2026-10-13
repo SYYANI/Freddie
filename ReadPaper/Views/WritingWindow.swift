@@ -24,11 +24,16 @@ final class WritingWindowState {
     /// Changing it moves keyboard focus into the window's editor.
     private(set) var focusRequest = 0
 
+    @ObservationIgnored private var focusesEditorOnAppear = false
     @ObservationIgnored private weak var window: NSWindow?
     @ObservationIgnored private var closeObserver: NSObjectProtocol?
 
     func windowDidAppear() {
         isOpen = true
+        if focusesEditorOnAppear {
+            focusesEditorOnAppear = false
+            requestFocus()
+        }
     }
 
     /// Only a hidden window counts as closed; closing is reported by the window itself.
@@ -57,6 +62,15 @@ final class WritingWindowState {
 
     func requestFocus() {
         focusRequest &+= 1
+    }
+
+    /// Moves keyboard focus into the window's editor now, or once a window being opened appears.
+    func focusEditorWhenShown() {
+        if isOpen {
+            requestFocus()
+        } else {
+            focusesEditorOnAppear = true
+        }
     }
 }
 

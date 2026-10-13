@@ -47,7 +47,6 @@ struct ContentView: View {
     @State private var droppedPDFImportErrorMessage: String?
     @State private var libraryFilter = PaperLibraryFilter()
     @State private var htmlTranslatedPaperIDs: Set<UUID> = []
-    @State private var writingFocusRequest = 0
     @State private var writingErrorMessage: String?
     @State private var citationErrorMessage: String?
     /// Identifies this window to `PaperLinkRouter`.
@@ -239,7 +238,6 @@ struct ContentView: View {
             currentSelectionContext: noteSelectionContext,
             focusedNoteID: $focusedNoteID,
             mode: inspectorModeBinding,
-            writingFocusRequest: writingFocusRequest,
             onCreateNote: createNoteFromCurrentSelection,
             onOpenNoteAnchor: openNoteAnchor,
             onOpenCitation: openCitation,
@@ -658,20 +656,14 @@ struct ContentView: View {
     }
 
     /// Shows the writing: in its window when that is open, otherwise in the inspector.
-    private func showWritingPane(focusingEditor: Bool = false) {
+    private func showWritingPane() {
         if WritingWindowState.shared.isOpen {
             openWindow(id: WritingWindowScene.id)
-            if focusingEditor {
-                WritingWindowState.shared.requestFocus()
-            }
             return
         }
         inspectorModeRawValue = InspectorMode.writing.rawValue
         if isInspectorCollapsed {
             inspectorCollapsedBinding.wrappedValue = false
-        }
-        if focusingEditor {
-            writingFocusRequest &+= 1
         }
     }
 
@@ -690,13 +682,14 @@ struct ContentView: View {
         }
     }
 
-    /// Creates a writing, optionally starting with markdown, and opens it with the keyboard
-    /// focus in the editor.
+    /// Creates a writing, optionally starting with markdown, and opens it in the writing
+    /// window with the keyboard focus in the editor.
     private func createWriting(markdown: String = "") {
         do {
             WritingDocumentCenter.shared.saveAll()
             try WritingLibrary.shared.createWriting(markdown: markdown)
-            showWritingPane(focusingEditor: true)
+            WritingWindowState.shared.focusEditorWhenShown()
+            openWindow(id: WritingWindowScene.id)
         } catch {
             writingErrorMessage = error.localizedDescription
         }
