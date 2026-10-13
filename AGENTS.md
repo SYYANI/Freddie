@@ -98,6 +98,8 @@ SwiftData schema 变更要特别谨慎：历史上已经出现过“新版本删
 
 论文库文件夹：`PaperFolder`（名称，预留 `parentID`，当前只显示一层）与 `PaperFolderMembership`（`paperID` 唯一，即一篇论文最多属于一个文件夹）。归属关系刻意不放进 `Paper`：移动论文不改 `Paper` schema，也不改按 `modifiedAt` 排序的列表顺序。删除文件夹只删归属记录，论文回到“未归档”；`PaperDeletionService` 删除论文时一并删除其归属记录；指向已不存在文件夹的归属按未归档处理。侧边栏分组统一走 `PaperLibraryGrouping`（文件夹按名称排序，组内沿用库顺序），删除论文后的下一个选中项也按它的显示顺序计算。文件夹折叠状态是视图状态，存 UserDefaults（`LibraryFolderExpansion`），不进 SwiftData。旧版 App 打开含文件夹的 store 能正常打开，但会丢弃两张文件夹表。论文拖到文件夹使用自定义 UTType `com.yiyan.ReadPaper.paper-reference`（已在 `Info.plist` 声明），不要改成文件 URL，否则会被整窗 PDF 拖入遮罩截走。侧边栏工具栏在最小宽度下只放得下“添加论文”和“删除论文”两个按钮，“新建文件夹”放在 File 菜单（⇧⌘N）和列表右键菜单里，不要再往侧边栏工具栏加按钮。
 
+侧边栏筛选：列表底部的筛选条（漏斗菜单 + `可见数 / 总数` + 清除按钮）是论文库新增操作的位置，不受顶部工具栏宽度限制。条件由 `PaperLibraryFilter` 定义（已收藏 / 有译文 / 有笔记，多选取交集），只是 `ContentView` 的 `@State`，不持久化，重启后总是显示完整论文库。筛选走 `PaperLibraryGrouping.filtered`：保留全部文件夹（“移到文件夹”菜单照常列出），筛选时隐藏没有可见论文的文件夹和空的“未归档”；当前打开的论文即使不再匹配也留在列表里；删除后的下一个选中项按筛选后的显示顺序计算。“有译文”= 有 `translatedPDF` 附件或有 `sourceType == "html"` 的 `TranslationSegment`，后者按需 fetch（只取 `paperID`），不要改成 `@Query`，否则 HTML 翻译每写一段缓存都会重绘整个窗口。收藏通过论文右键菜单切换，不更新 `modifiedAt`，避免打乱列表顺序。以后加文献类型等条件时，扩展 `PaperLibraryFilter.Criterion` 即可。
+
 LLM 配置现已拆成独立 SwiftData 模型：`LLMProviderProfile` 负责 provider 名称、`baseURL`、`apiKeyRef`、`testModel` 和启用状态，`LLMModelProfile` 负责模型名、所属 provider 和高级参数。`AppSettings` 只保留全局翻译偏好与当前选中的 HTML/PDF model profile；运行时路由解析不再依赖旧的单 Base URL / 多 legacy model name 配置。
 
 翻译缓存位于 `TranslationSegment`，现在除 `paperID`、`sourceType`、`targetLanguage`、`sourceHash` 之外，还会记录 route identity（至少 `providerProfileID`、`modelProfileID`、`modelName`）。改缓存或查找逻辑时，不要让切换 provider/model 后继续命中旧译文。
@@ -177,6 +179,7 @@ xcodebuild -project ReadPaper.xcodeproj -scheme ReadPaper -destination 'platform
 - arXiv ID、Atom XML：`ArxivClientTests`
 - 文件目录和附件写入：`PaperFileStoreTests`
 - 论文库文件夹（建/改名/删除、移动、分组排序、删除论文清理归属、新旧 schema 双向打开 store）：`PaperFolderServiceTests`
+- 侧边栏筛选条件（交集匹配、译文判定、筛选后保留文件夹与顺序）：`PaperLibraryFilterTests`
 - 本地 PDF 导入、arXiv ID 误判回归、arXiv 导入进度阶段、网页导入与 Readability 正文抽取：`PaperImporterTests`
 - HTML 导入、本地化与 Readability 回退、导入时清除页面代码：`HTMLLocalizerTests`
 - 阅读器关闭页面 JavaScript 但注入脚本（选区、查找、旁注、区域调整、TeX）照常工作：`HTMLReaderPageScriptTests`

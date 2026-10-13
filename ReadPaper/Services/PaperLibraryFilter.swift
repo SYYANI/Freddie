@@ -1,0 +1,62 @@
+import Foundation
+import SwiftData
+
+/// Sidebar filter. View state only: it is never persisted, so a relaunch always
+/// shows the whole library.
+struct PaperLibraryFilter: Equatable {
+    enum Criterion: String, CaseIterable, Identifiable {
+        case favorites
+        case translated
+        case notes
+
+        var id: String { rawValue }
+    }
+
+    /// What the filter needs to know that `Paper` itself does not record.
+    struct Facts {
+        var translatedPaperIDs: Set<UUID> = []
+        var notedPaperIDs: Set<UUID> = []
+    }
+
+    var criteria: Set<Criterion> = []
+
+    var isActive: Bool {
+        !criteria.isEmpty
+    }
+
+    /// A paper must meet every selected criterion.
+    func matches(_ paper: Paper, facts: Facts) -> Bool {
+        criteria.allSatisfy { criterion in
+            switch criterion {
+            case .favorites:
+                return paper.isFavorite
+            case .translated:
+                return facts.translatedPaperIDs.contains(paper.id)
+            case .notes:
+                return facts.notedPaperIDs.contains(paper.id)
+            }
+        }
+    }
+
+    /// Papers with a translated PDF (BabelDOC or LaTeX) or cached HTML translations.
+    static func translatedPaperIDs(
+        attachments: [PaperAttachment],
+        htmlTranslatedPaperIDs: Set<UUID>
+    ) -> Set<UUID> {
+        htmlTranslatedPaperIDs.union(
+            attachments.lazy.filter { $0.kind == .translatedPDF }.map(\.paperID)
+        )
+    }
+
+    /// Fetched on demand instead of through `@Query`, so a running HTML translation
+    /// does not redraw the whole window for every cached segment.
+    @MainActor
+    static func htmlTranslatedPaperIDs(modelContext: ModelContext) throws -> Set<UUID> {
+        let htmlSourceType = "html"
+        var descriptor = FetchDescriptor<TranslationSegment>(
+            predicate: #Predicate { $0.sourceType == htmlSourceType }
+        )
+        descriptor.propertiesToFetch = [\.paperID]
+        return Set(try modelContext.fetch(descriptor).map(\.paperID))
+    }
+}

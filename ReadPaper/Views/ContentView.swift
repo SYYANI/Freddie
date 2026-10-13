@@ -41,6 +41,8 @@ struct ContentView: View {
     @State private var isPDFDropTargeted = false
     @State private var isImportingDroppedPDFs = false
     @State private var droppedPDFImportErrorMessage: String?
+    @State private var libraryFilter = PaperLibraryFilter()
+    @State private var htmlTranslatedPaperIDs: Set<UUID> = []
 
     private var settings: AppSettings? {
         settingsRows.first
@@ -52,6 +54,26 @@ struct ContentView: View {
 
     private var libraryGrouping: PaperLibraryGrouping {
         PaperLibraryGrouping(papers: papers, folders: folders, memberships: folderMemberships)
+    }
+
+    /// The grouping the sidebar shows. The open paper stays listed even when it
+    /// stops matching, so unfavoriting it does not pull the row out from under
+    /// the pointer.
+    private var visibleLibraryGrouping: PaperLibraryGrouping {
+        let grouping = libraryGrouping
+        guard libraryFilter.isActive else { return grouping }
+
+        let facts = PaperLibraryFilter.Facts(
+            translatedPaperIDs: PaperLibraryFilter.translatedPaperIDs(
+                attachments: attachments,
+                htmlTranslatedPaperIDs: htmlTranslatedPaperIDs
+            ),
+            notedPaperIDs: Set(notes.map(\.paperID))
+        )
+        let pinnedPaperID = selectedPaper?.id
+        return grouping.filtered { paper in
+            paper.id == pinnedPaperID || libraryFilter.matches(paper, facts: facts)
+        }
     }
 
     private var selectedPaper: Paper? {
@@ -135,12 +157,20 @@ struct ContentView: View {
     private var sidebarColumn: some View {
         LibrarySidebarView(
             papers: papers,
-            grouping: libraryGrouping,
+            grouping: visibleLibraryGrouping,
+            filter: $libraryFilter,
             selectedPaper: selectedPaper,
             selectedPaperID: $selectedPaperID,
             isAddingPaper: $isAddingPaper,
             onDeletePaper: requestDeletion(of:)
         )
+        .task(id: HTMLTranslationLookupKey(
+            isNeeded: libraryFilter.criteria.contains(.translated),
+            selectedPaperID: selectedPaperID,
+            paperCount: papers.count
+        )) {
+            refreshHTMLTranslatedPaperIDs()
+        }
         .navigationSplitViewColumnWidth(min: 240, ideal: 260, max: 340)
         .overlay(alignment: .trailing) {
             if #unavailable(macOS 26.0) {
@@ -378,9 +408,22 @@ struct ContentView: View {
         }
     }
 
-    /// Follows the sidebar's display order, which groups papers by folder.
+    /// Only needed while the Translated filter is on. Re-read when it turns on and
+    /// whenever the selection changes, which covers translating a paper and then
+    /// moving on to another one.
+    private func refreshHTMLTranslatedPaperIDs() {
+        guard libraryFilter.criteria.contains(.translated) else { return }
+        do {
+            htmlTranslatedPaperIDs = try PaperLibraryFilter.htmlTranslatedPaperIDs(modelContext: modelContext)
+        } catch {
+            assertionFailure("Failed to load HTML translation state: \(error.localizedDescription)")
+        }
+    }
+
+    /// Follows the sidebar's display order, which groups papers by folder and
+    /// leaves out papers hidden by the filter.
     private func nextSelectionAfterDeletingPaper(withID paperID: UUID) -> UUID? {
-        let orderedPaperIDs = libraryGrouping.orderedPaperIDs
+        let orderedPaperIDs = visibleLibraryGrouping.orderedPaperIDs
         let remainingPaperIDs = orderedPaperIDs.filter { $0 != paperID }
         guard !remainingPaperIDs.isEmpty else { return nil }
 
@@ -673,4 +716,10 @@ private struct ArxivLinkImportStatusSheet: View {
         }
         .padding(24)
     }
+}
+
+private struct HTMLTranslationLookupKey: Equatable {
+    var isNeeded: Bool
+    var selectedPaperID: UUID?
+    var paperCount: Int
 }

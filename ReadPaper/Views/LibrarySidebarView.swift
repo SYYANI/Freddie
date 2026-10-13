@@ -9,6 +9,7 @@ struct LibrarySidebarView: View {
     @AppStorage(LibraryFolderExpansion.userDefaultsKey) private var collapsedFolderIDsStorage = ""
     var papers: [Paper]
     var grouping: PaperLibraryGrouping
+    @Binding var filter: PaperLibraryFilter
     var selectedPaper: Paper?
     @Binding var selectedPaperID: UUID?
     @Binding var isAddingPaper: Bool
@@ -19,6 +20,7 @@ struct LibrarySidebarView: View {
     @State private var folderPendingDeletion: PaperFolder?
     @State private var folderErrorMessage: String?
     @State private var dropTarget: FolderDropTarget?
+    @State private var favoriteErrorMessage: String?
 
     private var isPaperAppearance: Bool {
         displayAppearance == .paper
@@ -36,25 +38,31 @@ struct LibrarySidebarView: View {
                 if papers.isEmpty {
                     emptyLibraryState
                 } else {
-                    List(selection: $selectedPaperID) {
-                        if grouping.hasFolders {
-                            Section {
-                                ForEach(grouping.folderSections) { section in
-                                    folderGroup(section)
+                    if filter.isActive, visiblePaperCount == 0 {
+                        noMatchingPapersState
+                    } else {
+                        List(selection: $selectedPaperID) {
+                            if grouping.hasFolders {
+                                ForEach(displayedFolderSections) { section in
+                                    folderSection(section)
                                 }
-                            }
 
-                            Section {
+                                if !filter.isActive || !grouping.unfiledPapers.isEmpty {
+                                    Section {
+                                        paperRows(grouping.unfiledPapers)
+                                    } header: {
+                                        unfiledHeader
+                                    }
+                                }
+                            } else {
                                 paperRows(grouping.unfiledPapers)
-                            } header: {
-                                unfiledHeader
                             }
-                        } else {
-                            paperRows(papers)
                         }
+                        .listStyle(.sidebar)
+                        .modifier(SidebarListBackgroundModifier())
                     }
-                    .listStyle(.sidebar)
-                    .modifier(SidebarListBackgroundModifier())
+
+                    filterBar
                 }
             }
         }
@@ -112,6 +120,18 @@ struct LibrarySidebarView: View {
                 bundle: bundle,
                 folder.name
             ))
+        }
+        .alert(String(localized: "Unable to Update Paper", bundle: bundle), isPresented: Binding(
+            get: { favoriteErrorMessage != nil },
+            set: { isPresented in
+                if !isPresented {
+                    favoriteErrorMessage = nil
+                }
+            }
+        )) {
+            Button(String(localized: "OK", bundle: bundle), role: .cancel) {}
+        } message: {
+            Text(favoriteErrorMessage ?? "")
         }
         .alert(String(localized: "Unable to Update Folder", bundle: bundle), isPresented: Binding(
             get: { folderErrorMessage != nil },
@@ -178,6 +198,18 @@ struct LibrarySidebarView: View {
     private func paperContextMenu(for paper: Paper) -> some View {
         let currentFolderID = grouping.folderID(containing: paper.id)
 
+        Button {
+            toggleFavorite(paper)
+        } label: {
+            if paper.isFavorite {
+                Label(String(localized: "Remove from Favorites", bundle: bundle), systemImage: "star.slash")
+            } else {
+                Label(String(localized: "Add to Favorites", bundle: bundle), systemImage: "star")
+            }
+        }
+
+        Divider()
+
         Menu {
             ForEach(grouping.folderSections) { section in
                 Toggle(section.folder.name, isOn: Binding(
@@ -218,8 +250,10 @@ struct LibrarySidebarView: View {
         }
     }
 
-    private func folderGroup(_ section: PaperLibraryGrouping.FolderSection) -> some View {
-        DisclosureGroup(isExpanded: expansionBinding(for: section.folder.id)) {
+    // Folders are collapsible sections rather than disclosure rows so their
+    // names line up with the Unfiled header and their papers with unfiled papers.
+    private func folderSection(_ section: PaperLibraryGrouping.FolderSection) -> some View {
+        Section(isExpanded: expansionBinding(for: section.folder.id)) {
             if section.papers.isEmpty {
                 Text("No Papers", bundle: bundle)
                     .font(.caption)
@@ -227,10 +261,8 @@ struct LibrarySidebarView: View {
             } else {
                 paperRows(section.papers)
             }
-        } label: {
-            Label(section.folder.name, systemImage: "folder")
-                .lineLimit(1)
-                .badge(section.papers.count)
+        } header: {
+            sectionHeader(Text(verbatim: section.folder.name), count: section.papers.count)
                 .dropTargetHighlight(isActive: dropTarget == .folder(section.folder.id))
                 .dropDestination(for: PaperDragItem.self) { items, _ in
                     movePapers(items, to: section.folder.id)
@@ -258,9 +290,144 @@ struct LibrarySidebarView: View {
         }
     }
 
+    // The count sits next to the title because the section's collapse chevron
+    // takes the trailing edge on hover.
+    private func sectionHeader(_ title: Text, count: Int) -> some View {
+        HStack(spacing: 6) {
+            title
+                .lineLimit(1)
+                .truncationMode(.tail)
+            Text(count, format: .number)
+                .monospacedDigit()
+                .foregroundStyle(.tertiary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// While filtering, folders without a visible paper are hidden instead of
+    /// showing "No Papers".
+    private var displayedFolderSections: [PaperLibraryGrouping.FolderSection] {
+        guard filter.isActive else { return grouping.folderSections }
+        return grouping.folderSections.filter { !$0.papers.isEmpty }
+    }
+
+    private var visiblePaperCount: Int {
+        grouping.orderedPaperIDs.count
+    }
+
+    private var filterBar: some View {
+        HStack(spacing: 6) {
+            Menu {
+                ForEach(PaperLibraryFilter.Criterion.allCases) { criterion in
+                    Toggle(isOn: criterionBinding(criterion)) {
+                        Label(criterion.title(bundle: bundle), systemImage: criterion.systemImage)
+                    }
+                }
+
+                if filter.isActive {
+                    Divider()
+
+                    Button(String(localized: "Clear Filter", bundle: bundle)) {
+                        filter = PaperLibraryFilter()
+                    }
+                }
+            } label: {
+                Image(systemName: filter.isActive
+                    ? "line.3.horizontal.decrease.circle.fill"
+                    : "line.3.horizontal.decrease.circle")
+                    .font(.system(size: 15))
+                    .foregroundStyle(filter.isActive ? Color.accentColor : Color.secondary)
+                    .frame(width: 24, height: 22)
+                    .contentShape(Rectangle())
+            }
+            .menuStyle(.button)
+            .buttonStyle(.plain)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .help(String(localized: "Filter Library", bundle: bundle))
+            .accessibilityLabel(String(localized: "Filter Library", bundle: bundle))
+
+            if filter.isActive {
+                Text(AppLocalization.format(
+                    "%1$lld of %2$lld",
+                    bundle: bundle,
+                    visiblePaperCount,
+                    papers.count
+                ))
+                .font(.caption)
+                .monospacedDigit()
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+
+                Spacer(minLength: 0)
+
+                Button {
+                    filter = PaperLibraryFilter()
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.secondary)
+                        .frame(width: 22, height: 22)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help(String(localized: "Clear Filter", bundle: bundle))
+                .accessibilityLabel(String(localized: "Clear Filter", bundle: bundle))
+            } else {
+                Spacer(minLength: 0)
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .overlay(alignment: .top) {
+            Divider()
+        }
+    }
+
+    private var noMatchingPapersState: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "line.3.horizontal.decrease.circle")
+                .font(.system(size: 28, weight: .medium))
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(.secondary)
+
+            Text("No Matching Papers", bundle: bundle)
+                .font(.headline)
+
+            Button(String(localized: "Clear Filter", bundle: bundle)) {
+                filter = PaperLibraryFilter()
+            }
+            .controlSize(.small)
+        }
+        .padding(24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func criterionBinding(_ criterion: PaperLibraryFilter.Criterion) -> Binding<Bool> {
+        Binding(
+            get: { filter.criteria.contains(criterion) },
+            set: { isOn in
+                if isOn {
+                    filter.criteria.insert(criterion)
+                } else {
+                    filter.criteria.remove(criterion)
+                }
+            }
+        )
+    }
+
+    /// Leaves `modifiedAt` alone so favoriting does not reorder the library.
+    private func toggleFavorite(_ paper: Paper) {
+        paper.isFavorite.toggle()
+        do {
+            try modelContext.save()
+        } catch {
+            modelContext.rollback()
+            favoriteErrorMessage = error.localizedDescription
+        }
+    }
+
     private var unfiledHeader: some View {
-        Text("Unfiled", bundle: bundle)
-            .frame(maxWidth: .infinity, alignment: .leading)
+        sectionHeader(Text("Unfiled", bundle: bundle), count: grouping.unfiledPapers.count)
             .dropTargetHighlight(isActive: dropTarget == .unfiled)
             .dropDestination(for: PaperDragItem.self) { items, _ in
                 movePapers(items, to: nil)
@@ -489,6 +656,30 @@ extension FocusedValues {
     }
 }
 
+private extension PaperLibraryFilter.Criterion {
+    func title(bundle: Bundle) -> String {
+        switch self {
+        case .favorites:
+            return String(localized: "Favorites", bundle: bundle)
+        case .translated:
+            return String(localized: "Has Translation", bundle: bundle)
+        case .notes:
+            return String(localized: "Has Notes", bundle: bundle)
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .favorites:
+            return "star"
+        case .translated:
+            return "character.book.closed"
+        case .notes:
+            return "note.text"
+        }
+    }
+}
+
 private enum FolderDropTarget: Equatable {
     case folder(UUID)
     case unfiled
@@ -558,6 +749,7 @@ private func emptyStateActionLabel(_ title: String, systemImage: String) -> some
 private struct PaperRowView: View {
     var paper: Paper
     @Environment(\.pdfDisplayAppearance) private var displayAppearance
+    @Environment(\.localizationBundle) private var bundle
 
     private var titleDesign: Font.Design {
         displayAppearance == .paper
@@ -570,10 +762,18 @@ private struct PaperRowView: View {
             Text(paper.title)
                 .font(.system(.headline, design: titleDesign).weight(.semibold))
                 .lineLimit(2)
-            Text(paper.displayAuthors)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
+            HStack(spacing: 4) {
+                if paper.isFavorite {
+                    Image(systemName: "star.fill")
+                        .font(.caption2)
+                        .foregroundStyle(.yellow)
+                        .accessibilityLabel(Text("Favorite", bundle: bundle))
+                }
+                Text(paper.displayAuthors)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
             if let identifierText = paper.sidebarIdentifierText {
                 Text(identifierText)
                     .font(.caption2)

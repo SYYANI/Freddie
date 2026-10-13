@@ -27,7 +27,6 @@
     },
     "Freddie Library Paper" : {
       "comment" : "Description of the exported type used when dragging a paper onto a library folder",
-      "extractionState" : "extracted_with_value",
       "localizations" : {
         "en" : {
           "stringUnit" : {

@@ -51,6 +51,28 @@ struct PaperLibraryGrouping {
         self.folderIDByPaperID = folderIDByPaperID
     }
 
+    private init(
+        folderSections: [FolderSection],
+        unfiledPapers: [Paper],
+        folderIDByPaperID: [UUID: UUID]
+    ) {
+        self.folderSections = folderSections
+        self.unfiledPapers = unfiledPapers
+        self.folderIDByPaperID = folderIDByPaperID
+    }
+
+    /// Keeps every folder, so folder menus still list them all, but only the
+    /// papers that pass `isVisible`, in the same order.
+    func filtered(_ isVisible: (Paper) -> Bool) -> PaperLibraryGrouping {
+        PaperLibraryGrouping(
+            folderSections: folderSections.map { section in
+                FolderSection(folder: section.folder, papers: section.papers.filter(isVisible))
+            },
+            unfiledPapers: unfiledPapers.filter(isVisible),
+            folderIDByPaperID: folderIDByPaperID
+        )
+    }
+
     var hasFolders: Bool {
         !folderSections.isEmpty
     }
