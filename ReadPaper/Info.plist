@@ -26,5 +26,18 @@
 	<string>Copyright © 2026 SYYANI.</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<key>UTExportedTypeDeclarations</key>
+	<array>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>Freddie Library Paper</string>
+			<key>UTTypeIdentifier</key>
+			<string>com.yiyan.ReadPaper.paper-reference</string>
+		</dict>
+	</array>
 </dict>
 </plist>

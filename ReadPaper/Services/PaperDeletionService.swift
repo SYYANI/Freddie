@@ -18,6 +18,7 @@ struct PaperDeletionService {
             try deleteReadingStates(for: paperID, in: modelContext)
             try deleteTranslationSegments(for: paperID, in: modelContext)
             try deleteTranslationJobs(for: paperID, in: modelContext)
+            try deleteFolderMemberships(for: paperID, in: modelContext)
 
             modelContext.delete(paper)
             try fileStore.removeDirectory(for: paperID)
@@ -59,6 +60,13 @@ struct PaperDeletionService {
     private func deleteTranslationJobs(for paperID: UUID, in modelContext: ModelContext) throws {
         let descriptor = FetchDescriptor<TranslationJob>(
             predicate: #Predicate<TranslationJob> { $0.paperID == paperID }
+        )
+        try modelContext.fetch(descriptor).forEach(modelContext.delete)
+    }
+
+    private func deleteFolderMemberships(for paperID: UUID, in modelContext: ModelContext) throws {
+        let descriptor = FetchDescriptor<PaperFolderMembership>(
+            predicate: #Predicate<PaperFolderMembership> { $0.paperID == paperID }
         )
         try modelContext.fetch(descriptor).forEach(modelContext.delete)
     }

@@ -7343,6 +7343,156 @@
           }
         }
       }
+    },
+    "New Folder" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "新建文件夹"
+          }
+        }
+      }
+    },
+    "New Folder…" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "新建文件夹…"
+          }
+        }
+      }
+    },
+    "Move to Folder" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "移到文件夹"
+          }
+        }
+      }
+    },
+    "Remove from Folder" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "移出文件夹"
+          }
+        }
+      }
+    },
+    "Rename Folder…" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重命名文件夹…"
+          }
+        }
+      }
+    },
+    "Rename Folder" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重命名文件夹"
+          }
+        }
+      }
+    },
+    "Delete Folder…" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "删除文件夹…"
+          }
+        }
+      }
+    },
+    "Delete Folder?" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "删除文件夹？"
+          }
+        }
+      }
+    },
+    "Papers in “%@” will move to Unfiled. No papers are deleted." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“%1$@”中的论文将移至“未归档”，不会删除任何论文。"
+          }
+        }
+      }
+    },
+    "Unfiled" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未归档"
+          }
+        }
+      }
+    },
+    "No Papers" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "暂无论文"
+          }
+        }
+      }
+    },
+    "Folder Name" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "文件夹名称"
+          }
+        }
+      }
+    },
+    "Create" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "创建"
+          }
+        }
+      }
+    },
+    "Rename" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重命名"
+          }
+        }
+      }
+    },
+    "Unable to Update Folder" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法更新文件夹"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

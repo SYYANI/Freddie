@@ -16,6 +16,8 @@ struct ContentView: View {
     @Query(sort: \Paper.modifiedAt, order: .reverse) private var papers: [Paper]
     @Query(sort: \PaperAttachment.createdAt) private var attachments: [PaperAttachment]
     @Query(sort: \Note.modifiedAt, order: .reverse) private var notes: [Note]
+    @Query private var folders: [PaperFolder]
+    @Query private var folderMemberships: [PaperFolderMembership]
     @Query private var settingsRows: [AppSettings]
 
     @State private var selectedPaperID: UUID?
@@ -46,6 +48,10 @@ struct ContentView: View {
 
     private var isPaperAppearance: Bool {
         displayAppearance == .paper
+    }
+
+    private var libraryGrouping: PaperLibraryGrouping {
+        PaperLibraryGrouping(papers: papers, folders: folders, memberships: folderMemberships)
     }
 
     private var selectedPaper: Paper? {
@@ -129,10 +135,10 @@ struct ContentView: View {
     private var sidebarColumn: some View {
         LibrarySidebarView(
             papers: papers,
+            grouping: libraryGrouping,
             selectedPaper: selectedPaper,
             selectedPaperID: $selectedPaperID,
             isAddingPaper: $isAddingPaper,
-            onDeleteOffsets: confirmDeletion(at:),
             onDeletePaper: requestDeletion(of:)
         )
         .navigationSplitViewColumnWidth(min: 240, ideal: 260, max: 340)
@@ -355,11 +361,6 @@ struct ContentView: View {
         }
     }
 
-    private func confirmDeletion(at offsets: IndexSet) {
-        guard let offset = offsets.first, papers.indices.contains(offset) else { return }
-        requestDeletion(of: papers[offset])
-    }
-
     private func requestDeletion(of paper: Paper) {
         paperPendingDeletion = paper
     }
@@ -377,16 +378,18 @@ struct ContentView: View {
         }
     }
 
+    /// Follows the sidebar's display order, which groups papers by folder.
     private func nextSelectionAfterDeletingPaper(withID paperID: UUID) -> UUID? {
-        let remainingPapers = papers.filter { $0.id != paperID }
-        guard !remainingPapers.isEmpty else { return nil }
+        let orderedPaperIDs = libraryGrouping.orderedPaperIDs
+        let remainingPaperIDs = orderedPaperIDs.filter { $0 != paperID }
+        guard !remainingPaperIDs.isEmpty else { return nil }
 
-        guard let deletedIndex = papers.firstIndex(where: { $0.id == paperID }) else {
-            return remainingPapers.first?.id
+        guard let deletedIndex = orderedPaperIDs.firstIndex(of: paperID) else {
+            return remainingPaperIDs.first
         }
 
-        let nextIndex = min(deletedIndex, remainingPapers.count - 1)
-        return remainingPapers[nextIndex].id
+        let nextIndex = min(deletedIndex, remainingPaperIDs.count - 1)
+        return remainingPaperIDs[nextIndex]
     }
 
     private func restoreSelection(preferredPaperID: UUID?) {

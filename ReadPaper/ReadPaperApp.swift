@@ -44,6 +44,7 @@ struct ReadPaperApp: App {
         .modelContainer(sharedModelContainer)
         .commands {
             AboutFreddieCommands()
+            LibraryFolderCommands()
         }
 
         Window("About Freddie", id: AboutFreddieCommands.windowID) {
@@ -98,6 +99,20 @@ private struct AboutFreddieCommands: Commands {
             Button(String(localized: "About Freddie", bundle: LanguageManager.shared.bundle)) {
                 openWindow(id: Self.windowID)
             }
+        }
+    }
+}
+
+private struct LibraryFolderCommands: Commands {
+    @FocusedValue(\.newLibraryFolderAction) private var newFolderAction
+
+    var body: some Commands {
+        CommandGroup(after: .newItem) {
+            Button(String(localized: "New Folder…", bundle: LanguageManager.shared.bundle)) {
+                newFolderAction?.perform()
+            }
+            .keyboardShortcut("n", modifiers: [.command, .shift])
+            .disabled(newFolderAction == nil)
         }
     }
 }

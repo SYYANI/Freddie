@@ -73,6 +73,15 @@ final class PDFDropTargetTests: XCTestCase {
         XCTAssertEqual(targetedChanges, [])
     }
 
+    /// Dragging a paper onto a sidebar folder must reach the list, not the window-wide catcher.
+    func testCatcherDoesNotRegisterForLibraryPaperDrags() {
+        let catcher = PDFFileDropCatcherView(frame: .zero)
+        let paperType = NSPasteboard.PasteboardType(UTType.readPaperPaperReference.identifier)
+
+        XCTAssertFalse(catcher.registeredDraggedTypes.contains(paperType))
+        XCTAssertFalse(UTType.readPaperPaperReference.conforms(to: .fileURL))
+    }
+
     func testDisabledCatcherRejectsPDFDragsWhileAnImportRuns() throws {
         let fixture = try DropFixture()
         defer { fixture.tearDown() }

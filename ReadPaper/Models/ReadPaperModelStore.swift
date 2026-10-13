@@ -6,6 +6,8 @@ enum ReadPaperModelStore {
     static let schema = Schema([
         Paper.self,
         PaperAttachment.self,
+        PaperFolder.self,
+        PaperFolderMembership.self,
         ReadingState.self,
         Note.self,
         TranslationSegment.self,
