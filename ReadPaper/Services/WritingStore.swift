@@ -12,6 +12,9 @@ struct WritingMetadata: Codable, Equatable, Identifiable, Sendable {
     var modifiedAt: Date
     var citedPaperIDs: [UUID]
     var wordCount: Int
+    /// The citations with their passages, for marking them in the reader. Nil in metadata
+    /// written by a version without it, which is then rebuilt from the Markdown.
+    var citations: [WritingCitationRecord]?
 
     init(
         id: UUID,
@@ -20,6 +23,7 @@ struct WritingMetadata: Codable, Equatable, Identifiable, Sendable {
         modifiedAt: Date,
         citedPaperIDs: [UUID] = [],
         wordCount: Int = 0,
+        citations: [WritingCitationRecord]? = [],
         version: Int = WritingMetadata.currentVersion
     ) {
         self.version = version
@@ -29,6 +33,7 @@ struct WritingMetadata: Codable, Equatable, Identifiable, Sendable {
         self.modifiedAt = modifiedAt
         self.citedPaperIDs = citedPaperIDs
         self.wordCount = wordCount
+        self.citations = citations
     }
 
     init(id: UUID, markdown: String, createdAt: Date, modifiedAt: Date) {
@@ -38,7 +43,8 @@ struct WritingMetadata: Codable, Equatable, Identifiable, Sendable {
             createdAt: createdAt,
             modifiedAt: modifiedAt,
             citedPaperIDs: PaperCitation.citedPaperIDs(in: markdown),
-            wordCount: WritingStatistics.wordCount(in: markdown)
+            wordCount: WritingStatistics.wordCount(in: markdown),
+            citations: WritingCitationScanner.records(in: markdown)
         )
     }
 
@@ -51,6 +57,13 @@ struct WritingMetadata: Codable, Equatable, Identifiable, Sendable {
         modifiedAt = try container.decode(Date.self, forKey: .modifiedAt)
         citedPaperIDs = try container.decodeIfPresent([UUID].self, forKey: .citedPaperIDs) ?? []
         wordCount = try container.decodeIfPresent(Int.self, forKey: .wordCount) ?? 0
+        citations = try? container.decodeIfPresent([WritingCitationRecord].self, forKey: .citations)
+    }
+
+    /// Whether the cached citations can be used: a version without them may have written
+    /// this metadata after the last citation changed.
+    var hasCitationCache: Bool {
+        citations != nil || citedPaperIDs.isEmpty
     }
 }
 
@@ -142,6 +155,46 @@ struct WritingStore {
         return metadata
     }
 
+    /// Copies an image into the writing's `assets` folder and returns its path relative to
+    /// `writing.md`, ready for a Markdown image.
+    func importImage(_ source: WritingImageSource, into id: UUID, now: Date = Date()) throws -> String {
+        let assets = try directory(for: id).appendingPathComponent(WritingImagePath.assetsDirectoryName, isDirectory: true)
+        try fileStore.ensureDirectory(assets)
+
+        let destination: URL
+        switch source {
+        case let .file(url):
+            let fileExtension = url.pathExtension.lowercased()
+            destination = uniqueAssetURL(
+                baseName: WritingImagePath.assetBaseName(from: url.deletingPathExtension().lastPathComponent),
+                fileExtension: fileExtension.isEmpty ? "png" : fileExtension,
+                in: assets
+            )
+            try fileManager.copyItem(at: url, to: destination)
+        case let .data(data, fileExtension):
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            formatter.dateFormat = "yyyyMMdd-HHmmss"
+            destination = uniqueAssetURL(
+                baseName: "image-\(formatter.string(from: now))",
+                fileExtension: fileExtension,
+                in: assets
+            )
+            try data.write(to: destination, options: .atomic)
+        }
+        return "\(WritingImagePath.assetsDirectoryName)/\(destination.lastPathComponent)"
+    }
+
+    private func uniqueAssetURL(baseName: String, fileExtension: String, in directory: URL) -> URL {
+        var candidate = directory.appendingPathComponent(baseName).appendingPathExtension(fileExtension)
+        var number = 2
+        while fileManager.fileExists(atPath: candidate.path) {
+            candidate = directory.appendingPathComponent("\(baseName)-\(number)").appendingPathExtension(fileExtension)
+            number += 1
+        }
+        return candidate
+    }
+
     func delete(_ id: UUID) throws {
         let directory = try directory(for: id)
         guard fileManager.fileExists(atPath: directory.path) else { return }
@@ -160,6 +213,7 @@ struct WritingStore {
         if let stored,
            stored.id == id,
            stored.version <= WritingMetadata.currentVersion,
+           stored.hasCitationCache,
            markdownModifiedAt.timeIntervalSince(stored.modifiedAt) <= Self.metadataStalenessTolerance {
             return stored
         }

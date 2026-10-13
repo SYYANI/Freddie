@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// The writing editor: Markdown that is shown formatted as you type. The lines holding
 /// the selection show their Markdown syntax; every other line hides it.
@@ -8,7 +9,11 @@ struct WritingEditorView: NSViewRepresentable {
     var typography: WritingTypography
     /// Changing it moves keyboard focus into the editor.
     var focusRequest: Int
+    /// Keeps lines readable in a wide window by centering a column of at most this width.
+    var maximumTextWidth: CGFloat? = nil
     var onOpenLink: (WritingLinkActivation) -> Void
+    /// Reports images that could not be added.
+    var onImageError: (Error) -> Void = { _ in }
 
     func makeCoordinator() -> Coordinator {
         Coordinator(document: document)
@@ -52,6 +57,9 @@ struct WritingEditorView: NSViewRepresentable {
         }
         textView.linkTextAttributes = [:]
         textView.typingAttributes = document.textStorage.typingAttributes(at: document.selectedRange.location)
+        textView.maximumTextWidth = maximumTextWidth
+        // Registers the image types added by `acceptableDragTypes`.
+        textView.updateDragTypeRegistration()
 
         let scrollView = NSScrollView()
         scrollView.drawsBackground = false
@@ -63,6 +71,7 @@ struct WritingEditorView: NSViewRepresentable {
 
         context.coordinator.attach(textView: textView, layoutManager: layoutManager)
         context.coordinator.onOpenLink = onOpenLink
+        context.coordinator.onImageError = onImageError
         context.coordinator.lastFocusRequest = focusRequest
         return scrollView
     }
@@ -70,6 +79,10 @@ struct WritingEditorView: NSViewRepresentable {
     func updateNSView(_ nsView: NSScrollView, context: Context) {
         let coordinator = context.coordinator
         coordinator.onOpenLink = onOpenLink
+        coordinator.onImageError = onImageError
+        if let textView = coordinator.textView, textView.maximumTextWidth != maximumTextWidth {
+            textView.maximumTextWidth = maximumTextWidth
+        }
         if let layoutManager = coordinator.layoutManager, layoutManager.typography != typography {
             layoutManager.typography = typography
             coordinator.textView?.needsDisplay = true
@@ -90,6 +103,7 @@ struct WritingEditorView: NSViewRepresentable {
         weak var textView: WritingTextView?
         var layoutManager: WritingLayoutManager?
         var onOpenLink: (WritingLinkActivation) -> Void = { _ in }
+        var onImageError: (Error) -> Void = { _ in }
         var lastFocusRequest = 0
         /// Tracked from the text view: the window's first responder is not updated yet
         /// while `becomeFirstResponder` runs.
@@ -113,6 +127,9 @@ struct WritingEditorView: NSViewRepresentable {
                 self?.isFocused = isFocused
                 self?.updateRevealedRange()
             }
+            textView.onInsertImages = { [weak self] sources, location in
+                self?.insertImages(sources, at: location)
+            }
 
             let length = (document.textStorage.string as NSString).length
             let selection = NSRange(
@@ -120,8 +137,25 @@ struct WritingEditorView: NSViewRepresentable {
                 length: min(document.selectedRange.length, length - min(document.selectedRange.location, length))
             )
             textView.setSelectedRange(selection)
+            let indicatorRange = document.pendingIndicatorRange
+            document.pendingIndicatorRange = nil
             Task { @MainActor [weak textView] in
                 textView?.scrollRangeToVisible(selection)
+                guard let indicatorRange else { return }
+                // After the editor is on screen and laid out, or the indicator has no place to go.
+                try? await Task.sleep(for: .milliseconds(150))
+                guard let textView, textView.window != nil,
+                      NSMaxRange(indicatorRange) <= (textView.string as NSString).length else { return }
+                textView.scrollRangeToVisible(indicatorRange)
+                textView.showFindIndicator(for: indicatorRange)
+            }
+        }
+
+        private func insertImages(_ sources: [WritingImageSource], at location: Int) {
+            do {
+                try document.insertImages(sources, at: location)
+            } catch {
+                onImageError(error)
             }
         }
 
@@ -211,8 +245,119 @@ struct WritingLinkActivation: Equatable {
 
 /// Editing behaviors of the writing editor on top of `NSTextView`.
 final class WritingTextView: NSTextView {
+    static let minimumHorizontalInset: CGFloat = 12
+
     var onOpenLink: ((WritingLinkActivation) -> Void)?
     var onFocusChange: ((Bool) -> Void)?
+    /// Images pasted or dropped, with the character index to add them at.
+    var onInsertImages: (([WritingImageSource], Int) -> Void)?
+    /// Centers a column of at most this width.
+    var maximumTextWidth: CGFloat? {
+        didSet {
+            updateHorizontalInset()
+        }
+    }
+
+    private var evaluatedDrag: (sequenceNumber: Int, sources: [WritingImageSource]?)?
+
+    override func setFrameSize(_ newSize: NSSize) {
+        super.setFrameSize(newSize)
+        updateHorizontalInset()
+    }
+
+    private func updateHorizontalInset() {
+        var inset = Self.minimumHorizontalInset
+        if let maximumTextWidth {
+            inset = max(inset, ((frame.width - maximumTextWidth) / 2).rounded(.down))
+        }
+        guard textContainerInset.width != inset else { return }
+        textContainerInset = NSSize(width: inset, height: textContainerInset.height)
+        if let textContainer, textContainer.widthTracksTextView {
+            textContainer.size = NSSize(width: max(0, frame.width - 2 * inset), height: textContainer.size.height)
+        }
+    }
+
+    // MARK: - Images
+
+    /// Image files, or image data such as a screenshot. Pasted image data is only used when
+    /// there is no text to paste instead.
+    static func imageSources(on pasteboard: NSPasteboard, allowsDataWithText: Bool) -> [WritingImageSource]? {
+        let urls = pasteboard.readObjects(
+            forClasses: [NSURL.self],
+            options: [.urlReadingFileURLsOnly: true]
+        ) as? [URL] ?? []
+        if urls.isEmpty == false {
+            let images = urls.filter { url in
+                UTType(filenameExtension: url.pathExtension)?.conforms(to: .image) == true
+            }
+            return images.isEmpty ? nil : images.map { .file($0) }
+        }
+        guard allowsDataWithText || pasteboard.availableType(from: [.string]) == nil else { return nil }
+        if let png = pasteboard.data(forType: .png) {
+            return [.data(png, fileExtension: "png")]
+        }
+        if let tiff = pasteboard.data(forType: .tiff),
+           let image = NSBitmapImageRep(data: tiff),
+           let png = image.representation(using: .png, properties: [:]) {
+            return [.data(png, fileExtension: "png")]
+        }
+        return nil
+    }
+
+    override func paste(_ sender: Any?) {
+        if let onInsertImages, let sources = Self.imageSources(on: .general, allowsDataWithText: false) {
+            onInsertImages(sources, NSMaxRange(selectedRange()))
+            return
+        }
+        super.paste(sender)
+    }
+
+    override var acceptableDragTypes: [NSPasteboard.PasteboardType] {
+        var types = super.acceptableDragTypes
+        for type in [NSPasteboard.PasteboardType.fileURL, .png, .tiff] where types.contains(type) == false {
+            types.append(type)
+        }
+        return types
+    }
+
+    override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+        let operation = super.draggingEntered(sender)
+        return draggedImages(sender) != nil ? .copy : operation
+    }
+
+    override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation {
+        let operation = super.draggingUpdated(sender)
+        return draggedImages(sender) != nil ? .copy : operation
+    }
+
+    override func prepareForDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        draggedImages(sender) != nil || super.prepareForDragOperation(sender)
+    }
+
+    override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        guard let onInsertImages, let sources = draggedImages(sender) else {
+            return super.performDragOperation(sender)
+        }
+        let location = characterIndexForInsertion(at: convert(sender.draggingLocation, from: nil))
+        onInsertImages(sources, location)
+        return true
+    }
+
+    override func draggingEnded(_ sender: NSDraggingInfo) {
+        evaluatedDrag = nil
+        super.draggingEnded(sender)
+    }
+
+    /// Reads the drag pasteboard once per drag session.
+    private func draggedImages(_ sender: NSDraggingInfo) -> [WritingImageSource]? {
+        guard onInsertImages != nil, isEditable else { return nil }
+        if let evaluatedDrag, evaluatedDrag.sequenceNumber == sender.draggingSequenceNumber {
+            return evaluatedDrag.sources
+        }
+        let sources = Self.imageSources(on: sender.draggingPasteboard, allowsDataWithText: true)
+        evaluatedDrag = (sender.draggingSequenceNumber, sources)
+        return sources
+    }
 
     override func becomeFirstResponder() -> Bool {
         let accepted = super.becomeFirstResponder()

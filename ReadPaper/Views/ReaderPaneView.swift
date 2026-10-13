@@ -92,6 +92,9 @@ struct ReaderPaneView: View {
         UUID?
     ) throws -> UUID
     var onArxivLinkActivated: (URL) -> Void
+    /// Opens the writing that cites a passage marked in the reader.
+    var onRevealCitation: (WritingCitationMark) -> Void = { _ in }
+    var writingLibrary: WritingLibrary = .shared
 
     @State private var pdfPageIndex = 0
     @State private var htmlScrollRatio = 0.0
@@ -1534,6 +1537,48 @@ struct ReaderPaneView: View {
         }
     }
 
+    /// Passages of this paper cited in writings.
+    private var citationMarks: [WritingCitationMark] {
+        guard let paper else { return [] }
+        return writingLibrary.citationMarks(for: paper.id)
+    }
+
+    /// A click on a cited passage opens the writing citing it, or offers a menu when
+    /// several writings cite it.
+    @MainActor
+    private func handleCitationMarksActivated(_ ids: [String]) {
+        let marks = citationMarks.filter { ids.contains($0.id) }
+        var seenWritings = Set<UUID>()
+        let writingOrder = writingLibrary.writings.map(\.id)
+        let choices = marks
+            .filter { seenWritings.insert($0.writingID).inserted }
+            .sorted { (writingOrder.firstIndex(of: $0.writingID) ?? .max) < (writingOrder.firstIndex(of: $1.writingID) ?? .max) }
+        guard let first = choices.first else { return }
+        guard choices.count > 1 else {
+            onRevealCitation(first)
+            return
+        }
+
+        let menu = NSMenu()
+        let heading = NSMenuItem(title: String(localized: "Cited In", bundle: bundle), action: nil, keyEquivalent: "")
+        heading.isEnabled = false
+        menu.addItem(heading)
+        let target = CitationMenuTarget(onSelect: onRevealCitation)
+        for mark in choices {
+            let title = writingLibrary.metadata(for: mark.writingID)?.title ?? ""
+            let item = NSMenuItem(
+                title: title.isEmpty ? String(localized: "Untitled Writing", bundle: bundle) : title,
+                action: #selector(CitationMenuTarget.select(_:)),
+                keyEquivalent: ""
+            )
+            item.target = target
+            item.representedObject = mark.id
+            target.marks[mark.id] = mark
+            menu.addItem(item)
+        }
+        menu.popUp(positioning: nil, at: NSEvent.mouseLocation, in: nil)
+    }
+
     private func showCopyToast(message: String) {
         copyToastDismissTask?.cancel()
         copyToastMessage = message
@@ -1656,6 +1701,8 @@ struct ReaderPaneView: View {
                                 segmentUpdate: htmlSegmentUpdate,
                                 noteNavigationRequest: noteNavigationRequest,
                                 selectionAssistantHistoryAnchors: selectionAssistantHistoryAnchors,
+                                citationMarks: citationMarks,
+                                onCitationMarksActivated: handleCitationMarksActivated,
                                 selectionHighlightResetToken: htmlSelectionHighlightResetToken,
                                 nativeSelectionClearToken: htmlNativeSelectionClearToken,
                                 onNoteSelectionChanged: handleNoteSelectionChange,
@@ -1703,6 +1750,8 @@ struct ReaderPaneView: View {
                                 reloadToken: pdfReloadToken,
                                 noteNavigationRequest: noteNavigationRequest,
                                 selectionAssistantHistoryAnchors: selectionAssistantHistoryAnchors,
+                                citationMarks: citationMarks,
+                                onCitationMarksActivated: handleCitationMarksActivated,
                                 annotationSession: pdfAnnotationSession,
                                 debugRegionSelectionEnabled: pdfDebugModeEnabled,
                                 onDebugRegionSelected: handlePDFDebugRegionSelection,
@@ -2682,7 +2731,9 @@ struct ReaderPaneView: View {
                             findRequest: findRequest,
                             onFindStatusChanged: handleFindStatusChange,
                             sidenoteAnchors: anchors,
-                            sidenoteLayout: pdfSidenoteLayout
+                            sidenoteLayout: pdfSidenoteLayout,
+                            citationMarks: citationMarks,
+                            onCitationMarksActivated: handleCitationMarksActivated
                         )
 
                         if anchors.isEmpty == false {
@@ -3129,6 +3180,21 @@ struct ReaderPaneView: View {
         DispatchQueue.main.async {
             suspendReadingStatePersistence = false
         }
+    }
+}
+
+/// Receives the choice from the menu of writings citing a passage.
+private final class CitationMenuTarget: NSObject {
+    var marks: [String: WritingCitationMark] = [:]
+    private let onSelect: (WritingCitationMark) -> Void
+
+    init(onSelect: @escaping (WritingCitationMark) -> Void) {
+        self.onSelect = onSelect
+    }
+
+    @MainActor @objc func select(_ sender: NSMenuItem) {
+        guard let id = sender.representedObject as? String, let mark = marks[id] else { return }
+        onSelect(mark)
     }
 }
 

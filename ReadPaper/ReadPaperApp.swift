@@ -26,7 +26,7 @@ struct ReadPaperApp: App {
             rawValue: displayAppearancePreference
         )
 
-        WindowGroup {
+        WindowGroup(id: MainWindowScene.id) {
             ContentView()
                 .environment(\.localizationBundle, bundle)
                 .environment(\.pdfDisplayAppearance, displayAppearance)
@@ -47,6 +47,18 @@ struct ReadPaperApp: App {
             LibraryFolderCommands()
             WritingCommands()
         }
+
+        Window(Text("Writing", bundle: bundle), id: WritingWindowScene.id) {
+            WritingWindowView()
+                .environment(\.localizationBundle, bundle)
+                .environment(\.pdfDisplayAppearance, displayAppearance)
+                .preferredColorScheme(.light)
+        }
+        .defaultSize(
+            width: WritingWindowScene.defaultWidth,
+            height: WritingWindowScene.defaultHeight
+        )
+        .windowResizability(.contentMinSize)
 
         Window("About Freddie", id: AboutFreddieCommands.windowID) {
             AboutView()
@@ -142,6 +154,26 @@ private struct WritingCommands: Commands {
 }
 
 private final class ReadPaperApplicationDelegate: NSObject, NSApplicationDelegate {
+    /// `readpaper://` links, e.g. citations clicked in a writing opened in another Markdown
+    /// app, are taken before SwiftUI sees them: SwiftUI would open a new window for each
+    /// link, and a second one when a link launches the app. `PaperLinkRouter` picks the window.
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        NSAppleEventManager.shared().setEventHandler(
+            self,
+            andSelector: #selector(handleGetURLEvent(_:withReplyEvent:)),
+            forEventClass: AEEventClass(kInternetEventClass),
+            andEventID: AEEventID(kAEGetURL)
+        )
+    }
+
+    @MainActor @objc private func handleGetURLEvent(_ event: NSAppleEventDescriptor, withReplyEvent reply: NSAppleEventDescriptor) {
+        guard let string = event.paramDescriptor(forKeyword: AEKeyword(keyDirectObject))?.stringValue,
+              let url = URL(string: string) else {
+            return
+        }
+        PaperLinkRouter.shared.open(url)
+    }
+
     func applicationWillTerminate(_ notification: Notification) {
         WritingDocumentCenter.shared.saveAll()
     }
@@ -161,6 +193,10 @@ private final class ReadPaperApplicationDelegate: NSObject, NSApplicationDelegat
 
         NSApplication.shared.applicationIconImage = icon
     }
+}
+
+enum MainWindowScene {
+    static let id = "main"
 }
 
 enum MainWindowMetrics {

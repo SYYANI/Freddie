@@ -6,7 +6,7 @@ import Foundation
 /// it is copied into another writing or edited outside the app. The destination is ASCII
 /// only: apps disagree on how to encode a URL that mixes raw Unicode with percent escapes,
 /// so the quote goes in the link title, which Markdown apps show as a tooltip.
-struct PaperCitation: Equatable, Sendable {
+struct PaperCitation: Hashable, Sendable {
     static let scheme = "readpaper"
     static let host = "paper"
     /// Characters of the quote kept in the link title, enough to find the passage on its page.

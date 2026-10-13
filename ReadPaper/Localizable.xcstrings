@@ -12,6 +12,16 @@
         }
       }
     },
+    "Long notes across papers. Quotes link back to the source." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "跨论文的长篇笔记，引文可跳回原处。"
+          }
+        }
+      }
+    },
     "“%@” and all of its local files, notes, reading state, and translation cache will be removed." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1495,6 +1505,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "选择阅读器中用于 HTML 翻译和 BabelDOC PDF 路由的已保存模型配置。"
+          }
+        }
+      }
+    },
+    "Cited In" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "引用于"
           }
         }
       }
@@ -3560,6 +3581,28 @@
         }
       }
     },
+    "Insert" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "插入"
+          }
+        }
+      }
+    },
+    "Insert Image…" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "插入图片…"
+          }
+        }
+      }
+    },
     "Insert Placeholder" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -4349,6 +4392,17 @@
         }
       }
     },
+    "Move Back Here" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "移回这里"
+          }
+        }
+      }
+    },
     "Move to Folder" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -4819,6 +4873,17 @@
         }
       }
     },
+    "Open in Separate Window" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在单独窗口中打开"
+          }
+        }
+      }
+    },
     "Open in the Writing Tab" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -4826,6 +4891,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "在“写作”页中打开"
+          }
+        }
+      }
+    },
+    "Open in the Writing Window" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在写作窗口中打开"
           }
         }
       }
@@ -6526,6 +6602,17 @@
         }
       }
     },
+    "Show Window" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "显示窗口"
+          }
+        }
+      }
+    },
     "Skip" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -7287,6 +7374,16 @@
         }
       }
     },
+    "The writing is open in its own window. Quotes from the reader go there." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "写作稿已在单独的窗口中打开，从阅读器引用的内容会插入那里。"
+          }
+        }
+      }
+    },
     "The writing’s file could not be read." : {
       "localizations" : {
         "zh-Hans" : {
@@ -7799,6 +7896,17 @@
         }
       }
     },
+    "Unable to add the image: %@" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法添加图片：%@"
+          }
+        }
+      }
+    },
     "Unable to Create Digest" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -7865,6 +7973,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "无法载入写作稿：%@"
+          }
+        }
+      }
+    },
+    "Unable to Open Citation" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法打开引用"
           }
         }
       }
@@ -8324,22 +8443,23 @@
         }
       }
     },
-    "Write long notes that draw on several papers. Select text in a paper and choose Quote in Writing to add the passage with a link back to it." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在这里写跨越多篇论文的长篇笔记。在论文中选中文字后选择“引用到写作稿”，即可插入这段原文和指回原处的链接。"
-          }
-        }
-      }
-    },
     "Writing" : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "写作"
+          }
+        }
+      }
+    },
+    "Writing in a Separate Window" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "写作稿在单独窗口中"
           }
         }
       }

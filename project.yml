@@ -19,6 +19,9 @@ packages:
     path: ../arxivLatex
   SwiftStreamingMarkdown:
     path: ../SwiftStreamingMarkdown
+  iosMath:
+    url: https://github.com/junyan72/iosMath
+    revision: ba9ab7729b151329c54fd895a7c1859981d9484c
 targets:
   BabelDocHelper:
     type: tool
@@ -53,6 +56,7 @@ targets:
       - package: LaTeXTransSwift
         product: LaTeXTransKit
       - package: SwiftStreamingMarkdown
+      - package: iosMath
       - target: BabelDocHelper
         link: false
         embed: false
@@ -105,8 +109,8 @@ targets:
         ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS: NO
         SWIFT_VERSION: 6.0
         CODE_SIGN_STYLE: Automatic
-        CURRENT_PROJECT_VERSION: 118
-        MARKETING_VERSION: 0.7.14
+        CURRENT_PROJECT_VERSION: 119
+        MARKETING_VERSION: 0.7.15
       configs:
         Debug:
           ENABLE_TESTABILITY: YES
@@ -160,8 +164,8 @@ targets:
         ENABLE_TESTABILITY: YES
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: 3VM5RUH8V5
-        CURRENT_PROJECT_VERSION: 118
-        MARKETING_VERSION: 0.7.14
+        CURRENT_PROJECT_VERSION: 119
+        MARKETING_VERSION: 0.7.15
         SUPPORTED_PLATFORMS: iphoneos iphonesimulator
         SUPPORTS_MACCATALYST: NO
         SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD: NO

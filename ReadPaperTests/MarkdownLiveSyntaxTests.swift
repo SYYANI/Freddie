@@ -74,8 +74,10 @@ final class MarkdownLiveSyntaxTests: XCTestCase {
         XCTAssertEqual(citation.spans, [.init(kind: .citation(destination: destination, title: nil), range: range(5, 12))])
 
         let image = parse("![alt text](figure.png)")
-        XCTAssertEqual(image.spans, [.init(kind: .link(destination: "figure.png", title: nil), range: range(2, 8))])
+        XCTAssertEqual(image.spans, [.init(kind: .image(destination: "figure.png", title: nil), range: range(0, 23))])
         XCTAssertTrue(image.markers.contains(range(0, 2)))
+        XCTAssertTrue(image.markers.contains(range(10, 13)))
+        XCTAssertEqual(parse(#"\![not](image.png)"#).spans, [.init(kind: .link(destination: "image.png", title: nil), range: range(3, 3))])
 
         let autolink = parse("<https://example.com/a>")
         XCTAssertEqual(autolink.spans, [.init(kind: .link(destination: "https://example.com/a", title: nil), range: range(1, 21))])
@@ -137,6 +139,49 @@ final class MarkdownLiveSyntaxTests: XCTestCase {
         XCTAssertNil(closing.fence)
 
         XCTAssertNil(Syntax.parse("``` not `a` fence", fence: nil).fence)
+    }
+
+    func testInlineMathFollowsPandoc() {
+        let line = parse(#"Energy $E = mc^2$ and $\frac{a}{b}$."#)
+        XCTAssertEqual(line.spans, [
+            .init(kind: .math(tex: "E = mc^2", isDisplay: false), range: range(8, 8)),
+            .init(kind: .math(tex: #"\frac{a}{b}"#, isDisplay: false), range: range(23, 11)),
+        ])
+        XCTAssertEqual(Set(line.markers), [range(7, 1), range(16, 1), range(22, 1), range(34, 1)])
+
+        // Prices, a space inside the dollars, or a digit after the closing one: not math.
+        XCTAssertTrue(parse("It costs $5 and $10 now").spans.isEmpty)
+        XCTAssertTrue(parse("$ x$ and $x $").spans.isEmpty)
+        XCTAssertTrue(parse("$20,000 and $30,000").spans.isEmpty)
+        XCTAssertTrue(parse(#"\$x$ is escaped"#).spans.isEmpty)
+        XCTAssertTrue(parse("$unclosed").spans.isEmpty)
+    }
+
+    func testMathKeepsItsTeXAwayFromOtherSyntax() {
+        // Backslashes, underscores and stars inside are TeX, and "\$" does not close.
+        let line = parse(#"$a_1 * b_2 \$ c$ **bold**"#)
+        XCTAssertEqual(line.spans, [
+            .init(kind: .math(tex: #"a_1 * b_2 \$ c"#, isDisplay: false), range: range(1, 14)),
+            .init(kind: .strong, range: range(19, 4)),
+        ])
+
+        // Code spans that start first win, and math that starts first keeps backticks.
+        XCTAssertEqual(parse("`$x$` and $`y`$").spans, [
+            .init(kind: .code, range: range(1, 3)),
+            .init(kind: .math(tex: "`y`", isDisplay: false), range: range(11, 3)),
+        ])
+    }
+
+    func testDisplayMathOnOneLine() {
+        XCTAssertEqual(parse(#"$$\sum_{i=1}^n i$$"#).spans, [
+            .init(kind: .math(tex: #"\sum_{i=1}^n i"#, isDisplay: true), range: range(2, 14)),
+        ])
+        XCTAssertEqual(parse("$a$$b$").spans, [
+            .init(kind: .math(tex: "a", isDisplay: false), range: range(1, 1)),
+            .init(kind: .math(tex: "b", isDisplay: false), range: range(4, 1)),
+        ])
+        XCTAssertTrue(parse("$$ $$").spans.isEmpty)
+        XCTAssertTrue(parse("$$$x$$$").spans.isEmpty)
     }
 
     func testStrikethroughNeedsDoubleTildes() {

@@ -27,6 +27,8 @@ extension NSAttributedString.Key {
 struct WritingTypography: Equatable {
     static let quoteIndent: CGFloat = 16
     static let codeInset: CGFloat = 10
+    /// Latin Modern Math has a smaller x-height than the text fonts.
+    static let mathScale: CGFloat = 1.12
 
     var usesPaperAppearance: Bool
     var bodySize: CGFloat = 14
@@ -74,6 +76,10 @@ struct WritingTypography: Equatable {
     var linkColor: NSColor { .linkColor }
     var citationColor: NSColor { .controlAccentColor }
     var citationBackgroundColor: NSColor { NSColor.controlAccentColor.withAlphaComponent(0.12) }
+    /// TeX while its line is being edited.
+    var mathSourceColor: NSColor { NSColor(srgbRed: 0.10, green: 0.44, blue: 0.50, alpha: 1) }
+    /// TeX that iosMath cannot typeset, left as text.
+    var invalidMathColor: NSColor { NSColor.systemRed.withAlphaComponent(0.85) }
 
     var decorationColor: NSColor {
         usesPaperAppearance
@@ -106,11 +112,13 @@ final class WritingTextStorage: NSTextStorage {
     private static let managedKeys: [NSAttributedString.Key] = [
         .font, .foregroundColor, .paragraphStyle, .strikethroughStyle, .cursor, .toolTip,
         .writingMarker, .writingBullet, .writingLink, .writingLinkTitle, .writingCitation, .writingInlineCode,
-        .writingQuoteDepth, .writingCodeBlock, .writingRule, .writingLineState,
+        .writingQuoteDepth, .writingCodeBlock, .writingRule, .writingLineState, .writingMath, .writingImage,
     ]
 
     private let backing: NSMutableAttributedString
     private let processing = ProcessingDelegate()
+    /// The writing's folder, which relative image paths start from.
+    let baseURL: URL?
 
     var typography: WritingTypography {
         didSet {
@@ -125,9 +133,10 @@ final class WritingTextStorage: NSTextStorage {
     /// Called after characters change, with the edited range and the change in length.
     var onCharactersEdited: ((NSRange, Int) -> Void)?
 
-    init(markdown: String, typography: WritingTypography) {
+    init(markdown: String, typography: WritingTypography, baseURL: URL? = nil) {
         backing = NSMutableAttributedString(string: markdown)
         self.typography = typography
+        self.baseURL = baseURL
         super.init()
         processing.storage = self
         delegate = processing
@@ -302,6 +311,10 @@ final class WritingTextStorage: NSTextStorage {
             NSRange(location: contentStart + range.location, length: range.length)
         }
 
+        // Syntax shown as text after all: images that cannot be shown and TeX iosMath cannot read.
+        var unrenderedImages: [NSRange] = []
+        var invalidMath: [NSRange] = []
+
         for span in line.spans {
             let range = absolute(span.range)
             guard range.length > 0 else { continue }
@@ -346,6 +359,30 @@ final class WritingTextStorage: NSTextStorage {
                     citation[.toolTip] = title
                 }
                 backing.addAttributes(citation, range: range)
+            case let .image(destination, _):
+                if let image = loadImage(destination) {
+                    // Hidden as a whole outside the edited lines; the image shows instead.
+                    backing.addAttributes([.writingImage: image, .writingMarker: true], range: range)
+                } else {
+                    unrenderedImages.append(range)
+                }
+            case let .math(tex, isDisplay):
+                let size = (font.pointSize * WritingTypography.mathScale).rounded()
+                if let box = MainActor.assumeIsolated({
+                    WritingMathTypesetter.shared.box(tex: tex, isDisplay: isDisplay, fontSize: size)
+                }) {
+                    backing.addAttributes([
+                        .writingMath: box,
+                        .font: NSFont.monospacedSystemFont(ofSize: (font.pointSize * 0.9).rounded(), weight: .regular),
+                        .foregroundColor: typography.mathSourceColor,
+                    ], range: range)
+                } else {
+                    let delimiterLength = isDisplay ? 2 : 1
+                    invalidMath.append(NSRange(
+                        location: range.location - delimiterLength,
+                        length: range.length + 2 * delimiterLength
+                    ))
+                }
             }
         }
 
@@ -367,6 +404,24 @@ final class WritingTextStorage: NSTextStorage {
                 value: NSFont.systemFont(ofSize: (font.pointSize * 0.8).rounded()),
                 range: absolute(destination)
             )
+        }
+        for range in unrenderedImages {
+            backing.removeAttribute(.writingMarker, range: range)
+            backing.addAttribute(.foregroundColor, value: typography.markerColor, range: range)
+        }
+        for range in invalidMath {
+            backing.removeAttribute(.writingMarker, range: range)
+            backing.addAttribute(.foregroundColor, value: typography.invalidMathColor, range: range)
+        }
+    }
+
+    /// A local image to show for an image's destination; nil for missing files and web images.
+    private func loadImage(_ destination: String) -> WritingImageBox? {
+        guard let url = WritingImagePath.fileURL(forDestination: destination, relativeTo: baseURL) else {
+            return nil
+        }
+        return MainActor.assumeIsolated {
+            WritingImageCache.shared.image(at: url).map { WritingImageBox(url: url, image: $0) }
         }
     }
 
@@ -486,6 +541,134 @@ final class WritingLayoutManager: NSLayoutManager {
         drawCapsules(glyphsToShow, storage: storage, container: container, origin: origin)
     }
 
+    override func drawGlyphs(forGlyphRange glyphsToShow: NSRange, at origin: NSPoint) {
+        super.drawGlyphs(forGlyphRange: glyphsToShow, at: origin)
+        guard glyphsToShow.length > 0,
+              let storage = textStorage,
+              storage.length > 0,
+              let context = NSGraphicsContext.current?.cgContext else {
+            return
+        }
+        drawMath(glyphsToShow, storage: storage, origin: origin, context: context)
+        drawImages(glyphsToShow, origin: origin)
+    }
+
+    // MARK: - Formulas and images
+
+    /// The character where a formula's control glyph is, when the formula is shown typeset.
+    func typesetMathStart(at characterIndex: Int, box: WritingMathBox) -> Bool {
+        isShownSpanStart(at: characterIndex, key: .writingMath, box: box)
+    }
+
+    /// The character where an image's control glyph is, when the image is shown. Without a
+    /// glyph that is not null, a line of hidden image syntax would join the line before it.
+    func shownImageStart(at characterIndex: Int, box: WritingImageBox) -> Bool {
+        isShownSpanStart(at: characterIndex, key: .writingImage, box: box)
+    }
+
+    private func isShownSpanStart(at characterIndex: Int, key: NSAttributedString.Key, box: AnyObject) -> Bool {
+        guard let storage = textStorage else { return false }
+        let isSpanStart = characterIndex == 0
+            || (storage.attribute(key, at: characterIndex - 1, effectiveRange: nil) as AnyObject?) !== box
+        return isSpanStart && isRevealed(characterIndex) == false
+    }
+
+    /// The tallest typeset formula among `glyphRange`, which a line must make room for.
+    func mathExtent(inGlyphRange glyphRange: NSRange) -> (ascent: CGFloat, descent: CGFloat)? {
+        guard let storage = textStorage, glyphRange.length > 0 else { return nil }
+        let characters = characterRange(forGlyphRange: glyphRange, actualGlyphRange: nil)
+        var extent: (ascent: CGFloat, descent: CGFloat)?
+        storage.enumerateAttribute(.writingMath, in: characters) { value, range, _ in
+            guard let box = value as? WritingMathBox, typesetMathStart(at: range.location, box: box) else { return }
+            extent = (max(extent?.ascent ?? 0, box.ascent), max(extent?.descent ?? 0, box.descent))
+        }
+        return extent
+    }
+
+    /// The images to show for a line fragment: those of its paragraph, on the paragraph's last line.
+    func imageLayout(forLineFragmentGlyphRange glyphRange: NSRange, lineWidth: CGFloat) -> WritingImageLayout? {
+        guard let storage = textStorage, glyphRange.length > 0, let container = textContainers.first else { return nil }
+        let text = storage.string as NSString
+        let characters = characterRange(forGlyphRange: glyphRange, actualGlyphRange: nil)
+        guard characters.length > 0 else { return nil }
+        let paragraph = text.paragraphRange(for: NSRange(location: characters.location, length: 0))
+        guard NSMaxRange(characters) >= NSMaxRange(paragraph) else { return nil }
+
+        var boxes: [WritingImageBox] = []
+        var imageCharacters = IndexSet()
+        storage.enumerateAttribute(.writingImage, in: paragraph) { value, range, _ in
+            guard let box = value as? WritingImageBox else { return }
+            boxes.append(box)
+            imageCharacters.insert(integersIn: range.location..<NSMaxRange(range))
+        }
+        guard boxes.isEmpty == false else { return nil }
+
+        let headIndent = (storage.attribute(.paragraphStyle, at: paragraph.location, effectiveRange: nil) as? NSParagraphStyle)?
+            .headIndent ?? 0
+        let leadingInset = container.lineFragmentPadding + headIndent
+        let maximumWidth = lineWidth - leadingInset - container.lineFragmentPadding
+        var replacesText = true
+        for index in paragraph.location..<NSMaxRange(paragraph) {
+            if isRevealed(index) {
+                replacesText = false
+                break
+            }
+            guard imageCharacters.contains(index) == false else { continue }
+            let character = text.character(at: index)
+            if character != 0x20, character != 0x09, character != 0x0A, character != 0x0D {
+                replacesText = false
+                break
+            }
+        }
+        return WritingImageLayout(
+            items: boxes.map { ($0, $0.displaySize(maximumWidth: maximumWidth)) },
+            leadingInset: leadingInset,
+            replacesText: replacesText
+        )
+    }
+
+    private func drawMath(_ glyphsToShow: NSRange, storage: NSTextStorage, origin: NSPoint, context: CGContext) {
+        let characters = characterRange(forGlyphRange: glyphsToShow, actualGlyphRange: nil)
+        storage.enumerateAttribute(.writingMath, in: characters) { value, range, _ in
+            guard let box = value as? WritingMathBox, typesetMathStart(at: range.location, box: box) else { return }
+            let glyph = glyphIndexForCharacter(at: range.location)
+            guard glyph < numberOfGlyphs, propertyForGlyph(at: glyph) == .controlCharacter else { return }
+            let lineRect = lineFragmentRect(forGlyphAt: glyph, effectiveRange: nil)
+            let location = location(forGlyphAt: glyph)
+            let isQuote = (storage.attribute(.writingQuoteDepth, at: range.location, effectiveRange: nil) as? Int ?? 0) > 0
+            box.draw(
+                baselineOrigin: CGPoint(x: origin.x + lineRect.minX + location.x, y: origin.y + lineRect.minY + location.y),
+                color: isQuote ? typography.quoteTextColor : typography.textColor,
+                in: context
+            )
+        }
+    }
+
+    private func drawImages(_ glyphsToShow: NSRange, origin: NSPoint) {
+        enumerateLineFragments(forGlyphRange: glyphsToShow) { rect, _, _, glyphRange, _ in
+            guard let layout = self.imageLayout(forLineFragmentGlyphRange: glyphRange, lineWidth: rect.width) else { return }
+            for (box, frame) in layout.frames(inLineFragment: rect.offsetBy(dx: origin.x, dy: origin.y)) {
+                guard frame.width > 0, frame.height > 0 else { continue }
+                NSGraphicsContext.saveGraphicsState()
+                let shape = NSBezierPath(roundedRect: frame, xRadius: 4, yRadius: 4)
+                shape.addClip()
+                box.image.draw(
+                    in: frame,
+                    from: .zero,
+                    operation: .sourceOver,
+                    fraction: 1,
+                    respectFlipped: true,
+                    hints: [.interpolation: NSNumber(value: NSImageInterpolation.high.rawValue)]
+                )
+                NSGraphicsContext.restoreGraphicsState()
+                self.typography.decorationColor.withAlphaComponent(0.5).setStroke()
+                let border = NSBezierPath(roundedRect: frame.insetBy(dx: 0.5, dy: 0.5), xRadius: 4, yRadius: 4)
+                border.lineWidth = 1
+                border.stroke()
+            }
+        }
+    }
+
     private func drawBlockDecorations(
         _ glyphsToShow: NSRange,
         storage: NSTextStorage,
@@ -581,7 +764,9 @@ final class WritingLayoutManager: NSLayoutManager {
 }
 
 /// Hides Markdown syntax outside the lines being edited by turning its glyphs into
-/// null glyphs, and draws "-", "*" and "+" list markers as bullets.
+/// null glyphs, and draws "-", "*" and "+" list markers as bullets. A typeset formula keeps
+/// one glyph of its TeX as a control glyph as wide as the formula, a shown image one
+/// zero-width control glyph, and lines grow to fit tall formulas and the images below them.
 private final class WritingGlyphHider: NSObject, NSLayoutManagerDelegate {
     func layoutManager(
         _ layoutManager: NSLayoutManager,
@@ -603,14 +788,31 @@ private final class WritingGlyphHider: NSObject, NSLayoutManagerDelegate {
 
         var hidden: [NSRange] = []
         var bullets: [NSRange] = []
+        var controlStarts = IndexSet()
         storage.enumerateAttributes(in: NSRange(location: first, length: last - first + 1)) { attributes, range, _ in
-            if attributes[.writingMarker] != nil {
+            if let box = attributes[.writingImage] as? WritingImageBox {
+                var start = range.location
+                if layoutManager.shownImageStart(at: start, box: box) {
+                    controlStarts.insert(start)
+                    start += 1
+                }
+                hidden.append(NSRange(location: start, length: NSMaxRange(range) - start))
+            } else if attributes[.writingMarker] != nil {
                 hidden.append(range)
             } else if attributes[.writingBullet] != nil {
                 bullets.append(range)
+            } else if let box = attributes[.writingMath] as? WritingMathBox {
+                // Runs can split inside a formula, e.g. at fallback fonts; only its first
+                // character becomes the control glyph.
+                var start = range.location
+                if layoutManager.typesetMathStart(at: start, box: box) {
+                    controlStarts.insert(start)
+                    start += 1
+                }
+                hidden.append(NSRange(location: start, length: NSMaxRange(range) - start))
             }
         }
-        guard hidden.isEmpty == false || bullets.isEmpty == false else { return 0 }
+        guard hidden.isEmpty == false || bullets.isEmpty == false || controlStarts.isEmpty == false else { return 0 }
 
         var properties = Array(UnsafeBufferPointer(start: props, count: count))
         var newGlyphs = Array(UnsafeBufferPointer(start: glyphs, count: count))
@@ -619,7 +821,10 @@ private final class WritingGlyphHider: NSObject, NSLayoutManagerDelegate {
         for index in 0..<count {
             let characterIndex = charIndexes[index]
             guard layoutManager.isRevealed(characterIndex) == false else { continue }
-            if hidden.contains(where: { NSLocationInRange(characterIndex, $0) }) {
+            if controlStarts.contains(characterIndex) {
+                properties[index] = .controlCharacter
+                changed = true
+            } else if hidden.contains(where: { NSLocationInRange(characterIndex, $0) }) {
                 properties[index] = .null
                 changed = true
             } else if let bulletGlyph, bullets.contains(where: { NSLocationInRange(characterIndex, $0) }) {
@@ -630,6 +835,84 @@ private final class WritingGlyphHider: NSObject, NSLayoutManagerDelegate {
         guard changed else { return 0 }
         layoutManager.setGlyphs(newGlyphs, properties: properties, characterIndexes: charIndexes, font: aFont, forGlyphRange: glyphRange)
         return count
+    }
+
+    /// The control glyph of a typeset formula is laid out as whitespace of the formula's
+    /// width, and that of an image as empty whitespace.
+    func layoutManager(
+        _ layoutManager: NSLayoutManager,
+        shouldUse action: NSLayoutManager.ControlCharacterAction,
+        forControlCharacterAt charIndex: Int
+    ) -> NSLayoutManager.ControlCharacterAction {
+        guard let storage = layoutManager.textStorage, charIndex < storage.length else { return action }
+        let attributes = storage.attributes(at: charIndex, effectiveRange: nil)
+        guard attributes[.writingMath] is WritingMathBox || attributes[.writingImage] is WritingImageBox else {
+            return action
+        }
+        return .whitespace
+    }
+
+    /// The bounding box only sets the width: the line's height comes from
+    /// `shouldSetLineFragmentRect`. Images take no width; they are drawn below the line.
+    func layoutManager(
+        _ layoutManager: NSLayoutManager,
+        boundingBoxForControlGlyphAt glyphIndex: Int,
+        for textContainer: NSTextContainer,
+        proposedLineFragment proposedRect: NSRect,
+        glyphPosition: NSPoint,
+        characterIndex charIndex: Int
+    ) -> NSRect {
+        guard let storage = layoutManager.textStorage,
+              charIndex < storage.length,
+              let box = storage.attribute(.writingMath, at: charIndex, effectiveRange: nil) as? WritingMathBox else {
+            return .zero
+        }
+        return NSRect(x: 0, y: -box.descent, width: box.width, height: box.ascent + box.descent)
+    }
+
+    /// Makes room for formulas taller than the text, and for the images below a paragraph.
+    func layoutManager(
+        _ layoutManager: NSLayoutManager,
+        shouldSetLineFragmentRect lineFragmentRect: UnsafeMutablePointer<NSRect>,
+        lineFragmentUsedRect: UnsafeMutablePointer<NSRect>,
+        baselineOffset: UnsafeMutablePointer<CGFloat>,
+        in textContainer: NSTextContainer,
+        forGlyphRange glyphRange: NSRange
+    ) -> Bool {
+        guard let layoutManager = layoutManager as? WritingLayoutManager else { return false }
+        var changed = false
+
+        if let extent = layoutManager.mathExtent(inGlyphRange: glyphRange) {
+            let padding: CGFloat = 2
+            let above = max(0, extent.ascent + padding - baselineOffset.pointee)
+            let below = max(0, extent.descent + padding - (lineFragmentRect.pointee.height - baselineOffset.pointee))
+            if above > 0 || below > 0 {
+                baselineOffset.pointee += above
+                lineFragmentRect.pointee.size.height += above + below
+                lineFragmentUsedRect.pointee.size.height += above + below
+                changed = true
+            }
+        }
+
+        if let images = layoutManager.imageLayout(
+            forLineFragmentGlyphRange: glyphRange,
+            lineWidth: lineFragmentRect.pointee.width
+        ) {
+            let height = images.height
+            if images.replacesText {
+                lineFragmentRect.pointee.size.height = height
+                lineFragmentUsedRect.pointee.size.height = height
+            } else {
+                lineFragmentRect.pointee.size.height += height
+                lineFragmentUsedRect.pointee.size.height += height
+            }
+            lineFragmentUsedRect.pointee.size.width = max(
+                lineFragmentUsedRect.pointee.width,
+                images.leadingInset + images.width
+            )
+            changed = true
+        }
+        return changed
     }
 
     private static func bulletGlyph(in font: NSFont) -> CGGlyph? {

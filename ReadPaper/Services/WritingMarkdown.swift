@@ -56,6 +56,108 @@ enum MarkdownEscaping {
     }
 }
 
+/// An image to add to a writing.
+enum WritingImageSource: Equatable, Sendable {
+    case file(URL)
+    /// Image data without a file, such as a pasted screenshot.
+    case data(Data, fileExtension: String)
+}
+
+/// Paths of a writing's images. Added images are copied into the `assets` folder next to
+/// `writing.md` and linked by relative paths, so the folder opens with its images in other
+/// Markdown apps.
+enum WritingImagePath {
+    static let assetsDirectoryName = "assets"
+    private static let maximumBaseNameLength = 60
+
+    /// The local file an image destination points at: a path relative to the writing's
+    /// folder, an absolute path or a `file:` URL. Nil for web images, which are not loaded.
+    static func fileURL(forDestination destination: String, relativeTo baseURL: URL?) -> URL? {
+        var text = destination.trimmingCharacters(in: .whitespaces)
+        if text.hasPrefix("<"), text.hasSuffix(">") {
+            text = String(text.dropFirst().dropLast())
+        }
+        text = unescaped(text)
+        guard text.isEmpty == false else { return nil }
+
+        // A URL scheme has at least two characters, unlike a Windows drive letter.
+        if let colon = text.firstIndex(of: ":"),
+           text.distance(from: text.startIndex, to: colon) >= 2,
+           text[..<colon].allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || "+-.".contains($0)) }) {
+            guard text[..<colon].lowercased() == "file",
+                  let url = URL(string: text),
+                  url.isFileURL else {
+                return nil
+            }
+            return url.standardizedFileURL
+        }
+        let path = text.removingPercentEncoding ?? text
+        if path.hasPrefix("/") {
+            return URL(fileURLWithPath: path).standardizedFileURL
+        }
+        if path.hasPrefix("~/") {
+            return URL(fileURLWithPath: (path as NSString).expandingTildeInPath).standardizedFileURL
+        }
+        guard let baseURL else { return nil }
+        return baseURL.appendingPathComponent(path).standardizedFileURL
+    }
+
+    /// A file name for an added image: letters and digits of `name` (any script), with other
+    /// characters turned into dashes, so the path needs no escaping in Markdown.
+    static func assetBaseName(from name: String) -> String {
+        var result = ""
+        var pendingDash = false
+        for character in name {
+            if character.isLetter || character.isNumber || character == "_" || character == "." {
+                if pendingDash, result.isEmpty == false {
+                    result.append("-")
+                }
+                pendingDash = false
+                result.append(character)
+            } else {
+                pendingDash = true
+            }
+            if result.count >= maximumBaseNameLength {
+                break
+            }
+        }
+        while result.hasPrefix(".") {
+            result.removeFirst()
+        }
+        return result.isEmpty ? "image" : result
+    }
+
+    /// `![alt](path)` for an image in the writing's folder.
+    static func markdown(alt: String, relativePath: String) -> String {
+        "![\(MarkdownEscaping.escapedLinkLabel(alt))](\(relativePath))"
+    }
+
+    private static func unescaped(_ text: String) -> String {
+        guard text.contains("\\") else { return text }
+        var result = ""
+        var isEscaping = false
+        for character in text {
+            if isEscaping {
+                if character.isASCII, character.isPunctuation || character.isSymbol {
+                    result.append(character)
+                } else {
+                    result.append("\\")
+                    result.append(character)
+                }
+                isEscaping = false
+            } else if character == "\\" {
+                isEscaping = true
+            } else {
+                result.append(character)
+            }
+        }
+        if isEscaping {
+            result.append("\\")
+        }
+        return result
+    }
+}
+
 enum WritingTitle {
     static let maximumLength = 80
 
@@ -302,12 +404,117 @@ enum WritingContinuation {
     }
 }
 
+/// A citation in a writing as `meta.json` keeps it, with the passage it cites, so the
+/// reader can mark cited passages without reading every writing.
+struct WritingCitationRecord: Codable, Equatable, Hashable, Sendable {
+    var paperID: UUID
+    var attachmentID: UUID?
+    var pageIndex: Int?
+    var htmlSelector: String?
+    var quotePrefix: String?
+    /// The block quote the citation closes; nil for an inline citation, which only has
+    /// its quote prefix.
+    var passage: String?
+
+    init(citation: PaperCitation, passage: String?) {
+        paperID = citation.paperID
+        attachmentID = citation.attachmentID
+        pageIndex = citation.pageIndex
+        htmlSelector = citation.htmlSelector
+        quotePrefix = citation.quotePrefix
+        self.passage = passage == citation.quotePrefix ? nil : passage
+    }
+
+    var citation: PaperCitation {
+        PaperCitation(
+            paperID: paperID,
+            attachmentID: attachmentID,
+            pageIndex: pageIndex,
+            htmlSelector: htmlSelector,
+            quotePrefix: quotePrefix
+        )
+    }
+
+    /// The text to mark in the paper.
+    var markedText: String? {
+        passage ?? quotePrefix
+    }
+}
+
+/// A citation of a paper from one of the writings, as the reader marks it.
+struct WritingCitationMark: Equatable, Hashable, Sendable, Identifiable {
+    var writingID: UUID
+    /// The citation's position among the writing's citations.
+    var index: Int
+    var record: WritingCitationRecord
+
+    var id: String {
+        "\(writingID.uuidString)#\(index)"
+    }
+}
+
+/// Finds citation links the way the editor shows them: not in code, with their labels.
+enum WritingCitationScanner {
+    struct Occurrence: Equatable {
+        var citation: PaperCitation
+        /// The link label, in UTF-16 offsets of the writing.
+        var labelRange: NSRange
+        var passage: String?
+    }
+
+    static func occurrences(in markdown: String) -> [Occurrence] {
+        guard markdown.range(of: "\(PaperCitation.scheme):", options: .caseInsensitive) != nil else { return [] }
+        let text = markdown as NSString
+        var occurrences: [Occurrence] = []
+        var fence: MarkdownLiveSyntax.FenceState?
+        var lineStart = 0
+        while lineStart < text.length {
+            let lineRange = text.lineRange(for: NSRange(location: lineStart, length: 0))
+            lineStart = NSMaxRange(lineRange)
+            var contentEnd = NSMaxRange(lineRange)
+            while contentEnd > lineRange.location, text.character(at: contentEnd - 1) == 0x0A || text.character(at: contentEnd - 1) == 0x0D {
+                contentEnd -= 1
+            }
+            let content = NSRange(location: lineRange.location, length: contentEnd - lineRange.location)
+            let lineText = text.substring(with: content)
+            // Only citation lines and possible fences need parsing.
+            let trimmed = lineText.drop { $0 == " " }
+            guard lineText.range(of: "\(PaperCitation.scheme):", options: .caseInsensitive) != nil
+                    || trimmed.hasPrefix("```") || trimmed.hasPrefix("~~~") else {
+                continue
+            }
+            let (line, nextFence) = MarkdownLiveSyntax.parse(lineText, fence: fence)
+            fence = nextFence
+            for span in line.spans {
+                guard case let .citation(destination, title) = span.kind,
+                      let citation = PaperCitation(linkDestination: destination, title: title) else {
+                    continue
+                }
+                let labelRange = NSRange(location: content.location + span.range.location, length: span.range.length)
+                occurrences.append(Occurrence(
+                    citation: citation,
+                    labelRange: labelRange,
+                    passage: WritingCitationContext.quote(forCitationAt: labelRange.location, in: text, citation: citation)
+                ))
+            }
+        }
+        return occurrences
+    }
+
+    static func records(in markdown: String) -> [WritingCitationRecord] {
+        occurrences(in: markdown).map { WritingCitationRecord(citation: $0.citation, passage: $0.passage) }
+    }
+}
+
 enum WritingCitationContext {
     /// The block quote above a citation line such as "> — [label](…)", so the reader
     /// can highlight the whole passage. Nil when the link does not close a block quote,
     /// or when the quote was edited and no longer starts like the link's quote prefix.
     static func quote(forCitationAt location: Int, in text: String, citation: PaperCitation) -> String? {
-        let string = text as NSString
+        quote(forCitationAt: location, in: text as NSString, citation: citation)
+    }
+
+    static func quote(forCitationAt location: Int, in string: NSString, citation: PaperCitation) -> String? {
         guard location >= 0, location < string.length else { return nil }
         let citationLine = string.lineRange(for: NSRange(location: location, length: 0))
         guard MarkdownLiveSyntax.parse(lineText(string, citationLine), fence: nil).line.quoteDepth > 0 else {

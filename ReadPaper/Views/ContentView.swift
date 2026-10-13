@@ -14,6 +14,7 @@ struct ContentView: View {
     @Environment(\.localizationBundle) private var bundle
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.pdfDisplayAppearance) private var displayAppearance
+    @Environment(\.openWindow) private var openWindow
     @Query(sort: \Paper.modifiedAt, order: .reverse) private var papers: [Paper]
     @Query(sort: \PaperAttachment.createdAt) private var attachments: [PaperAttachment]
     @Query(sort: \Note.modifiedAt, order: .reverse) private var notes: [Note]
@@ -48,6 +49,9 @@ struct ContentView: View {
     @State private var htmlTranslatedPaperIDs: Set<UUID> = []
     @State private var writingFocusRequest = 0
     @State private var writingErrorMessage: String?
+    @State private var citationErrorMessage: String?
+    /// Identifies this window to `PaperLinkRouter`.
+    @State private var linkRouterWindowID = UUID()
 
     private var settings: AppSettings? {
         settingsRows.first
@@ -214,7 +218,8 @@ struct ContentView: View {
             isPDFSidenoteRailAvailable: $isPDFSidenoteRailAvailable,
             onCreateAnchoredNote: createNoteFromCurrentSelection,
             onSaveSelectionAssistantNote: saveSelectionAssistantResultAsNote,
-            onArxivLinkActivated: handleArxivLinkActivation
+            onArxivLinkActivated: handleArxivLinkActivation,
+            onRevealCitation: revealCitation
         )
         .navigationSplitViewColumnWidth(min: 520, ideal: 760)
         .background {
@@ -292,6 +297,10 @@ struct ContentView: View {
                     isPaperEnabled: isPaperAppearance
                 )
                     .frame(width: 0, height: 0)
+                HostingWindowReader { window in
+                    PaperLinkRouter.shared.register(windowID: linkRouterWindowID, window: window)
+                }
+                .frame(width: 0, height: 0)
             }
             .ignoresSafeArea()
         }
@@ -312,6 +321,18 @@ struct ContentView: View {
             Button(String(localized: "OK", bundle: bundle), role: .cancel) {}
         } message: {
             Text(writingErrorMessage ?? "")
+        }
+        .alert(String(localized: "Unable to Open Citation", bundle: bundle), isPresented: Binding(
+            get: { citationErrorMessage != nil },
+            set: { isPresented in
+                if !isPresented {
+                    citationErrorMessage = nil
+                }
+            }
+        )) {
+            Button(String(localized: "OK", bundle: bundle), role: .cancel) {}
+        } message: {
+            Text(citationErrorMessage ?? "")
         }
         // .tint(isPaperAppearance ? ReadPaperTheme.accentColor : nil)
         .sheet(isPresented: $isAddingPaper) {
@@ -398,7 +419,18 @@ struct ContentView: View {
         } message: {
             Text(droppedPDFImportErrorMessage ?? "")
         }
+        .onChange(of: PaperLinkRouter.shared.delivery, initial: true) { _, delivery in
+            guard let delivery, delivery.windowID == linkRouterWindowID else { return }
+            PaperLinkRouter.shared.finish(delivery)
+            openCitation(delivery.citation, quote: delivery.quote)
+        }
+        .onDisappear {
+            PaperLinkRouter.shared.unregister(windowID: linkRouterWindowID)
+        }
         .onAppear {
+            PaperLinkRouter.shared.openMainWindow = { [openWindow] in
+                openWindow(id: MainWindowScene.id)
+            }
             WritingLibrary.shared.loadIfNeeded()
             let restoredSettings = ensureSettings()
             restoreSelection(preferredPaperID: restoredSettings?.lastOpenedPaperID)
@@ -616,7 +648,7 @@ struct ContentView: View {
     /// happen together: the request carries the paper, so the switch keeps it.
     private func openCitation(_ citation: PaperCitation, quote: String?) {
         guard papers.contains(where: { $0.id == citation.paperID }) else {
-            writingErrorMessage = String(localized: "The cited paper is no longer in your library.", bundle: bundle)
+            citationErrorMessage = String(localized: "The cited paper is no longer in your library.", bundle: bundle)
             return
         }
         noteNavigationRequest = citation.navigationRequest(quote: quote)
@@ -625,10 +657,21 @@ struct ContentView: View {
         }
     }
 
-    private func showWritingPane() {
+    /// Shows the writing: in its window when that is open, otherwise in the inspector.
+    private func showWritingPane(focusingEditor: Bool = false) {
+        if WritingWindowState.shared.isOpen {
+            openWindow(id: WritingWindowScene.id)
+            if focusingEditor {
+                WritingWindowState.shared.requestFocus()
+            }
+            return
+        }
         inspectorModeRawValue = InspectorMode.writing.rawValue
         if isInspectorCollapsed {
             inspectorCollapsedBinding.wrappedValue = false
+        }
+        if focusingEditor {
+            writingFocusRequest &+= 1
         }
     }
 
@@ -637,14 +680,23 @@ struct ContentView: View {
         showWritingPane()
     }
 
+    /// Opens the writing that cites a passage marked in the reader, at the citation.
+    private func revealCitation(_ mark: WritingCitationMark) {
+        do {
+            try WritingDocumentCenter.shared.revealCitation(mark.record, inWriting: mark.writingID)
+            showWritingPane()
+        } catch {
+            writingErrorMessage = error.localizedDescription
+        }
+    }
+
     /// Creates a writing, optionally starting with markdown, and opens it with the keyboard
     /// focus in the editor.
     private func createWriting(markdown: String = "") {
         do {
             WritingDocumentCenter.shared.saveAll()
             try WritingLibrary.shared.createWriting(markdown: markdown)
-            showWritingPane()
-            writingFocusRequest &+= 1
+            showWritingPane(focusingEditor: true)
         } catch {
             writingErrorMessage = error.localizedDescription
         }

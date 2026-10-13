@@ -117,6 +117,88 @@ final class WritingStoreTests: XCTestCase {
         XCTAssertEqual(try store.loadAll(), [])
     }
 
+    func testMetadataKeepsCitationsWithTheirPassages() throws {
+        let store = makeStore()
+        let paperID = UUID()
+        let quoted = PaperCitation(paperID: paperID, pageIndex: 1, quotePrefix: "The dominant sequence")
+        let inline = PaperCitation(paperID: paperID, htmlSelector: "rp-anchor:0/3", quotePrefix: "Attention")
+        let markdown = """
+        > The dominant sequence transduction models
+        > are based on RNNs.
+        >
+        > — \(PaperCitation.inlineMarkdown(label: "Vaswani", citation: quoted))
+
+        As noted \(PaperCitation.inlineMarkdown(label: "Vaswani", citation: inline)).
+
+        `[code](\(inline.linkDestination))` is not a citation.
+        """
+
+        let metadata = try store.save(markdown: markdown, for: UUID(), createdAt: Date())
+
+        XCTAssertEqual(metadata.citations, [
+            WritingCitationRecord(citation: quoted, passage: "The dominant sequence transduction models are based on RNNs."),
+            WritingCitationRecord(citation: inline, passage: nil),
+        ])
+        XCTAssertEqual(metadata.citations?.map(\.markedText), [
+            "The dominant sequence transduction models are based on RNNs.",
+            "Attention",
+        ])
+        XCTAssertEqual(try store.loadAll().first?.citations, metadata.citations)
+    }
+
+    func testCitationsMissingFromOlderMetadataAreRebuilt() throws {
+        let store = makeStore()
+        let paperID = UUID()
+        let markdown = "See [x](readpaper://paper/\(paperID.uuidString)?p=3)"
+        let writing = try store.create(markdown: markdown, now: Date(timeIntervalSince1970: 1_000))
+        let metadataURL = try store.directory(for: writing.id).appendingPathComponent(WritingStore.metadataFilename)
+        var json = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: metadataURL)) as? [String: Any])
+        json["citations"] = nil
+        try JSONSerialization.data(withJSONObject: json).write(to: metadataURL)
+        try FileManager.default.setAttributes(
+            [.modificationDate: writing.modifiedAt],
+            ofItemAtPath: store.markdownURL(for: writing.id).path
+        )
+
+        let loaded = try XCTUnwrap(store.loadAll().first)
+
+        XCTAssertEqual(loaded.citations, [WritingCitationRecord(citation: PaperCitation(paperID: paperID, pageIndex: 2), passage: nil)])
+        let rewritten = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: metadataURL)) as? [String: Any])
+        XCTAssertNotNil(rewritten["citations"])
+    }
+
+    func testImportedImagesGetUniqueNamesInTheAssetsFolder() throws {
+        let store = makeStore()
+        let writing = try store.create(markdown: "")
+        let source = root.appendingPathComponent("图 1: Overview.JPG")
+        try Data([0xFF, 0xD8, 0xFF]).write(to: source)
+
+        XCTAssertEqual(try store.importImage(.file(source), into: writing.id), "assets/图-1-Overview.jpg")
+        XCTAssertEqual(try store.importImage(.file(source), into: writing.id), "assets/图-1-Overview-2.jpg")
+        let date = Date(timeIntervalSince1970: 1_700_000_000)
+        let pasted = try store.importImage(.data(Data([1, 2, 3]), fileExtension: "png"), into: writing.id, now: date)
+        XCTAssertTrue(pasted.hasPrefix("assets/image-2023111"), pasted)
+        XCTAssertTrue(pasted.hasSuffix(".png"), pasted)
+        let assets = try store.directory(for: writing.id).appendingPathComponent(WritingImagePath.assetsDirectoryName)
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: assets.path).count, 3)
+        // The assets folder does not show up as a writing.
+        XCTAssertEqual(try store.loadAll().map(\.id), [writing.id])
+    }
+
+    func testImageDestinationsResolveAgainstTheWritingFolder() {
+        let base = URL(fileURLWithPath: "/tmp/Writings/abc", isDirectory: true)
+
+        XCTAssertEqual(WritingImagePath.fileURL(forDestination: "assets/a.png", relativeTo: base)?.path, "/tmp/Writings/abc/assets/a.png")
+        XCTAssertEqual(WritingImagePath.fileURL(forDestination: "<assets/my image.png>", relativeTo: base)?.path, "/tmp/Writings/abc/assets/my image.png")
+        XCTAssertEqual(WritingImagePath.fileURL(forDestination: "assets/my%20image.png", relativeTo: base)?.path, "/tmp/Writings/abc/assets/my image.png")
+        XCTAssertEqual(WritingImagePath.fileURL(forDestination: #"assets/a\(1\).png"#, relativeTo: base)?.path, "/tmp/Writings/abc/assets/a(1).png")
+        XCTAssertEqual(WritingImagePath.fileURL(forDestination: "../other/b.png", relativeTo: base)?.path, "/tmp/Writings/other/b.png")
+        XCTAssertEqual(WritingImagePath.fileURL(forDestination: "/Users/x/c.png", relativeTo: base)?.path, "/Users/x/c.png")
+        XCTAssertEqual(WritingImagePath.fileURL(forDestination: "file:///Users/x/d.png", relativeTo: base)?.path, "/Users/x/d.png")
+        XCTAssertNil(WritingImagePath.fileURL(forDestination: "https://example.com/e.png", relativeTo: base))
+        XCTAssertNil(WritingImagePath.fileURL(forDestination: "assets/a.png", relativeTo: nil))
+    }
+
     // MARK: - Library
 
     @MainActor
@@ -150,6 +232,38 @@ final class WritingStoreTests: XCTestCase {
         XCTAssertEqual(library.writings.map(\.id), [older.id, newer.id])
         XCTAssertEqual(library.writings(citing: paperID).map(\.id), [older.id])
         XCTAssertNil(library.lastErrorMessage)
+    }
+
+    @MainActor
+    func testCitationMarksChangeOnlyWithCitations() throws {
+        let library = WritingLibrary(store: makeStore(), userDefaults: try makeDefaults())
+        let paperID = UUID()
+        let citation = PaperCitation(paperID: paperID, pageIndex: 0, quotePrefix: "Quoted")
+        let link = PaperCitation.inlineMarkdown(label: "A", citation: citation)
+        let first = try library.createWriting(markdown: "One \(link)")
+        let second = try library.createWriting(markdown: "Two \(link)")
+        XCTAssertEqual(library.citationMarks(for: paperID).map(\.writingID).sorted { $0.uuidString < $1.uuidString },
+                       [first.id, second.id].sorted { $0.uuidString < $1.uuidString })
+        XCTAssertEqual(library.citationMarks(for: paperID).first?.record.markedText, "Quoted")
+
+        final class Flag: @unchecked Sendable {
+            var isSet = false
+        }
+        let changed = Flag()
+        withObservationTracking {
+            _ = library.citationMarksByPaper
+        } onChange: {
+            changed.isSet = true
+        }
+        // Typing elsewhere, and the save moving the writing to the front, leave the marks alone.
+        XCTAssertTrue(library.save(markdown: "One, edited \(link)", for: first.id))
+        XCTAssertFalse(changed.isSet)
+
+        XCTAssertTrue(library.save(markdown: "One without citations", for: first.id))
+        XCTAssertTrue(changed.isSet)
+        XCTAssertEqual(library.citationMarks(for: paperID).map(\.writingID), [second.id])
+        try library.deleteWriting(second.id)
+        XCTAssertEqual(library.citationMarks(for: paperID), [])
     }
 
     @MainActor

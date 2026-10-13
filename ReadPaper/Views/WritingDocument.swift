@@ -14,6 +14,9 @@ final class WritingDocument {
     weak var textView: WritingTextView?
     /// Lets the editor keep its revealed lines in place when text changes elsewhere.
     var onCharactersEdited: ((NSRange, Int) -> Void)?
+    /// Text to point out once an editor shows the document, e.g. a citation revealed from
+    /// the reader while the Writing tab was hidden.
+    var pendingIndicatorRange: NSRange?
 
     private let library: WritingLibrary
     private var saveTask: Task<Void, Never>?
@@ -22,7 +25,11 @@ final class WritingDocument {
     init(id: UUID, markdown: String, typography: WritingTypography, library: WritingLibrary) {
         self.id = id
         self.library = library
-        textStorage = WritingTextStorage(markdown: markdown, typography: typography)
+        textStorage = WritingTextStorage(
+            markdown: markdown,
+            typography: typography,
+            baseURL: library.directoryURL(for: id)
+        )
         selectedRange = NSRange(location: (markdown as NSString).length, length: 0)
         textStorage.onCharactersEdited = { [weak self] range, delta in
             MainActor.assumeIsolated {
@@ -72,6 +79,52 @@ final class WritingDocument {
             replace(range, with: edit.replacement, selectingAfter: edit.selectionAfter)
         }
         selectedRange = edit.selectionAfter
+    }
+
+    /// Copies images into the writing's folder and inserts each as its own paragraph after
+    /// the paragraph at `location`. Images added before a failure are kept.
+    func insertImages(_ sources: [WritingImageSource], at location: Int) throws {
+        var images: [String] = []
+        var failure: Error?
+        for source in sources {
+            do {
+                let path = try library.importImage(source, into: id)
+                var alt = ""
+                if case let .file(url) = source {
+                    alt = url.deletingPathExtension().lastPathComponent
+                }
+                images.append(WritingImagePath.markdown(alt: alt, relativePath: path))
+            } catch {
+                failure = error
+                break
+            }
+        }
+        if images.isEmpty == false {
+            apply(WritingInsertion.block(images.joined(separator: "\n\n"), in: textStorage.string, at: location))
+        }
+        if let failure {
+            throw failure
+        }
+    }
+
+    /// Selects the label of the first link to `citation` and points it out: right away when
+    /// an editor shows the document, otherwise when one does.
+    @discardableResult
+    func revealCitation(_ citation: PaperCitation) -> Bool {
+        guard let occurrence = WritingCitationScanner.occurrences(in: textStorage.string)
+            .first(where: { $0.citation == citation }) else {
+            return false
+        }
+        let range = occurrence.labelRange
+        selectedRange = range
+        if let textView, textView.window != nil {
+            textView.setSelectedRange(range)
+            textView.scrollRangeToVisible(range)
+            textView.showFindIndicator(for: range)
+        } else {
+            pendingIndicatorRange = range
+        }
+        return true
     }
 
     private func replace(_ range: NSRange, with replacement: String, selectingAfter selection: NSRange) {
@@ -145,6 +198,13 @@ final class WritingDocumentCenter {
         documents[id]?.discardPendingSave()
         try library.deleteWriting(id)
         documents[id] = nil
+    }
+
+    /// Makes the writing the open one and selects the citation in it.
+    func revealCitation(_ record: WritingCitationRecord, inWriting id: UUID) throws {
+        saveAll()
+        library.selectWriting(id)
+        try document(for: id).revealCitation(record.citation)
     }
 
     /// Inserts a citation into the writing open in the Writing tab, creating a writing

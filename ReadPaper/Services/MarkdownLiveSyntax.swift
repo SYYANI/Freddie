@@ -2,8 +2,8 @@ import Foundation
 
 /// Recognizes Markdown one line at a time for the writing editor's live preview.
 /// Offsets are UTF-16 code units within the line, like `NSString`. The supported
-/// syntax follows CommonMark, so a writing looks the same after export to other
-/// Markdown apps.
+/// syntax follows CommonMark, plus `$…$` math as Pandoc reads it, so a writing looks
+/// the same after export to other Markdown apps.
 enum MarkdownLiveSyntax {
     struct FenceState: Equatable, Sendable {
         /// "`" or "~".
@@ -26,6 +26,11 @@ enum MarkdownLiveSyntax {
         case code
         case link(destination: String, title: String?)
         case citation(destination: String, title: String?)
+        /// `![alt](destination)`. The span covers the whole syntax, which the live preview
+        /// replaces with the image.
+        case image(destination: String, title: String?)
+        /// TeX between `$` (or `$$` for display style); the span covers the TeX alone.
+        case math(tex: String, isDisplay: Bool)
     }
 
     struct InlineSpan: Equatable, Sendable {
@@ -264,7 +269,7 @@ enum MarkdownLiveSyntax {
 
     private static func parseInline(_ units: [UInt16], in range: Range<Int>, into line: inout Line) {
         guard range.isEmpty == false else { return }
-        // Characters that cannot be syntax: escaped characters, code spans, link parts.
+        // Characters that cannot be syntax: escaped characters, code spans, math, link parts.
         var consumed = [Bool](repeating: false, count: units.count)
 
         var index = range.lowerBound
@@ -275,6 +280,33 @@ enum MarkdownLiveSyntax {
                 consumed[index] = true
                 consumed[index + 1] = true
                 index += 2
+                continue
+            }
+            if unit == Unit.dollar {
+                var runEnd = index
+                while runEnd < range.upperBound, units[runEnd] == Unit.dollar {
+                    runEnd += 1
+                }
+                guard let math = mathSpan(units, opening: index, runLength: runEnd - index, end: range.upperBound) else {
+                    // A run of dollars that opens nothing is text, e.g. a price.
+                    index = runEnd
+                    continue
+                }
+                let delimiterLength = math.isDisplay ? 2 : 1
+                let contentRange = NSRange(location: index + delimiterLength, length: math.closingStart - index - delimiterLength)
+                line.markers.append(NSRange(location: index, length: delimiterLength))
+                line.markers.append(NSRange(location: math.closingStart, length: delimiterLength))
+                line.spans.append(InlineSpan(
+                    kind: .math(
+                        tex: String(decoding: units[contentRange.location..<NSMaxRange(contentRange)], as: UTF16.self),
+                        isDisplay: math.isDisplay
+                    ),
+                    range: contentRange
+                ))
+                for position in index..<(math.closingStart + delimiterLength) {
+                    consumed[position] = true
+                }
+                index = math.closingStart + delimiterLength
                 continue
             }
             if unit == Unit.backtick {
@@ -338,10 +370,17 @@ enum MarkdownLiveSyntax {
                 line.markers.append(NSRange(location: openingStart, length: index + 1 - openingStart))
                 line.markers.append(NSRange(location: link.closingBracket, length: link.end - link.closingBracket))
                 line.destinations.append(link.destinationRange)
-                line.spans.append(InlineSpan(
-                    kind: linkKind(link.destination, title: link.title),
-                    range: NSRange(location: index + 1, length: link.closingBracket - index - 1)
-                ))
+                if isImage {
+                    line.spans.append(InlineSpan(
+                        kind: .image(destination: link.destination, title: link.title),
+                        range: NSRange(location: openingStart, length: link.end - openingStart)
+                    ))
+                } else {
+                    line.spans.append(InlineSpan(
+                        kind: linkKind(link.destination, title: link.title),
+                        range: NSRange(location: index + 1, length: link.closingBracket - index - 1)
+                    ))
+                }
                 for position in openingStart...index {
                     consumed[position] = true
                 }
@@ -379,6 +418,59 @@ enum MarkdownLiveSyntax {
                 return index
             }
             index = runEnd
+        }
+        return nil
+    }
+
+    /// Math as Pandoc and most Markdown apps read it: `$…$` opens with a non-space after the
+    /// `$` and closes with a non-space before a `$` that no digit follows, so "$5 and $10"
+    /// stays text; `$$…$$` is display style. Backslashes inside are TeX, so `\$` does not
+    /// close. `runLength` is the number of dollars at `opening`.
+    private static func mathSpan(
+        _ units: [UInt16],
+        opening: Int,
+        runLength: Int,
+        end: Int
+    ) -> (closingStart: Int, isDisplay: Bool)? {
+        let isDisplay: Bool
+        switch runLength {
+        case 1: isDisplay = false
+        case 2: isDisplay = true
+        default: return nil
+        }
+        let contentStart = opening + runLength
+        guard contentStart < end else { return nil }
+        if isDisplay == false, isSpaceOrTab(units[contentStart]) {
+            return nil
+        }
+
+        var index = contentStart
+        var hasContent = false
+        while index < end {
+            let unit = units[index]
+            if unit == Unit.backslash {
+                hasContent = true
+                index += 2
+                continue
+            }
+            if unit == Unit.dollar {
+                if isDisplay {
+                    if index + 1 < end, units[index + 1] == Unit.dollar, hasContent {
+                        return (index, true)
+                    }
+                } else if index > contentStart,
+                          isSpaceOrTab(units[index - 1]) == false,
+                          index + 1 >= end || isDigit(units[index + 1]) == false {
+                    return (index, false)
+                }
+                // A "$$" never closes inline math.
+                if isDisplay == false, index + 1 < end, units[index + 1] == Unit.dollar {
+                    return nil
+                }
+            } else if isSpaceOrTab(unit) == false {
+                hasContent = true
+            }
+            index += 1
         }
         return nil
     }
@@ -641,6 +733,7 @@ enum MarkdownLiveSyntax {
         static let exclamation: UInt16 = 0x21
         static let quotationMark: UInt16 = 0x22
         static let hash: UInt16 = 0x23
+        static let dollar: UInt16 = 0x24
         static let apostrophe: UInt16 = 0x27
         static let openingParenthesis: UInt16 = 0x28
         static let closingParenthesis: UInt16 = 0x29

@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Which view the inspector shows: the selected paper's details, or the writing that
 /// stays open across papers.
@@ -10,11 +11,23 @@ enum InspectorMode: String {
     static let userDefaultsKey = "ReadPaper.Inspector.Mode"
 }
 
-/// The inspector's Writing tab: one long Markdown writing that can cite any paper.
+enum WritingPanePresentation {
+    /// The inspector's Writing tab.
+    case inspector
+    /// The separate writing window.
+    case window
+}
+
+/// One long Markdown writing that can cite any paper, in the inspector's Writing tab or the
+/// separate writing window.
 struct WritingPaneView: View {
     @Environment(\.localizationBundle) private var bundle
     @Environment(\.pdfDisplayAppearance) private var displayAppearance
+    @Environment(\.openWindow) private var openWindow
+    @Environment(\.dismissWindow) private var dismissWindow
     var center: WritingDocumentCenter = .shared
+    var presentation: WritingPanePresentation = .inspector
+    var windowState: WritingWindowState = .shared
     /// Changing it moves keyboard focus into the editor.
     var focusRequest: Int
     var onOpenCitation: (PaperCitation, String?) -> Void
@@ -31,9 +44,16 @@ struct WritingPaneView: View {
         WritingTypography(usesPaperAppearance: displayAppearance == .paper)
     }
 
+    /// The inspector steps aside while the writing window is open.
+    private var showsWindowPlaceholder: Bool {
+        presentation == .inspector && windowState.isOpen
+    }
+
     var body: some View {
         VStack(spacing: 0) {
-            if let writing = library.currentWriting {
+            if showsWindowPlaceholder {
+                windowPlaceholder
+            } else if let writing = library.currentWriting {
                 header(writing)
                 Divider()
                 if let document = try? center.document(for: writing.id) {
@@ -41,8 +61,16 @@ struct WritingPaneView: View {
                         document: document,
                         typography: typography,
                         focusRequest: focusRequest &+ localFocusRequest,
+                        maximumTextWidth: presentation == .window ? WritingWindowScene.maximumTextWidth : nil,
                         onOpenLink: { link in
                             open(link, in: document)
+                        },
+                        onImageError: { error in
+                            errorMessage = AppLocalization.format(
+                                "Unable to add the image: %@",
+                                bundle: bundle,
+                                error.localizedDescription
+                            )
                         }
                     )
                     .id(writing.id)
@@ -148,7 +176,21 @@ struct WritingPaneView: View {
             .buttonStyle(.borderless)
             .help(String(localized: "New Writing", bundle: bundle))
 
+            if presentation == .inspector {
+                Button {
+                    openWindow(id: WritingWindowScene.id)
+                } label: {
+                    Label(String(localized: "Open in Separate Window", bundle: bundle), systemImage: "macwindow")
+                        .labelStyle(.iconOnly)
+                }
+                .buttonStyle(.borderless)
+                .help(String(localized: "Open in Separate Window", bundle: bundle))
+            }
+
             Menu {
+                Button(String(localized: "Insert Image…", bundle: bundle)) {
+                    chooseImages(for: writing)
+                }
                 Button(String(localized: "Show in Finder", bundle: bundle)) {
                     showInFinder(writing)
                 }
@@ -194,11 +236,30 @@ struct WritingPaneView: View {
         ContentUnavailableView {
             Label(String(localized: "No Writings Yet", bundle: bundle), systemImage: "square.and.pencil")
         } description: {
-            Text("Write long notes that draw on several papers. Select text in a paper and choose Quote in Writing to add the passage with a link back to it.", bundle: bundle)
+            Text("Long notes across papers. Quotes link back to the source.", bundle: bundle)
         } actions: {
             Button(String(localized: "New Writing", bundle: bundle)) {
                 createWriting()
             }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var windowPlaceholder: some View {
+        ContentUnavailableView {
+            Label(String(localized: "Writing in a Separate Window", bundle: bundle), systemImage: "macwindow")
+        } description: {
+            Text("The writing is open in its own window. Quotes from the reader go there.", bundle: bundle)
+        } actions: {
+            HStack(spacing: 8) {
+                Button(String(localized: "Show Window", bundle: bundle)) {
+                    openWindow(id: WritingWindowScene.id)
+                }
+                Button(String(localized: "Move Back Here", bundle: bundle)) {
+                    dismissWindow(id: WritingWindowScene.id)
+                }
+            }
+            .fixedSize()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -232,6 +293,22 @@ struct WritingPaneView: View {
             try center.deleteWriting(writing.id)
         } catch {
             errorMessage = error.localizedDescription
+        }
+    }
+
+    private func chooseImages(for writing: WritingMetadata) {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.image]
+        panel.allowsMultipleSelection = true
+        panel.canChooseDirectories = false
+        panel.prompt = String(localized: "Insert", bundle: bundle)
+        guard panel.runModal() == .OK, panel.urls.isEmpty == false else { return }
+        do {
+            let document = try center.document(for: writing.id)
+            try document.insertImages(panel.urls.map { .file($0) }, at: NSMaxRange(document.currentSelection))
+            localFocusRequest &+= 1
+        } catch {
+            errorMessage = AppLocalization.format("Unable to add the image: %@", bundle: bundle, error.localizedDescription)
         }
     }
 
@@ -304,7 +381,11 @@ struct PaperWritingsSection: View {
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .help(String(localized: "Open in the Writing Tab", bundle: bundle))
+                    .help(
+                        WritingWindowState.shared.isOpen
+                            ? String(localized: "Open in the Writing Window", bundle: bundle)
+                            : String(localized: "Open in the Writing Tab", bundle: bundle)
+                    )
                 }
             }
         }

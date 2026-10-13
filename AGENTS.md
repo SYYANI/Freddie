@@ -4,7 +4,7 @@
 
 ## 项目概览
 
-ReadPaper 是一个 macOS SwiftUI 论文阅读应用，使用 SwiftData 做本地数据模型，PDFKit 处理本地 PDF 轻量文本抽取，`swift-readability` 处理 arXiv/ar5iv HTML 正文抽取，SwiftSoup 处理 HTML 本地化和 HTML 段落翻译。项目最低 macOS 版本为 14.0，Swift 版本为 6.0，Xcode 项目由 `project.yml` 描述，依赖 SwiftSoup、`swift-readability` 和 `SwiftOpenAI`。
+ReadPaper 是一个 macOS SwiftUI 论文阅读应用，使用 SwiftData 做本地数据模型，PDFKit 处理本地 PDF 轻量文本抽取，`swift-readability` 处理 arXiv/ar5iv HTML 正文抽取，SwiftSoup 处理 HTML 本地化和 HTML 段落翻译。项目最低 macOS 版本为 14.0，Swift 版本为 6.0，Xcode 项目由 `project.yml` 描述，依赖 SwiftSoup、`swift-readability`、`SwiftOpenAI`，以及写作编辑器排版公式用的 `iosMath`（与 `SwiftStreamingMarkdown` 固定同一 revision）。
 
 核心能力分成四条路径：
 
@@ -102,11 +102,17 @@ SwiftData schema 变更要特别谨慎：历史上已经出现过“新版本删
 
 文献类型：`PaperItemType` 的 raw value 直接用 Zotero item type 标识符（`journalArticle`、`conferencePaper`、`preprint` 等共 37 种），中文名沿用 Zotero 简体中文译名，以后做引用导出或 Zotero 互通时直接映射，不要改成自定义值。类型默认由 `PaperItemTypeResolution` 按导入来源推断（有 `arxivID` → 预印本；有 `webPage` 来源的 HTML 附件 → 网页；其余包括带 DOI 的 PDF → 文档，DOI 本身分不出期刊还是会议，不要据此猜测），不落盘；只有用户在 Inspector 标题上方的类型菜单（`PaperItemTypePicker`）里手动选的类型才写入 `PaperItemTypeAssignment`（按 `paperID` 唯一，和文件夹归属一样不放进 `Paper`、不改 `modifiedAt`）。选回推断类型或“使用自动识别的类型”会删除记录，所以以后改进推断（例如查 Crossref）会自动作用到没有手动指定的论文。无法识别的 raw value（更新版本写入的类型）回退到推断类型。`PaperDeletionService` 删除论文时一并删除该记录；旧版 App 打开新 store 会丢弃这张表。
 
-写作稿（Inspector 的“写作”页）：跨论文的长篇 Markdown 笔记，与锚定在原文上的 `Note` 旁注并存。正文存为 `Application Support/ReadPaper/Writings/{writing UUID}/writing.md`，`meta.json` 只缓存标题（第一行可见文字）、时间、字数和引用到的 paperID，缺失或比 `writing.md` 旧时从正文重建，`version` 更高的元数据只读不覆盖。刻意不进 SwiftData：旧版 App 打开新 store 会丢弃不认识的表，写作稿不能跟着丢；也不放进 `Library/{paper UUID}/`，删论文不删写作稿，正文里的引用只是失效（删除确认里会提示）。列表由 `WritingLibrary` 提供（`@Observable`，不要改成 `@Query`，否则每次保存都会重绘整个窗口）；`WritingDocument` 在停止输入约 0.8 秒后写盘，关闭/切换编辑器、App 失去焦点和退出前立即落盘；删除写作稿移到废纸篓。当前打开的写作稿 ID 与 Inspector 页签存 UserDefaults。Inspector 最大宽度为 640，给写作留出空间。
+写作稿（Inspector 的“写作”页，或大屏用的独立写作窗口）：跨论文的长篇 Markdown 笔记，与锚定在原文上的 `Note` 旁注并存。正文存为 `Application Support/ReadPaper/Writings/{writing UUID}/writing.md`，图片复制进同目录的 `assets/` 并以相对路径引用（文件名只留字母数字、其余改成连字符，Markdown 里不用转义），整个文件夹在 Typora/Obsidian 里能直接带图打开。`meta.json` 只缓存标题（第一行可见文字）、时间、字数、引用到的 paperID，以及每条引用和它所引的原文段落（`citations`，供阅读器标记被引段落），缺失或比 `writing.md` 旧时从正文重建；旧版写回的 `meta.json` 没有 `citations` 键，此时也从正文重建；`version` 更高的元数据只读不覆盖。刻意不进 SwiftData：旧版 App 打开新 store 会丢弃不认识的表，写作稿不能跟着丢；也不放进 `Library/{paper UUID}/`，删论文不删写作稿，正文里的引用只是失效（删除确认里会提示）。列表由 `WritingLibrary` 提供（`@Observable`，不要改成 `@Query`，否则每次保存都会重绘整个窗口）；`WritingDocument` 在停止输入约 0.8 秒后写盘，关闭/切换编辑器、App 失去焦点和退出前立即落盘；删除写作稿移到废纸篓。当前打开的写作稿 ID 与 Inspector 页签存 UserDefaults。Inspector 最大宽度为 640，给写作留出空间。独立写作窗口是 `Window` scene（`WritingWindowScene.id`，出现在“窗口”菜单，也可从写作页标题栏的窗口按钮打开），显示的就是当前写作稿，正文列宽上限 700 居中；窗口打开期间 Inspector 的写作页只显示占位（“显示窗口 / 移回这里”），同一写作稿任何时候只有一个编辑器。`WritingWindowState.isOpen` 以 `onAppear` 和窗口自己的 `willClose` 通知为准，`onDisappear` 只在窗口确实不可见时才算关闭。窗口打开时，从论文页打开写作稿、新建写作稿和“在写作稿中显示引用”都转到窗口；“引用到写作稿”照常插入当前写作稿，也就是窗口里那一篇。
 
 引用格式：`[Vaswani et al., 2017, p. 2](readpaper://paper/{paperID}?att={attachmentID}&p={从 1 开始的页码}&anchor={rp-anchor 路径} "引文开头")`。链接目标只含 ASCII：中文与 `%20` 这类转义混排时，`URL(string:)` 和 JS 的 `encodeURI` 都会把 `%` 再编码一次；引文开头（`PaperCitation.quotePrefixLength` 个字符）放在链接 title 里，其他 Markdown 应用显示为提示，解析时兼容旧的 `q=` 参数。划词浮层的“引用到写作稿”（菜单 ⇧⌘E）在光标所在段落之后插入引用块和署名链接，按住 ⌥ 只在光标处插入链接；目标是“写作”页当前打开的写作稿，没有就新建。点击引用时，紧跟在引用块下的署名行用整段引文定位，否则用 title 里的开头。`PaperCitation.navigationRequest` 带 `paperID`：`ContentView` 换论文时保留指向新论文的请求，`ReaderPaneView` 在恢复新论文的阅读位置之后再跳转。
 
-写作编辑器是 TextKit 1 的 `NSTextView`（`WritingTextStorage` + `WritingLayoutManager`），存储始终是 Markdown 原文，“实时所得”只是显示方式：`MarkdownLiveSyntax` 按行识别（规则遵循 CommonMark，包括 `_` 不在词内生效、单个 `~` 和 `$` 不是语法，导出后效果一致），光标所在的行显示语法标记，其他行把标记生成为 null glyph、把 `-`/`*`/`+` 画成圆点，引用竖条、代码块底色、行内代码和引用胶囊在 `drawBackground` 里画。重新着色在 text storage 的 `willProcessEditing` 委托里做，只移除和设置自己管理的属性（保留输入法 marked text 的下划线）；`.writingLineState` 记录每行开头的代码围栏状态，编辑后只重排到状态一致的那一行。从磁盘载入的初始文本没有经过 `processEditing`，必须 `fixAttributes`，否则 CJK 字符没有后备字体、完全不显示。编辑器自己处理 ⌘Z/⇧⌘Z（工具栏的 PDF 批注菜单也绑定了 ⌘Z）和 ⌘B/⌘I；Return 续写列表和引用，在空项上结束并留出空行（否则下一段会变成懒惰续行）。
+`readpaper://` 已在 `Info.plist` 注册：导出到 Obsidian/Typora 的写作稿里的引用点开会回到 App。App delegate 在 `applicationWillFinishLaunching` 自己接管 `kAEGetURL`，不要改回 SwiftUI 的 `onOpenURL` / `application(_:open:)`：SwiftUI 会为每个链接再开一个主窗口，链接启动 App 时还会多开一个。外部链接和独立写作窗口里点的引用都交给 `PaperLinkRouter`：它按 `NSApp.orderedWindows` 选最前面的主窗口（`ContentView` 用 `HostingWindowReader` 登记），通过 `delivery` 交给该窗口的 `openCitation`；外部链接会激活 App，写作窗口的引用只在写作窗口挡住主窗口时才把主窗口提到前面。没有主窗口时先用视图留下的 `openMainWindow`（主 `WindowGroup` 的 id 是 `MainWindowScene.id`），1 秒后仍没有主窗口登记（链接启动 App 时 macOS 发的是 GURL 而不是“打开应用”事件，SwiftUI 不会开启动窗口）就给自己发一个 reopen Apple Event，相当于点 Dock 图标。外部链接不带 title，所以只按页码/锚点定位，不高亮引文。被引论文已不在库里时提示“无法打开引用”。
+
+被引段落标记：阅读器把写作稿引用过的段落用紫色下划线标出（HTML 用 CSS Custom Highlight API 的 `rp-citation`，PDF 用当前页前后各一页的内存临时 underline `PDFAnnotation`，和划词助手历史下划线同一套做法，不写进 `paper.html` 或 PDF）。数据来自 `WritingLibrary.citationMarksByPaper`：只在引用本身变化时才替换（按写作稿 ID 和序号排序，保存把写作稿移到列表最前也不算变化），所以打字自动保存不会重绘阅读器。HTML 匹配忽略全部空白（跨段落复制的引文有空格而页面元素之间没有），找不到时依次到最多四层父元素里找，最后只标开头；PDF 先用整段引文、再用 title 里的开头匹配，跨页的引文只标在起始页。单击（不是拖选、也不是双击的第一下：HTML 等 350 ms，PDF 等系统双击间隔、最多 350 ms 且要求鼠标已松开、没有选中文字；PDFView 可能自己跟踪鼠标，所以不依赖 `mouseUp`）被引段落会打开引用它的写作稿并选中、闪烁那条引用；被多篇写作稿引用时弹出菜单选择。划词助手历史下划线优先于引用标记。
+
+写作编辑器是 TextKit 1 的 `NSTextView`（`WritingTextStorage` + `WritingLayoutManager`），存储始终是 Markdown 原文，“实时所得”只是显示方式：`MarkdownLiveSyntax` 按行识别（规则遵循 CommonMark，包括 `_` 不在词内生效、单个 `~` 不是语法，导出后效果一致；`$…$` 行内公式按 Pandoc 规则：开头 `$` 后、结尾 `$` 前不能是空白，结尾 `$` 后不能紧跟数字，所以“$5 和 $10”仍是普通文字；同一行的 `$$…$$` 是 display 公式；多行 `$$` 公式块暂不支持），光标所在的行显示语法标记，其他行把标记生成为 null glyph、把 `-`/`*`/`+` 画成圆点，引用竖条、代码块底色、行内代码和引用胶囊在 `drawBackground` 里画。重新着色在 text storage 的 `willProcessEditing` 委托里做，只移除和设置自己管理的属性（保留输入法 marked text 的下划线）；`.writingLineState` 记录每行开头的代码围栏状态，编辑后只重排到状态一致的那一行。从磁盘载入的初始文本没有经过 `processEditing`，必须 `fixAttributes`，否则 CJK 字符没有后备字体、完全不显示。编辑器自己处理 ⌘Z/⇧⌘Z（工具栏的 PDF 批注菜单也绑定了 ⌘Z）和 ⌘B/⌘I；Return 续写列表和引用，在空项上结束并留出空行（否则下一段会变成懒惰续行）。
+
+公式和图片在 TextKit 1 里的做法（都已用测试验证过 TextKit 的实际行为）：公式用 `iosMath` 排版（`WritingMathTypesetter`，按 TeX、字号、display 缓存；iosMath 读不了的 TeX 保持源码并标红），TeX 的第一个字符在 glyph 生成时设为 `.controlCharacter`，委托返回 `.whitespace` 动作和公式宽度的 bounding box，其余字符和 `$` 都是 null glyph，公式在 `drawGlyphs` 里按该 glyph 的基线翻转坐标画出。control glyph 的 bounding box 只决定宽度、不会撑高行，所以高公式靠 `shouldSetLineFragmentRect` 加高行并下移 `baselineOffset`。图片只显示本地文件（相对写作稿文件夹的路径、绝对路径或 `file:`；网络图片、缺失或读不出的图片保持语法原样显示），整段 `![alt](path)` 都隐藏，画在该段最后一行下方，行高同样在 `shouldSetLineFragmentRect` 里加；段落只有图片且没在编辑时，用图片高度代替文字行高。图片语法的第一个字符也要保留为零宽 control glyph：一行全是 null glyph 时 TextKit 会把它并进上一行的 line fragment。粘贴（只有图片、没有文字时）、拖入图片文件或图片数据、“更多”菜单的“插入图片…”都会把图片复制进 `assets/` 再插入独立段落；主窗口最上层的 PDF 拖入遮罩会把非 PDF 拖拽转给鼠标下的写作编辑器。
 
 LLM 配置现已拆成独立 SwiftData 模型：`LLMProviderProfile` 负责 provider 名称、`baseURL`、`apiKeyRef`、`testModel` 和启用状态，`LLMModelProfile` 负责模型名、所属 provider 和高级参数。`AppSettings` 只保留全局翻译偏好与当前选中的 HTML/PDF model profile；运行时路由解析不再依赖旧的单 Base URL / 多 legacy model name 配置。
 
@@ -206,11 +212,13 @@ xcodebuild -project ReadPaper.xcodeproj -scheme ReadPaper -destination 'platform
 - 阅读位置存储与 mode 回退：`ReadingStateStoreTests`
 - 文内查找的文本规范化（PDF 空格/断词/连字容错、短词误命中保护、HTML 分段偏移）：`DocumentTextSearchTests`
 - 拖入 PDF 的整窗接收、PDF 过滤、导入中拒收，以及 `WKWebView` 上方的拖拽归属：`PDFDropTargetTests`
-- 写作稿存储与列表（`meta.json` 重建、新版本元数据不覆盖、删除后迟到的保存不会重建）、标题与字数、插入位置、列表续写、引文上下文：`WritingStoreTests`
+- 写作稿存储与列表（`meta.json` 重建、新版本元数据不覆盖、删除后迟到的保存不会重建、引用与段落缓存及旧版元数据重建、引用标记只在引用变化时更新、图片导入命名与路径解析）、标题与字数、插入位置、列表续写、引文上下文：`WritingStoreTests`
 - 引用链接（ASCII 目标地址、title 里的引文、旧 `q=` 参数）、作者年份标签与转义：`PaperCitationTests`
-- 实时预览的语法识别（CommonMark 强调规则、链接 title、代码围栏）：`MarkdownLiveSyntaxTests`
-- 写作编辑器的着色、语法隐藏、CJK 后备字体、输入法、撤销、引用插入与自动保存：`WritingEditorTests`
+- 实时预览的语法识别（CommonMark 强调规则、链接 title、代码围栏、图片、Pandoc 公式规则）：`MarkdownLiveSyntaxTests`
+- 写作编辑器的着色、语法隐藏、CJK 后备字体、输入法、撤销、引用插入与自动保存、公式宽度与行高、图片行高与缩放、粘贴来源、插入图片、居中列宽、在写作稿中显示引用、窗口打开时 Inspector 让位：`WritingEditorTests`
 - 打开引用时 PDF/HTML 阅读器落在被引位置，以及换论文时 PDF 按新论文的页码打开：`CitationNavigationTests`
+- 被引段落标记（HTML 高亮与单击/双击、跨段落引文、PDF 当前页附近的下划线）和图片拖到主窗口写作编辑器上的转交：`CitationMarkTests`
+- `readpaper://` 与写作窗口引用的窗口选择、没有主窗口时的等待与 reopen、写作窗口是否把主窗口提前：`PaperLinkRouterTests`
 - 运行时语言选择、bundle 规范化/回退、代表性本地化行为：`LanguageManagerTests`、`LocalizationBehaviorTests`
 
 涉及真实网络、OpenAI API、BabelDOC 安装或真实 PDF 翻译的测试不要默认加入单元测试；优先用可注入依赖、临时目录和小样本文本覆盖行为。

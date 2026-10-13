@@ -45,6 +45,7 @@ extension View {
 /// the types it registered, so an open HTML reader swallowed PDFs dragged from Finder. This
 /// view is layered above the whole window instead. AppKit's drag lookup does not consult
 /// `hitTest(_:)`, so the view can stay transparent to clicks, scrolling, and cursor updates.
+/// Other file drags over the writing editor, such as images, are passed on to the editor.
 struct PDFFileDropCatcher: NSViewRepresentable {
     var isEnabled: Bool
     var onTargetedChange: (Bool) -> Void
@@ -79,6 +80,8 @@ final class PDFFileDropCatcherView: NSView {
 
     private var isTargeted = false
     private var evaluatedDrag: (sequenceNumber: Int, containsPDFs: Bool)?
+    /// The writing editor under a drag without PDFs, which gets the drag instead.
+    private weak var forwardedTarget: WritingTextView?
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -109,22 +112,35 @@ final class PDFFileDropCatcherView: NSView {
 
     override func draggingExited(_ sender: NSDraggingInfo?) {
         setTargeted(false)
+        forwardedTarget?.draggingExited(sender)
+        forwardedTarget = nil
     }
 
     override func draggingEnded(_ sender: NSDraggingInfo) {
         evaluatedDrag = nil
         setTargeted(false)
+        forwardedTarget?.draggingEnded(sender)
+        forwardedTarget = nil
     }
 
     override func prepareForDragOperation(_ sender: NSDraggingInfo) -> Bool {
-        isEnabled && containsPDFs(sender)
+        if isEnabled && containsPDFs(sender) {
+            return true
+        }
+        return forwardedTarget?.prepareForDragOperation(sender) ?? false
     }
 
     override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
         let urls = Self.pdfURLs(on: sender.draggingPasteboard)
         setTargeted(false)
-        guard isEnabled, !urls.isEmpty else { return false }
+        guard isEnabled, !urls.isEmpty else {
+            return forwardedTarget?.performDragOperation(sender) ?? false
+        }
         return onDrop?(urls) ?? false
+    }
+
+    override func concludeDragOperation(_ sender: NSDraggingInfo?) {
+        forwardedTarget?.concludeDragOperation(sender)
     }
 
     /// Local PDF files on `pasteboard`, in drag order and without duplicates.
@@ -139,7 +155,35 @@ final class PDFFileDropCatcherView: NSView {
     private func updateTargeting(for sender: NSDraggingInfo) -> NSDragOperation {
         let accepts = isEnabled && containsPDFs(sender)
         setTargeted(accepts)
+        let target = accepts ? nil : forwardingTarget(for: sender)
+        if target !== forwardedTarget {
+            forwardedTarget?.draggingExited(sender)
+            forwardedTarget = target
+            if let target {
+                return target.draggingEntered(sender)
+            }
+        } else if let target {
+            return target.draggingUpdated(sender)
+        }
         return accepts ? .copy : []
+    }
+
+    /// The writing editor under the drag. The editor finds itself behind this view, which
+    /// `hitTest(_:)` skips.
+    private func forwardingTarget(for sender: NSDraggingInfo) -> WritingTextView? {
+        guard let contentView = window?.contentView else { return nil }
+        let location = contentView.superview?.convert(sender.draggingLocation, from: nil) ?? sender.draggingLocation
+        var view = contentView.hitTest(location)
+        while let current = view {
+            if let textView = current as? WritingTextView {
+                return textView
+            }
+            if let scrollView = current as? NSScrollView, let textView = scrollView.documentView as? WritingTextView {
+                return textView
+            }
+            view = current.superview
+        }
+        return nil
     }
 
     /// Reads the drag pasteboard once per drag session instead of on every mouse move.
