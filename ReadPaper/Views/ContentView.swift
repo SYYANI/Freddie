@@ -5,7 +5,8 @@ import SwiftUI
 private enum InspectorColumnMetrics {
     static let minWidth: CGFloat = 280
     static let idealWidth: CGFloat = 340
-    static let maxWidth: CGFloat = 420
+    /// Wide enough for the Writing tab; the Paper tab opens at the ideal width.
+    static let maxWidth: CGFloat = 640
 }
 
 struct ContentView: View {
@@ -13,10 +14,15 @@ struct ContentView: View {
     @Environment(\.localizationBundle) private var bundle
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.pdfDisplayAppearance) private var displayAppearance
+    @Environment(\.openWindow) private var openWindow
     @Query(sort: \Paper.modifiedAt, order: .reverse) private var papers: [Paper]
     @Query(sort: \PaperAttachment.createdAt) private var attachments: [PaperAttachment]
     @Query(sort: \Note.modifiedAt, order: .reverse) private var notes: [Note]
+    @Query private var folders: [PaperFolder]
+    @Query private var folderMemberships: [PaperFolderMembership]
+    @Query private var itemTypeAssignments: [PaperItemTypeAssignment]
     @Query private var settingsRows: [AppSettings]
+    @AppStorage(InspectorMode.userDefaultsKey) private var inspectorModeRawValue = InspectorMode.paper.rawValue
 
     @State private var selectedPaperID: UUID?
     @State private var readerMode: ReaderMode = .pdf
@@ -39,6 +45,13 @@ struct ContentView: View {
     @State private var isPDFDropTargeted = false
     @State private var isImportingDroppedPDFs = false
     @State private var droppedPDFImportErrorMessage: String?
+    @State private var libraryFilter = PaperLibraryFilter()
+    @State private var htmlTranslatedPaperIDs: Set<UUID> = []
+    @State private var writingFocusRequest = 0
+    @State private var writingErrorMessage: String?
+    @State private var citationErrorMessage: String?
+    /// Identifies this window to `PaperLinkRouter`.
+    @State private var linkRouterWindowID = UUID()
 
     private var settings: AppSettings? {
         settingsRows.first
@@ -46,6 +59,35 @@ struct ContentView: View {
 
     private var isPaperAppearance: Bool {
         displayAppearance == .paper
+    }
+
+    private var libraryGrouping: PaperLibraryGrouping {
+        PaperLibraryGrouping(papers: papers, folders: folders, memberships: folderMemberships)
+    }
+
+    private var itemTypeResolution: PaperItemTypeResolution {
+        PaperItemTypeResolution(papers: papers, attachments: attachments, assignments: itemTypeAssignments)
+    }
+
+    /// The grouping the sidebar shows. The open paper stays listed even when it
+    /// stops matching, so unfavoriting it does not pull the row out from under
+    /// the pointer.
+    private func visibleLibraryGrouping(itemTypes: PaperItemTypeResolution) -> PaperLibraryGrouping {
+        let grouping = libraryGrouping
+        guard libraryFilter.isActive else { return grouping }
+
+        let facts = PaperLibraryFilter.Facts(
+            translatedPaperIDs: PaperLibraryFilter.translatedPaperIDs(
+                attachments: attachments,
+                htmlTranslatedPaperIDs: htmlTranslatedPaperIDs
+            ),
+            notedPaperIDs: Set(notes.map(\.paperID)),
+            itemTypes: itemTypes
+        )
+        let pinnedPaperID = selectedPaper?.id
+        return grouping.filtered { paper in
+            paper.id == pinnedPaperID || libraryFilter.matches(paper, facts: facts)
+        }
     }
 
     private var selectedPaper: Paper? {
@@ -57,6 +99,13 @@ struct ContentView: View {
 
     private var isInspectorCollapsed: Bool {
         settings?.resolvedInspectorCollapsed ?? false
+    }
+
+    private var inspectorModeBinding: Binding<InspectorMode> {
+        Binding(
+            get: { InspectorMode(rawValue: inspectorModeRawValue) ?? .paper },
+            set: { inspectorModeRawValue = $0.rawValue }
+        )
     }
 
     private var inspectorCollapsedBinding: Binding<Bool> {
@@ -126,15 +175,24 @@ struct ContentView: View {
         }
     }
 
-    private var sidebarColumn: some View {
+    private func sidebarColumn(itemTypes: PaperItemTypeResolution) -> some View {
         LibrarySidebarView(
             papers: papers,
+            grouping: visibleLibraryGrouping(itemTypes: itemTypes),
+            itemTypes: itemTypes,
+            filter: $libraryFilter,
             selectedPaper: selectedPaper,
             selectedPaperID: $selectedPaperID,
             isAddingPaper: $isAddingPaper,
-            onDeleteOffsets: confirmDeletion(at:),
             onDeletePaper: requestDeletion(of:)
         )
+        .task(id: HTMLTranslationLookupKey(
+            isNeeded: libraryFilter.criteria.contains(.translated),
+            selectedPaperID: selectedPaperID,
+            paperCount: papers.count
+        )) {
+            refreshHTMLTranslatedPaperIDs()
+        }
         .navigationSplitViewColumnWidth(min: 240, ideal: 260, max: 340)
         .overlay(alignment: .trailing) {
             if #unavailable(macOS 26.0) {
@@ -160,7 +218,8 @@ struct ContentView: View {
             isPDFSidenoteRailAvailable: $isPDFSidenoteRailAvailable,
             onCreateAnchoredNote: createNoteFromCurrentSelection,
             onSaveSelectionAssistantNote: saveSelectionAssistantResultAsNote,
-            onArxivLinkActivated: handleArxivLinkActivation
+            onArxivLinkActivated: handleArxivLinkActivation,
+            onRevealCitation: revealCitation
         )
         .navigationSplitViewColumnWidth(min: 520, ideal: 760)
         .background {
@@ -171,27 +230,35 @@ struct ContentView: View {
         }
     }
 
-    private func inspectorColumn(isCollapsed: Bool) -> some View {
+    private func inspectorColumn(isCollapsed: Bool, itemTypes: PaperItemTypeResolution) -> some View {
         InspectorPaneView(
             paper: selectedPaper,
+            itemType: selectedPaper.map { itemTypes.selection(for: $0.id) },
             notes: notes.filter { $0.paperID == selectedPaper?.id },
             isCollapsed: isCollapsed,
             currentSelectionContext: noteSelectionContext,
             focusedNoteID: $focusedNoteID,
+            mode: inspectorModeBinding,
+            writingFocusRequest: writingFocusRequest,
             onCreateNote: createNoteFromCurrentSelection,
-            onOpenNoteAnchor: openNoteAnchor
+            onOpenNoteAnchor: openNoteAnchor,
+            onOpenCitation: openCitation,
+            onOpenWriting: openWriting,
+            onCreateWritingAboutPaper: createWriting(about:)
         )
     }
 
     @ViewBuilder
     private var mainNavigation: some View {
+        let itemTypes = itemTypeResolution
+
         if #available(macOS 26.0, *) {
             NavigationSplitView {
-                sidebarColumn
+                sidebarColumn(itemTypes: itemTypes)
             } detail: {
                 readerColumn
                     .inspector(isPresented: inspectorPresentedBinding) {
-                        inspectorColumn(isCollapsed: false)
+                        inspectorColumn(isCollapsed: false, itemTypes: itemTypes)
                             .inspectorColumnWidth(
                                 min: InspectorColumnMetrics.minWidth,
                                 ideal: InspectorColumnMetrics.idealWidth,
@@ -201,11 +268,11 @@ struct ContentView: View {
             }
         } else {
             NavigationSplitView {
-                sidebarColumn
+                sidebarColumn(itemTypes: itemTypes)
             } content: {
                 readerColumn
             } detail: {
-                inspectorColumn(isCollapsed: isInspectorCollapsed)
+                inspectorColumn(isCollapsed: isInspectorCollapsed, itemTypes: itemTypes)
                     .navigationSplitViewColumnWidth(
                         min: isInspectorCollapsed ? 0 : InspectorColumnMetrics.minWidth,
                         ideal: isInspectorCollapsed ? 0 : InspectorColumnMetrics.idealWidth,
@@ -230,6 +297,10 @@ struct ContentView: View {
                     isPaperEnabled: isPaperAppearance
                 )
                     .frame(width: 0, height: 0)
+                HostingWindowReader { window in
+                    PaperLinkRouter.shared.register(windowID: linkRouterWindowID, window: window)
+                }
+                .frame(width: 0, height: 0)
             }
             .ignoresSafeArea()
         }
@@ -238,6 +309,31 @@ struct ContentView: View {
             isImporting: isImportingDroppedPDFs,
             perform: importDroppedPDFs
         )
+        .focusedSceneValue(\.newWritingAction, NewWritingAction { createWriting() })
+        .alert(String(localized: "Unable to Update Writing", bundle: bundle), isPresented: Binding(
+            get: { writingErrorMessage != nil },
+            set: { isPresented in
+                if !isPresented {
+                    writingErrorMessage = nil
+                }
+            }
+        )) {
+            Button(String(localized: "OK", bundle: bundle), role: .cancel) {}
+        } message: {
+            Text(writingErrorMessage ?? "")
+        }
+        .alert(String(localized: "Unable to Open Citation", bundle: bundle), isPresented: Binding(
+            get: { citationErrorMessage != nil },
+            set: { isPresented in
+                if !isPresented {
+                    citationErrorMessage = nil
+                }
+            }
+        )) {
+            Button(String(localized: "OK", bundle: bundle), role: .cancel) {}
+        } message: {
+            Text(citationErrorMessage ?? "")
+        }
         // .tint(isPaperAppearance ? ReadPaperTheme.accentColor : nil)
         .sheet(isPresented: $isAddingPaper) {
             AddPaperSheet(isPresented: $isAddingPaper, selectedPaperID: $selectedPaperID)
@@ -297,12 +393,7 @@ struct ContentView: View {
             }
             Button(String(localized: "Cancel", bundle: bundle), role: .cancel) {}
         } message: { paper in
-            Text(
-                String(
-                    format: String(localized: "“%@” and all of its local files, notes, reading state, and translation cache will be removed.", bundle: bundle),
-                    paper.title
-                )
-            )
+            Text(deletionMessage(for: paper))
         }
         .alert(String(localized: "Unable to Delete Paper", bundle: bundle), isPresented: Binding(
             get: { deletionErrorMessage != nil },
@@ -328,7 +419,19 @@ struct ContentView: View {
         } message: {
             Text(droppedPDFImportErrorMessage ?? "")
         }
+        .onChange(of: PaperLinkRouter.shared.delivery, initial: true) { _, delivery in
+            guard let delivery, delivery.windowID == linkRouterWindowID else { return }
+            PaperLinkRouter.shared.finish(delivery)
+            openCitation(delivery.citation, quote: delivery.quote)
+        }
+        .onDisappear {
+            PaperLinkRouter.shared.unregister(windowID: linkRouterWindowID)
+        }
         .onAppear {
+            PaperLinkRouter.shared.openMainWindow = { [openWindow] in
+                openWindow(id: MainWindowScene.id)
+            }
+            WritingLibrary.shared.loadIfNeeded()
             let restoredSettings = ensureSettings()
             restoreSelection(preferredPaperID: restoredSettings?.lastOpenedPaperID)
             persistSelectedPaperIDIfNeeded(selectedPaperID, using: restoredSettings)
@@ -339,7 +442,12 @@ struct ContentView: View {
         .onChange(of: selectedPaperID) { _, newValue in
             noteSelectionContext = nil
             focusedNoteID = nil
-            noteNavigationRequest = nil
+            // A citation opened from a writing switches papers and navigates in one step.
+            let isOpeningCitation = noteNavigationRequest?.paperID != nil
+                && noteNavigationRequest?.paperID == newValue
+            if isOpeningCitation == false {
+                noteNavigationRequest = nil
+            }
             sidenoteFocusRequest = nil
             persistSelectedPaperIDIfNeeded(newValue)
         }
@@ -353,11 +461,6 @@ struct ContentView: View {
         } catch {
             return nil
         }
-    }
-
-    private func confirmDeletion(at offsets: IndexSet) {
-        guard let offset = offsets.first, papers.indices.contains(offset) else { return }
-        requestDeletion(of: papers[offset])
     }
 
     private func requestDeletion(of paper: Paper) {
@@ -377,16 +480,31 @@ struct ContentView: View {
         }
     }
 
-    private func nextSelectionAfterDeletingPaper(withID paperID: UUID) -> UUID? {
-        let remainingPapers = papers.filter { $0.id != paperID }
-        guard !remainingPapers.isEmpty else { return nil }
+    /// Only needed while the Translated filter is on. Re-read when it turns on and
+    /// whenever the selection changes, which covers translating a paper and then
+    /// moving on to another one.
+    private func refreshHTMLTranslatedPaperIDs() {
+        guard libraryFilter.criteria.contains(.translated) else { return }
+        do {
+            htmlTranslatedPaperIDs = try PaperLibraryFilter.htmlTranslatedPaperIDs(modelContext: modelContext)
+        } catch {
+            assertionFailure("Failed to load HTML translation state: \(error.localizedDescription)")
+        }
+    }
 
-        guard let deletedIndex = papers.firstIndex(where: { $0.id == paperID }) else {
-            return remainingPapers.first?.id
+    /// Follows the sidebar's display order, which groups papers by folder and
+    /// leaves out papers hidden by the filter.
+    private func nextSelectionAfterDeletingPaper(withID paperID: UUID) -> UUID? {
+        let orderedPaperIDs = visibleLibraryGrouping(itemTypes: itemTypeResolution).orderedPaperIDs
+        let remainingPaperIDs = orderedPaperIDs.filter { $0 != paperID }
+        guard !remainingPaperIDs.isEmpty else { return nil }
+
+        guard let deletedIndex = orderedPaperIDs.firstIndex(of: paperID) else {
+            return remainingPaperIDs.first
         }
 
-        let nextIndex = min(deletedIndex, remainingPapers.count - 1)
-        return remainingPapers[nextIndex].id
+        let nextIndex = min(deletedIndex, remainingPaperIDs.count - 1)
+        return remainingPaperIDs[nextIndex]
     }
 
     private func restoreSelection(preferredPaperID: UUID?) {
@@ -510,6 +628,97 @@ struct ContentView: View {
 
     private func openNoteAnchor(_ note: Note) {
         noteNavigationRequest = note.navigationRequest
+    }
+
+    private func deletionMessage(for paper: Paper) -> String {
+        let message = String(
+            format: String(localized: "“%@” and all of its local files, notes, reading state, and translation cache will be removed.", bundle: bundle),
+            paper.title
+        )
+        let citingWritings = WritingLibrary.shared.writings(citing: paper.id).count
+        guard citingWritings > 0 else { return message }
+        return message + "\n\n" + AppLocalization.format(
+            "Writings citing this paper: %lld. Their text stays, but its citations will no longer open the paper.",
+            bundle: bundle,
+            citingWritings
+        )
+    }
+
+    /// Opens the cited paper at the cited passage. Switching papers and navigating
+    /// happen together: the request carries the paper, so the switch keeps it.
+    private func openCitation(_ citation: PaperCitation, quote: String?) {
+        guard papers.contains(where: { $0.id == citation.paperID }) else {
+            citationErrorMessage = String(localized: "The cited paper is no longer in your library.", bundle: bundle)
+            return
+        }
+        noteNavigationRequest = citation.navigationRequest(quote: quote)
+        if selectedPaperID != citation.paperID {
+            selectedPaperID = citation.paperID
+        }
+    }
+
+    /// Shows the writing: in its window when that is open, otherwise in the inspector.
+    private func showWritingPane(focusingEditor: Bool = false) {
+        if WritingWindowState.shared.isOpen {
+            openWindow(id: WritingWindowScene.id)
+            if focusingEditor {
+                WritingWindowState.shared.requestFocus()
+            }
+            return
+        }
+        inspectorModeRawValue = InspectorMode.writing.rawValue
+        if isInspectorCollapsed {
+            inspectorCollapsedBinding.wrappedValue = false
+        }
+        if focusingEditor {
+            writingFocusRequest &+= 1
+        }
+    }
+
+    private func openWriting(_ id: UUID) {
+        WritingLibrary.shared.selectWriting(id)
+        showWritingPane()
+    }
+
+    /// Opens the writing that cites a passage marked in the reader, at the citation.
+    private func revealCitation(_ mark: WritingCitationMark) {
+        do {
+            try WritingDocumentCenter.shared.revealCitation(mark.record, inWriting: mark.writingID)
+            showWritingPane()
+        } catch {
+            writingErrorMessage = error.localizedDescription
+        }
+    }
+
+    /// Creates a writing, optionally starting with markdown, and opens it with the keyboard
+    /// focus in the editor.
+    private func createWriting(markdown: String = "") {
+        do {
+            WritingDocumentCenter.shared.saveAll()
+            try WritingLibrary.shared.createWriting(markdown: markdown)
+            showWritingPane(focusingEditor: true)
+        } catch {
+            writingErrorMessage = error.localizedDescription
+        }
+    }
+
+    /// A writing about one paper: its title as the heading and a citation of the paper.
+    private func createWriting(about paper: Paper) {
+        let citation = PaperCitation(paperID: paper.id)
+        let label = PaperCitation.label(
+            authors: paper.authors,
+            title: paper.title,
+            year: paper.publishedAt.map { Calendar(identifier: .gregorian).component(.year, from: $0) },
+            pageIndex: nil
+        )
+        let heading = paper.title
+            .components(separatedBy: .whitespacesAndNewlines)
+            .filter { $0.isEmpty == false }
+            .joined(separator: " ")
+        let markdown = "# \(MarkdownEscaping.escapedInlineText(heading))\n\n"
+            + PaperCitation.inlineMarkdown(label: label, citation: citation)
+            + "\n\n"
+        createWriting(markdown: markdown)
     }
 
     private func handleArxivLinkActivation(_ url: URL) {
@@ -670,4 +879,10 @@ private struct ArxivLinkImportStatusSheet: View {
         }
         .padding(24)
     }
+}
+
+private struct HTMLTranslationLookupKey: Equatable {
+    var isNeeded: Bool
+    var selectedPaperID: UUID?
+    var paperCount: Int
 }

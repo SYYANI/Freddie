@@ -16,6 +16,19 @@
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
 	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>CFBundleURLName</key>
+			<string>com.yiyan.ReadPaper.paper-link</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>readpaper</string>
+			</array>
+		</dict>
+	</array>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSMinimumSystemVersion</key>
@@ -26,5 +39,18 @@
 	<string>Copyright © 2026 SYYANI.</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<key>UTExportedTypeDeclarations</key>
+	<array>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>Freddie Library Paper</string>
+			<key>UTTypeIdentifier</key>
+			<string>com.yiyan.ReadPaper.paper-reference</string>
+		</dict>
+	</array>
 </dict>
 </plist>

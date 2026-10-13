@@ -298,6 +298,10 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
     var onFindStatusChanged: ((DocumentFindStatus) -> Void)? = nil
     var sidenoteAnchors: [PDFSidenoteAnchor] = []
     var sidenoteLayout: PDFSidenoteLayoutModel? = nil
+    /// Passages cited in writings, underlined in the document.
+    var citationMarks: [WritingCitationMark] = []
+    /// A single click on cited passages, with the marks under the pointer.
+    var onCitationMarksActivated: (([String]) -> Void)? = nil
 
     #if os(macOS)
     func makeNSView(context: Context) -> PDFView {
@@ -361,6 +365,7 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
         context.coordinator.onArxivLinkActivated = onArxivLinkActivated
         context.coordinator.onDocumentPageCountChanged = onDocumentPageCountChanged
         context.coordinator.onFindStatusChanged = onFindStatusChanged
+        context.coordinator.onCitationMarksActivated = onCitationMarksActivated
         if context.coordinator.lastSelectionResetToken != selectionResetToken {
             context.coordinator.lastSelectionResetToken = selectionResetToken
             view.clearSelection()
@@ -406,12 +411,17 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
             context.coordinator.loadedPaperID != paperID ||
             context.coordinator.loadedAttachmentID != attachmentID
         if shouldReloadDocument {
-            let restorePosition = context.coordinator.readingPosition(
-                fallbackPageIndex: pageIndex,
-                in: view
-            )
+            // Only a reload of the same attachment keeps the current scroll position, also when
+            // a translation update writes a new file. Another paper opens at `pageIndex`: its
+            // restored page, or the page of a citation opened from a writing.
+            let isSameDocument = context.coordinator.loadedPaperID == paperID &&
+                context.coordinator.loadedAttachmentID == attachmentID
+            let restorePosition = isSameDocument
+                ? context.coordinator.readingPosition(fallbackPageIndex: pageIndex, in: view)
+                : PDFReadingPosition(pageIndex: pageIndex)
             context.coordinator.prepareForProgrammaticPageRestore(to: restorePosition)
             context.coordinator.clearSelectionAssistantHistoryAnnotations()
+            context.coordinator.clearCitationMarkAnnotations()
             context.coordinator.invalidateFindDocument(
                 in: view,
                 keepingPosition: context.coordinator.loadedURL == fileURL &&
@@ -448,6 +458,7 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
             in: view,
             force: shouldReloadDocument
         )
+        context.coordinator.applyCitationMarks(citationMarks, in: view, force: shouldReloadDocument)
         context.coordinator.applyNoteNavigationIfNeeded(noteNavigationRequest, in: view)
         context.coordinator.applyFindRequest(findRequest, in: view)
         context.coordinator.applySidenoteAnchors(
@@ -532,6 +543,11 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
         private var appliedSelectionAssistantHistoryAnchors: [SelectionAssistantHistoryAnchor] = []
         private var renderedSelectionAssistantHistoryAnchorIDs: Set<String> = []
         private var selectionAssistantHistoryAnnotations: [(SelectionAssistantHistoryAnchor, PDFAnnotation)] = []
+        var onCitationMarksActivated: (([String]) -> Void)?
+        private var citationMarkRenderTask: Task<Void, Never>?
+        private var appliedCitationMarks: [WritingCitationMark] = []
+        private var renderedCitationMarkIDs: Set<String> = []
+        private var citationMarkAnnotations: [(markID: String, annotation: PDFAnnotation)] = []
         var onFindStatusChanged: ((DocumentFindStatus) -> Void)?
         private var findDocumentGeneration = 0
         private var findPageTexts: [DocumentSearchText]?
@@ -768,6 +784,9 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
                     self.flashSidenote(on: page, at: point)
                     return self.handleSelectionAssistantHistoryClick(on: page, at: point)
                 }
+                interactiveView.onBrowseSingleClick = { [weak self] page, point in
+                    self?.handleCitationMarkClick(on: page, at: point)
+                }
                 interactiveView.onInkStrokeCompleted = { [weak self] page, points in
                     self?.addInkAnnotation(on: page, points: points)
                 }
@@ -790,6 +809,7 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
             removeSidenoteHighlights()
             clearNoteNavigationHighlight()
             clearSelectionAssistantHistoryAnnotations()
+            clearCitationMarkAnnotations()
             if let pdfView {
                 NotificationCenter.default.removeObserver(
                     self,
@@ -1273,39 +1293,148 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
                     continue
                 }
                 let clampedPageIndex = min(max(0, pageIndex), document.pageCount - 1)
-                guard nearbyPageIndexes.contains(clampedPageIndex) else { continue }
-                guard let page = document.page(at: clampedPageIndex),
-                      let pageText = page.string,
-                      let range = PDFNoteNavigationTextMatcher.range(of: anchor.quote, in: pageText),
-                      let selection = page.selection(for: range) else {
+                guard nearbyPageIndexes.contains(clampedPageIndex),
+                      let passage = Self.passageLineBounds(of: anchor.quote, onPageAt: clampedPageIndex, in: document) else {
                     continue
                 }
-
-                let lineSelections = selection.selectionsByLine()
-                let selections = lineSelections.isEmpty ? [selection] : lineSelections
-                var didRenderAnchor = false
-                for line in selections {
-                    let bounds = line.bounds(for: page)
-                        .intersection(page.bounds(for: .cropBox))
-                        .standardized
-                    guard bounds.isNull == false, bounds.width > 0, bounds.height > 0 else { continue }
-                    let annotation = PDFAnnotation(
-                        bounds: bounds,
-                        forType: .underline,
-                        withProperties: nil
-                    )
-                    annotation.color = selectionAssistantHistoryColor
-                    let border = PDFBorder()
-                    border.lineWidth = 1
-                    annotation.border = border
-                    page.addAnnotation(annotation)
+                for bounds in passage.lines {
+                    let annotation = Self.underline(bounds, color: selectionAssistantHistoryColor, lineWidth: 1)
+                    passage.page.addAnnotation(annotation)
                     selectionAssistantHistoryAnnotations.append((anchor, annotation))
-                    didRenderAnchor = true
                 }
-                if didRenderAnchor {
-                    renderedSelectionAssistantHistoryAnchorIDs.insert(anchor.id)
+                renderedSelectionAssistantHistoryAnchorIDs.insert(anchor.id)
+            }
+        }
+
+        /// The line rects of `quote` on a page, for in-memory underlines.
+        static func passageLineBounds(
+            of quote: String,
+            onPageAt pageIndex: Int,
+            in document: PDFDocument
+        ) -> (page: PDFPage, lines: [CGRect])? {
+            guard let page = document.page(at: pageIndex),
+                  let pageText = page.string,
+                  let range = PDFNoteNavigationTextMatcher.range(of: quote, in: pageText),
+                  let selection = page.selection(for: range) else {
+                return nil
+            }
+            let lineSelections = selection.selectionsByLine()
+            let lines = (lineSelections.isEmpty ? [selection] : lineSelections).compactMap { line -> CGRect? in
+                let bounds = line.bounds(for: page)
+                    .intersection(page.bounds(for: .cropBox))
+                    .standardized
+                return bounds.isNull || bounds.width <= 0 || bounds.height <= 0 ? nil : bounds
+            }
+            return lines.isEmpty ? nil : (page, lines)
+        }
+
+        private static func underline(_ bounds: CGRect, color: PlatformPDFColor, lineWidth: CGFloat) -> PDFAnnotation {
+            let annotation = PDFAnnotation(bounds: bounds, forType: .underline, withProperties: nil)
+            annotation.color = color
+            let border = PDFBorder()
+            border.lineWidth = lineWidth
+            annotation.border = border
+            return annotation
+        }
+
+        // MARK: Citation marks
+
+        /// Underlines passages cited in writings, like the assistant history: in-memory
+        /// annotations on the pages around the current one.
+        func applyCitationMarks(_ marks: [WritingCitationMark], in pdfView: PDFView, force: Bool = false) {
+            let matchingMarks = marks.filter { mark in
+                mark.record.pageIndex != nil
+                    && (mark.record.attachmentID == nil || mark.record.attachmentID == attachmentID)
+            }
+            guard force || matchingMarks != appliedCitationMarks else { return }
+            clearCitationMarkAnnotations()
+            appliedCitationMarks = matchingMarks
+            scheduleCitationMarkRendering(in: pdfView)
+        }
+
+        private func scheduleCitationMarkRendering(in pdfView: PDFView) {
+            citationMarkRenderTask?.cancel()
+            guard appliedCitationMarks.isEmpty == false else { return }
+            citationMarkRenderTask = Task { @MainActor [weak self, weak pdfView] in
+                do {
+                    try await Task.sleep(for: .milliseconds(120))
+                } catch {
+                    return
+                }
+                guard Task.isCancelled == false, let self, let pdfView else { return }
+                self.renderCitationMarksNearCurrentPage(in: pdfView)
+                self.citationMarkRenderTask = nil
+            }
+        }
+
+        private func renderCitationMarksNearCurrentPage(in pdfView: PDFView) {
+            guard let document = pdfView.document,
+                  document.pageCount > 0,
+                  let currentPage = pdfView.currentPage else {
+                return
+            }
+            let currentPageIndex = document.index(for: currentPage)
+            guard currentPageIndex != NSNotFound else { return }
+            let nearbyPageIndexes = max(0, currentPageIndex - 1)...min(document.pageCount - 1, currentPageIndex + 1)
+
+            for mark in appliedCitationMarks {
+                guard let pageIndex = mark.record.pageIndex,
+                      renderedCitationMarkIDs.contains(mark.id) == false else {
+                    continue
+                }
+                let clampedPageIndex = min(max(0, pageIndex), document.pageCount - 1)
+                guard nearbyPageIndexes.contains(clampedPageIndex) else { continue }
+                // A passage that runs onto the next page is only found by its start.
+                let candidates = [mark.record.markedText, mark.record.quotePrefix].compactMap { $0 }
+                guard let passage = candidates.lazy.compactMap({
+                    Self.passageLineBounds(of: $0, onPageAt: clampedPageIndex, in: document)
+                }).first else {
+                    continue
+                }
+                for bounds in passage.lines {
+                    let annotation = Self.underline(bounds, color: Self.citationMarkColor, lineWidth: 1.5)
+                    passage.page.addAnnotation(annotation)
+                    citationMarkAnnotations.append((mark.id, annotation))
+                }
+                renderedCitationMarkIDs.insert(mark.id)
+            }
+        }
+
+        func clearCitationMarkAnnotations() {
+            citationMarkRenderTask?.cancel()
+            citationMarkRenderTask = nil
+            for (_, annotation) in citationMarkAnnotations {
+                annotation.page?.removeAnnotation(annotation)
+            }
+            citationMarkAnnotations = []
+            appliedCitationMarks = []
+            renderedCitationMarkIDs = []
+        }
+
+        fileprivate static var citationMarkColor: PlatformPDFColor {
+            #if os(macOS)
+            NSColor(srgbRed: 0.49, green: 0.36, blue: 0.84, alpha: 0.62)
+            #else
+            UIColor(red: 0.49, green: 0.36, blue: 0.84, alpha: 0.62)
+            #endif
+        }
+
+        /// The citation marks under a click, most recently rendered last.
+        func citationMarkIDs(on page: PDFPage, at point: CGPoint) -> [String] {
+            var ids: [String] = []
+            for (markID, annotation) in citationMarkAnnotations
+            where annotation.page === page && annotation.bounds.insetBy(dx: -2, dy: -2).contains(point) {
+                if ids.contains(markID) == false {
+                    ids.append(markID)
                 }
             }
+            return ids
+        }
+
+        private func handleCitationMarkClick(on page: PDFPage, at point: CGPoint) {
+            let ids = citationMarkIDs(on: page, at: point)
+            guard ids.isEmpty == false else { return }
+            onCitationMarksActivated?(ids)
         }
 
         func clearSelectionAssistantHistoryAnnotations() {
@@ -1819,6 +1948,7 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
             scheduleCurrentPageIndexUpdate()
             if let pdfView {
                 scheduleSelectionAssistantHistoryRendering(in: pdfView)
+                scheduleCitationMarkRendering(in: pdfView)
             }
         }
 
@@ -1886,6 +2016,9 @@ private final class InteractivePDFView: PDFView {
     var onInteractionBegan: (() -> Void)?
     var onLinkActivated: ((URL) -> Bool)?
     var onBrowseClick: ((PDFPage, CGPoint) -> Bool)?
+    /// A click that neither starts a double click nor selects text, reported once the
+    /// double-click interval has passed.
+    var onBrowseSingleClick: ((PDFPage, CGPoint) -> Void)?
     var onDebugRegionSelected: ((PDFDebugRegionSelection) -> Void)?
     var onInkStrokeCompleted: ((PDFPage, [CGPoint]) -> Void)?
     var onEraseRequested: ((PDFPage, CGPoint) -> Void)?
@@ -1896,6 +2029,7 @@ private final class InteractivePDFView: PDFView {
     private var interactionStartPoint: CGPoint?
     private var inkViewPoints: [CGPoint] = []
     private var suppressBrowseMouseSequence = false
+    private var pendingSingleClick: Task<Void, Never>?
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -1934,14 +2068,21 @@ private final class InteractivePDFView: PDFView {
     }
 
     override func mouseDown(with event: NSEvent) {
+        pendingSingleClick?.cancel()
+        pendingSingleClick = nil
         if interactionMode == .browse {
             onInteractionBegan?()
             if event.type == .leftMouseDown {
                 let viewPoint = convert(event.locationInWindow, from: nil)
-                if let page = page(for: viewPoint, nearest: false),
-                   onBrowseClick?(page, convert(viewPoint, to: page)) == true {
-                    suppressBrowseMouseSequence = true
-                    return
+                if let page = page(for: viewPoint, nearest: false) {
+                    let pagePoint = convert(viewPoint, to: page)
+                    if onBrowseClick?(page, pagePoint) == true {
+                        suppressBrowseMouseSequence = true
+                        return
+                    }
+                    if event.clickCount == 1 {
+                        scheduleSingleClick(on: page, at: pagePoint)
+                    }
                 }
             }
             super.mouseDown(with: event)
@@ -1977,6 +2118,23 @@ private final class InteractivePDFView: PDFView {
             requestErase(on: page, viewPoint: point)
         case .textNote:
             onTextNoteRequested?(page, convert(point, to: page))
+        }
+    }
+
+    /// PDFView may track the mouse itself, so the click is judged after the double-click
+    /// interval instead of on mouse up: the button is up and no text was selected.
+    private func scheduleSingleClick(on page: PDFPage, at point: CGPoint) {
+        guard onBrowseSingleClick != nil else { return }
+        let delay = min(NSEvent.doubleClickInterval, 0.35)
+        pendingSingleClick = Task { @MainActor [weak self, weak page] in
+            try? await Task.sleep(for: .seconds(delay))
+            guard Task.isCancelled == false, let self, let page else { return }
+            self.pendingSingleClick = nil
+            guard NSEvent.pressedMouseButtons & 1 == 0,
+                  (self.currentSelection?.string ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                return
+            }
+            self.onBrowseSingleClick?(page, point)
         }
     }
 

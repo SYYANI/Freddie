@@ -39,6 +39,8 @@ struct DualPDFReaderView: View {
     var reloadToken: Int = 0
     var noteNavigationRequest: NoteNavigationRequest? = nil
     var selectionAssistantHistoryAnchors: [SelectionAssistantHistoryAnchor] = []
+    var citationMarks: [WritingCitationMark] = []
+    var onCitationMarksActivated: (([String]) -> Void)? = nil
     var annotationSession: PDFAnnotationSession? = nil
     var debugRegionSelectionEnabled = false
     var onDebugRegionSelected: ((PDFDebugRegionSelection) -> Void)? = nil
@@ -197,7 +199,9 @@ struct DualPDFReaderView: View {
                 debugRegionSelectionEnabled: debugRegionSelectionEnabled,
                 onDebugRegionSelected: onDebugRegionSelected,
                 findRequest: findRequest,
-                onFindStatusChanged: onFindStatusChanged
+                onFindStatusChanged: onFindStatusChanged,
+                citationMarks: citationMarks,
+                onCitationMarksActivated: onCitationMarksActivated
             )
         }
     }

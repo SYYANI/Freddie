@@ -92,6 +92,9 @@ struct ReaderPaneView: View {
         UUID?
     ) throws -> UUID
     var onArxivLinkActivated: (URL) -> Void
+    /// Opens the writing that cites a passage marked in the reader.
+    var onRevealCitation: (WritingCitationMark) -> Void = { _ in }
+    var writingLibrary: WritingLibrary = .shared
 
     @State private var pdfPageIndex = 0
     @State private var htmlScrollRatio = 0.0
@@ -115,6 +118,7 @@ struct ReaderPaneView: View {
     @State private var digestNoticeMessage: String?
     @State private var digestNoticeTitle: String?
     @State private var digestErrorMessage: String?
+    @State private var writingQuoteErrorMessage: String?
     @State private var isExportingHTMLPDF = false
     @State private var htmlPDFExportError: String?
     @State private var copyToastMessage: String?
@@ -348,6 +352,7 @@ struct ReaderPaneView: View {
                 noteSelectionContext = nil
                 clearSelectionAssistant()
                 restoreReadingStateForCurrentPaper()
+                revealNavigationArrivingWithPaper()
                 refreshSelectionAssistantHistoryAnchors()
             }
             .onChange(of: readerAvailability) { _, newValue in
@@ -446,6 +451,10 @@ struct ReaderPaneView: View {
 
     var body: some View {
         readerBody
+            .modifier(WritingQuoteSupport(
+                errorMessage: $writingQuoteErrorMessage,
+                action: quoteInWritingAction
+            ))
             .task(id: findQuery) {
                 await commitFindQueryAfterTyping()
             }
@@ -1491,6 +1500,85 @@ struct ReaderPaneView: View {
         showCopyToast(message: String(localized: "Link copied to the clipboard.", bundle: bundle))
     }
 
+    private var quoteInWritingAction: QuoteInWritingAction? {
+        guard paper != nil, let selection = noteSelectionContext, selection.trimmedQuote != nil else {
+            return nil
+        }
+        return QuoteInWritingAction {
+            quoteInWriting(selection, citeOnly: false)
+        }
+    }
+
+    /// Adds the selected passage to the writing open in the inspector's Writing tab, as
+    /// a block quote with a citation linking back here, or with `citeOnly` just the citation.
+    @MainActor
+    private func quoteInWriting(_ selection: NoteSelectionContext, citeOnly: Bool) {
+        guard let paper, let quote = selection.trimmedQuote else { return }
+        let label = PaperCitation.label(
+            authors: paper.authors,
+            title: paper.title,
+            year: paper.publishedAt.map { Calendar(identifier: .gregorian).component(.year, from: $0) },
+            pageIndex: selection.pageIndex
+        )
+        do {
+            let title = try WritingDocumentCenter.shared.insertCitation(
+                PaperCitation(paperID: paper.id, selection: selection),
+                label: label,
+                quote: citeOnly ? nil : quote
+            )
+            clearSelectionAssistant()
+            showCopyToast(message: AppLocalization.format(
+                citeOnly ? "Cited in “%@”." : "Quoted in “%@”.",
+                bundle: bundle,
+                title.isEmpty ? String(localized: "Untitled Writing", bundle: bundle) : title
+            ))
+        } catch {
+            writingQuoteErrorMessage = error.localizedDescription
+        }
+    }
+
+    /// Passages of this paper cited in writings.
+    private var citationMarks: [WritingCitationMark] {
+        guard let paper else { return [] }
+        return writingLibrary.citationMarks(for: paper.id)
+    }
+
+    /// A click on a cited passage opens the writing citing it, or offers a menu when
+    /// several writings cite it.
+    @MainActor
+    private func handleCitationMarksActivated(_ ids: [String]) {
+        let marks = citationMarks.filter { ids.contains($0.id) }
+        var seenWritings = Set<UUID>()
+        let writingOrder = writingLibrary.writings.map(\.id)
+        let choices = marks
+            .filter { seenWritings.insert($0.writingID).inserted }
+            .sorted { (writingOrder.firstIndex(of: $0.writingID) ?? .max) < (writingOrder.firstIndex(of: $1.writingID) ?? .max) }
+        guard let first = choices.first else { return }
+        guard choices.count > 1 else {
+            onRevealCitation(first)
+            return
+        }
+
+        let menu = NSMenu()
+        let heading = NSMenuItem(title: String(localized: "Cited In", bundle: bundle), action: nil, keyEquivalent: "")
+        heading.isEnabled = false
+        menu.addItem(heading)
+        let target = CitationMenuTarget(onSelect: onRevealCitation)
+        for mark in choices {
+            let title = writingLibrary.metadata(for: mark.writingID)?.title ?? ""
+            let item = NSMenuItem(
+                title: title.isEmpty ? String(localized: "Untitled Writing", bundle: bundle) : title,
+                action: #selector(CitationMenuTarget.select(_:)),
+                keyEquivalent: ""
+            )
+            item.target = target
+            item.representedObject = mark.id
+            target.marks[mark.id] = mark
+            menu.addItem(item)
+        }
+        menu.popUp(positioning: nil, at: NSEvent.mouseLocation, in: nil)
+    }
+
     private func showCopyToast(message: String) {
         copyToastDismissTask?.cancel()
         copyToastMessage = message
@@ -1613,6 +1701,8 @@ struct ReaderPaneView: View {
                                 segmentUpdate: htmlSegmentUpdate,
                                 noteNavigationRequest: noteNavigationRequest,
                                 selectionAssistantHistoryAnchors: selectionAssistantHistoryAnchors,
+                                citationMarks: citationMarks,
+                                onCitationMarksActivated: handleCitationMarksActivated,
                                 selectionHighlightResetToken: htmlSelectionHighlightResetToken,
                                 nativeSelectionClearToken: htmlNativeSelectionClearToken,
                                 onNoteSelectionChanged: handleNoteSelectionChange,
@@ -1660,6 +1750,8 @@ struct ReaderPaneView: View {
                                 reloadToken: pdfReloadToken,
                                 noteNavigationRequest: noteNavigationRequest,
                                 selectionAssistantHistoryAnchors: selectionAssistantHistoryAnchors,
+                                citationMarks: citationMarks,
+                                onCitationMarksActivated: handleCitationMarksActivated,
                                 annotationSession: pdfAnnotationSession,
                                 debugRegionSelectionEnabled: pdfDebugModeEnabled,
                                 onDebugRegionSelected: handlePDFDebugRegionSelection,
@@ -1704,7 +1796,8 @@ struct ReaderPaneView: View {
                     onSourceActivated: activateSelectionAssistantSource,
                     onConversationChanged: persistSelectionAssistantConversation,
                     onInteractionBegan: pinSelectionAssistant,
-                    onDismiss: clearSelectionAssistant
+                    onDismiss: clearSelectionAssistant,
+                    quoteInWriting: quoteInWriting
                 )
                 .transition(.move(edge: .bottom).combined(with: .opacity))
                 .zIndex(10)
@@ -2638,7 +2731,9 @@ struct ReaderPaneView: View {
                             findRequest: findRequest,
                             onFindStatusChanged: handleFindStatusChange,
                             sidenoteAnchors: anchors,
-                            sidenoteLayout: pdfSidenoteLayout
+                            sidenoteLayout: pdfSidenoteLayout,
+                            citationMarks: citationMarks,
+                            onCitationMarksActivated: handleCitationMarksActivated
                         )
 
                         if anchors.isEmpty == false {
@@ -2872,6 +2967,13 @@ struct ReaderPaneView: View {
         htmlSelectionHighlightResetToken &+= 1
     }
 
+    /// A citation opened from a writing arrives together with its paper. Going to it after
+    /// the paper's reading position is restored works whichever change SwiftUI handles first.
+    private func revealNavigationArrivingWithPaper() {
+        guard let targetPaperID = noteNavigationRequest?.paperID, targetPaperID == paper?.id else { return }
+        revealNoteAnchorIfNeeded()
+    }
+
     private func revealNoteAnchorIfNeeded() {
         guard let request = noteNavigationRequest else { return }
 
@@ -3078,5 +3180,47 @@ struct ReaderPaneView: View {
         DispatchQueue.main.async {
             suspendReadingStatePersistence = false
         }
+    }
+}
+
+/// Receives the choice from the menu of writings citing a passage.
+private final class CitationMenuTarget: NSObject {
+    var marks: [String: WritingCitationMark] = [:]
+    private let onSelect: (WritingCitationMark) -> Void
+
+    init(onSelect: @escaping (WritingCitationMark) -> Void) {
+        self.onSelect = onSelect
+    }
+
+    @MainActor @objc func select(_ sender: NSMenuItem) {
+        guard let id = sender.representedObject as? String, let mark = marks[id] else { return }
+        onSelect(mark)
+    }
+}
+
+/// The reader's part of "Quote in Writing": the menu command and its error alert.
+private struct WritingQuoteSupport: ViewModifier {
+    @Environment(\.localizationBundle) private var bundle
+    @Binding var errorMessage: String?
+    var action: QuoteInWritingAction?
+
+    func body(content: Content) -> some View {
+        content
+            .focusedSceneValue(\.quoteInWritingAction, action)
+            .alert(
+                String(localized: "Unable to Quote in Writing", bundle: bundle),
+                isPresented: Binding(
+                    get: { errorMessage != nil },
+                    set: { isPresented in
+                        if !isPresented {
+                            errorMessage = nil
+                        }
+                    }
+                )
+            ) {
+                Button(String(localized: "OK", bundle: bundle), role: .cancel) {}
+            } message: {
+                Text(errorMessage ?? "")
+            }
     }
 }

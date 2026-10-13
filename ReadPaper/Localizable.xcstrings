@@ -1,171 +1,6 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
-    "Block" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "区块"
-          }
-        }
-      }
-    },
-    "Click" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "点击"
-          }
-        }
-      }
-    },
-    "⇧ Click" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "⇧ 点击"
-          }
-        }
-      }
-    },
-    "Click a region to hide it, or a faded region to restore it. Shift-click another region to make the same change to everything in between. Press ↑ or ↓ to resize the outline and Esc to finish." : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "点击区域即可隐藏，点击半透明区域可恢复。按住 ⇧ 点击另一处，可对两者之间的内容做同样的调整。按 ↑ 或 ↓ 调整选框大小，按 Esc 完成。"
-          }
-        }
-      }
-    },
-    "Code" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "代码"
-          }
-        }
-      }
-    },
-    "Formula" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "公式"
-          }
-        }
-      }
-    },
-    "Heading" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "标题"
-          }
-        }
-      }
-    },
-    "Hide or restore parts of this page (%lld hidden)" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "隐藏或恢复页面中的部分区域（已隐藏 %lld 处）"
-          }
-        }
-      }
-    },
-    "Hide/Restore" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "隐藏/恢复"
-          }
-        }
-      }
-    },
-    "Image" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "图片"
-          }
-        }
-      }
-    },
-    "Link" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "链接"
-          }
-        }
-      }
-    },
-    "List" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "列表"
-          }
-        }
-      }
-    },
-    "List Item" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "列表项"
-          }
-        }
-      }
-    },
-    "Media" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "媒体"
-          }
-        }
-      }
-    },
-    "Paragraph" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "段落"
-          }
-        }
-      }
-    },
     " (part %d/%d)" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -177,6 +12,16 @@
         }
       }
     },
+    "Long notes across papers. Quotes link back to the source." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "跨论文的长篇笔记，引文可跳回原处。"
+          }
+        }
+      }
+    },
     "“%@” and all of its local files, notes, reading state, and translation cache will be removed." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -184,6 +29,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "“%1$@”及其所有本地文件、笔记、阅读状态和翻译缓存都将被删除。"
+          }
+        }
+      }
+    },
+    "“%@” will be moved to the Trash." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“%@”将被移到废纸篓。"
           }
         }
       }
@@ -213,6 +69,17 @@
         }
       }
     },
+    "%@ regions" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 个区块"
+          }
+        }
+      }
+    },
     "%@/%@" : {
       "localizations" : {
         "en" : {
@@ -225,6 +92,28 @@
     },
     "%@%%" : {
 
+    },
+    "%1$@ (%2$lld)" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@（%2$lld）"
+          }
+        }
+      }
+    },
+    "%1$lld of %2$lld" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld / %2$lld"
+          }
+        }
+      }
     },
     "%d model profile%@ ready to use." : {
       "extractionState" : "stale",
@@ -304,6 +193,17 @@
     },
     "•" : {
 
+    },
+    "⇧ Click" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "⇧ 点击"
+          }
+        }
+      }
     },
     "1. Save a provider API key" : {
       "extractionState" : "stale",
@@ -516,6 +416,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "添加 PDF 批注"
+          }
+        }
+      }
+    },
+    "Add to Favorites" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "添加到收藏"
           }
         }
       }
@@ -743,6 +654,17 @@
         }
       }
     },
+    "Artwork" : {
+      "comment" : "Bibliographic item type (Zotero item type name)",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "艺术品"
+          }
+        }
+      }
+    },
     "arXiv %@" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -848,6 +770,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "助手范围"
+          }
+        }
+      }
+    },
+    "Audio Recording" : {
+      "comment" : "Bibliographic item type (Zotero item type name)",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "音频"
           }
         }
       }
@@ -1165,6 +1098,39 @@
         }
       }
     },
+    "Bill" : {
+      "comment" : "Bibliographic item type (Zotero item type name)",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "法案"
+          }
+        }
+      }
+    },
+    "Block" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "区块"
+          }
+        }
+      }
+    },
+    "Blog Post" : {
+      "comment" : "Bibliographic item type (Zotero item type name)",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "博客帖文"
+          }
+        }
+      }
+    },
     "Blue" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1172,6 +1138,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "蓝色"
+          }
+        }
+      }
+    },
+    "Book" : {
+      "comment" : "Bibliographic item type (Zotero item type name)",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "图书"
+          }
+        }
+      }
+    },
+    "Book Section" : {
+      "comment" : "Bibliographic item type (Zotero item type name)",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "图书章节"
           }
         }
       }
@@ -1270,6 +1258,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在取消..."
+          }
+        }
+      }
+    },
+    "Case" : {
+      "comment" : "Bibliographic item type (Zotero item type name)",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "司法案例"
           }
         }
       }
@@ -1510,6 +1509,39 @@
         }
       }
     },
+    "Cited In" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "引用于"
+          }
+        }
+      }
+    },
+    "Cited in “%@”." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已将引用插入“%@”。"
+          }
+        }
+      }
+    },
+    "Cited papers: %lld" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "引用论文：%lld"
+          }
+        }
+      }
+    },
     "Clear" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1517,6 +1549,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "清除"
+          }
+        }
+      }
+    },
+    "Clear Filter" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "清除筛选"
           }
         }
       }
@@ -1542,6 +1585,28 @@
         }
       }
     },
+    "Click" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "点击"
+          }
+        }
+      }
+    },
+    "Click a region to hide it, or a faded region to restore it. Shift-click another region to make the same change to everything in between. Press ↑ or ↓ to resize the outline and Esc to finish." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "点击区域即可隐藏，点击半透明区域可恢复。按住 ⇧ 点击另一处，可对两者之间的内容做同样的调整。按 ↑ 或 ↓ 调整选框大小，按 Esc 完成。"
+          }
+        }
+      }
+    },
     "Click to edit note" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1558,6 +1623,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "关闭"
+          }
+        }
+      }
+    },
+    "Code" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "代码"
           }
         }
       }
@@ -1590,6 +1666,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "完整联网搜索 Trace"
+          }
+        }
+      }
+    },
+    "Conference Paper" : {
+      "comment" : "Bibliographic item type (Zotero item type name)",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "会议论文"
           }
         }
       }
@@ -1740,6 +1827,17 @@
         }
       }
     },
+    "Create" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "创建"
+          }
+        }
+      }
+    },
     "Create a note from the current PDF or HTML selection, or start a blank note." : {
       "localizations" : {
         "zh-Hans" : {
@@ -1825,6 +1923,17 @@
         }
       }
     },
+    "Dataset" : {
+      "comment" : "Bibliographic item type (Zotero item type name)",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "数据集"
+          }
+        }
+      }
+    },
     "Decrease Font Size" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1889,6 +1998,28 @@
         }
       }
     },
+    "Delete Folder?" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "删除文件夹？"
+          }
+        }
+      }
+    },
+    "Delete Folder…" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "删除文件夹…"
+          }
+        }
+      }
+    },
     "Delete note" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1944,6 +2075,28 @@
         }
       }
     },
+    "Delete Writing?" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "删除写作稿？"
+          }
+        }
+      }
+    },
+    "Delete Writing…" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "删除写作稿…"
+          }
+        }
+      }
+    },
     "Development" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1951,6 +2104,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "开发"
+          }
+        }
+      }
+    },
+    "Dictionary Entry" : {
+      "comment" : "Bibliographic item type (Zotero item type name)",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "词条"
           }
         }
       }
@@ -2050,6 +2214,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "显示名称"
+          }
+        }
+      }
+    },
+    "Document" : {
+      "comment" : "Bibliographic item type (Zotero item type name)",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "文档"
           }
         }
       }
@@ -2172,6 +2347,17 @@
         }
       }
     },
+    "E-mail" : {
+      "comment" : "Bibliographic item type (Zotero item type name)",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "电子邮件"
+          }
+        }
+      }
+    },
     "Edit note" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2234,6 +2420,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "启用"
+          }
+        }
+      }
+    },
+    "Encyclopedia Article" : {
+      "comment" : "Bibliographic item type (Zotero item type name)",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "百科条目"
           }
         }
       }
@@ -2546,6 +2743,27 @@
         }
       }
     },
+    "Favorite" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已收藏"
+          }
+        }
+      }
+    },
+    "Favorites" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已收藏"
+          }
+        }
+      }
+    },
     "Fetching metadata" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2575,6 +2793,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在获取网页"
+          }
+        }
+      }
+    },
+    "Film" : {
+      "comment" : "Bibliographic item type (Zotero item type name)",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "电影"
+          }
+        }
+      }
+    },
+    "Filter Library" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "筛选论文库"
           }
         }
       }
@@ -2655,6 +2895,17 @@
         }
       }
     },
+    "Folder Name" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "文件夹名称"
+          }
+        }
+      }
+    },
     "Follow System" : {
       "localizations" : {
         "zh-Hans" : {
@@ -2683,6 +2934,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "常见配置方式是：填写服务 base URL，粘贴 API key，设置一个轻量测试模型，然后点击 Save 和 Test。"
+          }
+        }
+      }
+    },
+    "Formula" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "公式"
+          }
+        }
+      }
+    },
+    "Forum Post" : {
+      "comment" : "Bibliographic item type (Zotero item type name)",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "论坛帖文"
           }
         }
       }
@@ -2839,6 +3112,50 @@
         }
       }
     },
+    "Has Notes" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "有笔记"
+          }
+        }
+      }
+    },
+    "Has Translation" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "有译文"
+          }
+        }
+      }
+    },
+    "Heading" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "标题"
+          }
+        }
+      }
+    },
+    "Hearing" : {
+      "comment" : "Bibliographic item type (Zotero item type name)",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "听证会"
+          }
+        }
+      }
+    },
     "Hidden: %lld" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2879,6 +3196,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "隐藏或恢复页面中的部分区域"
+          }
+        }
+      }
+    },
+    "Hide or restore parts of this page (%lld hidden)" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "隐藏或恢复页面中的部分区域（已隐藏 %lld 处）"
+          }
+        }
+      }
+    },
+    "Hide/Restore" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "隐藏/恢复"
           }
         }
       }
@@ -3102,6 +3441,17 @@
         }
       }
     },
+    "Image" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "图片"
+          }
+        }
+      }
+    },
     "Import" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -3231,6 +3581,28 @@
         }
       }
     },
+    "Insert" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "插入"
+          }
+        }
+      }
+    },
+    "Insert Image…" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "插入图片…"
+          }
+        }
+      }
+    },
     "Insert Placeholder" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -3308,6 +3680,17 @@
         }
       }
     },
+    "Instant Message" : {
+      "comment" : "Bibliographic item type (Zotero item type name)",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "即时消息"
+          }
+        }
+      }
+    },
     "Interface and Localization" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -3315,6 +3698,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "界面与本地化"
+          }
+        }
+      }
+    },
+    "Interview" : {
+      "comment" : "Bibliographic item type (Zotero item type name)",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "访谈"
           }
         }
       }
@@ -3369,6 +3763,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "无法为 Base URL 构建有效的 Provider endpoint：%1$@"
+          }
+        }
+      }
+    },
+    "Item Type" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "文献类型"
+          }
+        }
+      }
+    },
+    "Journal Article" : {
+      "comment" : "Bibliographic item type (Zotero item type name)",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "期刊文章"
           }
         }
       }
@@ -3552,6 +3968,28 @@
         }
       }
     },
+    "Letter" : {
+      "comment" : "Bibliographic item type (Zotero item type name)",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "信件"
+          }
+        }
+      }
+    },
+    "Link" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "链接"
+          }
+        }
+      }
+    },
     "Link Copied" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -3570,6 +4008,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "链接已复制到剪贴板。"
+          }
+        }
+      }
+    },
+    "List" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "列表"
+          }
+        }
+      }
+    },
+    "List Item" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "列表项"
           }
         }
       }
@@ -3659,6 +4119,39 @@
         }
       }
     },
+    "Magazine Article" : {
+      "comment" : "Bibliographic item type (Zotero item type name)",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "杂志文章"
+          }
+        }
+      }
+    },
+    "Manuscript" : {
+      "comment" : "Bibliographic item type (Zotero item type name)",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "手稿"
+          }
+        }
+      }
+    },
+    "Map" : {
+      "comment" : "Bibliographic item type (Zotero item type name)",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "地图"
+          }
+        }
+      }
+    },
     "Markdown export requires a configured folder. Copy Digest can still use the template without an export folder." : {
       "localizations" : {
         "zh-Hans" : {
@@ -3720,6 +4213,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Max tokens"
+          }
+        }
+      }
+    },
+    "Media" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "媒体"
           }
         }
       }
@@ -3877,6 +4381,50 @@
         }
       }
     },
+    "More Types" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "更多类型"
+          }
+        }
+      }
+    },
+    "Move Back Here" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "移回这里"
+          }
+        }
+      }
+    },
+    "Move to Folder" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "移到文件夹"
+          }
+        }
+      }
+    },
+    "Move to Trash" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "移到废纸篓"
+          }
+        }
+      }
+    },
     "Nearby" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -3895,6 +4443,27 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "新建"
+          }
+        }
+      }
+    },
+    "New Folder" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "新建文件夹"
+          }
+        }
+      }
+    },
+    "New Folder…" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "新建文件夹…"
           }
         }
       }
@@ -3926,6 +4495,39 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "新 Provider"
+          }
+        }
+      }
+    },
+    "New Writing" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "新建写作稿"
+          }
+        }
+      }
+    },
+    "New Writing About This Paper" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "为本文新建写作稿"
+          }
+        }
+      }
+    },
+    "Newspaper Article" : {
+      "comment" : "Bibliographic item type (Zotero item type name)",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "报纸文章"
           }
         }
       }
@@ -3984,6 +4586,16 @@
         }
       }
     },
+    "No Matching Papers" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "没有符合条件的论文"
+          }
+        }
+      }
+    },
     "No notes yet." : {
       "localizations" : {
         "zh-Hans" : {
@@ -4000,6 +4612,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "未选择论文"
+          }
+        }
+      }
+    },
+    "No Papers" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "暂无论文"
           }
         }
       }
@@ -4063,6 +4685,27 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "未找到可用的 LaTeX 安装。请安装 MacTeX、刷新检测，或手动选择 TeX 二进制目录。"
+          }
+        }
+      }
+    },
+    "No writings cite this paper yet." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "还没有写作稿引用这篇论文。"
+          }
+        }
+      }
+    },
+    "No Writings Yet" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "还没有写作稿"
           }
         }
       }
@@ -4230,6 +4873,39 @@
         }
       }
     },
+    "Open in Separate Window" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在单独窗口中打开"
+          }
+        }
+      }
+    },
+    "Open in the Writing Tab" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在“写作”页中打开"
+          }
+        }
+      }
+    },
+    "Open in the Writing Window" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在写作窗口中打开"
+          }
+        }
+      }
+    },
     "Open Models" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -4365,7 +5041,6 @@
       }
     },
     "Paper" : {
-      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -4416,12 +5091,45 @@
         }
       }
     },
+    "Papers in “%@” will move to Unfiled. No papers are deleted." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“%1$@”中的论文将移至“未归档”，不会删除任何论文。"
+          }
+        }
+      }
+    },
+    "Paragraph" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "段落"
+          }
+        }
+      }
+    },
     "Parsing LaTeX source..." : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在解析 LaTeX 源码..."
+          }
+        }
+      }
+    },
+    "Patent" : {
+      "comment" : "Bibliographic item type (Zotero item type name)",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "专利"
           }
         }
       }
@@ -4668,6 +5376,17 @@
         }
       }
     },
+    "Podcast" : {
+      "comment" : "Bibliographic item type (Zotero item type name)",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "播客"
+          }
+        }
+      }
+    },
     "Preparing arXiv LaTeX source..." : {
       "localizations" : {
         "zh-Hans" : {
@@ -4729,6 +5448,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在准备 PDF 翻译..."
+          }
+        }
+      }
+    },
+    "Preprint" : {
+      "comment" : "Bibliographic item type (Zotero item type name)",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "预印本"
+          }
+        }
+      }
+    },
+    "Presentation" : {
+      "comment" : "Bibliographic item type (Zotero item type name)",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "演示文稿"
           }
         }
       }
@@ -4962,6 +5703,50 @@
         }
       }
     },
+    "Quote in Writing" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "引用到写作稿"
+          }
+        }
+      }
+    },
+    "Quote in Writing (Option-click to add only the citation)" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "引用到写作稿（按住 Option 点按则只插入引用）"
+          }
+        }
+      }
+    },
+    "Quoted in “%@”." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已将引文插入“%@”。"
+          }
+        }
+      }
+    },
+    "Radio Broadcast" : {
+      "comment" : "Bibliographic item type (Zotero item type name)",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "电台广播"
+          }
+        }
+      }
+    },
     "Range" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -5114,17 +5899,6 @@
         }
       }
     },
-    "%@ regions" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ 个区块"
-          }
-        }
-      }
-    },
     "Regions can't be edited while a translation is running." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -5147,6 +5921,28 @@
         }
       }
     },
+    "Remove from Favorites" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "从收藏中移除"
+          }
+        }
+      }
+    },
+    "Remove from Folder" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "移出文件夹"
+          }
+        }
+      }
+    },
     "Removed BabelDOC." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -5165,6 +5961,50 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在移除 BabelDOC..."
+          }
+        }
+      }
+    },
+    "Rename" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重命名"
+          }
+        }
+      }
+    },
+    "Rename Folder" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重命名文件夹"
+          }
+        }
+      }
+    },
+    "Rename Folder…" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重命名文件夹…"
+          }
+        }
+      }
+    },
+    "Report" : {
+      "comment" : "Bibliographic item type (Zotero item type name)",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "报告"
           }
         }
       }
@@ -5729,6 +6569,17 @@
         }
       }
     },
+    "Show in Finder" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在访达中显示"
+          }
+        }
+      }
+    },
     "Show Inspector" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -5751,6 +6602,17 @@
         }
       }
     },
+    "Show Window" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "显示窗口"
+          }
+        }
+      }
+    },
     "Skip" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -5758,6 +6620,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "跳过"
+          }
+        }
+      }
+    },
+    "Software" : {
+      "comment" : "Bibliographic item type (Zotero item type name)",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "软件"
           }
         }
       }
@@ -5784,6 +6657,17 @@
         }
       }
     },
+    "Standard" : {
+      "comment" : "Bibliographic item type (Zotero item type name)",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "标准"
+          }
+        }
+      }
+    },
     "Start from the left sidebar" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -5791,6 +6675,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "从左侧边栏开始"
+          }
+        }
+      }
+    },
+    "Statute" : {
+      "comment" : "Bibliographic item type (Zotero item type name)",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "法律"
           }
         }
       }
@@ -5849,6 +6744,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "在本地化 HTML、原始 PDF、翻译 PDF，以及左右并排 PDF 对照之间切换。"
+          }
+        }
+      }
+    },
+    "Switch Writing" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "切换写作稿"
           }
         }
       }
@@ -6043,6 +6949,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "arXiv 源码响应不是有效归档。"
+          }
+        }
+      }
+    },
+    "The cited paper is no longer in your library." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "引用的论文已不在论文库中。"
           }
         }
       }
@@ -6453,6 +7370,37 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "网页服务器返回了错误（状态码 %d）。"
+          }
+        }
+      }
+    },
+    "The writing is open in its own window. Quotes from the reader go there." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "写作稿已在单独的窗口中打开，从阅读器引用的内容会插入那里。"
+          }
+        }
+      }
+    },
+    "The writing’s file could not be read." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法读取写作稿文件。"
+          }
+        }
+      }
+    },
+    "Thesis" : {
+      "comment" : "Bibliographic item type (Zotero item type name)",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "学位论文"
           }
         }
       }
@@ -6937,6 +7885,28 @@
         }
       }
     },
+    "TV Broadcast" : {
+      "comment" : "Bibliographic item type (Zotero item type name)",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "电视广播"
+          }
+        }
+      }
+    },
+    "Unable to add the image: %@" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法添加图片：%@"
+          }
+        }
+      }
+    },
     "Unable to Create Digest" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -6997,6 +7967,38 @@
         }
       }
     },
+    "Unable to load writings: %@" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法载入写作稿：%@"
+          }
+        }
+      }
+    },
+    "Unable to Open Citation" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法打开引用"
+          }
+        }
+      }
+    },
+    "Unable to Quote in Writing" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法引用到写作稿"
+          }
+        }
+      }
+    },
     "Unable to render the HTML content as a PDF." : {
       "localizations" : {
         "en" : {
@@ -7020,6 +8022,49 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "无法保存笔记：%1$@"
+          }
+        }
+      }
+    },
+    "Unable to save the writing: %@" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法保存写作稿：%@"
+          }
+        }
+      }
+    },
+    "Unable to Update Folder" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法更新文件夹"
+          }
+        }
+      }
+    },
+    "Unable to Update Paper" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法更新论文"
+          }
+        }
+      }
+    },
+    "Unable to Update Writing" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法更新写作稿"
           }
         }
       }
@@ -7090,6 +8135,16 @@
         }
       }
     },
+    "Unfiled" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未归档"
+          }
+        }
+      }
+    },
     "Unknown authors" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -7156,6 +8211,17 @@
         }
       }
     },
+    "Untitled Writing" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未命名写作稿"
+          }
+        }
+      }
+    },
     "Use arXiv LaTeX structure for PDF translation" : {
       "localizations" : {
         "zh-Hans" : {
@@ -7173,6 +8239,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "使用自动检测"
+          }
+        }
+      }
+    },
+    "Use Detected Type (%@)" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "使用自动识别的类型（%@）"
           }
         }
       }
@@ -7250,6 +8327,28 @@
         }
       }
     },
+    "Video Recording" : {
+      "comment" : "Bibliographic item type (Zotero item type name)",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "视频"
+          }
+        }
+      }
+    },
+    "Web Page" : {
+      "comment" : "Bibliographic item type (Zotero item type name)",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "网页"
+          }
+        }
+      }
+    },
     "Web page URL" : {
       "localizations" : {
         "zh-Hans" : {
@@ -7312,6 +8411,17 @@
         }
       }
     },
+    "Words: %lld" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "字数：%lld"
+          }
+        }
+      }
+    },
     "Working..." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -7329,6 +8439,59 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "写点笔记…"
+          }
+        }
+      }
+    },
+    "Writing" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "写作"
+          }
+        }
+      }
+    },
+    "Writing in a Separate Window" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "写作稿在单独窗口中"
+          }
+        }
+      }
+    },
+    "Writing Unavailable" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "写作稿无法打开"
+          }
+        }
+      }
+    },
+    "Writings" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "写作稿"
+          }
+        }
+      }
+    },
+    "Writings citing this paper: %lld. Their text stays, but its citations will no longer open the paper." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "有 %lld 篇写作稿引用了这篇论文。写作稿的文字会保留，但其中的引用将无法再打开这篇论文。"
           }
         }
       }

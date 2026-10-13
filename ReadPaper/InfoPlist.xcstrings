@@ -25,6 +25,23 @@
         }
       }
     },
+    "Freddie Library Paper" : {
+      "comment" : "Description of the exported type used when dragging a paper onto a library folder",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Freddie Library Paper"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Freddie 论文库条目"
+          }
+        }
+      }
+    },
     "NSDocumentsFolderUsageDescription" : {
       "comment" : "Privacy - Documents Folder Usage Description",
       "extractionState" : "extracted_with_value",

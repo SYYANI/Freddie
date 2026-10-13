@@ -160,6 +160,10 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
     var segmentUpdate: HTMLTranslationSegmentUpdate?
     var noteNavigationRequest: NoteNavigationRequest? = nil
     var selectionAssistantHistoryAnchors: [SelectionAssistantHistoryAnchor] = []
+    /// Passages cited in writings, underlined in the page.
+    var citationMarks: [WritingCitationMark] = []
+    /// A single click on cited passages, with the marks under the pointer.
+    var onCitationMarksActivated: (([String]) -> Void)? = nil
     var selectionHighlightResetToken: Int = 0
     var nativeSelectionClearToken: Int = 0
     var onNoteSelectionChanged: ((NoteSelectionContext?) -> Void)? = nil
@@ -214,6 +218,7 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
         configuration.userContentController.add(coordinator, name: Coordinator.selectionMessageHandlerName)
         configuration.userContentController.add(coordinator, name: Coordinator.selectionResetMessageHandlerName)
         configuration.userContentController.add(coordinator, name: Coordinator.sidenoteMessageHandlerName)
+        configuration.userContentController.add(coordinator, name: Coordinator.citationMarkMessageHandlerName)
         configuration.userContentController.add(coordinator, name: HTMLRegionEditing.messageHandlerName)
         configuration.userContentController.addUserScript(
             WKUserScript(
@@ -271,6 +276,8 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
         context.coordinator.onNoteSelectionChanged = onNoteSelectionChanged
         context.coordinator.onSelectionAssistantDismissed = onSelectionAssistantDismissed
         context.coordinator.selectionAssistantHistoryAnchors = selectionAssistantHistoryAnchors
+        context.coordinator.citationMarks = citationMarks
+        context.coordinator.onCitationMarksActivated = onCitationMarksActivated
         context.coordinator.findRequest = findRequest
         context.coordinator.onFindStatusChanged = onFindStatusChanged
         context.coordinator.sidenotes = sidenotes
@@ -303,6 +310,7 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
                 targetScrollRatio: initialScrollRatio,
                 in: view
             )
+            context.coordinator.queueNoteNavigationForNewDocument(noteNavigationRequest)
             return
         }
 
@@ -323,6 +331,7 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
         context.coordinator.applyDisplayAppearance(to: view)
         context.coordinator.applySegmentUpdateIfNeeded(segmentUpdate, to: view)
         context.coordinator.applySelectionAssistantHistoryAnchors(to: view)
+        context.coordinator.applyCitationMarks(to: view)
         context.coordinator.applySidenotes(to: view)
         context.coordinator.applySidenoteFocusIfNeeded(to: view)
         context.coordinator.applyNoteNavigationIfNeeded(noteNavigationRequest, to: view)
@@ -370,6 +379,10 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
         static let selectionMessageHandlerName = "rpSelection"
         static let selectionResetMessageHandlerName = "rpSelectionReset"
         static let sidenoteMessageHandlerName = "rpSidenote"
+        static let citationMarkMessageHandlerName = "rpCitationMark"
+        /// A click on a cited passage waits this long for a second click, which selects a
+        /// word instead of opening the writing.
+        static let citationMarkClickDelayMilliseconds = 350
         static let nativeSelectionClearScript = """
         (() => {
             const selection = window.getSelection();
@@ -871,6 +884,111 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
                     selector: item.entry.htmlSelector,
                     localContext: normalizeText(item.target.textContent).slice(0, 8000)
                 });
+            }, true);
+
+            if (!document.getElementById('rp-citation-mark-style')) {
+                const style = document.createElement('style');
+                style.id = 'rp-citation-mark-style';
+                style.textContent = `
+                    ::highlight(rp-citation) {
+                        background-color: rgba(124, 92, 214, 0.08);
+                        text-decoration: underline rgba(124, 92, 214, 0.58) 1.5px;
+                    }
+                `;
+                (document.head || document.documentElement).appendChild(style);
+            }
+
+            // Passages cited in writings. Whitespace is ignored when matching: a passage
+            // copied across paragraphs has spaces where the page has none between elements.
+            // One that runs past its anchored element is looked for in a few parents, then
+            // marked from its start.
+            var citationMarkRanges = [];
+            const citationContextLimit = 20000;
+            const compactRangeIn = (element, quote) => {
+                const compactQuote = (quote || '').replace(/\\s+/g, '');
+                if (!element || !compactQuote) { return null; }
+                const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT, {
+                    acceptNode: node => node.parentElement?.closest?.(translationSelector)
+                        ? NodeFilter.FILTER_REJECT
+                        : NodeFilter.FILTER_ACCEPT
+                });
+                let text = '';
+                const positions = [];
+                while (walker.nextNode()) {
+                    const node = walker.currentNode;
+                    const value = node.nodeValue || '';
+                    for (let offset = 0; offset < value.length; offset += 1) {
+                        if (/\\s/.test(value[offset])) { continue; }
+                        text += value[offset];
+                        positions.push({ node, offset });
+                    }
+                }
+                const start = text.indexOf(compactQuote);
+                if (start < 0) { return null; }
+                const end = positions[start + compactQuote.length - 1];
+                const range = document.createRange();
+                range.setStart(positions[start].node, positions[start].offset);
+                range.setEnd(end.node, end.offset + 1);
+                return range;
+            };
+            const citationRangeFor = (target, quote) => {
+                const normalizedQuote = normalizeText(quote);
+                if (!target || !normalizedQuote) { return null; }
+                let element = target;
+                for (let level = 0; element && level < 4; level += 1) {
+                    if ((element.textContent || '').length > citationContextLimit) { break; }
+                    const range = compactRangeIn(element, normalizedQuote);
+                    if (range) { return range; }
+                    if (element === document.body) { break; }
+                    element = element.parentElement;
+                }
+                const start = normalizedQuote.slice(0, 40);
+                return start.length < normalizedQuote.length ? compactRangeIn(target, start) : null;
+            };
+
+            window.__rpSetCitationMarks = entries => {
+                try { CSS.highlights?.delete('rp-citation'); } catch {}
+                citationMarkRanges = [];
+                for (const entry of Array.isArray(entries) ? entries : []) {
+                    const range = citationRangeFor(window.__rpResolveNoteAnchor(entry.htmlSelector), entry.quote);
+                    if (range) { citationMarkRanges.push({ id: entry.id, range }); }
+                }
+                if (citationMarkRanges.length > 0 && window.CSS?.highlights && typeof Highlight !== 'undefined') {
+                    try {
+                        CSS.highlights.set('rp-citation', new Highlight(...citationMarkRanges.map(item => item.range)));
+                    } catch {}
+                }
+                return citationMarkRanges.length;
+            };
+
+            const citationMarksAtPoint = (x, y) => citationMarkRanges
+                .filter(item => Array.from(item.range.getClientRects()).some(rect =>
+                    x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom
+                ))
+                .map(item => item.id)
+                .filter((id, index, ids) => ids.indexOf(id) === index);
+            window.__rpCitationMarksAtPoint = citationMarksAtPoint;
+
+            // A single click on a cited passage opens the writing that cites it; a second
+            // click within the delay selects a word instead.
+            let citationClickTimer = null;
+            document.addEventListener('click', event => {
+                if (citationClickTimer !== null) {
+                    clearTimeout(citationClickTimer);
+                    citationClickTimer = null;
+                }
+                if (event.button !== 0 || event.detail > 1 || isInSidenoteLayer(event)) { return; }
+                if (document.documentElement.getAttribute('\(HTMLRegionVisibility.editingAttribute)') === 'true') { return; }
+                if (event.target?.closest?.('a[href]')) { return; }
+                if (assistantHistoryEntryAtPoint(event.clientX, event.clientY)) { return; }
+                if (normalizeText(window.getSelection()?.toString() || '')) { return; }
+                const ids = citationMarksAtPoint(event.clientX, event.clientY);
+                if (ids.length === 0) { return; }
+                citationClickTimer = window.setTimeout(() => {
+                    citationClickTimer = null;
+                    if (normalizeText(window.getSelection()?.toString() || '')) { return; }
+                    window.webkit.messageHandlers.rpCitationMark.postMessage({ ids });
+                }, \(citationMarkClickDelayMilliseconds));
             }, true);
 
             window.__rpScrollToNoteAnchor = anchor => {
@@ -1900,6 +2018,9 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
         var onNoteSelectionChanged: ((NoteSelectionContext?) -> Void)?
         var onSelectionAssistantDismissed: (() -> Void)?
         var selectionAssistantHistoryAnchors: [SelectionAssistantHistoryAnchor] = []
+        var citationMarks: [WritingCitationMark] = []
+        var onCitationMarksActivated: (([String]) -> Void)?
+        private var lastCitationMarkSignature: String?
         var sidenotes: [HTMLSidenote] = []
         var sidenoteLabels = HTMLSidenoteLabels()
         var renderSidenoteMarkdown: (String) -> String = HTMLSidenote.plainTextHTML
@@ -1963,6 +2084,7 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
             pendingNoteNavigationRequest = nil
             lastAppliedNoteNavigationID = nil
             lastSelectionAssistantHistorySignature = nil
+            lastCitationMarkSignature = nil
             appliedSidenotes = nil
             appliedRegionEditing = nil
             isLoading = false
@@ -2001,6 +2123,7 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
             isLoading = true
             isDocumentReady = false
             lastSelectionAssistantHistorySignature = nil
+            lastCitationMarkSignature = nil
             appliedSidenotes = nil
             appliedRegionEditing = nil
             invalidateFindText(keepingPosition: request.preserveScrollPosition)
@@ -2100,11 +2223,19 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
             applyDisplayAppearance(to: webView)
             applySelectionAssistantHistoryAnchors(to: webView)
             applySidenotes(to: webView)
+            // A navigation that came with the page, such as a citation opened from a
+            // writing, replaces the restored reading position.
+            if pendingNoteNavigationRequest != nil {
+                pendingScrollRatio = nil
+            }
             restoreScrollRatioIfNeeded(in: webView)
             flushPendingSegmentUpdates(in: webView)
-            flushPendingNoteNavigationIfNeeded(in: webView)
             applySidenoteFocusIfNeeded(to: webView)
             finishLoadIfNeeded(in: webView)
+            // After the load is finished, or the navigation would only be queued again; when
+            // `finishLoadIfNeeded` started loading another page, it waits for that page.
+            flushPendingNoteNavigationIfNeeded(in: webView)
+            applyCitationMarks(to: webView)
             applyRegionEditing(to: webView)
             applyFindRequestIfNeeded(to: webView)
         }
@@ -2151,6 +2282,13 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
                 onSelectionAssistantDismissed?()
             case Self.sidenoteMessageHandlerName:
                 handleSidenoteMessage(message)
+            case Self.citationMarkMessageHandlerName:
+                guard let body = message.body as? [String: Any],
+                      let ids = body["ids"] as? [String],
+                      ids.isEmpty == false else {
+                    return
+                }
+                onCitationMarksActivated?(ids)
             case HTMLRegionEditing.messageHandlerName:
                 handleRegionEditMessage(message)
             default:
@@ -2421,6 +2559,16 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
             }
         }
 
+        /// A request that arrives together with a new page waits for the page to load;
+        /// one left over from the previous page is dropped.
+        func queueNoteNavigationForNewDocument(_ request: NoteNavigationRequest?) {
+            guard let request, request.htmlSelector != nil, request.id != lastAppliedNoteNavigationID else {
+                pendingNoteNavigationRequest = nil
+                return
+            }
+            pendingNoteNavigationRequest = request
+        }
+
         func applyNoteNavigationIfNeeded(_ request: NoteNavigationRequest?, to webView: WKWebView) {
             guard let request,
                   let htmlSelector = request.htmlSelector,
@@ -2462,6 +2610,29 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
                 in: webView
             )
             lastSelectionAssistantHistorySignature = signature
+        }
+
+        func applyCitationMarks(to webView: WKWebView) {
+            guard isDocumentReady, isLoading == false else { return }
+            struct Entry: Encodable {
+                let id: String
+                let htmlSelector: String
+                let quote: String
+            }
+            let entries = citationMarks.compactMap { mark -> Entry? in
+                guard let htmlSelector = mark.record.htmlSelector,
+                      let quote = mark.record.markedText,
+                      mark.record.attachmentID == nil || mark.record.attachmentID == attachmentID else {
+                    return nil
+                }
+                return Entry(id: mark.id, htmlSelector: htmlSelector, quote: quote)
+            }
+            guard let data = try? JSONEncoder().encode(entries),
+                  let json = String(data: data, encoding: .utf8) else { return }
+            let signature = Hashing.sha256Hex(json)
+            guard signature != lastCitationMarkSignature else { return }
+            runJavaScript("window.__rpSetCitationMarks?.(\(json));", in: webView)
+            lastCitationMarkSignature = signature
         }
 
         func applySidenotes(to webView: WKWebView) {

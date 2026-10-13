@@ -26,7 +26,7 @@ struct ReadPaperApp: App {
             rawValue: displayAppearancePreference
         )
 
-        WindowGroup {
+        WindowGroup(id: MainWindowScene.id) {
             ContentView()
                 .environment(\.localizationBundle, bundle)
                 .environment(\.pdfDisplayAppearance, displayAppearance)
@@ -44,7 +44,21 @@ struct ReadPaperApp: App {
         .modelContainer(sharedModelContainer)
         .commands {
             AboutFreddieCommands()
+            LibraryFolderCommands()
+            WritingCommands()
         }
+
+        Window(Text("Writing", bundle: bundle), id: WritingWindowScene.id) {
+            WritingWindowView()
+                .environment(\.localizationBundle, bundle)
+                .environment(\.pdfDisplayAppearance, displayAppearance)
+                .preferredColorScheme(.light)
+        }
+        .defaultSize(
+            width: WritingWindowScene.defaultWidth,
+            height: WritingWindowScene.defaultHeight
+        )
+        .windowResizability(.contentMinSize)
 
         Window("About Freddie", id: AboutFreddieCommands.windowID) {
             AboutView()
@@ -102,7 +116,72 @@ private struct AboutFreddieCommands: Commands {
     }
 }
 
+private struct LibraryFolderCommands: Commands {
+    @FocusedValue(\.newLibraryFolderAction) private var newFolderAction
+
+    var body: some Commands {
+        CommandGroup(after: .newItem) {
+            Button(String(localized: "New Folder…", bundle: LanguageManager.shared.bundle)) {
+                newFolderAction?.perform()
+            }
+            .keyboardShortcut("n", modifiers: [.command, .shift])
+            .disabled(newFolderAction == nil)
+        }
+    }
+}
+
+private struct WritingCommands: Commands {
+    @FocusedValue(\.newWritingAction) private var newWritingAction
+    @FocusedValue(\.quoteInWritingAction) private var quoteInWritingAction
+
+    var body: some Commands {
+        CommandGroup(after: .newItem) {
+            Button(String(localized: "New Writing", bundle: LanguageManager.shared.bundle)) {
+                newWritingAction?.perform()
+            }
+            .keyboardShortcut("n", modifiers: [.command, .option])
+            .disabled(newWritingAction == nil)
+        }
+        CommandGroup(after: .pasteboard) {
+            Divider()
+            Button(String(localized: "Quote in Writing", bundle: LanguageManager.shared.bundle)) {
+                quoteInWritingAction?.perform()
+            }
+            .keyboardShortcut("e", modifiers: [.command, .shift])
+            .disabled(quoteInWritingAction == nil)
+        }
+    }
+}
+
 private final class ReadPaperApplicationDelegate: NSObject, NSApplicationDelegate {
+    /// `readpaper://` links, e.g. citations clicked in a writing opened in another Markdown
+    /// app, are taken before SwiftUI sees them: SwiftUI would open a new window for each
+    /// link, and a second one when a link launches the app. `PaperLinkRouter` picks the window.
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        NSAppleEventManager.shared().setEventHandler(
+            self,
+            andSelector: #selector(handleGetURLEvent(_:withReplyEvent:)),
+            forEventClass: AEEventClass(kInternetEventClass),
+            andEventID: AEEventID(kAEGetURL)
+        )
+    }
+
+    @MainActor @objc private func handleGetURLEvent(_ event: NSAppleEventDescriptor, withReplyEvent reply: NSAppleEventDescriptor) {
+        guard let string = event.paramDescriptor(forKeyword: AEKeyword(keyDirectObject))?.stringValue,
+              let url = URL(string: string) else {
+            return
+        }
+        PaperLinkRouter.shared.open(url)
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        WritingDocumentCenter.shared.saveAll()
+    }
+
+    func applicationDidResignActive(_ notification: Notification) {
+        WritingDocumentCenter.shared.saveAll()
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         guard #unavailable(macOS 26.0) else {
             return
@@ -114,6 +193,10 @@ private final class ReadPaperApplicationDelegate: NSObject, NSApplicationDelegat
 
         NSApplication.shared.applicationIconImage = icon
     }
+}
+
+enum MainWindowScene {
+    static let id = "main"
 }
 
 enum MainWindowMetrics {

@@ -88,6 +88,8 @@ struct SelectionAssistantOverlay: View {
     let onConversationChanged: @MainActor (SelectionAssistantConversationSnapshot) -> Void
     let onInteractionBegan: @MainActor @Sendable () -> Void
     let onDismiss: @MainActor @Sendable () -> Void
+    /// Adds the selection to the open writing; `true` adds only a citation (Option-click).
+    var quoteInWriting: (@MainActor (NoteSelectionContext, Bool) -> Void)? = nil
 
     @State private var question = ""
     @State private var isEnteringQuestion = false
@@ -219,6 +221,23 @@ struct SelectionAssistantOverlay: View {
                     title: String(localized: "Translate Selected Text", bundle: bundle),
                     systemImage: "translate"
                 )
+                if let quoteInWriting {
+                    Divider()
+                        .frame(height: 18)
+                        .padding(.horizontal, 2)
+                    Button {
+                        onInteractionBegan()
+                        quoteInWriting(selection, NSEvent.modifierFlags.contains(.option))
+                    } label: {
+                        Image(systemName: "text.quote")
+                            .font(.system(size: 15, weight: .medium))
+                            .frame(width: 28, height: 28)
+                            .contentShape(Circle())
+                    }
+                    .buttonStyle(SelectionAssistantCircleButtonStyle())
+                    .help(String(localized: "Quote in Writing (Option-click to add only the citation)", bundle: bundle))
+                    .accessibilityLabel(String(localized: "Quote in Writing", bundle: bundle))
+                }
             }
             .padding(6)
             .selectionAssistantMaterial(cornerRadius: 22)
