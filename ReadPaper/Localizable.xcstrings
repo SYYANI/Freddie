@@ -5988,6 +5988,28 @@
         }
       }
     },
+    "Rename Writing" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重命名写作稿"
+          }
+        }
+      }
+    },
+    "Rename…" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重命名…"
+          }
+        }
+      }
+    },
     "Report" : {
       "comment" : "Bibliographic item type (Zotero item type name)",
       "localizations" : {
@@ -7332,6 +7354,16 @@
         }
       }
     },
+    "The title is the writing’s first line, so renaming changes that line." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "写作稿的标题就是正文第一行，重命名会修改这一行。"
+          }
+        }
+      }
+    },
     "The translated PDF could not be opened for debug export." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -7510,6 +7542,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "此 PDF 链接到 arXiv %@。要将其导入资料库吗？"
+          }
+        }
+      }
+    },
+    "Title" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "标题"
           }
         }
       }

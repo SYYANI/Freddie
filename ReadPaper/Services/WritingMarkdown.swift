@@ -176,6 +176,63 @@ enum WritingTitle {
         return ""
     }
 
+    /// Renames a writing by editing the line its title comes from: a heading keeps its
+    /// level and gets the new text; otherwise a `# title` heading goes on top, so the
+    /// text that used to name the writing stays. `nil` when there is nothing to change.
+    static func renaming(_ markdown: String, to newTitle: String, selection: NSRange) -> WritingEdit? {
+        let title = newTitle
+            .components(separatedBy: .whitespacesAndNewlines)
+            .filter { $0.isEmpty == false }
+            .joined(separator: " ")
+        guard title.isEmpty == false, title != derive(from: markdown) else { return nil }
+        let content = MarkdownEscaping.escapedInlineText(title)
+
+        let string = markdown as NSString
+        var fence: MarkdownLiveSyntax.FenceState?
+        var location = 0
+        while location < string.length {
+            var lineEnd = 0
+            var contentsEnd = 0
+            string.getLineStart(nil, end: &lineEnd, contentsEnd: &contentsEnd, for: NSRange(location: location, length: 0))
+            let lineRange = NSRange(location: location, length: contentsEnd - location)
+            let text = string.substring(with: lineRange)
+            let (line, nextFence) = MarkdownLiveSyntax.parse(text, fence: fence)
+            fence = nextFence
+            if line.isBlank == false, line.isFence == false, line.isRule == false,
+               visibleText(of: text, line: line).isEmpty == false {
+                if let level = line.headingLevel, line.quoteDepth == 0 {
+                    let replacement = String(repeating: "#", count: level) + " " + content
+                    let delta = (replacement as NSString).length - lineRange.length
+                    return WritingEdit(
+                        range: lineRange,
+                        replacement: replacement,
+                        selectionAfter: shifted(selection, by: delta, replacing: lineRange)
+                    )
+                }
+                break
+            }
+            location = lineEnd
+        }
+
+        let heading = "# " + content + "\n\n"
+        return WritingEdit(
+            range: NSRange(location: 0, length: 0),
+            replacement: heading,
+            selectionAfter: shifted(selection, by: (heading as NSString).length, replacing: NSRange(location: 0, length: 0))
+        )
+    }
+
+    /// Keeps the caret on the same text: a selection inside the replaced line moves to its end.
+    private static func shifted(_ selection: NSRange, by delta: Int, replacing range: NSRange) -> NSRange {
+        if selection.location >= NSMaxRange(range) {
+            return NSRange(location: selection.location + delta, length: selection.length)
+        }
+        if NSMaxRange(selection) <= range.location {
+            return selection
+        }
+        return NSRange(location: NSMaxRange(range) + delta, length: 0)
+    }
+
     /// The line as the live preview shows it, with syntax characters and list markers removed.
     static func visibleText(of text: String, line: MarkdownLiveSyntax.Line) -> String {
         let units = Array(text.utf16)
