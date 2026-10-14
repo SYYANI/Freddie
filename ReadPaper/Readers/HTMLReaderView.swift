@@ -383,6 +383,15 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
         /// A click on a cited passage waits this long for a second click, which selects a
         /// word instead of opening the writing.
         static let citationMarkClickDelayMilliseconds = 350
+        /// On macOS WebKit paints a selection that crosses blocks as one slab reaching the
+        /// page edges, in the site's own `::selection` color. The reader hides that paint and
+        /// shows the selection with the assistant highlight, which covers only the text. On
+        /// iPad UIKit draws the selection, so it is left alone.
+        #if os(macOS)
+        static let paintsSelectionWithHighlight = true
+        #else
+        static let paintsSelectionWithHighlight = false
+        #endif
         static let nativeSelectionClearScript = """
         (() => {
             const selection = window.getSelection();
@@ -472,6 +481,8 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
             if (window.__rpReaderToolsInstalled) { return; }
             window.__rpReaderToolsInstalled = true;
 
+            const paintsSelectionWithHighlight = \(paintsSelectionWithHighlight)
+                && !!window.CSS?.highlights && typeof Highlight !== 'undefined';
             const translationSelector = '.rp-translation-block,[data-rp-translation="true"]';
 
             const maxScrollY = () => {
@@ -728,18 +739,58 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
                         color: inherit;
                     }
                 `;
+                if (paintsSelectionWithHighlight) {
+                    // Sidenote cards live outside <body> and form controls paint inside their
+                    // own editors, so both keep the native selection.
+                    style.textContent += `
+                        body::selection,
+                        body :not(input, textarea)::selection {
+                            background-color: transparent !important;
+                        }
+                    `;
+                }
                 (document.head || document.documentElement).appendChild(style);
             }
 
+            // WebKit does not repaint the text a highlight covered when the registered
+            // Highlight is replaced or deleted, so shrinking a drag left the old end painted.
+            // One Highlight stays registered and is changed in place, which does repaint.
+            const assistantSelectionHighlight =
+                window.CSS?.highlights && typeof Highlight !== 'undefined' ? new Highlight() : null;
+
             const preserveAssistantSelectionHighlight = range => {
-                if (!range || !window.CSS?.highlights || typeof Highlight === 'undefined') { return; }
+                if (!range || !assistantSelectionHighlight) { return; }
                 try {
-                    CSS.highlights.set('rp-assistant-selection', new Highlight(range.cloneRange()));
+                    assistantSelectionHighlight.clear();
+                    assistantSelectionHighlight.add(range.cloneRange());
+                    if (CSS.highlights.get('rp-assistant-selection') !== assistantSelectionHighlight) {
+                        CSS.highlights.set('rp-assistant-selection', assistantSelectionHighlight);
+                    }
                 } catch {}
             };
 
+            const liveBodySelectionRange = () => {
+                const selection = window.getSelection();
+                if (!selection || selection.rangeCount === 0 || selection.isCollapsed) { return null; }
+                const range = selection.getRangeAt(0);
+                return document.body && range.intersectsNode(document.body) ? range : null;
+            };
+
+            const paintLiveSelection = () => {
+                if (!paintsSelectionWithHighlight) { return; }
+                if (document.documentElement.getAttribute('\(HTMLRegionVisibility.editingAttribute)') === 'true') { return; }
+                const range = liveBodySelectionRange();
+                if (range) { preserveAssistantSelectionHighlight(range); }
+            };
+
+            const clearAssistantSelectionHighlight = () => {
+                try { assistantSelectionHighlight?.clear(); } catch {}
+            };
+
+            // Clearing from the app must not hide a selection that is still there.
             window.__rpClearSelectionAssistantHighlight = () => {
-                try { CSS.highlights?.delete('rp-assistant-selection'); } catch {}
+                clearAssistantSelectionHighlight();
+                paintLiveSelection();
             };
 
             if (!document.getElementById('rp-selection-assistant-history-style')) {
@@ -868,7 +919,8 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
                     assistantHistorySelectionGraceUntil = Date.now() + assistantHistorySelectionGraceMilliseconds;
                     return;
                 }
-                window.__rpClearSelectionAssistantHighlight();
+                // The old selection is still live here; the next selectionchange paints the new one.
+                clearAssistantSelectionHighlight();
                 window.webkit.messageHandlers.rpSelectionReset.postMessage(null);
             }, true);
 
@@ -1055,6 +1107,7 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
             };
 
             document.addEventListener('selectionchange', () => {
+                paintLiveSelection();
                 if (selectionTimer !== null) {
                     clearTimeout(selectionTimer);
                 }
