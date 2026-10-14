@@ -4690,7 +4690,6 @@
       }
     },
     "No Writings Yet" : {
-      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
