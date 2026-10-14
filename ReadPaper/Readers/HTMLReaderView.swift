@@ -752,10 +752,20 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
                 (document.head || document.documentElement).appendChild(style);
             }
 
+            // WebKit does not repaint the text a highlight covered when the registered
+            // Highlight is replaced or deleted, so shrinking a drag left the old end painted.
+            // One Highlight stays registered and is changed in place, which does repaint.
+            const assistantSelectionHighlight =
+                window.CSS?.highlights && typeof Highlight !== 'undefined' ? new Highlight() : null;
+
             const preserveAssistantSelectionHighlight = range => {
-                if (!range || !window.CSS?.highlights || typeof Highlight === 'undefined') { return; }
+                if (!range || !assistantSelectionHighlight) { return; }
                 try {
-                    CSS.highlights.set('rp-assistant-selection', new Highlight(range.cloneRange()));
+                    assistantSelectionHighlight.clear();
+                    assistantSelectionHighlight.add(range.cloneRange());
+                    if (CSS.highlights.get('rp-assistant-selection') !== assistantSelectionHighlight) {
+                        CSS.highlights.set('rp-assistant-selection', assistantSelectionHighlight);
+                    }
                 } catch {}
             };
 
@@ -774,7 +784,7 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
             };
 
             const clearAssistantSelectionHighlight = () => {
-                try { CSS.highlights?.delete('rp-assistant-selection'); } catch {}
+                try { assistantSelectionHighlight?.clear(); } catch {}
             };
 
             // Clearing from the app must not hide a selection that is still there.

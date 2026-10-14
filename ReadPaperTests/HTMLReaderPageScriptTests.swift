@@ -124,7 +124,9 @@ final class HTMLReaderPageScriptTests: XCTestCase {
                     .map(range => range.toString()).join('|'),
                 selection: window.getSelection().rangeCount > 0
                     ? window.getSelection().getRangeAt(0).toString() : '',
-                nativePaint: getComputedStyle(document.getElementById('first'), '::selection').backgroundColor
+                nativePaint: getComputedStyle(document.getElementById('first'), '::selection').backgroundColor,
+                sameHighlight: !!window.__firstSelectionHighlight
+                    && CSS.highlights.get('rp-assistant-selection') === window.__firstSelectionHighlight
             })
             """) as? String
             return try XCTUnwrap(JSONSerialization.jsonObject(with: Data(try XCTUnwrap(json).utf8)) as? [String: Any])
@@ -150,6 +152,24 @@ final class HTMLReaderPageScriptTests: XCTestCase {
         XCTAssertEqual(current["highlight"] as? String, selected)
         XCTAssertEqual(current["nativePaint"] as? String, "rgba(0, 0, 0, 0)")
 
+        // Dragging back up shrinks the highlight. WebKit only repaints the text a highlight
+        // stops covering when the registered Highlight is changed in place, so it must stay
+        // the same object.
+        _ = try await webView.evaluateJavaScript("""
+        window.__firstSelectionHighlight = CSS.highlights.get('rp-assistant-selection');
+        window.getSelection().extend(document.getElementById('first').firstChild, 15);
+        true
+        """)
+        try await Task.sleep(for: .milliseconds(40))
+        current = try await state()
+        XCTAssertEqual(current["highlight"] as? String, "paragraph")
+        XCTAssertEqual(current["sameHighlight"] as? Bool, true)
+        _ = try await webView.evaluateJavaScript("""
+        window.getSelection().extend(document.getElementById('last').firstChild, 4);
+        true
+        """)
+        try await Task.sleep(for: .milliseconds(40))
+
         // Dismissing the assistant while the text is still selected keeps it visible.
         _ = try await webView.evaluateJavaScript("window.__rpClearSelectionAssistantHighlight(); true")
         current = try await state()
@@ -166,6 +186,7 @@ final class HTMLReaderPageScriptTests: XCTestCase {
         try await Task.sleep(for: .milliseconds(40))
         current = try await state()
         XCTAssertEqual(current["highlight"] as? String, "")
+        XCTAssertEqual(current["sameHighlight"] as? Bool, true)
     }
 }
 
