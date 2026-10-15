@@ -464,6 +464,86 @@ final class HTMLTranslationPipelineTests: XCTestCase {
     }
 
     @MainActor
+    func testTranslateHTMLWritesCacheHitsBeforeReloadingThePage() async throws {
+        let environment = try makeEnvironment()
+        defer { try? FileManager.default.removeItem(at: environment.rootURL) }
+
+        let sourceHTML = """
+        <html><body>
+        <p>The first paragraph is long enough to be translated.</p>
+        <p>The second paragraph is long enough to be translated.</p>
+        <p>The third paragraph is long enough to be translated.</p>
+        </body></html>
+        """
+        try sourceHTML.write(to: environment.attachment.fileURL, atomically: true, encoding: .utf8)
+
+        let candidates = try HTMLTranslationPipeline.prepareDocument(sourceHTML).candidates
+        XCTAssertEqual(candidates.count, 3)
+        let route = makeRoute(modelID: UUID(), providerID: UUID(), modelName: "cached-model")
+        for (index, candidate) in candidates.prefix(2).enumerated() {
+            environment.modelContext.insert(TranslationSegment(
+                paperID: environment.paper.id,
+                sourceType: "html",
+                targetLanguage: "zh-CN",
+                sourceHash: candidate.sourceHash,
+                sourceText: candidate.sourceText,
+                translatedText: "Cached translation \(index).",
+                providerProfileID: route.providerProfileID,
+                modelProfileID: route.modelProfileID,
+                modelName: route.translationCacheIdentity
+            ))
+        }
+        // Another paper's cache for the same text must not be used.
+        environment.modelContext.insert(TranslationSegment(
+            paperID: UUID(),
+            sourceType: "html",
+            targetLanguage: "zh-CN",
+            sourceHash: candidates[2].sourceHash,
+            sourceText: candidates[2].sourceText,
+            translatedText: "Other paper translation.",
+            providerProfileID: route.providerProfileID,
+            modelProfileID: route.modelProfileID,
+            modelName: route.translationCacheIdentity
+        ))
+        try environment.modelContext.save()
+
+        var htmlAtReload: String?
+        var progress: [[Int]] = []
+        let client = MockTranslationLLMClient(translatedText: "Fresh translation.")
+        try await HTMLTranslationPipeline(client: client).translateHTML(
+            attachment: environment.attachment,
+            paper: environment.paper,
+            preferences: TranslationPreferencesSnapshot(
+                targetLanguage: "zh-CN",
+                htmlTranslationConcurrency: 2,
+                babelDocQPS: 4,
+                babelDocVersion: "0.5.24"
+            ),
+            route: route,
+            apiKey: "sk-test",
+            modelContext: environment.modelContext,
+            onDocumentPrepared: {
+                htmlAtReload = try? String(contentsOf: environment.attachment.fileURL, encoding: .utf8)
+            },
+            onProgressUpdated: { processed, total in
+                progress.append([processed, total])
+            }
+        )
+
+        let reloaded = try XCTUnwrap(htmlAtReload)
+        XCTAssertTrue(reloaded.contains("Cached translation 0."))
+        XCTAssertTrue(reloaded.contains("Cached translation 1."))
+        XCTAssertFalse(reloaded.contains("Fresh translation."))
+        XCTAssertEqual(progress, [[0, 3], [2, 3], [3, 3]])
+        let callCount = await client.currentCallCount()
+        XCTAssertEqual(callCount, 1)
+
+        let translatedHTML = try String(contentsOf: environment.attachment.fileURL, encoding: .utf8)
+        XCTAssertTrue(translatedHTML.contains("Fresh translation."))
+        XCTAssertFalse(translatedHTML.contains("Other paper translation."))
+    }
+
+    @MainActor
     func testTranslateHTMLSkipsCacheWhenModelRouteChanges() async throws {
         let environment = try makeEnvironment()
         defer { try? FileManager.default.removeItem(at: environment.rootURL) }

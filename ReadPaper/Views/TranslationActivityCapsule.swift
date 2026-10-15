@@ -2,9 +2,9 @@ import SwiftUI
 
 /// Floating capsule that shows a running translation where the toast appears:
 /// a soft glow spreads across the capsule as progress grows, and the cancel button
-/// is a round glass bubble at its trailing end that melts further into the capsule
-/// as the run nears the end. When the run ends the bubble is fully absorbed and
-/// carries the outcome mark, then the capsule fades out.
+/// is a round glass bubble at its trailing end that melts into the capsule over
+/// the first half of the run, before the glow reaches it. When the run ends the
+/// absorbed bubble carries the outcome mark, then the capsule fades out.
 /// It names only the phase; the stage detail is in the tooltip.
 struct TranslationActivityCapsule: View {
     enum Phase: Equatable {
@@ -31,8 +31,10 @@ struct TranslationActivityCapsule: View {
     private static let width: CGFloat = 230
     /// Bubble spacing at the start of a run: apart, joined only by a glass neck.
     private static let startGap: CGFloat = 4
-    /// Bubble spacing at 100%: well into the capsule's end.
-    private static let endGap: CGFloat = -14
+    /// Progress by which the bubble is fully absorbed. The glow's soft edge runs
+    /// about 30pt ahead of the progress point and would spill over the pinched
+    /// neck from roughly 60%, so the neck has to be gone before that.
+    private static let mergedFraction = 0.5
 
     // Three layers share one layout: the glass shapes, one glow across both of
     // them, then the text and buttons. Giving each shape its own glow would show
@@ -67,12 +69,14 @@ struct TranslationActivityCapsule: View {
         .animation(.easeInOut(duration: 0.25), value: summary)
     }
 
-    /// The bubble closes in with progress; once the run ends it sits entirely
-    /// inside the capsule's rounded end, so the two read as one shape.
+    /// The bubble closes in with progress until it sits entirely inside the
+    /// capsule's rounded end, so the two read as one shape.
     private var bubbleGap: CGFloat {
-        isRunning
-            ? Self.startGap + (Self.endGap - Self.startGap) * displayedFraction
-            : -Self.height
+        let merged = -Self.height
+        guard isRunning else { return merged }
+        let t = min(displayedFraction / Self.mergedFraction, 1)
+        let eased = t * t * (3 - 2 * t)
+        return Self.startGap + (merged - Self.startGap) * eased
     }
 
     private var title: String {

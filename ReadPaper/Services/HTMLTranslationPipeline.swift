@@ -41,7 +41,7 @@ struct HTMLTranslationSegmentUpdate: Equatable, Sendable {
 
 @MainActor
 final class HTMLTranslationPipeline {
-    private static let candidateSelector = "p, h1, h2, h3, h4, h5, h6, figcaption, blockquote, li"
+    nonisolated private static let candidateSelector = "p, h1, h2, h3, h4, h5, h6, figcaption, blockquote, li"
 
     private let client: TranslationLLMClientProtocol
 
@@ -63,17 +63,21 @@ final class HTMLTranslationPipeline {
     ) async throws -> HTMLTranslationOutcome {
         try Task.checkCancellation()
         guard attachment.kind == .html else { throw PaperImportError.missingHTML }
-        let htmlURL = attachment.fileURL
-        let html = try String(contentsOf: htmlURL, encoding: .utf8)
-        let extraction = try Self.prepareDocument(html)
-        let candidates = extraction.candidates
-        let document = try SwiftSoup.parse(extraction.preparedHTML)
+        // Parsing and rewriting paper.html runs off the main actor, so the reader
+        // stays responsive while long pages are prepared and saved.
+        let page = HTMLTranslationPage(url: attachment.fileURL)
+        let candidates = try await page.prepare()
+        // paper.html has changed from here on, so the reader reloads it even if
+        // the run stops before the cache hits are in.
+        var isPagePrepared = false
+        defer {
+            if isPagePrepared == false {
+                onDocumentPrepared?()
+            }
+        }
         let client = self.client
         let cacheIdentity = preferences.translationCacheIdentity(for: route)
         let documentTitle = paper.title
-        try Self.injectDisplayStyles(into: document)
-        try Self.writeDocument(document, to: htmlURL)
-        onDocumentPrepared?()
 
         let job = TranslationJob(
             paperID: paper.id,
@@ -88,20 +92,18 @@ final class HTMLTranslationPipeline {
         onProgressUpdated?(0, candidates.count)
 
         do {
-            var pendingCandidates: [HTMLTranslationCandidate] = []
             var failedSegments = 0
 
-            func advanceProgress() throws {
-                job.processedSegments += 1
+            func advanceProgress(by count: Int = 1) throws {
+                job.processedSegments += count
                 job.progress = candidates.isEmpty ? 1 : Double(job.processedSegments) / Double(candidates.count)
                 job.modifiedAt = Date()
                 try modelContext.save()
                 onProgressUpdated?(job.processedSegments, candidates.count)
             }
 
-            func applyTranslatedSegment(_ candidate: HTMLTranslationCandidate, translated: String) throws {
-                try Self.applyTranslation(translated, candidate: candidate, to: document)
-                try Self.writeDocument(document, to: htmlURL)
+            func applyTranslatedSegment(_ candidate: HTMLTranslationCandidate, translated: String) async throws {
+                try await page.apply([HTMLTranslationPage.Translation(candidate: candidate, text: translated)])
                 try advanceProgress()
                 onSegmentTranslated?(HTMLTranslationSegmentUpdate(
                     sequence: job.processedSegments,
@@ -112,22 +114,28 @@ final class HTMLTranslationPipeline {
                 ))
             }
 
-            for candidate in candidates {
-                try Task.checkCancellation()
-                if let cached = try cachedSegment(
-                    paperID: paper.id,
-                    sourceType: "html",
-                    targetLanguage: preferences.targetLanguage,
-                    candidate: candidate,
-                    route: route,
-                    cacheIdentity: cacheIdentity,
-                    modelContext: modelContext
-                ) {
-                    try applyTranslatedSegment(candidate, translated: cached.translatedText)
-                } else {
-                    pendingCandidates.append(candidate)
-                }
+            // Cache hits land in one write and one save. The page reload that
+            // `onDocumentPrepared` triggers shows them all; per-segment updates would
+            // arrive in one burst, and the reader applies only the last of a burst.
+            try Task.checkCancellation()
+            let cached = try cachedTranslations(
+                for: candidates,
+                paperID: paper.id,
+                targetLanguage: preferences.targetLanguage,
+                route: route,
+                cacheIdentity: cacheIdentity,
+                modelContext: modelContext
+            )
+            let cachedHits = candidates.compactMap { candidate in
+                cached[candidate.segmentID].map { HTMLTranslationPage.Translation(candidate: candidate, text: $0) }
             }
+            let pendingCandidates = candidates.filter { cached[$0.segmentID] == nil }
+            if cachedHits.isEmpty == false {
+                try await page.apply(cachedHits)
+                try advanceProgress(by: cachedHits.count)
+            }
+            isPagePrepared = true
+            onDocumentPrepared?()
 
             let concurrency = max(1, preferences.htmlTranslationConcurrency)
             for batch in pendingCandidates.chunked(into: concurrency) {
@@ -173,7 +181,7 @@ final class HTMLTranslationPipeline {
                             modelProfileID: route.modelProfileID,
                             modelName: cacheIdentity
                         ))
-                        try applyTranslatedSegment(candidate, translated: translated)
+                        try await applyTranslatedSegment(candidate, translated: translated)
                     }
                 }
             }
@@ -208,49 +216,64 @@ final class HTMLTranslationPipeline {
         )
     }
 
-    private func cachedSegment(
+    /// Valid cached translations keyed by segment ID, from one fetch of this paper's
+    /// cache rather than one fetch of every paper's cache per segment.
+    private func cachedTranslations(
+        for candidates: [HTMLTranslationCandidate],
         paperID: UUID,
-        sourceType: String,
         targetLanguage: String,
-        candidate: HTMLTranslationCandidate,
         route: LLMModelRouteSnapshot,
         cacheIdentity: String,
         modelContext: ModelContext
-    ) throws -> TranslationSegment? {
-        let segments = try modelContext.fetch(FetchDescriptor<TranslationSegment>())
-        let matches = segments.filter {
-            $0.paperID == paperID &&
-                $0.sourceType == sourceType &&
-                $0.targetLanguage == targetLanguage &&
-                $0.sourceHash == candidate.sourceHash &&
+    ) throws -> [String: String] {
+        let sourceType = "html"
+        let descriptor = FetchDescriptor<TranslationSegment>(predicate: #Predicate {
+            $0.paperID == paperID && $0.sourceType == sourceType && $0.targetLanguage == targetLanguage
+        })
+        let segmentsByHash = Dictionary(
+            grouping: try modelContext.fetch(descriptor).filter {
                 $0.providerProfileID == route.providerProfileID &&
-                $0.modelProfileID == route.modelProfileID &&
-                $0.modelName == cacheIdentity
-        }
-        let context = candidate.translationContext(documentTitle: nil, glossary: nil)
-        var validSegment: TranslationSegment?
-        for segment in matches {
-            let issue = TranslationOutputValidator.issue(
-                in: segment.translatedText,
-                source: candidate.sourceText,
-                context: context
-            )
-            if let issue, issue.isFatal {
-                // Purge outputs cached before validation existed (e.g. echoed prompts).
-                modelContext.delete(segment)
-            } else if validSegment == nil {
-                validSegment = segment
+                    $0.modelProfileID == route.modelProfileID &&
+                    $0.modelName == cacheIdentity
+            },
+            by: \.sourceHash
+        )
+
+        var translations: [String: String] = [:]
+        var purged = Set<PersistentIdentifier>()
+        for candidate in candidates {
+            guard let matches = segmentsByHash[candidate.sourceHash] else { continue }
+            let context = candidate.translationContext(documentTitle: nil, glossary: nil)
+            for segment in matches where purged.contains(segment.persistentModelID) == false {
+                let issue = TranslationOutputValidator.issue(
+                    in: segment.translatedText,
+                    source: candidate.sourceText,
+                    context: context
+                )
+                if let issue, issue.isFatal {
+                    // Purge outputs cached before validation existed (e.g. echoed prompts).
+                    purged.insert(segment.persistentModelID)
+                    modelContext.delete(segment)
+                } else if translations[candidate.segmentID] == nil {
+                    translations[candidate.segmentID] = segment.translatedText
+                }
             }
         }
-        return validSegment
+        return translations
     }
 
-    static func extractCandidates(from html: String) throws -> [HTMLTranslationCandidate] {
+    nonisolated static func extractCandidates(from html: String) throws -> [HTMLTranslationCandidate] {
         try prepareDocument(html).candidates
     }
 
-    static func prepareDocument(_ html: String) throws -> (preparedHTML: String, candidates: [HTMLTranslationCandidate]) {
+    nonisolated static func prepareDocument(_ html: String) throws -> (preparedHTML: String, candidates: [HTMLTranslationCandidate]) {
         let document = try SwiftSoup.parse(html)
+        let candidates = try prepare(document)
+        return (try document.outerHtml(), candidates)
+    }
+
+    /// Clears earlier translations and marks every candidate in place.
+    nonisolated static func prepare(_ document: Document) throws -> [HTMLTranslationCandidate] {
         try removeExistingTranslationBlocks(from: document)
         try removeExistingSourceMarkers(from: document)
         var candidates: [HTMLTranslationCandidate] = []
@@ -292,10 +315,10 @@ final class HTMLTranslationPipeline {
             }
         }
 
-        return (try document.outerHtml(), candidates)
+        return candidates
     }
 
-    static func applyTranslations(
+    nonisolated static func applyTranslations(
         toPreparedHTML html: String,
         candidates: [HTMLTranslationCandidate],
         translations: [String: String]
@@ -311,7 +334,7 @@ final class HTMLTranslationPipeline {
         return try document.outerHtml()
     }
 
-    private static func applyTranslation(
+    nonisolated fileprivate static func applyTranslation(
         _ translation: String,
         candidate: HTMLTranslationCandidate,
         to document: Document
@@ -329,24 +352,24 @@ final class HTMLTranslationPipeline {
         }
     }
 
-    private static func removeExistingTranslationBlocks(from document: Document) throws {
+    nonisolated private static func removeExistingTranslationBlocks(from document: Document) throws {
         for block in try document.select(".rp-translation-block, [data-rp-translation=true]").array() {
             try block.remove()
         }
     }
 
-    private static func removeExistingSourceMarkers(from document: Document) throws {
+    nonisolated private static func removeExistingSourceMarkers(from document: Document) throws {
         for element in try document.select("[data-rp-segment-id], [data-rp-source]").array() {
             try element.removeAttr("data-rp-segment-id")
             try element.removeAttr("data-rp-source")
         }
     }
 
-    private static func writeDocument(_ document: Document, to url: URL) throws {
+    nonisolated fileprivate static func writeDocument(_ document: Document, to url: URL) throws {
         try document.outerHtml().write(to: url, atomically: true, encoding: .utf8)
     }
 
-    private static func shouldSkip(_ element: Element) throws -> Bool {
+    nonisolated private static func shouldSkip(_ element: Element) throws -> Bool {
         if element.hasAttr("data-rp-translation") || element.hasClass("rp-translation-block") {
             return true
         }
@@ -356,7 +379,7 @@ final class HTMLTranslationPipeline {
         return HTMLRegionVisibility.isWithinHiddenRegion(element)
     }
 
-    private static func hasTranslatableDescendant(in element: Element) throws -> Bool {
+    nonisolated private static func hasTranslatableDescendant(in element: Element) throws -> Bool {
         for descendant in try element.select(candidateSelector).array() {
             if descendant === element { continue }
             if try shouldSkip(descendant) { continue }
@@ -371,7 +394,7 @@ final class HTMLTranslationPipeline {
     }
 
     /// Formula-only blocks have nothing to translate; translating them only duplicates the equation.
-    static func isMathOnly(_ text: String) -> Bool {
+    nonisolated static func isMathOnly(_ text: String) -> Bool {
         let prose = text
             .replacingOccurrences(of: #"\[PROTECTED_\d+\]"#, with: " ", options: .regularExpression)
             .replacingOccurrences(
@@ -382,7 +405,7 @@ final class HTMLTranslationPipeline {
         return !prose.contains { $0.isLetter }
     }
 
-    private static func protectedText(from element: Element) throws -> (text: String, fragments: [String]) {
+    nonisolated private static func protectedText(from element: Element) throws -> (text: String, fragments: [String]) {
         let clone = element.copy() as! Element
         try HTMLRegionVisibility.removeHiddenRegions(in: clone)
         var fragments: [String] = []
@@ -398,7 +421,7 @@ final class HTMLTranslationPipeline {
         return (text, fragments)
     }
 
-    private static func renderTranslation(_ translation: String, candidate: HTMLTranslationCandidate) -> String {
+    nonisolated private static func renderTranslation(_ translation: String, candidate: HTMLTranslationCandidate) -> String {
         var escaped = escapeHTML(translation)
         for (index, fragment) in candidate.protectedFragments.enumerated() {
             escaped = escaped.replacingOccurrences(of: "[PROTECTED_\(index)]", with: fragment)
@@ -406,7 +429,7 @@ final class HTMLTranslationPipeline {
         return "<\(candidate.tagName) class=\"rp-translation-block\" data-rp-translation=\"true\" data-rp-source-segment-id=\"\(escapeHTML(candidate.segmentID))\">\(escaped)</\(candidate.tagName)>"
     }
 
-    private static func escapeHTML(_ value: String) -> String {
+    nonisolated private static func escapeHTML(_ value: String) -> String {
         value
             .replacingOccurrences(of: "&", with: "&amp;")
             .replacingOccurrences(of: "<", with: "&lt;")
@@ -414,7 +437,7 @@ final class HTMLTranslationPipeline {
             .replacingOccurrences(of: "\"", with: "&quot;")
     }
 
-    private static func injectDisplayStyles(into document: Document) throws {
+    nonisolated fileprivate static func injectDisplayStyles(into document: Document) throws {
         let styleID = "rp-translation-display-style"
         let style: Element
         if let existing = try document.getElementById(styleID) {
@@ -461,6 +484,46 @@ final class HTMLTranslationPipeline {
         if style.parent() == nil, let head = document.head() {
             try head.appendChild(style)
         }
+    }
+}
+
+/// paper.html during one translation run. The parsed page lives here, off the
+/// main actor: each save serializes the whole page, which takes hundreds of
+/// milliseconds on long pages in Debug builds.
+private actor HTMLTranslationPage {
+    struct Translation: Sendable {
+        var candidate: HTMLTranslationCandidate
+        var text: String
+    }
+
+    private let url: URL
+    private var document: Document?
+
+    init(url: URL) {
+        self.url = url
+    }
+
+    /// Marks the candidates, adds the translation styles and saves the page.
+    func prepare() throws -> [HTMLTranslationCandidate] {
+        let document = try SwiftSoup.parse(String(contentsOf: url, encoding: .utf8))
+        let candidates = try HTMLTranslationPipeline.prepare(document)
+        try HTMLTranslationPipeline.injectDisplayStyles(into: document)
+        try HTMLTranslationPipeline.writeDocument(document, to: url)
+        self.document = document
+        return candidates
+    }
+
+    /// Inserts the translation blocks and saves the page once.
+    func apply(_ translations: [Translation]) throws {
+        guard let document, translations.isEmpty == false else { return }
+        for translation in translations {
+            try HTMLTranslationPipeline.applyTranslation(
+                translation.text,
+                candidate: translation.candidate,
+                to: document
+            )
+        }
+        try HTMLTranslationPipeline.writeDocument(document, to: url)
     }
 }
 
