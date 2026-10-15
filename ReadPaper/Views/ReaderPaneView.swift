@@ -657,12 +657,12 @@ struct ReaderPaneView: View {
     @ToolbarContentBuilder
     private var readerToolbar: some ToolbarContent {
         if paper != nil {
-            ToolbarItem(placement: .primaryAction) {
+            segmentedPickerToolbarItem {
                 readerModePicker
             }
 
             if readerMode == .html {
-                ToolbarItem(placement: .primaryAction) {
+                segmentedPickerToolbarItem {
                     htmlDisplayPicker
                 }
                 ToolbarItem(placement: .primaryAction) {
@@ -672,7 +672,7 @@ struct ReaderPaneView: View {
                     htmlRegionEditButton
                 }
             } else {
-                ToolbarItem(placement: .primaryAction) {
+                segmentedPickerToolbarItem {
                     pdfDisplayPicker
                 }
                 ToolbarItem(placement: .primaryAction) {
@@ -779,30 +779,29 @@ struct ReaderPaneView: View {
     }
 
     private var readerModePicker: some View {
-        Picker(String(localized: "Reader", bundle: bundle), selection: primaryReaderMode) {
-            Text("HTML", bundle: bundle)
-                .tag(PrimaryReaderMode.html)
-            Text("PDF", bundle: bundle)
-                .tag(PrimaryReaderMode.pdf)
-        }
-        .pickerStyle(.segmented)
-        .frame(width: 120)
-        .labelsHidden()
+        ReadPaperSegmentedPicker(
+            label: String(localized: "Reader", bundle: bundle),
+            selection: primaryReaderMode,
+            options: [
+                .init(value: .html, title: String(localized: "HTML", bundle: bundle)),
+                .init(value: .pdf, title: String(localized: "PDF", bundle: bundle)),
+            ],
+            placement: .toolbar
+        )
         .help(String(localized: "Switch between HTML and PDF reading", bundle: bundle))
     }
 
     private var htmlDisplayPicker: some View {
-        Picker(String(localized: "Display", bundle: bundle), selection: $displayMode) {
-            Text("Original", bundle: bundle)
-                .tag(TranslationDisplayMode.original)
-            Text("Bilingual", bundle: bundle)
-                .tag(TranslationDisplayMode.bilingual)
-            Text("Translated", bundle: bundle)
-                .tag(TranslationDisplayMode.translated)
-        }
-        .pickerStyle(.segmented)
-        .fixedSize()
-        .labelsHidden()
+        ReadPaperSegmentedPicker(
+            label: String(localized: "Display", bundle: bundle),
+            selection: $displayMode,
+            options: [
+                .init(value: .original, title: String(localized: "Original", bundle: bundle)),
+                .init(value: .bilingual, title: String(localized: "Bilingual", bundle: bundle)),
+                .init(value: .translated, title: String(localized: "Translated", bundle: bundle)),
+            ],
+            placement: .toolbar
+        )
         .help(String(localized: "HTML Display Mode", bundle: bundle))
     }
 
@@ -1014,17 +1013,16 @@ struct ReaderPaneView: View {
     }
 
     private var pdfDisplayPicker: some View {
-        Picker(String(localized: "PDF Display", bundle: bundle), selection: pdfReaderModeSelection) {
-            Text("Original", bundle: bundle)
-                .tag(ReaderMode.pdf)
-            Text("Bilingual", bundle: bundle)
-                .tag(ReaderMode.bilingualPDF)    
-            Text("Translated", bundle: bundle)
-                .tag(ReaderMode.translatedPDF)
-        }
-        .pickerStyle(.segmented)
-        .fixedSize()
-        .labelsHidden()
+        ReadPaperSegmentedPicker(
+            label: String(localized: "PDF Display", bundle: bundle),
+            selection: pdfReaderModeSelection,
+            options: [
+                .init(value: .pdf, title: String(localized: "Original", bundle: bundle)),
+                .init(value: .bilingualPDF, title: String(localized: "Bilingual", bundle: bundle)),
+                .init(value: .translatedPDF, title: String(localized: "Translated", bundle: bundle)),
+            ],
+            placement: .toolbar
+        )
         .help(String(localized: "PDF Display Mode", bundle: bundle))
     }
 
