@@ -1208,6 +1208,17 @@
         }
       }
     },
+    "Cancelled" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已取消"
+          }
+        }
+      }
+    },
     "Cancelled BabelDOC installation and removed downloaded cache." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1215,6 +1226,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "已取消 BabelDOC 安装，并移除了已下载的缓存。"
+          }
+        }
+      }
+    },
+    "Cancelling" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在取消"
           }
         }
       }
@@ -7751,6 +7773,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "已翻译 %1$d 个文本块；为保护版面，安全保留了 %2$d 个公式布局块。"
+          }
+        }
+      }
+    },
+    "Translating" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "翻译中"
           }
         }
       }

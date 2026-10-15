@@ -46,6 +46,12 @@ struct ReaderPaneView: View {
         var summary: String
     }
 
+    /// How a finished translation is shown in the activity capsule before it fades.
+    private struct TranslationActivityOutcome: Equatable {
+        var phase: TranslationActivityCapsule.Phase
+        var message: String?
+    }
+
     private enum PDFTranslationScope {
         case firstPages(Int)
         case allPages
@@ -106,6 +112,8 @@ struct ReaderPaneView: View {
     @State private var statusMessage: String?
     @State private var translationProgress: TranslationProgressStatus?
     @State private var translationTask: Task<Void, Never>?
+    @State private var translationActivityOutcome: TranslationActivityOutcome?
+    @State private var translationActivityDismissTask: Task<Void, Never>?
     @State private var pdfTranslationErrorLogURL: URL?
     @State private var pdfTranslationDiagnosticsNoticeID: String?
     @State private var latexTranslationErrorLogURL: URL?
@@ -324,12 +332,17 @@ struct ReaderPaneView: View {
                     .ignoresSafeArea()
             }
             .overlay(alignment: .bottom) {
-                if let copyToastMessage {
-                    copyToast(message: copyToastMessage)
-                        .padding(.bottom, 20)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                        .zIndex(20)
+                VStack(spacing: 10) {
+                    if let copyToastMessage {
+                        copyToast(message: copyToastMessage)
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
+                    translationActivityCapsule
                 }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 20)
+                .zIndex(20)
+                .animation(.spring(duration: 0.4, bounce: 0.15), value: translationActivityPhase == nil)
             }
             .animation(.easeOut(duration: 0.18), value: copyToastMessage != nil)
             .toolbar {
@@ -344,6 +357,7 @@ struct ReaderPaneView: View {
                 await refreshOriginalPDFPageCount(for: originalPDFPageCountRequest)
             }
             .onChange(of: paper?.id) { _, _ in
+                dismissTranslationActivityOutcome()
                 finishHTMLRegionEditing()
                 htmlHiddenRegionCount = 0
                 flushPendingReadingStatePersistence()
@@ -395,6 +409,7 @@ struct ReaderPaneView: View {
                 deactivatePDFTranslationDebugMode()
                 clearSelectionAssistant()
                 dismissCopyToast()
+                dismissTranslationActivityOutcome()
             }
             .confirmationDialog(
                 String(localized: "Choose Translation Scope", bundle: bundle),
@@ -599,7 +614,9 @@ struct ReaderPaneView: View {
                 }
             }
 
-            if isWorking || statusMessage != nil {
+            // A running translation shows in the floating activity capsule; this row
+            // keeps what is left afterwards and needs attention, such as errors.
+            if !isWorking, statusMessage != nil {
                 statusRow
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
@@ -671,26 +688,6 @@ struct ReaderPaneView: View {
                 pdfTranslationDebugButton
                 #endif
                 exportMenu
-
-                if isWorking {
-                    Button {
-                        cancelTranslation()
-                    } label: {
-                        Label(
-                            isCancelling
-                                ? String(localized: "Cancelling...", bundle: bundle)
-                                : String(localized: "Cancel", bundle: bundle),
-                            systemImage: "xmark.circle"
-                        )
-                    }
-                    .labelStyle(.iconOnly)
-                    .disabled(isCancelling)
-                    .help(
-                        isCancelling
-                            ? String(localized: "Cancelling translation...", bundle: bundle)
-                            : String(localized: "Cancel Translation", bundle: bundle)
-                    )
-                }
             }
 
             if #available(macOS 26.0, *) {
@@ -1859,89 +1856,134 @@ struct ReaderPaneView: View {
     }
 
     private var statusRow: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 8) {
-                if isWorking, translationProgress == nil {
-                    ProgressView()
-                        .controlSize(.small)
+        HStack(spacing: 8) {
+            Text(statusMessage ?? "")
+                .font(.caption)
+                .foregroundStyle(AppLocalization.isErrorMessage(statusMessage, bundle: bundle) ? .red : .secondary)
+                .lineLimit(1)
+
+            Spacer(minLength: 0)
+
+            if pdfTranslationErrorLogURL != nil {
+                Button {
+                    revealPDFTranslationErrorLog()
+                } label: {
+                    Label(String(localized: "Show BabelDOC Log", bundle: bundle), systemImage: "doc.text.magnifyingglass")
                 }
-                Text(statusMessage ?? String(localized: "Working...", bundle: bundle))
-                    .font(.caption)
-                    .foregroundStyle(AppLocalization.isErrorMessage(statusMessage, bundle: bundle) ? .red : .secondary)
-                    .lineLimit(1)
+                .labelStyle(.iconOnly)
+                .buttonStyle(.borderless)
+                .help(String(localized: "Show BabelDOC Log", bundle: bundle))
 
-                Spacer(minLength: 0)
-
-                if let translationProgress {
-                    Text(translationProgress.summary)
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(.tertiary)
+                Button {
+                    copyPDFTranslationErrorLogPath()
+                } label: {
+                    Label(String(localized: "Copy BabelDOC Log Path", bundle: bundle), systemImage: "doc.on.doc")
                 }
-
-                if pdfTranslationErrorLogURL != nil {
-                    Button {
-                        revealPDFTranslationErrorLog()
-                    } label: {
-                        Label(String(localized: "Show BabelDOC Log", bundle: bundle), systemImage: "doc.text.magnifyingglass")
-                    }
-                    .labelStyle(.iconOnly)
-                    .buttonStyle(.borderless)
-                    .help(String(localized: "Show BabelDOC Log", bundle: bundle))
-
-                    Button {
-                        copyPDFTranslationErrorLogPath()
-                    } label: {
-                        Label(String(localized: "Copy BabelDOC Log Path", bundle: bundle), systemImage: "doc.on.doc")
-                    }
-                    .labelStyle(.iconOnly)
-                    .buttonStyle(.borderless)
-                    .help(String(localized: "Copy BabelDOC Log Path", bundle: bundle))
-                }
-
-                if latexTranslationErrorLogURL != nil {
-                    Button {
-                        revealLaTeXTranslationErrorLog()
-                    } label: {
-                        Label(String(localized: "Show LaTeX Compilation Log", bundle: bundle), systemImage: "doc.text.magnifyingglass")
-                    }
-                    .labelStyle(.iconOnly)
-                    .buttonStyle(.borderless)
-                    .help(String(localized: "Show LaTeX Compilation Log", bundle: bundle))
-                }
-
-                if translatedLaTeXSourceAttachment != nil {
-                    Button {
-                        revealTranslatedLaTeXSource()
-                    } label: {
-                        Label(String(localized: "Reveal Translated LaTeX Source", bundle: bundle), systemImage: "folder")
-                    }
-                    .labelStyle(.iconOnly)
-                    .buttonStyle(.borderless)
-                    .help(String(localized: "Reveal Translated LaTeX Source", bundle: bundle))
-                }
-
-                if statusMessage != nil, !isWorking {
-                    Button {
-                        dismissStatusMessage()
-                    } label: {
-                        Label(String(localized: "Close", bundle: bundle), systemImage: "xmark")
-                    }
-                    .labelStyle(.iconOnly)
-                    .buttonStyle(.borderless)
-                    .controlSize(.small)
-                    .help(String(localized: "Close", bundle: bundle))
-                }
+                .labelStyle(.iconOnly)
+                .buttonStyle(.borderless)
+                .help(String(localized: "Copy BabelDOC Log Path", bundle: bundle))
             }
 
-            if let translationProgress, translationProgress.total > 0 {
-                ProgressView(
-                    value: Double(translationProgress.completed),
-                    total: Double(translationProgress.total)
-                )
-                .progressViewStyle(.linear)
-                .controlSize(.small)
+            if latexTranslationErrorLogURL != nil {
+                Button {
+                    revealLaTeXTranslationErrorLog()
+                } label: {
+                    Label(String(localized: "Show LaTeX Compilation Log", bundle: bundle), systemImage: "doc.text.magnifyingglass")
+                }
+                .labelStyle(.iconOnly)
+                .buttonStyle(.borderless)
+                .help(String(localized: "Show LaTeX Compilation Log", bundle: bundle))
             }
+
+            if translatedLaTeXSourceAttachment != nil {
+                Button {
+                    revealTranslatedLaTeXSource()
+                } label: {
+                    Label(String(localized: "Reveal Translated LaTeX Source", bundle: bundle), systemImage: "folder")
+                }
+                .labelStyle(.iconOnly)
+                .buttonStyle(.borderless)
+                .help(String(localized: "Reveal Translated LaTeX Source", bundle: bundle))
+            }
+
+            Button {
+                dismissStatusMessage()
+            } label: {
+                Label(String(localized: "Close", bundle: bundle), systemImage: "xmark")
+            }
+            .labelStyle(.iconOnly)
+            .buttonStyle(.borderless)
+            .controlSize(.small)
+            .help(String(localized: "Close", bundle: bundle))
         }
+    }
+
+    private var translationActivityPhase: TranslationActivityCapsule.Phase? {
+        isWorking ? .running(isCancelling: isCancelling) : translationActivityOutcome?.phase
+    }
+
+    /// One capsule for the whole run, so on finishing it morphs in place: the cancel
+    /// bubble melts in and the glow fills or drains.
+    @ViewBuilder
+    private var translationActivityCapsule: some View {
+        if let phase = translationActivityPhase {
+            TranslationActivityCapsule(
+                phase: phase,
+                detail: isWorking ? statusMessage : translationActivityOutcome?.message,
+                fraction: translationProgress.flatMap { progress in
+                    progress.total > 0 ? progress.completed / progress.total : nil
+                },
+                summary: translationProgress?.summary,
+                onCancel: cancelTranslation
+            )
+            .transition(.move(edge: .bottom).combined(with: .opacity))
+        }
+    }
+
+    /// Ends a translation run. The outcome is set in the same update that clears
+    /// `isWorking`, so the running capsule turns into the outcome instead of
+    /// disappearing for a frame. A run that failed passes no outcome.
+    private func endTranslationRun(_ outcome: TranslationActivityCapsule.Phase?) {
+        finishTranslationActivity(outcome)
+        isWorking = false
+        isCancelling = false
+        translationTask = nil
+    }
+
+    /// Plays the finish or the cancel out in the capsule, so the run ends where it
+    /// started. A finish with warnings, or a LaTeX finish whose row holds the button
+    /// that reveals the source, also keeps its message in the status row.
+    private func finishTranslationActivity(_ phase: TranslationActivityCapsule.Phase?) {
+        guard let phase else {
+            dismissTranslationActivityOutcome()
+            return
+        }
+        let message = statusMessage
+        let plainFinishes = [
+            String(localized: "Translation cancelled.", bundle: bundle),
+            String(localized: "HTML translation completed.", bundle: bundle),
+            String(localized: "PDF translation completed.", bundle: bundle),
+        ]
+        if let message, plainFinishes.contains(message) {
+            statusMessage = nil
+        }
+
+        translationActivityOutcome = TranslationActivityOutcome(phase: phase, message: message)
+        translationActivityDismissTask?.cancel()
+        translationActivityDismissTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(phase == .completed ? 2 : 1.4))
+            guard Task.isCancelled == false else { return }
+            withAnimation(.easeIn(duration: 0.25)) {
+                translationActivityOutcome = nil
+            }
+            translationActivityDismissTask = nil
+        }
+    }
+
+    private func dismissTranslationActivityOutcome() {
+        translationActivityDismissTask?.cancel()
+        translationActivityDismissTask = nil
+        translationActivityOutcome = nil
     }
 
     private func translateHTML() {
@@ -1957,6 +1999,7 @@ struct ReaderPaneView: View {
         isCancelling = false
         statusMessage = String(localized: "Translating HTML...", bundle: bundle)
         translationTask = Task {
+            var runOutcome: TranslationActivityCapsule.Phase?
             // Translation rewrites paper.html, so region edits must be on disk first.
             await HTMLRegionWriter.shared.waitForQueuedWrites()
             do {
@@ -1997,15 +2040,15 @@ struct ReaderPaneView: View {
                 statusMessage = outcome.failedSegments > 0
                     ? HTMLTranslationPipeline.skippedSegmentsMessage(count: outcome.failedSegments, bundle: bundle)
                     : String(localized: "HTML translation completed.", bundle: bundle)
+                runOutcome = .completed
             } catch is CancellationError {
+                runOutcome = .cancelled
                 translationProgress = nil
                 statusMessage = String(localized: "Translation cancelled.", bundle: bundle)
             } catch {
                 handleTranslationError(error)
             }
-            isWorking = false
-            isCancelling = false
-            translationTask = nil
+            endTranslationRun(runOutcome)
         }
     }
 
@@ -2056,6 +2099,7 @@ struct ReaderPaneView: View {
         isCancelling = false
         statusMessage = String(localized: "Preparing arXiv LaTeX source...", bundle: bundle)
         translationTask = Task {
+            var runOutcome: TranslationActivityCapsule.Phase?
             do {
                 try Task.checkCancellation()
                 let resolvedRoute = try LLMRouteResolver().resolvePDFRoute(
@@ -2135,7 +2179,9 @@ struct ReaderPaneView: View {
                 statusMessage = compilationFailureMessage
                     ?? incompleteUnitsMessage
                     ?? String(localized: "LaTeX translation completed.", bundle: bundle)
+                runOutcome = output.pdfCompilationFailed ? nil : .completed
             } catch is CancellationError {
+                runOutcome = .cancelled
                 translationProgress = nil
                 finishLaTeXJob(
                     id: jobID,
@@ -2150,9 +2196,7 @@ struct ReaderPaneView: View {
                 pdfTranslationErrorLogURL = nil
                 statusMessage = message
             }
-            isWorking = false
-            isCancelling = false
-            translationTask = nil
+            endTranslationRun(runOutcome)
         }
     }
 
@@ -2250,6 +2294,7 @@ struct ReaderPaneView: View {
         isCancelling = false
         statusMessage = String(localized: "Running BabelDOC...", bundle: bundle)
         translationTask = Task {
+            var runOutcome: TranslationActivityCapsule.Phase?
             do {
                 try Task.checkCancellation()
                 let resolvedRoute = try LLMRouteResolver().resolvePDFRoute(
@@ -2350,16 +2395,16 @@ struct ReaderPaneView: View {
                     diagnostics: translationResult.diagnostics
                 )
                 statusMessage = pdfTranslationCompletionMessage(translationResult.diagnostics)
+                runOutcome = .completed
             } catch is CancellationError {
+                runOutcome = .cancelled
                 translationProgress = nil
                 pdfTranslationErrorLogURL = nil
                 statusMessage = String(localized: "Translation cancelled.", bundle: bundle)
             } catch {
                 handleTranslationError(error)
             }
-            isWorking = false
-            isCancelling = false
-            translationTask = nil
+            endTranslationRun(runOutcome)
         }
     }
 
@@ -2380,6 +2425,7 @@ struct ReaderPaneView: View {
         isCancelling = false
         statusMessage = String(localized: "Running BabelDOC...", bundle: bundle)
         translationTask = Task {
+            var runOutcome: TranslationActivityCapsule.Phase?
             do {
                 try Task.checkCancellation()
                 let resolvedRoute = try LLMRouteResolver().resolvePDFRoute(
@@ -2502,16 +2548,16 @@ struct ReaderPaneView: View {
                     diagnostics: combinedDiagnostics
                 )
                 statusMessage = pdfTranslationCompletionMessage(combinedDiagnostics)
+                runOutcome = .completed
             } catch is CancellationError {
+                runOutcome = .cancelled
                 translationProgress = nil
                 pdfTranslationErrorLogURL = nil
                 statusMessage = String(localized: "Translation cancelled.", bundle: bundle)
             } catch {
                 handleTranslationError(error)
             }
-            isWorking = false
-            isCancelling = false
-            translationTask = nil
+            endTranslationRun(runOutcome)
         }
     }
 

@@ -129,6 +129,7 @@ LLM 配置现已拆成独立 SwiftData 模型：`LLMProviderProfile` 负责 prov
 - `HTMLTranslationPipeline` 只翻译语义块，不翻译整份 HTML 字符串；当前候选选择器包括 `p`、`h1...h6`、`figcaption`、`blockquote`、`li`。
 - HTML 全文翻译必须按语义块增量落盘和刷新展示：每完成一个块（包括缓存命中）就插入 `.rp-translation-block`、写回 `paper.html` 并通知阅读器刷新；不要等所有段落翻译完成后再一次性展示。
 - HTML 翻译进度在阅读器中优先使用确定型进度条展示；如果已知总段数，至少同时显示线性进度和 `processed/total` 计数，不要只保留 `1/xxx` 这类纯文本进度提示。
+- 翻译运行中的状态只在阅读器底部的浮动胶囊 `TranslationActivityCapsule` 里显示（与复制链接 toast 同一位置和玻璃样式）：进度以模糊光晕沿胶囊背景推进，右侧圆形玻璃取消按钮随进度逐渐融进胶囊，结束时完全并入并显示对勾/叉；工具栏不再放取消按钮；胶囊只显示“翻译中 / 正在取消 / 完成 / 已取消”和计数，具体阶段文案放在 tooltip 里。各翻译流程把结果（`runOutcome`）交给 `endTranslationRun`，在清除 `isWorking` 的同一次更新里切换到结果，不要按状态文案字符串判断成败：完成（包括带警告的完成，PDF 常有少量段落失败）显示“完成”约 2 秒，取消显示“已取消”；警告、LaTeX 完成（那一行有“显示翻译后的 LaTeX 源码”按钮）和错误的文案另外留在顶部状态行，直到用户关闭。
 - HTML 翻译会保护 `math`、`.ltx_Math`、`cite`、`code`，生成 `[PROTECTED_N]` 占位符；改 prompt 或渲染时必须保持占位符可恢复。
 - 模型输出不可信：HTML 与摘要翻译统一走 `TranslationLLMClientProtocol.validatedTranslate`，由 `TranslationOutputValidator` 拦截回显 prompt 分隔标记、原样返回原文、复述相邻上下文和异常超长输出（失败会去掉相邻段上下文后重试）。仍无效的 HTML 段落跳过且不写入 `TranslationSegment`，整篇翻译继续并汇报跳过数；读取缓存时也要过同一校验并清除无效条目。改 prompt 分隔标签时同步 `AcademicTranslationPrompt.envelopeLabels`。
 - LaTeX 翻译的输出校验在 `../arxivLatex` 的 `PromptingLaTeXTranslator` 内完成：不可用的槽位响应会按单元重试，只有完整结果才写 checkpoint，未完成单元以 `untranslated-unit` / `partially-translated-unit` warning 返回；ReadPaper 只通过 `ReadPaperLaTeXTranslationOutput.incompleteUnitCount` 汇报数量，不要在 host 侧另写一套 LaTeX 回显检测。
