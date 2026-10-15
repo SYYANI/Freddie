@@ -95,41 +95,18 @@ struct InspectorPaneView: View {
         .fontDesign(displayAppearance == .paper ? .serif : .default)
     }
 
-    /// A segmented picker outside the toolbar gets the accent-filled content style, so this
-    /// draws the toolbar look (glass capsule, gray selected segment) to match the reader pickers.
     private var modePicker: some View {
-        HStack(spacing: 2) {
-            modePickerSegment(.paper, title: String(localized: "Paper", bundle: bundle))
-            modePickerSegment(.writing, title: String(localized: "Writing", bundle: bundle))
-        }
-        .padding(3)
-        .readPaperGlassEffect(in: Capsule())
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel(String(localized: "Inspector", bundle: bundle))
+        ReadPaperSegmentedPicker(
+            label: String(localized: "Inspector", bundle: bundle),
+            selection: $mode,
+            options: [
+                .init(value: .paper, title: String(localized: "Paper", bundle: bundle)),
+                .init(value: .writing, title: String(localized: "Writing", bundle: bundle)),
+            ]
+        )
         .frame(maxWidth: .infinity)
         .padding(.top, 10)
         .padding(.bottom, 6)
-    }
-
-    private func modePickerSegment(_ segmentMode: InspectorMode, title: String) -> some View {
-        let isSelected = mode == segmentMode
-        return Button {
-            mode = segmentMode
-        } label: {
-            Text(title)
-                .font(.system(size: 13))
-                .foregroundStyle(.primary)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 5)
-                .background {
-                    if isSelected {
-                        Capsule().fill(Color.primary.opacity(0.1))
-                    }
-                }
-                .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     private func metadataSection(_ paper: Paper) -> some View {

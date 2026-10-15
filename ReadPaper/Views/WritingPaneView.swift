@@ -300,22 +300,32 @@ struct WritingPaneView: View {
     }
 
     private var emptyState: some View {
-        ContentUnavailableView {
-            Label(String(localized: "No Writings Yet", bundle: bundle), systemImage: "square.and.pencil")
-        } actions: {
+        VStack(spacing: 14) {
+            Image(systemName: "square.and.pencil")
+                .font(.system(size: 32, weight: .regular))
+                .foregroundStyle(.tertiary)
+                .accessibilityHidden(true)
+
+            Text("No Writings Yet", bundle: bundle)
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+
             Button(String(localized: "New Writing", bundle: bundle)) {
                 createWriting()
             }
+            .controlSize(.regular)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
     }
 
     private var windowPlaceholder: some View {
         ContentUnavailableView {
             // Only the icon: the buttons say what the placeholder is for.
-            Image(systemName: "macwindow")
-                .font(.system(size: 40))
-                .foregroundStyle(.secondary)
+            Image(systemName: "square.and.pencil")
+                .font(.system(size: 32, weight: .regular))
+                .foregroundStyle(.tertiary)
                 .padding(.bottom, 4)
                 .accessibilityLabel(String(localized: "Writing in a Separate Window", bundle: bundle))
         } actions: {
