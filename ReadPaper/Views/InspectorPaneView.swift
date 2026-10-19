@@ -301,8 +301,12 @@ struct InspectorPaneView: View {
                         .font(.callout)
                         .textSelection(.enabled)
                         .lineLimit(isAbstractExpanded ? nil : 8)
+                        .fixedSize(horizontal: false, vertical: true)
                         .animation(.easeInOut(duration: 0.2), value: isAbstractExpanded)
                         .frame(maxWidth: .infinity, alignment: .leading)
+                        // macOS can draw the full selectable text on double-click,
+                        // even while lineLimit keeps the collapsed layout at eight lines.
+                        .clipped()
                 }
                 
                 if !isAbstractExpanded && !abstractTranslationState.isTranslating {
