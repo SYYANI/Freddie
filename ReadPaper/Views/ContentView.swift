@@ -71,7 +71,10 @@ struct ContentView: View {
     /// The grouping the sidebar shows. The open paper stays listed even when it
     /// stops matching, so unfavoriting it does not pull the row out from under
     /// the pointer.
-    private func visibleLibraryGrouping(itemTypes: PaperItemTypeResolution) -> PaperLibraryGrouping {
+    private func visibleLibraryGrouping(
+        itemTypes: PaperItemTypeResolution,
+        pinnedPaperID: UUID?
+    ) -> PaperLibraryGrouping {
         let grouping = libraryGrouping
         guard libraryFilter.isActive else { return grouping }
 
@@ -83,12 +86,12 @@ struct ContentView: View {
             notedPaperIDs: Set(notes.map(\.paperID)),
             itemTypes: itemTypes
         )
-        let pinnedPaperID = selectedPaper?.id
         return grouping.filtered { paper in
             paper.id == pinnedPaperID || libraryFilter.matches(paper, facts: facts)
         }
     }
 
+    /// A linear search over the library: views read it once per update and pass it on.
     private var selectedPaper: Paper? {
         if let selectedPaperID, let paper = papers.first(where: { $0.id == selectedPaperID }) {
             return paper
@@ -174,10 +177,10 @@ struct ContentView: View {
         }
     }
 
-    private func sidebarColumn(itemTypes: PaperItemTypeResolution) -> some View {
+    private func sidebarColumn(itemTypes: PaperItemTypeResolution, selectedPaper: Paper?) -> some View {
         LibrarySidebarView(
             papers: papers,
-            grouping: visibleLibraryGrouping(itemTypes: itemTypes),
+            grouping: visibleLibraryGrouping(itemTypes: itemTypes, pinnedPaperID: selectedPaper?.id),
             itemTypes: itemTypes,
             filter: $libraryFilter,
             selectedPaper: selectedPaper,
@@ -185,6 +188,7 @@ struct ContentView: View {
             isAddingPaper: $isAddingPaper,
             onDeletePaper: requestDeletion(of:)
         )
+        .equatable()
         .task(id: HTMLTranslationLookupKey(
             isNeeded: libraryFilter.criteria.contains(.translated),
             selectedPaperID: selectedPaperID,
@@ -202,13 +206,14 @@ struct ContentView: View {
         }
     }
 
-    private var readerColumn: some View {
-        ReaderPaneView(
-            paper: selectedPaper,
-            attachments: attachments.filter { $0.paperID == selectedPaper?.id },
-            notes: notes.filter { $0.paperID == selectedPaper?.id },
+    private func readerColumn(paper: Paper?, notes paperNotes: [Note]) -> some View {
+        let paperID = paper?.id
+        return ReaderPaneView(
+            paper: paper,
+            attachments: attachments.filter { $0.paperID == paperID },
+            notes: paperNotes,
             settings: settings,
-            readerMode: $readerMode,
+            storedReaderMode: $readerMode,
             displayMode: $displayMode,
             isInspectorCollapsed: inspectorCollapsedBinding,
             noteSelectionContext: $noteSelectionContext,
@@ -220,6 +225,7 @@ struct ContentView: View {
             onArxivLinkActivated: handleArxivLinkActivation,
             onRevealCitation: revealCitation
         )
+        .equatable()
         .navigationSplitViewColumnWidth(min: 520, ideal: 760)
         .background {
             if !isPaperAppearance {
@@ -229,11 +235,16 @@ struct ContentView: View {
         }
     }
 
-    private func inspectorColumn(isCollapsed: Bool, itemTypes: PaperItemTypeResolution) -> some View {
+    private func inspectorColumn(
+        isCollapsed: Bool,
+        itemTypes: PaperItemTypeResolution,
+        paper: Paper?,
+        notes paperNotes: [Note]
+    ) -> some View {
         InspectorPaneView(
-            paper: selectedPaper,
-            itemType: selectedPaper.map { itemTypes.selection(for: $0.id) },
-            notes: notes.filter { $0.paperID == selectedPaper?.id },
+            paper: paper,
+            itemType: paper.map { itemTypes.selection(for: $0.id) },
+            notes: paperNotes,
             isCollapsed: isCollapsed,
             currentSelectionContext: noteSelectionContext,
             focusedNoteID: $focusedNoteID,
@@ -249,14 +260,17 @@ struct ContentView: View {
     @ViewBuilder
     private var mainNavigation: some View {
         let itemTypes = itemTypeResolution
+        let paper = selectedPaper
+        let paperID = paper?.id
+        let paperNotes = notes.filter { $0.paperID == paperID }
 
         if #available(macOS 26.0, *) {
             NavigationSplitView {
-                sidebarColumn(itemTypes: itemTypes)
+                sidebarColumn(itemTypes: itemTypes, selectedPaper: paper)
             } detail: {
-                readerColumn
+                readerColumn(paper: paper, notes: paperNotes)
                     .inspector(isPresented: inspectorPresentedBinding) {
-                        inspectorColumn(isCollapsed: false, itemTypes: itemTypes)
+                        inspectorColumn(isCollapsed: false, itemTypes: itemTypes, paper: paper, notes: paperNotes)
                             .inspectorColumnWidth(
                                 min: InspectorColumnMetrics.minWidth,
                                 ideal: InspectorColumnMetrics.idealWidth,
@@ -266,11 +280,11 @@ struct ContentView: View {
             }
         } else {
             NavigationSplitView {
-                sidebarColumn(itemTypes: itemTypes)
+                sidebarColumn(itemTypes: itemTypes, selectedPaper: paper)
             } content: {
-                readerColumn
+                readerColumn(paper: paper, notes: paperNotes)
             } detail: {
-                inspectorColumn(isCollapsed: isInspectorCollapsed, itemTypes: itemTypes)
+                inspectorColumn(isCollapsed: isInspectorCollapsed, itemTypes: itemTypes, paper: paper, notes: paperNotes)
                     .navigationSplitViewColumnWidth(
                         min: isInspectorCollapsed ? 0 : InspectorColumnMetrics.minWidth,
                         ideal: isInspectorCollapsed ? 0 : InspectorColumnMetrics.idealWidth,
@@ -425,14 +439,19 @@ struct ContentView: View {
         .onDisappear {
             PaperLinkRouter.shared.unregister(windowID: linkRouterWindowID)
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
+            persistSelectedPaperIDIfNeeded(selectedPaperID)
+        }
         .onAppear {
             PaperLinkRouter.shared.openMainWindow = { [openWindow] in
                 openWindow(id: MainWindowScene.id)
             }
             WritingLibrary.shared.loadIfNeeded()
             let restoredSettings = ensureSettings()
-            restoreSelection(preferredPaperID: restoredSettings?.lastOpenedPaperID)
-            persistSelectedPaperIDIfNeeded(selectedPaperID, using: restoredSettings)
+            restoreSelection(preferredPaperID: PaperSelectionStore.savedPaperID(
+                settingsPaperID: restoredSettings?.lastOpenedPaperID
+            ))
+            PaperSelectionStore.saveSelection(selectedPaperID)
         }
         .onChange(of: papers.map(\.id)) { _, _ in
             syncSelectionWithAvailablePapers()
@@ -447,7 +466,7 @@ struct ContentView: View {
                 noteNavigationRequest = nil
             }
             sidenoteFocusRequest = nil
-            persistSelectedPaperIDIfNeeded(newValue)
+            PaperSelectionStore.saveSelection(newValue)
         }
     }
 
@@ -493,7 +512,10 @@ struct ContentView: View {
     /// Follows the sidebar's display order, which groups papers by folder and
     /// leaves out papers hidden by the filter.
     private func nextSelectionAfterDeletingPaper(withID paperID: UUID) -> UUID? {
-        let orderedPaperIDs = visibleLibraryGrouping(itemTypes: itemTypeResolution).orderedPaperIDs
+        let orderedPaperIDs = visibleLibraryGrouping(
+            itemTypes: itemTypeResolution,
+            pinnedPaperID: selectedPaper?.id
+        ).orderedPaperIDs
         let remainingPaperIDs = orderedPaperIDs.filter { $0 != paperID }
         guard !remainingPaperIDs.isEmpty else { return nil }
 
@@ -516,7 +538,7 @@ struct ContentView: View {
     private func syncSelectionWithAvailablePapers() {
         let resolvedSelection = PaperSelectionStore.resolvedSelection(
             currentPaperID: selectedPaperID,
-            savedPaperID: settings?.lastOpenedPaperID,
+            savedPaperID: PaperSelectionStore.savedPaperID(settingsPaperID: settings?.lastOpenedPaperID),
             availablePaperIDs: papers.map(\.id)
         )
 
@@ -524,11 +546,10 @@ struct ContentView: View {
         selectedPaperID = resolvedSelection
     }
 
-    private func persistSelectedPaperIDIfNeeded(
-        _ paperID: UUID?,
-        using settingsOverride: AppSettings? = nil
-    ) {
-        guard let settings = settingsOverride ?? settings else { return }
+    /// The selection is saved in `PaperSelectionStore` as it changes; the settings field is
+    /// only brought up to date when the app quits (see `PaperSelectionStore.lastOpenedPaperIDKey`).
+    private func persistSelectedPaperIDIfNeeded(_ paperID: UUID?) {
+        guard let settings else { return }
         guard settings.lastOpenedPaperID != paperID else { return }
 
         settings.lastOpenedPaperID = paperID

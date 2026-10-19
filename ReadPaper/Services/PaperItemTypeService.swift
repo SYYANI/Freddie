@@ -3,7 +3,7 @@ import SwiftData
 
 /// Every paper's item type: the user's choice when there is one, otherwise the
 /// type detected from how the paper was imported.
-struct PaperItemTypeResolution {
+struct PaperItemTypeResolution: Equatable {
     private let detectedTypes: [UUID: PaperItemType]
     private let assignedTypes: [UUID: PaperItemType]
 

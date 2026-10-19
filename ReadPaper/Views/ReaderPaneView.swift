@@ -83,7 +83,9 @@ struct ReaderPaneView: View {
     var attachments: [PaperAttachment]
     var notes: [Note]
     var settings: AppSettings?
-    @Binding var readerMode: ReaderMode
+    /// The reader mode of the current paper. Read `readerMode`, which also covers the update
+    /// in which another paper arrives before its reading state is restored.
+    @Binding var storedReaderMode: ReaderMode
     @Binding var displayMode: TranslationDisplayMode
     @Binding var isInspectorCollapsed: Bool
     @Binding var noteSelectionContext: NoteSelectionContext?
@@ -102,7 +104,10 @@ struct ReaderPaneView: View {
     var onRevealCitation: (WritingCitationMark) -> Void = { _ in }
     var writingLibrary: WritingLibrary = .shared
 
-    @State private var pdfPageIndex = 0
+    /// Read `pdfPageIndex`, for the same reason as `storedReaderMode`.
+    @State private var storedPDFPageIndex = 0
+    /// The paper whose reading state `storedReaderMode` and `storedPDFPageIndex` hold.
+    @State private var readingStatePaperID: UUID?
     @State private var htmlScrollRatio = 0.0
     @State private var htmlReloadToken = 0
     @State private var pdfReloadToken = 0
@@ -243,12 +248,50 @@ struct ReaderPaneView: View {
     }
 
     private var readingState: ReadingState? {
-        guard let paper else { return nil }
-        return readingStates.first { $0.paperID == paper.id }
+        guard let paperID = paper?.id else { return nil }
+        return readingStates.first { $0.paperID == paperID }
     }
 
     private var restoredHTMLScrollRatio: Double {
         ReadingStateStore.clampedScrollRatio(readingState?.scrollRatio ?? 0)
+    }
+
+    /// The saved reader mode and page of the current paper, resolved against its attachments.
+    private var restoredReadingPosition: (readerMode: ReaderMode, pageIndex: Int) {
+        let state = readingState
+        let readerMode = ReadingStateStore.resolvedReaderMode(
+            preferredMode: state?.readerMode,
+            hasHTML: htmlAttachment != nil,
+            hasPDF: pdfAttachment != nil,
+            hasTranslatedPDF: translatedPDFAttachment != nil
+        )
+        return (readerMode, max(0, state?.pageIndex ?? 0))
+    }
+
+    /// SwiftUI renders a newly selected paper once before `onChange(of: paper?.id)` restores
+    /// its reading state. Until then the stored mode and page are the previous paper's, so
+    /// the reader shows the restored ones instead; otherwise it would open the paper in the
+    /// previous paper's reader or at its page and then open it again.
+    private var isAwaitingReadingStateRestore: Bool {
+        guard let paper else { return false }
+        return readingStatePaperID != paper.id
+    }
+
+    private var readerMode: ReaderMode {
+        get { isAwaitingReadingStateRestore ? restoredReadingPosition.readerMode : storedReaderMode }
+        nonmutating set { storedReaderMode = newValue }
+    }
+
+    private var pdfPageIndex: Int {
+        get { isAwaitingReadingStateRestore ? restoredReadingPosition.pageIndex : storedPDFPageIndex }
+        nonmutating set { storedPDFPageIndex = newValue }
+    }
+
+    private var pdfPageIndexBinding: Binding<Int> {
+        Binding(
+            get: { pdfPageIndex },
+            set: { pdfPageIndex = $0 }
+        )
     }
 
     private var pdfTranslationBatchSize: Int {
@@ -661,22 +704,19 @@ struct ReaderPaneView: View {
                 readerModePicker
             }
 
+            // The HTML and PDF readers share these items, and each keeps the same kind of
+            // control in both. When the toolbar changes otherwise, SwiftUI replaces items and
+            // AppKit rebuilds the whole toolbar, which took nearly half of switching between
+            // an HTML and a PDF paper.
+            segmentedPickerToolbarItem {
+                displayPicker
+            }
+            ToolbarItem(placement: .primaryAction) {
+                readerToolsMenu
+            }
             if readerMode == .html {
-                segmentedPickerToolbarItem {
-                    htmlDisplayPicker
-                }
-                ToolbarItem(placement: .primaryAction) {
-                    htmlTypographyMenu
-                }
                 ToolbarItem(placement: .primaryAction) {
                     htmlRegionEditButton
-                }
-            } else {
-                segmentedPickerToolbarItem {
-                    pdfDisplayPicker
-                }
-                ToolbarItem(placement: .primaryAction) {
-                    pdfAnnotationMenu
                 }
             }
 
@@ -791,10 +831,14 @@ struct ReaderPaneView: View {
         .help(String(localized: "Switch between HTML and PDF reading", bundle: bundle))
     }
 
-    private var htmlDisplayPicker: some View {
-        ReadPaperSegmentedPicker(
-            label: String(localized: "Display", bundle: bundle),
-            selection: $displayMode,
+    /// Original, bilingual or translated: the HTML page's display mode, or the PDF reader.
+    private var displayPicker: some View {
+        let isHTML = readerMode == .html
+        return ReadPaperSegmentedPicker(
+            label: isHTML
+                ? String(localized: "Display", bundle: bundle)
+                : String(localized: "PDF Display", bundle: bundle),
+            selection: displayChoice,
             options: [
                 .init(value: .original, title: String(localized: "Original", bundle: bundle)),
                 .init(value: .bilingual, title: String(localized: "Bilingual", bundle: bundle)),
@@ -802,49 +846,84 @@ struct ReaderPaneView: View {
             ],
             placement: .toolbar
         )
-        .help(String(localized: "HTML Display Mode", bundle: bundle))
+        .help(isHTML
+            ? String(localized: "HTML Display Mode", bundle: bundle)
+            : String(localized: "PDF Display Mode", bundle: bundle))
     }
 
-    private var htmlTypographyMenu: some View {
-        Menu {
-            Button {
-                decreaseHTMLReaderFontSize()
-            } label: {
-                Label(String(localized: "Decrease Font Size", bundle: bundle), systemImage: "minus")
+    private var displayChoice: Binding<TranslationDisplayMode> {
+        Binding(
+            get: {
+                readerMode == .html
+                    ? displayMode
+                    : TranslationDisplayMode(pdfReaderMode: pdfReaderModeSelection.wrappedValue)
+            },
+            set: { choice in
+                if readerMode == .html {
+                    displayMode = choice
+                } else {
+                    pdfReaderModeSelection.wrappedValue = choice.pdfReaderMode
+                }
             }
-            .disabled(htmlReaderFontSize <= HTMLReaderTypography.fontSizeRange.lowerBound)
+        )
+    }
 
-            Button {
-                increaseHTMLReaderFontSize()
-            } label: {
-                Label(String(localized: "Increase Font Size", bundle: bundle), systemImage: "plus")
+    /// The typography menu in HTML mode and the annotation menu otherwise, as one menu so
+    /// that its toolbar item is not replaced when the mode changes.
+    private var readerToolsMenu: some View {
+        let isHTML = readerMode == .html
+        let fontSize = Int(HTMLReaderTypography.clampFontSize(htmlReaderFontSize).rounded())
+        return Menu {
+            if isHTML {
+                htmlTypographyMenuItems
+            } else {
+                pdfAnnotationMenuItems
             }
-            .disabled(htmlReaderFontSize >= HTMLReaderTypography.fontSizeRange.upperBound)
-
-            Divider()
-
-            Button {
-                resetHTMLReaderFontSize()
-            } label: {
-                Label(String(localized: "Reset Font Size", bundle: bundle), systemImage: "arrow.counterclockwise")
-            }
-            .disabled(htmlReaderFontSize == HTMLReaderTypography.defaultFontSize)
         } label: {
             Label(
-                String(
-                    format: String(localized: "Font Size: %d", bundle: bundle),
-                    Int(HTMLReaderTypography.clampFontSize(htmlReaderFontSize).rounded())
-                ),
-                systemImage: "textformat.size"
+                isHTML
+                    ? String(format: String(localized: "Font Size: %d", bundle: bundle), fontSize)
+                    : String(localized: "PDF Annotations", bundle: bundle),
+                systemImage: isHTML ? "textformat.size" : pdfAnnotationToolSystemImage
+            )
+            .labelStyle(.iconOnly)
+            .foregroundStyle(
+                isHTML || pdfAnnotationSession.interactionMode == .browse
+                    ? Color.primary
+                    : Color.accentColor
             )
         }
-        .labelStyle(.iconOnly)
-        .help(
-            String(
-                format: String(localized: "HTML Font Size: %d", bundle: bundle),
-                Int(HTMLReaderTypography.clampFontSize(htmlReaderFontSize).rounded())
-            )
-        )
+        .menuIndicator(isHTML ? .automatic : .hidden)
+        .disabled(isHTML ? false : pdfAnnotationSession.isDebugInteractionActive)
+        .help(isHTML
+            ? String(format: String(localized: "HTML Font Size: %d", bundle: bundle), fontSize)
+            : String(localized: "PDF Annotations", bundle: bundle))
+    }
+
+    @ViewBuilder
+    private var htmlTypographyMenuItems: some View {
+        Button {
+            decreaseHTMLReaderFontSize()
+        } label: {
+            Label(String(localized: "Decrease Font Size", bundle: bundle), systemImage: "minus")
+        }
+        .disabled(htmlReaderFontSize <= HTMLReaderTypography.fontSizeRange.lowerBound)
+
+        Button {
+            increaseHTMLReaderFontSize()
+        } label: {
+            Label(String(localized: "Increase Font Size", bundle: bundle), systemImage: "plus")
+        }
+        .disabled(htmlReaderFontSize >= HTMLReaderTypography.fontSizeRange.upperBound)
+
+        Divider()
+
+        Button {
+            resetHTMLReaderFontSize()
+        } label: {
+            Label(String(localized: "Reset Font Size", bundle: bundle), systemImage: "arrow.counterclockwise")
+        }
+        .disabled(htmlReaderFontSize == HTMLReaderTypography.defaultFontSize)
     }
 
     private var htmlRegionEditButton: some View {
@@ -1012,114 +1091,85 @@ struct ReaderPaneView: View {
         }
     }
 
-    private var pdfDisplayPicker: some View {
-        ReadPaperSegmentedPicker(
-            label: String(localized: "PDF Display", bundle: bundle),
-            selection: pdfReaderModeSelection,
-            options: [
-                .init(value: .pdf, title: String(localized: "Original", bundle: bundle)),
-                .init(value: .bilingualPDF, title: String(localized: "Bilingual", bundle: bundle)),
-                .init(value: .translatedPDF, title: String(localized: "Translated", bundle: bundle)),
-            ],
-            placement: .toolbar
+    @ViewBuilder
+    private var pdfAnnotationMenuItems: some View {
+        annotationModeButton(
+            .browse,
+            title: String(localized: "Browse", bundle: bundle),
+            systemImage: "cursorarrow"
         )
-        .help(String(localized: "PDF Display Mode", bundle: bundle))
-    }
+        annotationModeButton(
+            .ink,
+            title: String(localized: "Freehand Draw", bundle: bundle),
+            systemImage: "pencil.tip"
+        )
+        annotationModeButton(
+            .textNote,
+            title: String(localized: "Place PDF Note", bundle: bundle),
+            systemImage: "note.text.badge.plus"
+        )
+        annotationModeButton(
+            .erase,
+            title: String(localized: "Erase Annotation", bundle: bundle),
+            systemImage: "eraser"
+        )
 
-    private var pdfAnnotationMenu: some View {
-        Menu {
-            annotationModeButton(
-                .browse,
-                title: String(localized: "Browse", bundle: bundle),
-                systemImage: "cursorarrow"
-            )
-            annotationModeButton(
-                .ink,
-                title: String(localized: "Freehand Draw", bundle: bundle),
-                systemImage: "pencil.tip"
-            )
-            annotationModeButton(
-                .textNote,
-                title: String(localized: "Place PDF Note", bundle: bundle),
-                systemImage: "note.text.badge.plus"
-            )
-            annotationModeButton(
-                .erase,
-                title: String(localized: "Erase Annotation", bundle: bundle),
-                systemImage: "eraser"
-            )
+        Divider()
 
-            Divider()
-
-            Button {
-                pdfAnnotationSession.applyTextMarkup(.highlight)
-            } label: {
-                Label(String(localized: "Highlight Selection", bundle: bundle), systemImage: "highlighter")
-            }
-            .disabled(pdfAnnotationSession.hasTextSelection == false)
-
-            Button {
-                pdfAnnotationSession.applyTextMarkup(.underline)
-            } label: {
-                Label(String(localized: "Underline Selection", bundle: bundle), systemImage: "underline")
-            }
-            .disabled(pdfAnnotationSession.hasTextSelection == false)
-
-            Button {
-                pdfAnnotationSession.applyTextMarkup(.strikeOut)
-            } label: {
-                Label(String(localized: "Strike Through Selection", bundle: bundle), systemImage: "strikethrough")
-            }
-            .disabled(pdfAnnotationSession.hasTextSelection == false)
-
-            Divider()
-
-            Menu(String(localized: "Annotation Color", bundle: bundle)) {
-                annotationColorButton(.yellow, title: String(localized: "Yellow", bundle: bundle))
-                annotationColorButton(.green, title: String(localized: "Green", bundle: bundle))
-                annotationColorButton(.blue, title: String(localized: "Blue", bundle: bundle))
-                annotationColorButton(.red, title: String(localized: "Red", bundle: bundle))
-                annotationColorButton(.purple, title: String(localized: "Purple", bundle: bundle))
-            }
-
-            Menu(String(localized: "Drawing Width", bundle: bundle)) {
-                annotationLineWidthButton(1, title: String(localized: "Thin", bundle: bundle))
-                annotationLineWidthButton(2, title: String(localized: "Medium", bundle: bundle))
-                annotationLineWidthButton(5, title: String(localized: "Thick", bundle: bundle))
-            }
-
-            Divider()
-
-            Button {
-                pdfAnnotationSession.undo()
-            } label: {
-                Label(String(localized: "Undo PDF Annotation", bundle: bundle), systemImage: "arrow.uturn.backward")
-            }
-            .keyboardShortcut("z", modifiers: .command)
-            .disabled(pdfAnnotationSession.canUndo == false)
-
-            Button {
-                pdfAnnotationSession.redo()
-            } label: {
-                Label(String(localized: "Redo PDF Annotation", bundle: bundle), systemImage: "arrow.uturn.forward")
-            }
-            .keyboardShortcut("z", modifiers: [.command, .shift])
-            .disabled(pdfAnnotationSession.canRedo == false)
+        Button {
+            pdfAnnotationSession.applyTextMarkup(.highlight)
         } label: {
-            Label(
-                String(localized: "PDF Annotations", bundle: bundle),
-                systemImage: pdfAnnotationToolSystemImage
-            )
-            .labelStyle(.iconOnly)
-            .foregroundStyle(
-                pdfAnnotationSession.interactionMode == .browse
-                    ? Color.primary
-                    : Color.accentColor
-            )
+            Label(String(localized: "Highlight Selection", bundle: bundle), systemImage: "highlighter")
         }
-        .menuIndicator(.hidden)
-        .disabled(pdfAnnotationSession.isDebugInteractionActive)
-        .help(String(localized: "PDF Annotations", bundle: bundle))
+        .disabled(pdfAnnotationSession.hasTextSelection == false)
+
+        Button {
+            pdfAnnotationSession.applyTextMarkup(.underline)
+        } label: {
+            Label(String(localized: "Underline Selection", bundle: bundle), systemImage: "underline")
+        }
+        .disabled(pdfAnnotationSession.hasTextSelection == false)
+
+        Button {
+            pdfAnnotationSession.applyTextMarkup(.strikeOut)
+        } label: {
+            Label(String(localized: "Strike Through Selection", bundle: bundle), systemImage: "strikethrough")
+        }
+        .disabled(pdfAnnotationSession.hasTextSelection == false)
+
+        Divider()
+
+        Menu(String(localized: "Annotation Color", bundle: bundle)) {
+            annotationColorButton(.yellow, title: String(localized: "Yellow", bundle: bundle))
+            annotationColorButton(.green, title: String(localized: "Green", bundle: bundle))
+            annotationColorButton(.blue, title: String(localized: "Blue", bundle: bundle))
+            annotationColorButton(.red, title: String(localized: "Red", bundle: bundle))
+            annotationColorButton(.purple, title: String(localized: "Purple", bundle: bundle))
+        }
+
+        Menu(String(localized: "Drawing Width", bundle: bundle)) {
+            annotationLineWidthButton(1, title: String(localized: "Thin", bundle: bundle))
+            annotationLineWidthButton(2, title: String(localized: "Medium", bundle: bundle))
+            annotationLineWidthButton(5, title: String(localized: "Thick", bundle: bundle))
+        }
+
+        Divider()
+
+        Button {
+            pdfAnnotationSession.undo()
+        } label: {
+            Label(String(localized: "Undo PDF Annotation", bundle: bundle), systemImage: "arrow.uturn.backward")
+        }
+        .keyboardShortcut("z", modifiers: .command)
+        .disabled(pdfAnnotationSession.canUndo == false)
+
+        Button {
+            pdfAnnotationSession.redo()
+        } label: {
+            Label(String(localized: "Redo PDF Annotation", bundle: bundle), systemImage: "arrow.uturn.forward")
+        }
+        .keyboardShortcut("z", modifiers: [.command, .shift])
+        .disabled(pdfAnnotationSession.canRedo == false)
     }
 
     private var pdfAnnotationToolSystemImage: String {
@@ -1741,7 +1791,7 @@ struct ReaderPaneView: View {
                                 translatedAttachmentID: translatedPDFAttachment?.id,
                                 translatedLastPage: translatedPDFAttachment?.translatedLastPage,
                                 displayAppearance: pdfDisplayAppearance,
-                                pageIndex: $pdfPageIndex,
+                                pageIndex: pdfPageIndexBinding,
                                 reloadToken: pdfReloadToken,
                                 noteNavigationRequest: noteNavigationRequest,
                                 selectionAssistantHistoryAnchors: selectionAssistantHistoryAnchors,
@@ -2763,7 +2813,7 @@ struct ReaderPaneView: View {
                             paperID: paper?.id,
                             attachmentID: attachmentID,
                             displayAppearance: pdfDisplayAppearance,
-                            pageIndex: $pdfPageIndex,
+                            pageIndex: pdfPageIndexBinding,
                             reloadToken: reloadToken,
                             noteNavigationRequest: noteNavigationRequest,
                             selectionAssistantHistoryAnchors: selectionAssistantHistoryAnchors,
@@ -3074,18 +3124,13 @@ struct ReaderPaneView: View {
     }
 
     private func restoreReadingStateForCurrentPaper() {
-        guard paper != nil else { return }
+        guard let paper else { return }
 
-        let restoredMode = ReadingStateStore.resolvedReaderMode(
-            preferredMode: readingState?.readerMode,
-            hasHTML: htmlAttachment != nil,
-            hasPDF: pdfAttachment != nil,
-            hasTranslatedPDF: translatedPDFAttachment != nil
-        )
-        let restoredPageIndex = max(0, readingState?.pageIndex ?? 0)
-        let restoredScrollRatio = ReadingStateStore.clampedScrollRatio(readingState?.scrollRatio ?? 0)
+        let (restoredMode, restoredPageIndex) = restoredReadingPosition
+        let restoredScrollRatio = restoredHTMLScrollRatio
 
         updateWithoutPersistingReadingState {
+            readingStatePaperID = paper.id
             readerMode = restoredMode
             if restoredMode != .html {
                 lastPDFReaderMode = normalizedPDFReaderMode(restoredMode)
@@ -3110,6 +3155,8 @@ struct ReaderPaneView: View {
 
     private func readingStatePersistenceSnapshot() -> ReadingStatePersistenceSnapshot? {
         guard !suspendReadingStatePersistence, let paper else { return nil }
+        // The previous paper's position must not be saved as this one's before it is restored.
+        guard isAwaitingReadingStateRestore == false else { return nil }
         guard htmlAttachment != nil || pdfAttachment != nil || translatedPDFAttachment != nil else {
             return nil
         }
@@ -3223,6 +3270,47 @@ struct ReaderPaneView: View {
         updates()
         DispatchQueue.main.async {
             suspendReadingStatePersistence = false
+        }
+    }
+}
+
+extension ReaderPaneView: Equatable {
+    /// The window redraws for much that the reader does not show, such as SwiftData refreshing
+    /// its models after a save, and redrawing the reader also updates its toolbar. Bindings
+    /// still update the reader when their values change, models it reads redraw it through
+    /// observation, and the action closures only reach state that outlives the view value.
+    nonisolated static func == (lhs: ReaderPaneView, rhs: ReaderPaneView) -> Bool {
+        MainActor.assumeIsolated {
+            lhs.paper === rhs.paper
+                && lhs.settings === rhs.settings
+                && lhs.writingLibrary === rhs.writingLibrary
+                && lhs.attachments.elementsEqual(rhs.attachments, by: ===)
+                && lhs.notes.elementsEqual(rhs.notes, by: ===)
+        }
+    }
+}
+
+/// The PDF reader modes as the toolbar's Original / Bilingual / Translated choice.
+private extension TranslationDisplayMode {
+    init(pdfReaderMode: ReaderMode) {
+        switch pdfReaderMode {
+        case .html, .pdf:
+            self = .original
+        case .bilingualPDF:
+            self = .bilingual
+        case .translatedPDF:
+            self = .translated
+        }
+    }
+
+    var pdfReaderMode: ReaderMode {
+        switch self {
+        case .original:
+            .pdf
+        case .bilingual:
+            .bilingualPDF
+        case .translated:
+            .translatedPDF
         }
     }
 }

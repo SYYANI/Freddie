@@ -50,4 +50,26 @@ final class PaperSelectionStoreTests: XCTestCase {
 
         XCTAssertNil(selection)
     }
+
+    func testSavedSelectionFallsBackToTheSettingsFieldUntilOneIsSaved() throws {
+        let suiteName = "ReadPaperTests.PaperSelection.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let settingsPaperID = UUID()
+
+        XCTAssertEqual(PaperSelectionStore.savedPaperID(in: defaults, settingsPaperID: settingsPaperID), settingsPaperID)
+
+        let selectedPaperID = UUID()
+        PaperSelectionStore.saveSelection(selectedPaperID, in: defaults)
+        XCTAssertEqual(PaperSelectionStore.savedPaperID(in: defaults, settingsPaperID: settingsPaperID), selectedPaperID)
+
+        PaperSelectionStore.saveSelection(nil, in: defaults)
+        XCTAssertNil(PaperSelectionStore.savedPaperID(in: defaults, settingsPaperID: settingsPaperID))
+    }
+
+    /// Any write to the standard defaults updates every `@AppStorage` property in the
+    /// window, so the selection, saved on every switch, has to go elsewhere.
+    func testSelectionIsNotSavedInTheStandardDefaults() {
+        XCTAssertFalse(PaperSelectionStore.windowStateDefaults === UserDefaults.standard)
+    }
 }
