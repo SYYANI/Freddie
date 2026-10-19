@@ -2034,11 +2034,13 @@ private final class InteractivePDFView: PDFView {
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         installInteractionOverlay()
+        observeLiveMagnify()
     }
 
     required init?(coder: NSCoder) {
         super.init(coder: coder)
         installInteractionOverlay()
+        observeLiveMagnify()
     }
 
     override func resetCursorRects() {
@@ -2065,6 +2067,27 @@ private final class InteractivePDFView: PDFView {
         // opens, but it otherwise snaps a manual pinch zoom back to fit.
         autoScales = false
         super.magnify(with: event)
+    }
+
+    /// Pinch and smart zoom are handled by PDFKit's internal scroll view and never reach
+    /// `magnify(with:)`. PDFKit turns `autoScales` off when they start, but no longer does once
+    /// the document has been replaced (another paper, or a translation update reloading the
+    /// file); the zoom then lasts only until the next layout fits the page again.
+    private func observeLiveMagnify() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(scrollViewWillStartLiveMagnify(_:)),
+            name: NSScrollView.willStartLiveMagnifyNotification,
+            object: nil
+        )
+    }
+
+    @objc private func scrollViewWillStartLiveMagnify(_ notification: Notification) {
+        guard let scrollView = notification.object as? NSView,
+              scrollView.isDescendant(of: self) else {
+            return
+        }
+        autoScales = false
     }
 
     override func mouseDown(with event: NSEvent) {
