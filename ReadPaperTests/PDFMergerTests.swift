@@ -523,6 +523,47 @@ final class PDFMergerTests: XCTestCase {
         ))
     }
 
+    /// PDFKit stops turning `autoScales` off at the start of a pinch once the view's document has
+    /// been replaced, so the next layout snapped the zoom back to fit.
+    @MainActor
+    func testPinchZoomSurvivesLayoutAfterDocumentIsReplaced() async throws {
+        let firstURL = tempDirectory.appendingPathComponent("first.pdf")
+        let secondURL = tempDirectory.appendingPathComponent("second.pdf")
+        try savePDFDocument(createPDFDocument(withPageCount: 3), to: firstURL)
+        try savePDFDocument(createPDFDocument(withPageCount: 3), to: secondURL)
+        let model = AutomaticScalingHarnessModel(fileURL: firstURL)
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 500, height: 600),
+            styleMask: [.titled],
+            backing: .buffered,
+            defer: false
+        )
+        window.isReleasedWhenClosed = false
+        window.contentView = NSHostingView(rootView: AutomaticScalingHarness(model: model))
+        window.makeKeyAndOrderFront(nil)
+        defer { window.close() }
+        window.contentView?.layoutSubtreeIfNeeded()
+        let pdfView = try XCTUnwrap(firstDescendant(PDFView.self, in: try XCTUnwrap(window.contentView)))
+        try await waitUntil { pdfView.document?.documentURL == firstURL }
+
+        model.fileURL = secondURL
+        try await waitUntil { pdfView.document?.documentURL == secondURL }
+        pdfView.layoutDocumentView()
+        XCTAssertTrue(pdfView.autoScales)
+
+        // What a trackpad pinch does: NSScrollView announces a live magnify, then changes its
+        // magnification without going through `PDFView.scaleFactor`.
+        let scrollView = try XCTUnwrap(firstDescendant(NSScrollView.self, in: pdfView))
+        let zoomedScale = pdfView.scaleFactorForSizeToFit * 1.5
+        NotificationCenter.default.post(name: NSScrollView.willStartLiveMagnifyNotification, object: scrollView)
+        scrollView.magnification = zoomedScale
+        NotificationCenter.default.post(name: NSScrollView.didEndLiveMagnifyNotification, object: scrollView)
+        pdfView.layoutDocumentView()
+
+        XCTAssertFalse(pdfView.autoScales)
+        XCTAssertEqual(pdfView.scaleFactor, zoomedScale, accuracy: 0.001)
+    }
+
     func testPDFDisplayAppearanceOnlyCompositesWhenAnOverlayNeedsBlending() {
         XCTAssertFalse(PDFDisplayAppearance.defaultMode.requiresOverlayCompositing)
         #if os(macOS)
@@ -564,5 +605,55 @@ final class PDFMergerTests: XCTestCase {
         XCTAssertEqual(ownership.activeSource, .translated)
         XCTAssertTrue(ownership.clear(.translated))
         XCTAssertNil(ownership.activeSource)
+    }
+
+    private func firstDescendant<View: NSView>(_ type: View.Type, in view: NSView) -> View? {
+        if let match = view as? View {
+            return match
+        }
+        for subview in view.subviews {
+            if let match = firstDescendant(type, in: subview) {
+                return match
+            }
+        }
+        return nil
+    }
+
+    @MainActor
+    private func waitUntil(
+        timeout: Duration = .seconds(3),
+        _ condition: @MainActor () -> Bool
+    ) async throws {
+        let deadline = ContinuousClock.now + timeout
+        while condition() == false {
+            guard ContinuousClock.now < deadline else {
+                XCTFail("Timed out waiting for condition")
+                return
+            }
+            try await Task.sleep(for: .milliseconds(20))
+        }
+    }
+}
+
+@MainActor
+private final class AutomaticScalingHarnessModel: ObservableObject {
+    @Published var fileURL: URL
+    @Published var pageIndex = 0
+
+    init(fileURL: URL) {
+        self.fileURL = fileURL
+    }
+}
+
+private struct AutomaticScalingHarness: View {
+    @ObservedObject var model: AutomaticScalingHarnessModel
+
+    var body: some View {
+        PDFReaderView(
+            fileURL: model.fileURL,
+            usesAutomaticScaling: true,
+            pageIndex: $model.pageIndex
+        )
+        .frame(width: 500, height: 600)
     }
 }
