@@ -173,81 +173,26 @@ struct LibrarySidebarView: View {
     }
 
     private func paperRows(_ rowPapers: [Paper]) -> some View {
-        ForEach(rowPapers) { paper in
-            PaperRowView(paper: paper)
-                .tag(paper.id)
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    selectedPaperID = paper.id
-                }
-                .draggable(PaperDragItem(paperID: paper.id)) {
-                    PaperRowView(paper: paper)
-                        .frame(width: 240, alignment: .leading)
-                        .padding(.horizontal, 10)
-                }
-                .contextMenu {
-                    paperContextMenu(for: paper)
-                }
+        let folderChoices = grouping.folderSections.map { section in
+            LibraryPaperRow.FolderChoice(id: section.folder.id, name: section.folder.name)
+        }
+        return ForEach(rowPapers) { paper in
+            LibraryPaperRow(
+                paper: paper,
+                currentFolderID: grouping.folderID(containing: paper.id),
+                folderChoices: folderChoices,
+                selectedPaperID: $selectedPaperID,
+                onToggleFavorite: toggleFavorite,
+                onMove: movePaper,
+                onNewFolder: { promptForNewFolder(containing: $0) },
+                onDelete: onDeletePaper
+            )
+            .equatable()
+            .tag(paper.id)
         }
         .onDelete { offsets in
             guard let offset = offsets.first, rowPapers.indices.contains(offset) else { return }
             onDeletePaper(rowPapers[offset])
-        }
-    }
-
-    @ViewBuilder
-    private func paperContextMenu(for paper: Paper) -> some View {
-        let currentFolderID = grouping.folderID(containing: paper.id)
-
-        Button {
-            toggleFavorite(paper)
-        } label: {
-            if paper.isFavorite {
-                Label(String(localized: "Remove from Favorites", bundle: bundle), systemImage: "star.slash")
-            } else {
-                Label(String(localized: "Add to Favorites", bundle: bundle), systemImage: "star")
-            }
-        }
-
-        Divider()
-
-        Menu {
-            ForEach(grouping.folderSections) { section in
-                Toggle(section.folder.name, isOn: Binding(
-                    get: { currentFolderID == section.folder.id },
-                    set: { isOn in
-                        if isOn {
-                            movePaper(paper.id, to: section.folder.id)
-                        }
-                    }
-                ))
-            }
-
-            if grouping.hasFolders {
-                Divider()
-            }
-
-            Button(String(localized: "New Folder…", bundle: bundle)) {
-                promptForNewFolder(containing: paper.id)
-            }
-        } label: {
-            Label(String(localized: "Move to Folder", bundle: bundle), systemImage: "folder")
-        }
-
-        if currentFolderID != nil {
-            Button {
-                movePaper(paper.id, to: nil)
-            } label: {
-                Label(String(localized: "Remove from Folder", bundle: bundle), systemImage: "folder.badge.minus")
-            }
-        }
-
-        Divider()
-
-        Button(role: .destructive) {
-            onDeletePaper(paper)
-        } label: {
-            Label(String(localized: "Delete Paper", bundle: bundle), systemImage: "trash")
         }
     }
 
@@ -779,6 +724,122 @@ private func emptyStateActionLabel(_ title: String, systemImage: String) -> some
         .padding(.horizontal, 10)
         .padding(.vertical, 9)
         .contentShape(Rectangle())
+}
+
+extension LibrarySidebarView: Equatable {
+    /// The window redraws for much that the library list does not show, such as SwiftData
+    /// refreshing its models after a save; comparing the inputs lets the list skip those
+    /// updates. Titles, names and favorites redraw through observation anyway, and the
+    /// action closure only reaches state that outlives the view value.
+    nonisolated static func == (lhs: LibrarySidebarView, rhs: LibrarySidebarView) -> Bool {
+        MainActor.assumeIsolated {
+            lhs.selectedPaperID == rhs.selectedPaperID
+                && lhs.selectedPaper === rhs.selectedPaper
+                && lhs.filter == rhs.filter
+                && lhs.papers.elementsEqual(rhs.papers, by: ===)
+                && lhs.grouping == rhs.grouping
+                && lhs.itemTypes == rhs.itemTypes
+        }
+    }
+}
+
+/// One library row and its context menu. SwiftUI builds the context menus of all visible
+/// rows on every update of the list, not on right-click, so rows are compared and only
+/// rebuilt when their paper or folder choices change, not when the selection moves.
+private struct LibraryPaperRow: View, Equatable {
+    struct FolderChoice: Equatable {
+        let id: UUID
+        let name: String
+    }
+
+    @Environment(\.localizationBundle) private var bundle
+    let paper: Paper
+    let currentFolderID: UUID?
+    let folderChoices: [FolderChoice]
+    @Binding var selectedPaperID: UUID?
+    let onToggleFavorite: (Paper) -> Void
+    let onMove: (UUID, UUID?) -> Void
+    let onNewFolder: (UUID) -> Void
+    let onDelete: (Paper) -> Void
+
+    /// The closures only reach state that outlives the view value, so they are left out.
+    nonisolated static func == (lhs: LibraryPaperRow, rhs: LibraryPaperRow) -> Bool {
+        MainActor.assumeIsolated {
+            lhs.paper === rhs.paper
+                && lhs.currentFolderID == rhs.currentFolderID
+                && lhs.folderChoices == rhs.folderChoices
+        }
+    }
+
+    var body: some View {
+        PaperRowView(paper: paper)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                selectedPaperID = paper.id
+            }
+            .draggable(PaperDragItem(paperID: paper.id)) {
+                PaperRowView(paper: paper)
+                    .frame(width: 240, alignment: .leading)
+                    .padding(.horizontal, 10)
+            }
+            .contextMenu {
+                contextMenu
+            }
+    }
+
+    @ViewBuilder
+    private var contextMenu: some View {
+        Button {
+            onToggleFavorite(paper)
+        } label: {
+            if paper.isFavorite {
+                Label(String(localized: "Remove from Favorites", bundle: bundle), systemImage: "star.slash")
+            } else {
+                Label(String(localized: "Add to Favorites", bundle: bundle), systemImage: "star")
+            }
+        }
+
+        Divider()
+
+        Menu {
+            ForEach(folderChoices, id: \.id) { folder in
+                Toggle(folder.name, isOn: Binding(
+                    get: { currentFolderID == folder.id },
+                    set: { isOn in
+                        if isOn {
+                            onMove(paper.id, folder.id)
+                        }
+                    }
+                ))
+            }
+
+            if folderChoices.isEmpty == false {
+                Divider()
+            }
+
+            Button(String(localized: "New Folder…", bundle: bundle)) {
+                onNewFolder(paper.id)
+            }
+        } label: {
+            Label(String(localized: "Move to Folder", bundle: bundle), systemImage: "folder")
+        }
+
+        if currentFolderID != nil {
+            Button {
+                onMove(paper.id, nil)
+            } label: {
+                Label(String(localized: "Remove from Folder", bundle: bundle), systemImage: "folder.badge.minus")
+            }
+        }
+
+        Divider()
+
+        Button(role: .destructive) {
+            onDelete(paper)
+        } label: {
+            Label(String(localized: "Delete Paper", bundle: bundle), systemImage: "trash")
+        }
+    }
 }
 
 private struct PaperRowView: View {

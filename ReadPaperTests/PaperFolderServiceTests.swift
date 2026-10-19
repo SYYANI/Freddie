@@ -158,6 +158,54 @@ final class PaperFolderServiceTests: XCTestCase {
         XCTAssertNil(grouping.folderID(containing: orphaned.id))
     }
 
+    /// The sidebar skips window updates when its grouping compares equal, so a grouping
+    /// rebuilt from the same models is equal and one that moves or reorders papers is not.
+    @MainActor
+    func testGroupingsCompareTheirFoldersAndPapers() {
+        let first = Paper(title: "First")
+        let second = Paper(title: "Second")
+        let folder = PaperFolder(name: "Folder")
+        let membership = PaperFolderMembership(paperID: first.id, folderID: folder.id)
+        let grouping = PaperLibraryGrouping(papers: [first, second], folders: [folder], memberships: [membership])
+
+        XCTAssertEqual(grouping, PaperLibraryGrouping(papers: [first, second], folders: [folder], memberships: [membership]))
+        XCTAssertNotEqual(grouping, PaperLibraryGrouping(papers: [first, second], folders: [folder], memberships: []))
+        XCTAssertNotEqual(grouping, PaperLibraryGrouping(
+            papers: [first, second],
+            folders: [folder],
+            memberships: [PaperFolderMembership(paperID: second.id, folderID: folder.id)]
+        ))
+        XCTAssertNotEqual(grouping, grouping.filtered { $0 !== second })
+        XCTAssertNotEqual(
+            PaperLibraryGrouping(papers: [first, second], folders: [], memberships: []),
+            PaperLibraryGrouping(papers: [second, first], folders: [], memberships: [])
+        )
+    }
+
+    /// The sidebar is compared on what it shows, so a window update that only recreates
+    /// its action closure does not rebuild the list, while a new selection does.
+    @MainActor
+    func testSidebarComparesWhatItShows() {
+        let first = Paper(title: "First")
+        let second = Paper(title: "Second")
+        func sidebar(selecting selected: Paper, in papers: [Paper]) -> LibrarySidebarView {
+            LibrarySidebarView(
+                papers: papers,
+                grouping: PaperLibraryGrouping(papers: papers, folders: [], memberships: []),
+                itemTypes: PaperItemTypeResolution(papers: papers, attachments: [], assignments: []),
+                filter: .constant(PaperLibraryFilter()),
+                selectedPaper: selected,
+                selectedPaperID: .constant(selected.id),
+                isAddingPaper: .constant(false),
+                onDeletePaper: { _ in }
+            )
+        }
+
+        XCTAssertEqual(sidebar(selecting: first, in: [first, second]), sidebar(selecting: first, in: [first, second]))
+        XCTAssertNotEqual(sidebar(selecting: first, in: [first, second]), sidebar(selecting: second, in: [first, second]))
+        XCTAssertNotEqual(sidebar(selecting: first, in: [first, second]), sidebar(selecting: first, in: [first]))
+    }
+
     func testCollapsedFolderStorageRoundTrips() {
         let ids: Set<UUID> = [UUID(), UUID()]
 

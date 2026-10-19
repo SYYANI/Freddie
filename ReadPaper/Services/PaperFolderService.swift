@@ -2,7 +2,7 @@ import Foundation
 import SwiftData
 
 /// Splits the library into folders and unfiled papers, in display order.
-struct PaperLibraryGrouping {
+struct PaperLibraryGrouping: Equatable {
     struct FolderSection: Identifiable {
         let folder: PaperFolder
         let papers: [Paper]
@@ -75,6 +75,15 @@ struct PaperLibraryGrouping {
 
     var hasFolders: Bool {
         !folderSections.isEmpty
+    }
+
+    /// The same folders and papers in the same order. Compares objects, not their
+    /// properties: views showing a name or title redraw when it changes anyway.
+    static func == (lhs: PaperLibraryGrouping, rhs: PaperLibraryGrouping) -> Bool {
+        lhs.unfiledPapers.elementsEqual(rhs.unfiledPapers, by: ===)
+            && lhs.folderSections.elementsEqual(rhs.folderSections) { left, right in
+                left.folder === right.folder && left.papers.elementsEqual(right.papers, by: ===)
+            }
     }
 
     var orderedPaperIDs: [UUID] {
