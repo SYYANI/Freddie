@@ -4,6 +4,8 @@ import Foundation
 /// in UserDefaults rather than `AppSettings`, so older app versions can still open the store.
 enum ScannedPDFTranslationPreferences {
     static let transcriptionModelProfileIDKey = "ReadPaper.ScannedPDF.TranscriptionModelProfileID"
+    /// The page-image and cost notice is acknowledged once across papers and launches.
+    static let didConfirmTranslationKey = "ReadPaper.ScannedPDF.DidConfirmTranslation"
 
     /// Translated scans are typeset with Simplified Chinese fonts and prompts only.
     static func supports(targetLanguage: String) -> Bool {

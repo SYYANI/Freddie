@@ -221,7 +221,7 @@ xcodebuild -project ReadPaper.xcodeproj -scheme ReadPaper -destination 'platform
 - HTML 区域调整（JS 与 Swift 路径一致性、隐藏/恢复落盘、签名校验、层级与徽标、⇧ 连选、写回顺序与退出前落盘）：`HTMLRegionVisibilityTests`
 - 翻译输出校验（prompt/原文/上下文回显、重试与回退）：`TranslationOutputValidatorTests`
 - PDF 无文字层检测（Type3 无映射字体、扫描件、glyph name 判定）：`PDFTextLayerInspectorTests`
-- 扫描版 PDF 翻译（模型适配、图像消息、截断映射、扫描页路由回退、错误映射、转写附件与显示选择、用真实 XeLaTeX 跑通整条路线并产出译文与矫正转写、复用检查点）：`ScannedPDFTranslationServiceTests`；全文索引优先用矫正转写的文字：`PaperFullTextSearchServiceTests`；RebuildPDFKit 本身（与 Python 的对照、XeLaTeX 排版、流水线检查点与失败页回退）在 `../rebuild-pdf` 里 `swift test`，`SampleReplayTests` 用 Python 运行留下的回答离线重放两篇样例（需本地 `.rebuild` 目录，约 1.5 分钟）
+- 扫描版 PDF 翻译（模型适配、图像消息、截断映射、扫描页路由回退、错误映射、转写附件与显示选择、用真实 XeLaTeX 跑通整条路线并产出译文与矫正转写、复用检查点）：`ScannedPDFTranslationServiceTests`；全文索引优先用矫正转写的文字：`PaperFullTextSearchServiceTests`；RebuildPDFKit 本身（与 Python 的对照、XeLaTeX 排版、流水线检查点与失败页回退）在 `../rebuild-pdf` 里 `swift test`，`SampleReplayTests` 用 Python 运行留下的回答离线重放两篇样例（需本地 `.rebuild` 目录，约 1.5 分钟），`ThompsonReplayTests` 从三页真实模型回答重新转写排版，覆盖美分符号、图注后独立换栏和独立字号控制行；这些排版回归不能只用已完成的页面检查点验证，否则会跳过首次转写校验。
 - BabelDOC 安装源、latest 版本解析、uv 安装参数：`BabelDocToolManagerTests`
 - BabelDOC 参数、progress bridge、敏感信息遮蔽、子进程输出/取消：`BabelDocRunnerTests`
 - provider 校验、base URL 规范化、连接测试：`LLMProviderValidationUseCaseTests`

@@ -87,6 +87,8 @@ struct ReaderPaneView: View {
     private var babelDocSemanticHintsEnabled = BabelDocSemanticHintPreference.defaultValue
     @AppStorage(LaTeXIntegrationPreferences.translationEnabledKey)
     private var latexTranslationEnabled = false
+    @AppStorage(ScannedPDFTranslationPreferences.didConfirmTranslationKey)
+    private var didConfirmScannedPDFTranslation = false
     @AppStorage(ScannedPDFTranscription.displayedPaperIDsKey)
     private var transcriptionPaperIDsStorage = ""
 
@@ -549,13 +551,20 @@ struct ReaderPaneView: View {
             }
     }
 
-    /// Asks before a scanned-PDF translation sends page images to a model.
+    private var scannedPDFTranslationDialogTitle: String {
+        if didConfirmScannedPDFTranslation {
+            return String(localized: "Choose Translation Scope", bundle: bundle)
+        }
+        return scannedPDFTranslationOffer?.hasNoTextLayer == true
+            ? String(localized: "This PDF Has No Text Layer", bundle: bundle)
+            : String(localized: "Translate Scanned PDF", bundle: bundle)
+    }
+
+    /// Shows the page-image notice once; later dialogs only choose the page range.
     private func scannedPDFTranslationDialog<Content: View>(_ content: Content) -> some View {
         content
             .confirmationDialog(
-                scannedPDFTranslationOffer?.hasNoTextLayer == true
-                    ? String(localized: "This PDF Has No Text Layer", bundle: bundle)
-                    : String(localized: "Translate Scanned PDF", bundle: bundle),
+                scannedPDFTranslationDialogTitle,
                 isPresented: Binding(
                     get: { scannedPDFTranslationOffer != nil },
                     set: { if !$0 { scannedPDFTranslationOffer = nil } }
@@ -2385,7 +2394,7 @@ struct ReaderPaneView: View {
         return jobs.first { $0.id == id }
     }
 
-    /// Asks before translating as a scan: every page image goes to a vision model.
+    /// Asks for the initial notice or a page range, otherwise starts immediately.
     private func offerScannedPDFTranslation(hasNoTextLayer: Bool) {
         guard let pdfAttachment, let settings else { return }
         guard ScannedPDFTranslationPreferences.supports(targetLanguage: settings.targetLanguage) else {
@@ -2396,10 +2405,22 @@ struct ReaderPaneView: View {
             handleTranslationError(ScannedPDFTranslationError.unreadablePDF)
             return
         }
+        if didConfirmScannedPDFTranslation, pageCount <= pdfTranslationBatchSize {
+            startScannedPDFTranslation(pages: nil)
+            return
+        }
         scannedPDFTranslationOffer = ScannedPDFTranslationOffer(pageCount: pageCount, hasNoTextLayer: hasNoTextLayer)
     }
 
     private func scannedPDFTranslationOfferMessage(_ offer: ScannedPDFTranslationOffer) -> String {
+        if didConfirmScannedPDFTranslation {
+            return AppLocalization.format(
+                "This PDF has %d pages. Translating the first %d pages is faster.",
+                bundle: bundle,
+                offer.pageCount,
+                pdfTranslationBatchSize
+            )
+        }
         let explanation = offer.hasNoTextLayer
             ? String(localized: "Its pages are images, so their text cannot be translated directly. Freddie can read each page with a vision model, translate the text, and typeset it on the original page layout.", bundle: bundle)
             : String(localized: "Freddie reads each page image with a vision model, translates the text, and typesets it on the original page layout. Use this for scans and for PDFs whose text layer is unreliable.", bundle: bundle)
@@ -2413,6 +2434,9 @@ struct ReaderPaneView: View {
 
     private func startScannedPDFTranslation(pages: [Int]?) {
         guard let paper, let pdfAttachment, let settings else { return }
+        if !didConfirmScannedPDFTranslation {
+            didConfirmScannedPDFTranslation = true
+        }
         let preferences = TranslationPreferencesSnapshot(settings)
         let job = TranslationJob(
             paperID: paper.id,

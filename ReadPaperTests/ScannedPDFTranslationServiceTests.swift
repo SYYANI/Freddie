@@ -14,6 +14,7 @@ final class ScannedPDFTranslationServiceTests: XCTestCase {
         private(set) var requests: [LLMCompletionRequest] = []
         var finishReason: LLMFinishReason? = .stop
         var reviewResponse = "<changes></changes><unchanged/>"
+        var transcriptionResponse: String?
 
         func complete(request: LLMCompletionRequest) async throws -> LLMCompletionResponse {
             lock.withLock { requests.append(request) }
@@ -25,6 +26,8 @@ final class ScannedPDFTranslationServiceTests: XCTestCase {
                 text = source.replacingOccurrences(of: "Source words", with: "原文译文")
             } else if user.content.contains("SOURCE region") {
                 text = reviewResponse
+            } else if let transcriptionResponse {
+                text = transcriptionResponse
             } else {
                 text = """
                     <page font="serif" columns="1">
@@ -209,7 +212,28 @@ final class ScannedPDFTranslationServiceTests: XCTestCase {
         try await assertTranslationReusesFinishedPages(rejectReview: true)
     }
 
-    private func assertTranslationReusesFinishedPages(rejectReview: Bool = false) async throws {
+    func testCentSymbolAndColumnBreakAfterCaptionTranslateAndReuseFinishedPages() async throws {
+        try await assertTranslationReusesFinishedPages(transcriptionResponse: #"""
+            <page font="serif" columns="2">
+            <header></header>
+            <body>
+            \begin{multicols}{2}
+            \begin{center}
+            Left caption
+            \end{center}
+            \columnbreak
+            {\small
+            Source words
+            on the scanned page.
+            }
+            \end{multicols}
+            </body>
+            <footer>\copyright 1984 75\cents</footer>
+            </page>
+            """#)
+    }
+
+    private func assertTranslationReusesFinishedPages(rejectReview: Bool = false, transcriptionResponse: String? = nil) async throws {
         let xelatex = try XCTUnwrap(
             ScannedPDFTranslationService.locateXeLaTeX(userDefaults: UserDefaults(suiteName: UUID().uuidString)!),
             "XeLaTeX required"
@@ -223,6 +247,7 @@ final class ScannedPDFTranslationServiceTests: XCTestCase {
         try Self.makePDF(at: input, text: "Original scanned words")
 
         let provider = ScriptedProvider()
+        provider.transcriptionResponse = transcriptionResponse
         if rejectReview {
             provider.reviewResponse = "<page font=\"serif\"><body>\\input{x}</body></page>"
         }
