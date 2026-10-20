@@ -13,16 +13,18 @@ final class ScannedPDFTranslationServiceTests: XCTestCase {
         private let lock = NSLock()
         private(set) var requests: [LLMCompletionRequest] = []
         var finishReason: LLMFinishReason? = .stop
+        var reviewResponse = "<changes></changes><unchanged/>"
 
         func complete(request: LLMCompletionRequest) async throws -> LLMCompletionResponse {
             lock.withLock { requests.append(request) }
-            let user = request.messages.last { $0.role == "user" }!
+            // Validation retries append text feedback after the original image request.
+            let user = request.messages.first { $0.role == "user" }!
             let text: String
             if user.parts == nil {
                 let source = String(user.content[user.content.firstIndex(of: "\n")!...].dropFirst())
                 text = source.replacingOccurrences(of: "Source words", with: "原文译文")
             } else if user.content.contains("SOURCE region") {
-                text = "<changes></changes><unchanged/>"
+                text = reviewResponse
             } else {
                 text = """
                     <page font="serif" columns="1">
@@ -200,6 +202,14 @@ final class ScannedPDFTranslationServiceTests: XCTestCase {
     /// The whole route with a scripted provider: XeLaTeX check, transcription, proofreading,
     /// translation and typesetting into the paper's translations folder, reusing checkpoints.
     func testTranslatesAScannedPDFIntoThePaperFolderAndReusesFinishedPages() async throws {
+        try await assertTranslationReusesFinishedPages()
+    }
+
+    func testUnusableProofreadingKeepsTheDraftAndContinuesTranslation() async throws {
+        try await assertTranslationReusesFinishedPages(rejectReview: true)
+    }
+
+    private func assertTranslationReusesFinishedPages(rejectReview: Bool = false) async throws {
         let xelatex = try XCTUnwrap(
             ScannedPDFTranslationService.locateXeLaTeX(userDefaults: UserDefaults(suiteName: UUID().uuidString)!),
             "XeLaTeX required"
@@ -213,6 +223,9 @@ final class ScannedPDFTranslationServiceTests: XCTestCase {
         try Self.makePDF(at: input, text: "Original scanned words")
 
         let provider = ScriptedProvider()
+        if rejectReview {
+            provider.reviewResponse = "<page font=\"serif\"><body>\\input{x}</body></page>"
+        }
         let service = ScannedPDFTranslationService(
             fileStore: fileStore, recognizer: NoText(), provider: provider, compiler: XeLaTeXCompiler(executable: xelatex)
         )
@@ -233,10 +246,18 @@ final class ScannedPDFTranslationServiceTests: XCTestCase {
         XCTAssertTrue(try XCTUnwrap(PDFDocument(url: transcription)?.page(at: 0)?.string).contains("Source words"))
         XCTAssertEqual(log.all.first, .checkingTeX)
         XCTAssertEqual(log.all.last, .rebuilding(.assembling))
-        XCTAssertEqual(provider.requests.count, 3)  // transcription, proofreading, translation
+        let expectedRequests = rejectReview ? 5 : 3  // transcription, up to three review attempts, translation
+        XCTAssertEqual(provider.requests.count, expectedRequests)
+        if rejectReview {
+            let stateURL = try service.artifactsDirectory(for: paperID).appendingPathComponent("typeset/page-0001.json")
+            let state = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: stateURL)) as? [String: Any])
+            XCTAssertEqual(state["rounds"] as? Int, 1)
+            XCTAssertEqual((state["usage"] as? [String: Int])?["total_tokens"], 12)
+            XCTAssertTrue((state["changes"] as? [String])?.last?.contains("校对结果被拒绝") == true)
+        }
 
         _ = try await service.translate(request) { _ in }
-        XCTAssertEqual(provider.requests.count, 3)
+        XCTAssertEqual(provider.requests.count, expectedRequests)
     }
 
     private static func makePDF(at url: URL, text: String) throws {
