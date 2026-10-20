@@ -1530,11 +1530,13 @@ private struct SettingsForm: View {
         )
     }
 
+    /// One form row per step, so the section draws them like every other settings
+    /// group instead of opaque cards inside its translucent container.
+    @ViewBuilder
     private var gettingStartedPanel: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            quickSetupCard
+        quickSetupCard
 
-            onboardingStep(
+        onboardingStepHeader(
                 title: String(localized: "2. Import and translate papers", bundle: bundle),
                 detail: paperCount > 0
                     ? String(
@@ -1545,13 +1547,12 @@ private struct SettingsForm: View {
                     : String(localized: "Return to the main window, add an arXiv paper or local PDF, then use Translate in the reader toolbar.", bundle: bundle),
                 isComplete: paperCount > 0
             )
+            .padding(.vertical, 6)
 
-            Button(String(localized: "Skip", bundle: bundle)) {
-                didDismissGettingStarted = true
-            }
-            .buttonStyle(.bordered)
+        Button(String(localized: "Skip", bundle: bundle)) {
+            didDismissGettingStarted = true
         }
-        .padding(.vertical, 6)
+        .buttonStyle(.bordered)
     }
 
     private var quickSetupCard: some View {
@@ -1597,12 +1598,7 @@ private struct SettingsForm: View {
                 }
             }
         }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color(nsColor: .controlBackgroundColor))
-        )
+        .padding(.vertical, 6)
     }
 
     private var quickSetupForm: some View {
@@ -1723,16 +1719,6 @@ private struct SettingsForm: View {
 
             Spacer(minLength: 0)
         }
-    }
-
-    private func onboardingStep(title: String, detail: String, isComplete: Bool) -> some View {
-        onboardingStepHeader(title: title, detail: detail, isComplete: isComplete)
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color(nsColor: .controlBackgroundColor))
-        )
     }
 
     private func loadInitialSelectionIfNeeded() {
@@ -2548,9 +2534,34 @@ private struct SettingsFieldRow<Content: View>: View {
     }
 }
 
-private struct SettingsPlainTextField: NSViewRepresentable {
+/// Settings text fields draw their own translucent well instead of the system's
+/// opaque white bezel, which stands out against the translucent form. The native
+/// field inside stays borderless, and reports focus so the well can show it.
+private struct SettingsFieldWell: ViewModifier {
+    var isFocused = false
+
+    func body(content: Content) -> some View {
+        content
+            .background(
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .fill(Color(nsColor: .textBackgroundColor).opacity(0.55))
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .strokeBorder(
+                        isFocused ? Color(nsColor: .keyboardFocusIndicatorColor) : Color(nsColor: .separatorColor),
+                        lineWidth: isFocused ? 2 : 0.5
+                    )
+            )
+            .animation(.easeOut(duration: 0.12), value: isFocused)
+    }
+}
+
+private struct SettingsPlainTextField: View {
     let placeholder: String
     @Binding var text: String
+    @State private var isFocused = false
 
     init(_ placeholder: String, text: Binding<String>) {
         self.placeholder = placeholder
@@ -2562,12 +2573,64 @@ private struct SettingsPlainTextField: NSViewRepresentable {
         _text = text
     }
 
+    var body: some View {
+        SettingsNativePlainTextField(placeholder: placeholder, text: $text, isFocused: $isFocused)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 4)
+            .modifier(SettingsFieldWell(isFocused: isFocused))
+    }
+}
+
+private struct SettingsSecureTextField: View {
+    let placeholder: String
+    @Binding var text: String
+    @State private var isFocused = false
+
+    init(text: Binding<String>, placeholder: String = "") {
+        self.placeholder = placeholder
+        _text = text
+    }
+
+    var body: some View {
+        SettingsNativeSecureTextField(placeholder: placeholder, text: $text, isFocused: $isFocused)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 4)
+            .modifier(SettingsFieldWell(isFocused: isFocused))
+    }
+}
+
+private final class SettingsFocusReportingTextField: NSTextField {
+    var onFocus: (() -> Void)?
+
+    override func becomeFirstResponder() -> Bool {
+        let didBecome = super.becomeFirstResponder()
+        if didBecome { onFocus?() }
+        return didBecome
+    }
+}
+
+private final class SettingsFocusReportingSecureTextField: NSSecureTextField {
+    var onFocus: (() -> Void)?
+
+    override func becomeFirstResponder() -> Bool {
+        let didBecome = super.becomeFirstResponder()
+        if didBecome { onFocus?() }
+        return didBecome
+    }
+}
+
+private struct SettingsNativePlainTextField: NSViewRepresentable {
+    let placeholder: String
+    @Binding var text: String
+    @Binding var isFocused: Bool
+
     func makeCoordinator() -> Coordinator {
-        Coordinator(text: $text)
+        Coordinator(text: $text, isFocused: $isFocused)
     }
 
     func makeNSView(context: Context) -> NSTextField {
-        let textField = NSTextField()
+        let textField = SettingsFocusReportingTextField()
+        textField.onFocus = { [coordinator = context.coordinator] in coordinator.setFocused(true) }
         configure(textField, coordinator: context.coordinator)
         return textField
     }
@@ -2584,6 +2647,9 @@ private struct SettingsPlainTextField: NSViewRepresentable {
         textField.delegate = coordinator
         textField.placeholderString = placeholder
         textField.stringValue = text
+        textField.isBordered = false
+        textField.drawsBackground = false
+        textField.focusRingType = .none
         textField.isEditable = true
         textField.isSelectable = true
         textField.usesSingleLineMode = true
@@ -2599,26 +2665,18 @@ private struct SettingsPlainTextField: NSViewRepresentable {
     }
 }
 
-private struct SettingsSecureTextField: NSViewRepresentable {
+private struct SettingsNativeSecureTextField: NSViewRepresentable {
     let placeholder: String
     @Binding var text: String
-
-    init(_ placeholder: String, text: Binding<String>, placeholder displayPlaceholder: String = "") {
-        self.placeholder = displayPlaceholder.isEmpty ? placeholder : displayPlaceholder
-        _text = text
-    }
-
-    init(text: Binding<String>, placeholder: String = "") {
-        self.placeholder = placeholder
-        _text = text
-    }
+    @Binding var isFocused: Bool
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(text: $text)
+        Coordinator(text: $text, isFocused: $isFocused)
     }
 
     func makeNSView(context: Context) -> NSSecureTextField {
-        let textField = NSSecureTextField()
+        let textField = SettingsFocusReportingSecureTextField()
+        textField.onFocus = { [coordinator = context.coordinator] in coordinator.setFocused(true) }
         configure(textField, coordinator: context.coordinator)
         return textField
     }
@@ -2635,6 +2693,9 @@ private struct SettingsSecureTextField: NSViewRepresentable {
         textField.delegate = coordinator
         textField.placeholderString = placeholder
         textField.stringValue = text
+        textField.isBordered = false
+        textField.drawsBackground = false
+        textField.focusRingType = .none
         textField.isEditable = true
         textField.isSelectable = true
         textField.usesSingleLineMode = true
@@ -2650,7 +2711,18 @@ private struct SettingsSecureTextField: NSViewRepresentable {
     }
 }
 
-private struct SettingsTemplateTextEditor: NSViewRepresentable {
+/// A multi-line field in the same translucent well as the single-line fields.
+private struct SettingsTemplateTextEditor: View {
+    @Binding var text: String
+    @Binding var pendingInsertion: String?
+
+    var body: some View {
+        SettingsTemplateTextView(text: $text, pendingInsertion: $pendingInsertion)
+            .modifier(SettingsFieldWell())
+    }
+}
+
+private struct SettingsTemplateTextView: NSViewRepresentable {
     @Binding var text: String
     @Binding var pendingInsertion: String?
 
@@ -2663,12 +2735,14 @@ private struct SettingsTemplateTextEditor: NSViewRepresentable {
         scrollView.hasVerticalScroller = true
         scrollView.hasHorizontalScroller = false
         scrollView.autohidesScrollers = true
-        scrollView.borderType = .bezelBorder
+        scrollView.borderType = .noBorder
+        scrollView.drawsBackground = false
 
         let textView = NSTextView()
         textView.delegate = context.coordinator
         textView.string = text
         textView.isRichText = false
+        textView.drawsBackground = false
         textView.isEditable = true
         textView.isSelectable = true
         textView.allowsUndo = true
@@ -2748,9 +2822,21 @@ private struct SettingsTemplateTextEditor: NSViewRepresentable {
 
 private final class Coordinator: NSObject, NSTextFieldDelegate {
     @Binding private var text: String
+    @Binding private var isFocused: Bool
 
-    init(text: Binding<String>) {
+    init(text: Binding<String>, isFocused: Binding<Bool>) {
         _text = text
+        _isFocused = isFocused
+    }
+
+    func setFocused(_ focused: Bool) {
+        guard isFocused != focused else { return }
+        isFocused = focused
+    }
+
+    /// Sent when the field editor leaves the field, whether or not anything was typed.
+    func controlTextDidEndEditing(_ notification: Notification) {
+        setFocused(false)
     }
 
     func controlTextDidChange(_ notification: Notification) {
