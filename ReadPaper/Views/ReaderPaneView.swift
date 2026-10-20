@@ -67,7 +67,6 @@ struct ReaderPaneView: View {
 
     @Environment(\.modelContext) private var modelContext
     @Environment(\.localizationBundle) private var bundle
-    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.pdfDisplayAppearance) private var pdfDisplayAppearance
     @Query(sort: \ReadingState.modifiedAt, order: .reverse) private var readingStates: [ReadingState]
     @AppStorage(PDFTranslationBatchPreference.userDefaultsKey)
@@ -103,6 +102,9 @@ struct ReaderPaneView: View {
     /// Opens the writing that cites a passage marked in the reader.
     var onRevealCitation: (WritingCitationMark) -> Void = { _ in }
     var writingLibrary: WritingLibrary = .shared
+    /// Whether the library has no papers yet, for the empty reader's call to action.
+    var isLibraryEmpty = false
+    var onAddPaper: () -> Void = {}
 
     /// Read `pdfPageIndex`, for the same reason as `storedReaderMode`.
     @State private var storedPDFPageIndex = 0
@@ -2876,106 +2878,44 @@ struct ReaderPaneView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
     }
 
+    /// With no paper open, the reader is the way into the library: one action, like
+    /// Zotero's empty library, instead of a tour of features.
     private var emptyReaderState: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 28) {
-                Text("Build your local paper desk", bundle: bundle)
-                    .font(.system(
-                        size: 30,
-                        weight: .semibold,
-                        design: pdfDisplayAppearance == .paper ? .serif : .rounded
-                    ))
+        VStack(spacing: 14) {
+            Image(systemName: isLibraryEmpty ? "doc.badge.plus" : "doc.text")
+                .font(.system(size: 40, weight: .regular))
+                .foregroundStyle(.tertiary)
+                .accessibilityHidden(true)
 
-                LazyVGrid(
-                    columns: [
-                        GridItem(.adaptive(minimum: 220, maximum: 320), spacing: 16, alignment: .top)
-                    ],
-                    alignment: .leading,
-                    spacing: 16
-                ) {
-                    emptyStateCard(
-                        title: String(localized: "Import", bundle: bundle),
-                        systemImage: "square.and.arrow.down",
-                        description: String(localized: "Add an arXiv ID, an arXiv URL, web page URL, or a local PDF from the library sidebar.", bundle: bundle)
-                    )
-                    emptyStateCard(
-                        title: String(localized: "Read", bundle: bundle),
-                        systemImage: "doc.richtext",
-                        description: String(localized: "Switch between localized HTML, original PDF, translated PDF, and side-by-side PDF comparison.", bundle: bundle)
-                    )
-                    emptyStateCard(
-                        title: String(localized: "Translate", bundle: bundle),
-                        systemImage: "character.book.closed",
-                        description: String(localized: "Run semantic HTML translation incrementally, or send the PDF through BabelDOC when you need a full translated document.", bundle: bundle)
-                    )
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-
+            VStack(spacing: 6) {
+                Text(isLibraryEmpty ? "Add Your First Paper" : "No Paper Selected", bundle: bundle)
+                    .font(.title3.weight(.semibold))
+                Text(
+                    isLibraryEmpty
+                        ? "Import from an arXiv ID or a web page URL, or drop a PDF here."
+                        : "Select a paper in the library, or add another one.",
+                    bundle: bundle
+                )
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
             }
-            .padding(.horizontal, 32)
-            .padding(.top, 28)
-            .padding(.bottom, 32)
-            .frame(maxWidth: 900, alignment: .leading)
+            .multilineTextAlignment(.center)
+
+            Button {
+                onAddPaper()
+            } label: {
+                Label(String(localized: "Add Paper", bundle: bundle), systemImage: "plus")
+                    .padding(.horizontal, 4)
+            }
+            .readPaperGlassButtonStyle(prominent: isLibraryEmpty)
+            .controlSize(.large)
+            .padding(.top, 4)
         }
-        .scrollIndicators(.hidden)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .frame(maxWidth: 360)
+        .padding(32)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
         .background(ReadPaperAppearanceSurface(role: .reader))
-    }
-
-    private func emptyStateCard(
-        title: String,
-        systemImage: String,
-        description: String
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Image(systemName: systemImage)
-                .font(.title2)
-                .foregroundStyle(
-                    pdfDisplayAppearance == .paper
-                        ? ReadPaperTheme.accentColor
-                        : Color.primary
-                )
-                .frame(width: 40, height: 40)
-                .background {
-                    if pdfDisplayAppearance == .paper {
-                        ReadPaperTheme.accentColor
-                            .opacity(0.10)
-                            .clipShape(RoundedRectangle(cornerRadius: 12))
-                    } else {
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(.regularMaterial)
-                    }
-                }
-
-            VStack(alignment: .leading, spacing: 6) {
-                Text(title)
-                    .font(.headline)
-                Text(description)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            Spacer(minLength: 0)
-        }
-        .frame(maxWidth: .infinity, minHeight: 168, maxHeight: .infinity, alignment: .topLeading)
-        .padding(20)
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(
-                    pdfDisplayAppearance == .paper
-                        ? ReadPaperTheme.cardColor(scheme: colorScheme)
-                        : Color(nsColor: .controlBackgroundColor)
-                )
-        )
-        .overlay {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .strokeBorder(
-                    pdfDisplayAppearance == .paper
-                        ? ReadPaperTheme.cardBorderColor(scheme: colorScheme)
-                        : Color.primary.opacity(0.06)
-                )
-        }
     }
 
     private func readerLabel(_ value: String) -> some View {
@@ -3282,6 +3222,7 @@ extension ReaderPaneView: Equatable {
     nonisolated static func == (lhs: ReaderPaneView, rhs: ReaderPaneView) -> Bool {
         MainActor.assumeIsolated {
             lhs.paper === rhs.paper
+                && lhs.isLibraryEmpty == rhs.isLibraryEmpty
                 && lhs.settings === rhs.settings
                 && lhs.writingLibrary === rhs.writingLibrary
                 && lhs.attachments.elementsEqual(rhs.attachments, by: ===)

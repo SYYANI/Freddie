@@ -504,32 +504,15 @@ struct LibrarySidebarView: View {
         }
     }
 
+    /// Just a quiet line: the reader beside it holds the "Add Your First Paper" action,
+    /// and the toolbar's add button is right above.
     private var emptyLibraryState: some View {
-        VStack(spacing: 26) {
-            VStack(spacing: 16) {
-                ZStack {
-                    Image(systemName: "doc.text.magnifyingglass")
-                        .font(.system(size: 30, weight: .medium))
-                        .symbolRenderingMode(.hierarchical)
-                        .foregroundStyle(
-                            isPaperAppearance
-                                ? ReadPaperTheme.accentColor
-                                : Color.accentColor
-                        )
-                }
-                .frame(width: 72, height: 60)
-
-                Text("No papers yet", bundle: bundle)
-                    .font(.system(size: 22, weight: .semibold, design: .rounded))
-                    .multilineTextAlignment(.center)
-            }
-
-            emptyStateActions
-        }
-        .frame(maxWidth: 360)
-        .padding(.horizontal, 32)
-        .padding(.vertical, 40)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+        Text("No papers yet", bundle: bundle)
+            .font(.callout)
+            .foregroundStyle(.secondary)
+            .multilineTextAlignment(.center)
+            .padding(24)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
     }
 
     @ViewBuilder
@@ -540,60 +523,6 @@ struct LibrarySidebarView: View {
             Color.clear
                 .accessibilityHidden(true)
                 .allowsHitTesting(false)
-        }
-    }
-
-    @ViewBuilder
-    private var emptyStateActions: some View {
-        if #available(macOS 26.0, *) {
-            ReadPaperGlassEffectContainer(spacing: 8) {
-                HStack(spacing: 8) {
-                    SettingsLink {
-                        emptyStateActionLabel(String(localized: "Settings", bundle: bundle), systemImage: "gearshape")
-                    }
-                    .readPaperGlassButtonStyle()
-                    .frame(maxWidth: .infinity)
-                    .controlSize(.mini)
-
-                    Button {
-                        isAddingPaper = true
-                    } label: {
-                        emptyStateActionLabel(String(localized: "Add Paper", bundle: bundle), systemImage: "plus")
-                    }
-                    .readPaperGlassButtonStyle(prominent: true)
-                    .frame(maxWidth: .infinity)
-                    .controlSize(.mini)
-                }
-            }
-            .frame(maxWidth: .infinity)
-        } else {
-            HStack(spacing: 0) {
-                SettingsLink {
-                    emptyStateActionLabel(String(localized: "Settings", bundle: bundle), systemImage: "gearshape")
-                }
-                .buttonStyle(.plain)
-                .frame(maxWidth: .infinity)
-
-                Divider()
-                    .frame(height: 18)
-
-                Button {
-                    isAddingPaper = true
-                } label: {
-                    emptyStateActionLabel(String(localized: "Add Paper", bundle: bundle), systemImage: "plus")
-                }
-                .buttonStyle(.plain)
-                .frame(maxWidth: .infinity)
-            }
-            .background(
-                RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .fill(Color(nsColor: .controlBackgroundColor))
-            )
-            .overlay {
-                RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .strokeBorder(Color.primary.opacity(0.08))
-            }
-            .frame(maxWidth: .infinity)
         }
     }
 }
@@ -713,17 +642,6 @@ private struct SidebarListBackgroundModifier: ViewModifier {
     func body(content: Content) -> some View {
         content.scrollContentBackground(.hidden)
     }
-}
-
-private func emptyStateActionLabel(_ title: String, systemImage: String) -> some View {
-    Label(title, systemImage: systemImage)
-        .font(.subheadline.weight(.medium))
-        .lineLimit(1)
-        .minimumScaleFactor(0.9)
-        .frame(maxWidth: .infinity)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 9)
-        .contentShape(Rectangle())
 }
 
 extension LibrarySidebarView: Equatable {

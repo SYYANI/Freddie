@@ -448,14 +448,12 @@ struct PaperWritingsSection: View {
     var body: some View {
         let writings = library.writings(citing: paperID)
         VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text("Writings", bundle: bundle)
-                    .font(.headline)
-                Spacer()
-                Button {
+            InspectorSectionHeader(title: String(localized: "Writings", bundle: bundle)) {
+                InspectorIconButton(
+                    title: String(localized: "New Writing About This Paper", bundle: bundle),
+                    systemImage: "square.and.pencil"
+                ) {
                     onCreateWriting()
-                } label: {
-                    Label(String(localized: "New Writing About This Paper", bundle: bundle), systemImage: "square.and.pencil")
                 }
             }
 

@@ -323,17 +323,6 @@
         }
       }
     },
-    "Add an arXiv ID, an arXiv URL, web page URL, or a local PDF from the library sidebar." : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "从资料库侧边栏添加 arXiv ID、arXiv URL、网页 URL，或本地 PDF。"
-          }
-        }
-      }
-    },
     "Add an arXiv ID, arXiv URL, or a local PDF. Before using translation, open Settings and save at least one LLM provider API key and model profile." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -417,6 +406,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "添加到收藏"
+          }
+        }
+      }
+    },
+    "Add Your First Paper" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "添加第一篇论文"
           }
         }
       }
@@ -1161,16 +1161,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "浏览"
-          }
-        }
-      }
-    },
-    "Build your local paper desk" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "搭建你的本地论文书桌"
           }
         }
       }
@@ -3540,6 +3530,17 @@
         }
       }
     },
+    "Import from an arXiv ID or a web page URL, or drop a PDF here." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "输入 arXiv ID 或网页地址导入，或把 PDF 拖到这里。"
+          }
+        }
+      }
+    },
     "Import from arXiv" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -4628,6 +4629,16 @@
         }
       }
     },
+    "No Paper Selected" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未选择论文"
+          }
+        }
+      }
+    },
     "No Papers" : {
       "localizations" : {
         "zh-Hans" : {
@@ -5057,16 +5068,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "论文"
-          }
-        }
-      }
-    },
-    "Paper details will appear here" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "论文详情会显示在这里"
           }
         }
       }
@@ -5769,17 +5770,6 @@
         }
       }
     },
-    "Read" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "阅读"
-          }
-        }
-      }
-    },
     "Reader" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -6192,17 +6182,6 @@
         }
       }
     },
-    "Run semantic HTML translation incrementally, or send the PDF through BabelDOC when you need a full translated document." : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "可以增量执行语义化 HTML 翻译，或者在需要完整译文文档时把 PDF 交给 BabelDOC。"
-          }
-        }
-      }
-    },
     "Save" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -6365,6 +6344,17 @@
         }
       }
     },
+    "Select a paper in the library, or add another one." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在论文库中选择一篇论文，或添加新的论文。"
+          }
+        }
+      }
+    },
     "Select a paper to start reading" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -6383,16 +6373,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "请为该模型选择一个 provider。"
-          }
-        }
-      }
-    },
-    "Select or import a paper to view metadata, abstract, and notes in this panel." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "选择或导入一篇论文，即可在此面板查看元数据、摘要和笔记。"
           }
         }
       }
@@ -6766,17 +6746,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "在 HTML 和 PDF 阅读之间切换"
-          }
-        }
-      }
-    },
-    "Switch between localized HTML, original PDF, translated PDF, and side-by-side PDF comparison." : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在本地化 HTML、原始 PDF、翻译 PDF，以及左右并排 PDF 对照之间切换。"
           }
         }
       }

@@ -223,7 +223,9 @@ struct ContentView: View {
             onCreateAnchoredNote: createNoteFromCurrentSelection,
             onSaveSelectionAssistantNote: saveSelectionAssistantResultAsNote,
             onArxivLinkActivated: handleArxivLinkActivation,
-            onRevealCitation: revealCitation
+            onRevealCitation: revealCitation,
+            isLibraryEmpty: papers.isEmpty,
+            onAddPaper: { isAddingPaper = true }
         )
         .equatable()
         .navigationSplitViewColumnWidth(min: 520, ideal: 760)
