@@ -4,6 +4,18 @@ import XCTest
 @testable import ReadPaper
 
 final class HTMLLocalizerTests: XCTestCase {
+    func testZhihuBrowserChallengeIsNotReadableContentEvenWithLongWelcomeText() {
+        let html = """
+        <html><head><meta id="zh-zse-ck" charset="UTF-8"></head>
+        <body><div>\(String(repeating: "知乎，让每一次点击都充满意义 —— 欢迎来到知乎，发现问题背后的世界。", count: 4))</div>
+        <script src="https://static.zhihu.com/zse-ck/v4/check.js"></script></body></html>
+        """
+        let localizer = HTMLLocalizer()
+        XCTAssertTrue(localizer.requiresBrowserRendering(html))
+        XCTAssertFalse(localizer.hasMeaningfulHTMLContent(html))
+        XCTAssertFalse(localizer.shouldUseRenderedHTML(html, insteadOf: "<html><body></body></html>"))
+    }
+
     override func tearDown() {
         MockHTMLLocalizerURLProtocol.reset()
         super.tearDown()
