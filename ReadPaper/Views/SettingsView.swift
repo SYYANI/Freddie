@@ -145,6 +145,8 @@ private struct SettingsForm: View {
     @AppStorage(PaperDigestExportConfiguration.directoryDisplayPathKey) private var digestExportDirectoryPath = ""
     @AppStorage(SelectionAssistantPreferences.selectedModelProfileIDKey)
     private var selectedAssistantModelProfileIDRawValue = ""
+    @AppStorage(ScannedPDFTranslationPreferences.transcriptionModelProfileIDKey)
+    private var selectedScannedPageModelProfileIDRawValue = ""
     @AppStorage(SelectionAssistantPreferences.externalSearchEnabledKey)
     private var externalAssistantSearchEnabled = false
 
@@ -299,6 +301,13 @@ private struct SettingsForm: View {
         Binding(
             get: { UUID(uuidString: selectedAssistantModelProfileIDRawValue) },
             set: { selectedAssistantModelProfileIDRawValue = $0?.uuidString ?? "" }
+        )
+    }
+
+    private var selectedScannedPageModelProfileIDBinding: Binding<UUID?> {
+        Binding(
+            get: { UUID(uuidString: selectedScannedPageModelProfileIDRawValue) },
+            set: { selectedScannedPageModelProfileIDRawValue = $0?.uuidString ?? "" }
         )
     }
 
@@ -684,6 +693,16 @@ private struct SettingsForm: View {
                     }
 
                     Picker(
+                        String(localized: "Scanned Page Model", bundle: bundle),
+                        selection: selectedScannedPageModelProfileIDBinding
+                    ) {
+                        Text("Use PDF/BabelDOC Model", bundle: bundle).tag(Optional<UUID>.none)
+                        ForEach(sortedModels, id: \.id) { model in
+                            Text(modelDisplayName(model)).tag(Optional(model.id))
+                        }
+                    }
+
+                    Picker(
                         String(localized: "Reading Assistant Model", bundle: bundle),
                         selection: selectedAssistantModelProfileIDBinding
                     ) {
@@ -701,6 +720,11 @@ private struct SettingsForm: View {
                     Text("Choose separate saved model profiles for translation and reading assistance. When enabled, external questions are answered through the selected model's server-side web search (Responses API or Anthropic Messages API), instead of calling academic search services directly.", bundle: bundle)
                         .font(.footnote)
                         .foregroundStyle(.secondary)
+
+                    Text("Translating a scanned PDF sends each page image to the scanned page model, which must accept image input; the PDF/BabelDOC model then translates the transcribed text.", bundle: bundle)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
             .formStyle(.grouped)
@@ -723,6 +747,14 @@ private struct SettingsForm: View {
 
                     Text(
                         "When enabled, Translate arXiv LaTeX appears in the reader's Translate menu. It downloads the paper source, translates its semantic units, and uses the selected external TeX distribution to compile the translated PDF.",
+                        bundle: bundle
+                    )
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                    Text(
+                        "Translate Scanned PDF also typesets its pages with this distribution's XeLaTeX, whether or not arXiv LaTeX translation is enabled.",
                         bundle: bundle
                     )
                     .font(.footnote)
@@ -1762,6 +1794,10 @@ private struct SettingsForm: View {
            models.contains(where: { $0.id == assistantModelID }) == false {
             selectedAssistantModelProfileIDRawValue = ""
         }
+        if let scannedPageModelID = UUID(uuidString: selectedScannedPageModelProfileIDRawValue),
+           models.contains(where: { $0.id == scannedPageModelID }) == false {
+            selectedScannedPageModelProfileIDRawValue = ""
+        }
     }
 
     private func applySelectedProvider() {
@@ -1921,6 +1957,10 @@ private struct SettingsForm: View {
         if let assistantModelID = UUID(uuidString: selectedAssistantModelProfileIDRawValue),
            relatedModelIDs.contains(assistantModelID) {
             selectedAssistantModelProfileIDRawValue = ""
+        }
+        if let scannedPageModelID = UUID(uuidString: selectedScannedPageModelProfileIDRawValue),
+           relatedModelIDs.contains(scannedPageModelID) {
+            selectedScannedPageModelProfileIDRawValue = ""
         }
         modelContext.delete(provider)
         apiStyleStore.removeAPIStyle(for: provider.id)
@@ -2114,6 +2154,9 @@ private struct SettingsForm: View {
         }
         if UUID(uuidString: selectedAssistantModelProfileIDRawValue) == model.id {
             selectedAssistantModelProfileIDRawValue = ""
+        }
+        if UUID(uuidString: selectedScannedPageModelProfileIDRawValue) == model.id {
+            selectedScannedPageModelProfileIDRawValue = ""
         }
         modelContext.delete(model)
 

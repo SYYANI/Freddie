@@ -1770,3 +1770,161 @@ private final class MockURLProtocol: URLProtocol {
 
     override func stopLoading() {}
 }
+
+// MARK: - Image input, finish reasons and usage (scanned PDF translation)
+
+extension OpenAICompatibleLLMProviderTests {
+    private static let jpegBytes = Data([0xFF, 0xD8, 0xFF])
+
+    private static func imageMessages() -> [LLMCompletionMessage] {
+        [
+            LLMCompletionMessage(role: "system", content: "Transcribe."),
+            LLMCompletionMessage(role: "user", parts: [
+                .text("Page 1."),
+                .image(data: jpegBytes, mediaType: "image/jpeg"),
+            ]),
+            LLMCompletionMessage(role: "assistant", content: "<page>"),
+        ]
+    }
+
+    private func respond(with body: String) -> URLSessionConfiguration {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [MockURLProtocol.self]
+        MockURLProtocol.requestHandler = { request in
+            (
+                HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil,
+                                headerFields: ["Content-Type": "application/json"])!,
+                Data(body.utf8)
+            )
+        }
+        return configuration
+    }
+
+    private func lastRequestJSON() throws -> [String: Any] {
+        let body = try XCTUnwrap(MockURLProtocol.requestBodies.last)
+        return try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
+    }
+
+    func testChatCompletionsSendsImagePartsAndReportsLengthAndUsage() async throws {
+        let configuration = respond(with: """
+            {"choices":[{"message":{"content":"<page font"},"finish_reason":"length"}],
+             "usage":{"prompt_tokens":10,"completion_tokens":5,"total_tokens":15}}
+            """)
+        let response = try await OpenAICompatibleLLMProvider(sessionConfigurationOverride: configuration).complete(
+            request: LLMCompletionRequest(
+                baseURL: URL(string: "https://api.example.com/v1")!,
+                apiKey: "sk-test",
+                model: "vision-model",
+                messages: Self.imageMessages(),
+                maxTokens: 32_768
+            )
+        )
+        XCTAssertEqual(response.text, "<page font")
+        XCTAssertEqual(response.finishReason, .length)
+        XCTAssertEqual(response.usage, LLMTokenUsage(inputTokens: 10, outputTokens: 5, totalTokens: 15))
+
+        let messages = try XCTUnwrap(try lastRequestJSON()["messages"] as? [[String: Any]])
+        XCTAssertEqual(messages[0]["content"] as? String, "Transcribe.")
+        XCTAssertEqual(messages[2]["content"] as? String, "<page>")
+        let parts = try XCTUnwrap(messages[1]["content"] as? [[String: Any]])
+        XCTAssertEqual(parts[0]["type"] as? String, "text")
+        XCTAssertEqual(parts[0]["text"] as? String, "Page 1.")
+        XCTAssertEqual(parts[1]["type"] as? String, "image_url")
+        let image = try XCTUnwrap(parts[1]["image_url"] as? [String: String])
+        XCTAssertEqual(image["url"], "data:image/jpeg;base64,/9j/")
+        XCTAssertEqual(image["detail"], "high")
+    }
+
+    func testChatCompletionsWithoutFinishReasonReportsNone() async throws {
+        let configuration = respond(with: Self.chatCompletionSuccessBody)
+        let response = try await OpenAICompatibleLLMProvider(sessionConfigurationOverride: configuration).complete(
+            request: LLMCompletionRequest(
+                baseURL: URL(string: "https://api.example.com/v1")!,
+                apiKey: "sk-test",
+                model: "m",
+                messages: [LLMCompletionMessage(role: "user", content: "Hi")]
+            )
+        )
+        XCTAssertNotEqual(response.finishReason, .length)
+    }
+
+    func testResponsesSendsInputImageAndReturnsTruncatedOutputOnlyWhenAllowed() async throws {
+        let body = """
+            {"status":"incomplete","incomplete_details":{"reason":"max_output_tokens"},
+             "output":[{"type":"message","content":[{"type":"output_text","text":"partial"}]}],
+             "usage":{"input_tokens":3,"output_tokens":4,"total_tokens":7}}
+            """
+        func request(allowingTruncation: Bool) -> LLMCompletionRequest {
+            LLMCompletionRequest(
+                baseURL: URL(string: "https://api.example.com/v1")!,
+                apiStyle: .responses,
+                apiKey: "sk-test",
+                model: "vision-model",
+                messages: Self.imageMessages(),
+                allowsTruncatedOutput: allowingTruncation
+            )
+        }
+        let configuration = respond(with: body)
+        let provider = OpenAICompatibleLLMProvider(sessionConfigurationOverride: configuration)
+        let response = try await provider.complete(request: request(allowingTruncation: true))
+        XCTAssertEqual(response.text, "partial")
+        XCTAssertEqual(response.finishReason, .length)
+        XCTAssertEqual(response.usage?.totalTokens, 7)
+
+        let input = try XCTUnwrap(try lastRequestJSON()["input"] as? [[String: Any]])
+        let parts = try XCTUnwrap(input[1]["content"] as? [[String: Any]])
+        XCTAssertEqual(parts[0]["type"] as? String, "input_text")
+        XCTAssertEqual(parts[1]["type"] as? String, "input_image")
+        XCTAssertEqual(parts[1]["image_url"] as? String, "data:image/jpeg;base64,/9j/")
+        XCTAssertEqual(input[0]["content"] as? String, "Transcribe.")
+
+        do {
+            _ = try await provider.complete(request: request(allowingTruncation: false))
+            XCTFail("An incomplete response must fail unless truncation is allowed.")
+        } catch {
+            XCTAssertTrue(AppLocalization.errorMessage(error).contains("max_output_tokens"))
+        }
+    }
+
+    func testAnthropicSendsBase64ImageAndTreatsMaxTokensAsTruncationWhenAllowed() async throws {
+        let body = """
+            {"content":[{"type":"thinking","thinking":"..."},{"type":"text","text":"partial"}],
+             "stop_reason":"max_tokens","usage":{"input_tokens":2,"output_tokens":3}}
+            """
+        func request(allowingTruncation: Bool) -> LLMCompletionRequest {
+            LLMCompletionRequest(
+                baseURL: URL(string: "https://api.anthropic.com/v1")!,
+                apiStyle: .anthropicMessages,
+                apiKey: "sk-ant",
+                model: "claude-opus-5-5",
+                messages: Self.imageMessages(),
+                maxTokens: 32_768,
+                allowsTruncatedOutput: allowingTruncation
+            )
+        }
+        let configuration = respond(with: body)
+        let provider = OpenAICompatibleLLMProvider(sessionConfigurationOverride: configuration)
+        let response = try await provider.complete(request: request(allowingTruncation: true))
+        XCTAssertEqual(response.text, "partial")
+        XCTAssertEqual(response.finishReason, .length)
+        XCTAssertEqual(response.usage, LLMTokenUsage(inputTokens: 2, outputTokens: 3, totalTokens: 5))
+
+        let json = try lastRequestJSON()
+        XCTAssertEqual(json["system"] as? String, "Transcribe.")
+        XCTAssertEqual(json["max_tokens"] as? Int, 32_768)
+        let messages = try XCTUnwrap(json["messages"] as? [[String: Any]])
+        let parts = try XCTUnwrap(messages[0]["content"] as? [[String: Any]])
+        XCTAssertEqual(parts[0]["type"] as? String, "text")
+        XCTAssertEqual(parts[1]["type"] as? String, "image")
+        let source = try XCTUnwrap(parts[1]["source"] as? [String: String])
+        XCTAssertEqual(source, ["type": "base64", "media_type": "image/jpeg", "data": "/9j/"])
+        XCTAssertEqual(messages[1]["content"] as? String, "<page>")
+
+        do {
+            _ = try await provider.complete(request: request(allowingTruncation: false))
+            XCTFail("max_tokens must fail unless truncation is allowed.")
+        } catch {
+            XCTAssertTrue(AppLocalization.errorMessage(error).contains("max_tokens"))
+        }
+    }
+}

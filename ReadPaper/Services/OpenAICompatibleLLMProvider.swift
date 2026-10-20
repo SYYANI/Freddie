@@ -1,9 +1,70 @@
 import Foundation
 @preconcurrency import SwiftOpenAI
 
+/// One part of a message that mixes text and images.
+enum LLMMessageContentPart: Sendable, Equatable {
+    case text(String)
+    /// An image sent inline as base64, such as a scanned page; `mediaType` is e.g. `image/jpeg`.
+    case image(data: Data, mediaType: String)
+}
+
 struct LLMCompletionMessage: Sendable, Equatable {
     let role: String
+    /// The message text; for a message with images, its text parts joined by newlines.
     let content: String
+    /// Text and images in order, for models that accept images; nil for a text-only message.
+    let parts: [LLMMessageContentPart]?
+
+    init(role: String, content: String) {
+        self.role = role
+        self.content = content
+        parts = nil
+    }
+
+    init(role: String, parts: [LLMMessageContentPart]) {
+        self.role = role
+        self.parts = parts
+        content = parts.compactMap { part -> String? in
+            if case .text(let text) = part {
+                return text
+            }
+            return nil
+        }
+        .joined(separator: "\n")
+    }
+}
+
+extension LLMMessageContentPart {
+    static func dataURL(_ data: Data, mediaType: String) -> String {
+        "data:\(mediaType);base64,\(data.base64EncodedString())"
+    }
+}
+
+/// Why the model stopped writing.
+enum LLMFinishReason: Equatable, Sendable {
+    /// The model finished its answer.
+    case stop
+    /// The output budget (`max_tokens`) ran out.
+    case length
+    case other(String)
+
+    init?(chatCompletions value: String?) {
+        guard let value, value.isEmpty == false else { return nil }
+        switch value {
+        case "stop":
+            self = .stop
+        case "length":
+            self = .length
+        default:
+            self = .other(value)
+        }
+    }
+}
+
+struct LLMTokenUsage: Equatable, Sendable {
+    var inputTokens: Int
+    var outputTokens: Int
+    var totalTokens: Int
 }
 
 struct LLMResolvedEndpoint: Equatable, Sendable {
@@ -27,6 +88,13 @@ struct LLMNetworkTimeoutProfile: Equatable, Sendable {
     static let translationDefault = LLMNetworkTimeoutProfile(
         requestTimeoutSeconds: 120,
         resourceTimeoutSeconds: 600
+    )
+
+    /// A vision model reasoning over several page images can think for minutes
+    /// before the first byte of a non-streamed answer arrives.
+    static let scannedPage = LLMNetworkTimeoutProfile(
+        requestTimeoutSeconds: 900,
+        resourceTimeoutSeconds: 1800
     )
 
     static func validation(timeoutSeconds: TimeInterval) -> LLMNetworkTimeoutProfile {
@@ -295,6 +363,9 @@ struct LLMCompletionRequest: Sendable {
     let responsesWebSearchReplay: [LLMResponsesWebSearchCallItem]
     let responsesWebSearchContinuationPrompt: String?
     let responsesWebSearchContinuationCount: Int
+    /// Return an answer cut off by the output budget with `finishReason == .length`
+    /// instead of failing, so the caller can ask again with a larger budget.
+    let allowsTruncatedOutput: Bool
     let traceHandler: (@Sendable (String) async -> Void)?
 
     init(
@@ -313,6 +384,7 @@ struct LLMCompletionRequest: Sendable {
         responsesWebSearchReplay: [LLMResponsesWebSearchCallItem] = [],
         responsesWebSearchContinuationPrompt: String? = nil,
         responsesWebSearchContinuationCount: Int = 0,
+        allowsTruncatedOutput: Bool = false,
         traceHandler: (@Sendable (String) async -> Void)? = nil
     ) {
         self.baseURL = baseURL
@@ -330,6 +402,7 @@ struct LLMCompletionRequest: Sendable {
         self.responsesWebSearchReplay = responsesWebSearchReplay
         self.responsesWebSearchContinuationPrompt = responsesWebSearchContinuationPrompt
         self.responsesWebSearchContinuationCount = max(0, responsesWebSearchContinuationCount)
+        self.allowsTruncatedOutput = allowsTruncatedOutput
         self.traceHandler = traceHandler
     }
 
@@ -357,6 +430,7 @@ struct LLMCompletionRequest: Sendable {
             responsesWebSearchReplay: mergedReplay,
             responsesWebSearchContinuationPrompt: continuationPrompt ?? responsesWebSearchContinuationPrompt,
             responsesWebSearchContinuationCount: responsesWebSearchContinuationCount + 1,
+            allowsTruncatedOutput: allowsTruncatedOutput,
             traceHandler: traceHandler
         )
     }
@@ -366,15 +440,22 @@ struct LLMCompletionResponse: Equatable, Sendable {
     let text: String
     let resolvedEndpoint: LLMResolvedEndpoint?
     let webSearchSources: [LLMWebSearchSource]
+    /// Why the model stopped, when the provider reports it (non-streamed requests only).
+    let finishReason: LLMFinishReason?
+    let usage: LLMTokenUsage?
 
     init(
         text: String,
         resolvedEndpoint: LLMResolvedEndpoint?,
-        webSearchSources: [LLMWebSearchSource] = []
+        webSearchSources: [LLMWebSearchSource] = [],
+        finishReason: LLMFinishReason? = nil,
+        usage: LLMTokenUsage? = nil
     ) {
         self.text = text
         self.resolvedEndpoint = resolvedEndpoint
         self.webSearchSources = webSearchSources
+        self.finishReason = finishReason
+        self.usage = usage
     }
 }
 
@@ -621,13 +702,25 @@ nonisolated struct OpenAICompatibleLLMProvider: Sendable {
 
             let text: String
             let webSearchSources: [LLMWebSearchSource]
+            let finishReason: LLMFinishReason?
+            let usage: LLMTokenUsage?
             switch request.apiStyle {
             case .chatCompletions:
                 let decoded = try JSONDecoder().decode(LLMChatCompletionResponseBody.self, from: data)
                 text = decoded.choices?.first?.message?.content ?? ""
                 webSearchSources = []
+                finishReason = LLMFinishReason(chatCompletions: decoded.choices?.first?.finishReason)
+                usage = decoded.usage?.tokenUsage
             case .responses:
                 let decoded = try JSONDecoder().decode(LLMResponsesResponseBody.self, from: data)
+                if request.allowsTruncatedOutput, decoded.isTruncated {
+                    return LLMCompletionResponse(
+                        text: decoded.outputText,
+                        resolvedEndpoint: makeResolvedEndpointSnapshot(from: routePlan, apiStyle: request.apiStyle),
+                        finishReason: .length,
+                        usage: decoded.usage?.tokenUsage
+                    )
+                }
                 if let terminalError = decoded.terminalError {
                     throw terminalError
                 }
@@ -650,15 +743,20 @@ nonisolated struct OpenAICompatibleLLMProvider: Sendable {
                     decoded.webSearchSources
                         + request.responsesWebSearchReplay.flatMap(\.webSearchSources)
                 )
+                finishReason = decoded.status?.lowercased() == "completed" ? .stop : nil
+                usage = decoded.usage?.tokenUsage
             case .anthropicMessages:
                 let decoded = try LLMAnthropicMessagesResponseBody(data: data)
-                if let terminalError = decoded.terminalError {
+                let truncated = request.allowsTruncatedOutput && decoded.stopReason == "max_tokens"
+                if truncated == false, let terminalError = decoded.terminalError {
                     throw terminalError
                 }
                 text = decoded.outputText
                 webSearchSources = Self.uniqueWebSearchSources(
                     LLMWebSearchSource.detected(in: text) + decoded.content.webSearchSources
                 )
+                finishReason = decoded.finishReason
+                usage = decoded.usage
             }
             return LLMCompletionResponse(
                 text: text,
@@ -666,7 +764,9 @@ nonisolated struct OpenAICompatibleLLMProvider: Sendable {
                     from: routePlan,
                     apiStyle: request.apiStyle
                 ),
-                webSearchSources: webSearchSources
+                webSearchSources: webSearchSources,
+                finishReason: finishReason,
+                usage: usage
             )
         }
     }
@@ -1347,6 +1447,46 @@ private struct LLMChatCompletionBody: Encodable {
     struct Message: Encodable {
         let role: String
         let content: String
+        let parts: [LLMMessageContentPart]?
+
+        private enum CodingKeys: String, CodingKey {
+            case role
+            case content
+        }
+
+        private enum PartKeys: String, CodingKey {
+            case type
+            case text
+            case imageURL = "image_url"
+        }
+
+        private enum ImageKeys: String, CodingKey {
+            case url
+            case detail
+        }
+
+        func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(role, forKey: .role)
+            guard let parts else {
+                try container.encode(content, forKey: .content)
+                return
+            }
+            var items = container.nestedUnkeyedContainer(forKey: .content)
+            for part in parts {
+                var item = items.nestedContainer(keyedBy: PartKeys.self)
+                switch part {
+                case .text(let text):
+                    try item.encode("text", forKey: .type)
+                    try item.encode(text, forKey: .text)
+                case .image(let data, let mediaType):
+                    try item.encode("image_url", forKey: .type)
+                    var image = item.nestedContainer(keyedBy: ImageKeys.self, forKey: .imageURL)
+                    try image.encode(LLMMessageContentPart.dataURL(data, mediaType: mediaType), forKey: .url)
+                    try image.encode("high", forKey: .detail)
+                }
+            }
+        }
     }
 
     struct Thinking: Encodable {
@@ -1364,7 +1504,7 @@ private struct LLMChatCompletionBody: Encodable {
 
     init(request: LLMCompletionRequest, stream: Bool? = nil) {
         model = request.model
-        messages = request.messages.map { Message(role: $0.role, content: $0.content) }
+        messages = request.messages.map { Message(role: $0.role, content: $0.content, parts: $0.parts) }
         temperature = request.temperature
         topP = request.topP
         maxTokens = request.maxTokens
@@ -1402,9 +1542,34 @@ private struct LLMChatCompletionResponseBody: Decodable {
         }
 
         let message: Message?
+        let finishReason: String?
+
+        enum CodingKeys: String, CodingKey {
+            case message
+            case finishReason = "finish_reason"
+        }
+    }
+
+    struct Usage: Decodable {
+        let promptTokens: Int?
+        let completionTokens: Int?
+        let totalTokens: Int?
+
+        enum CodingKeys: String, CodingKey {
+            case promptTokens = "prompt_tokens"
+            case completionTokens = "completion_tokens"
+            case totalTokens = "total_tokens"
+        }
+
+        var tokenUsage: LLMTokenUsage {
+            let input = promptTokens ?? 0
+            let output = completionTokens ?? 0
+            return LLMTokenUsage(inputTokens: input, outputTokens: output, totalTokens: totalTokens ?? input + output)
+        }
     }
 
     let choices: [Choice]?
+    let usage: Usage?
 }
 
 private struct LLMResponsesRequestBody: Encodable {
@@ -1413,15 +1578,38 @@ private struct LLMResponsesRequestBody: Encodable {
     }
 
     enum InputItem: Encodable {
-        case message(role: String, content: String)
+        case message(role: String, content: String, parts: [LLMMessageContentPart]? = nil)
         case webSearchCall(LLMResponsesWebSearchCallItem)
+
+        private enum PartKeys: String, CodingKey {
+            case type
+            case text
+            case imageURL = "image_url"
+            case detail
+        }
 
         func encode(to encoder: Encoder) throws {
             switch self {
-            case .message(let role, let content):
+            case .message(let role, let content, let parts):
                 var container = encoder.container(keyedBy: MessageCodingKey.self)
                 try container.encode(role, forKey: .role)
-                try container.encode(content, forKey: .content)
+                guard let parts else {
+                    try container.encode(content, forKey: .content)
+                    return
+                }
+                var items = container.nestedUnkeyedContainer(forKey: .content)
+                for part in parts {
+                    var item = items.nestedContainer(keyedBy: PartKeys.self)
+                    switch part {
+                    case .text(let text):
+                        try item.encode("input_text", forKey: .type)
+                        try item.encode(text, forKey: .text)
+                    case .image(let data, let mediaType):
+                        try item.encode("input_image", forKey: .type)
+                        try item.encode(LLMMessageContentPart.dataURL(data, mediaType: mediaType), forKey: .imageURL)
+                        try item.encode("high", forKey: .detail)
+                    }
+                }
             case .webSearchCall(let item):
                 try item.encodeAsJSONObject(to: encoder)
             }
@@ -1466,7 +1654,7 @@ private struct LLMResponsesRequestBody: Encodable {
     init(request: LLMCompletionRequest, stream: Bool? = nil) {
         model = request.model
         var inputItems = request.messages.map {
-            InputItem.message(role: $0.role, content: $0.content)
+            InputItem.message(role: $0.role, content: $0.content, parts: $0.parts)
         }
         if request.responsesWebSearchReplay.isEmpty == false {
             inputItems.append(
@@ -1538,15 +1726,40 @@ private struct LLMResponsesResponseBody: Decodable {
         }
     }
 
+    struct Usage: Decodable {
+        let inputTokens: Int?
+        let outputTokens: Int?
+        let totalTokens: Int?
+
+        enum CodingKeys: String, CodingKey {
+            case inputTokens = "input_tokens"
+            case outputTokens = "output_tokens"
+            case totalTokens = "total_tokens"
+        }
+
+        var tokenUsage: LLMTokenUsage {
+            let input = inputTokens ?? 0
+            let output = outputTokens ?? 0
+            return LLMTokenUsage(inputTokens: input, outputTokens: output, totalTokens: totalTokens ?? input + output)
+        }
+    }
+
     let status: String?
     let error: ResponseError?
     let incompleteDetails: IncompleteDetails?
     let output: [OutputItem]?
+    let usage: Usage?
+
+    /// The answer stopped because the output budget ran out.
+    var isTruncated: Bool {
+        status?.lowercased() == "incomplete" && incompleteDetails?.reason == "max_output_tokens"
+    }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         status = try container.decodeIfPresent(String.self, forKey: .status)
         error = try container.decodeIfPresent(ResponseError.self, forKey: .error)
+        usage = try? container.decodeIfPresent(Usage.self, forKey: .usage)
         incompleteDetails = try container.decodeIfPresent(
             IncompleteDetails.self,
             forKey: .incompleteDetails
@@ -1663,6 +1876,7 @@ private struct LLMResponsesResponseBody: Decodable {
         case error
         case incompleteDetails = "incomplete_details"
         case output
+        case usage
     }
 }
 
@@ -1670,6 +1884,48 @@ private struct LLMAnthropicMessagesRequestBody: Encodable {
     struct Message: Encodable {
         let role: String
         let content: String
+        let parts: [LLMMessageContentPart]?
+
+        private enum CodingKeys: String, CodingKey {
+            case role
+            case content
+        }
+
+        private enum PartKeys: String, CodingKey {
+            case type
+            case text
+            case source
+        }
+
+        private enum SourceKeys: String, CodingKey {
+            case type
+            case mediaType = "media_type"
+            case data
+        }
+
+        func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(role, forKey: .role)
+            guard let parts else {
+                try container.encode(content, forKey: .content)
+                return
+            }
+            var items = container.nestedUnkeyedContainer(forKey: .content)
+            for part in parts {
+                var item = items.nestedContainer(keyedBy: PartKeys.self)
+                switch part {
+                case .text(let text):
+                    try item.encode("text", forKey: .type)
+                    try item.encode(text, forKey: .text)
+                case .image(let data, let mediaType):
+                    try item.encode("image", forKey: .type)
+                    var source = item.nestedContainer(keyedBy: SourceKeys.self, forKey: .source)
+                    try source.encode("base64", forKey: .type)
+                    try source.encode(mediaType, forKey: .mediaType)
+                    try source.encode(data.base64EncodedString(), forKey: .data)
+                }
+            }
+        }
     }
 
     struct Thinking: Encodable {
@@ -1723,7 +1979,9 @@ private struct LLMAnthropicMessagesRequestBody: Encodable {
         // travels in the top-level `system` field instead.
         messages = request.messages
             .filter { $0.role != "system" && $0.role != "developer" }
-            .map { Message(role: $0.role == "assistant" ? "assistant" : "user", content: $0.content) }
+            .map {
+                Message(role: $0.role == "assistant" ? "assistant" : "user", content: $0.content, parts: $0.parts)
+            }
         temperature = request.temperature
         topP = request.topP
         // `tool_choice` stays at its `auto` default: forcing a tool is
@@ -1897,6 +2155,7 @@ struct LLMAnthropicMessagesContentAccumulator {
 private struct LLMAnthropicMessagesResponseBody {
     let stopReason: String?
     let content: LLMAnthropicMessagesContentAccumulator
+    let usage: LLMTokenUsage?
 
     init(data: Data) throws {
         guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
@@ -1909,6 +2168,26 @@ private struct LLMAnthropicMessagesResponseBody {
         content = LLMAnthropicMessagesContentAccumulator(
             content: object["content"] as? [[String: Any]] ?? []
         )
+        if let usage = object["usage"] as? [String: Any] {
+            let input = usage["input_tokens"] as? Int ?? 0
+            let output = usage["output_tokens"] as? Int ?? 0
+            self.usage = LLMTokenUsage(inputTokens: input, outputTokens: output, totalTokens: input + output)
+        } else {
+            self.usage = nil
+        }
+    }
+
+    var finishReason: LLMFinishReason? {
+        switch stopReason {
+        case nil:
+            return nil
+        case "end_turn", "stop_sequence":
+            return .stop
+        case "max_tokens":
+            return .length
+        case let other?:
+            return .other(other)
+        }
     }
 
     /// Joins the visible `text` blocks; `thinking` blocks are never shown.

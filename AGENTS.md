@@ -4,14 +4,15 @@
 
 ## 项目概览
 
-ReadPaper 是一个 macOS SwiftUI 论文阅读应用，使用 SwiftData 做本地数据模型，PDFKit 处理本地 PDF 轻量文本抽取，`swift-readability` 处理 arXiv/ar5iv HTML 正文抽取，SwiftSoup 处理 HTML 本地化和 HTML 段落翻译。项目最低 macOS 版本为 14.0，Swift 版本为 6.0，Xcode 项目由 `project.yml` 描述，依赖 SwiftSoup、`swift-readability`、`SwiftOpenAI`，以及写作编辑器排版公式用的 `iosMath`（与 `SwiftStreamingMarkdown` 固定同一 revision）。
+ReadPaper 是一个 macOS SwiftUI 论文阅读应用，使用 SwiftData 做本地数据模型，PDFKit 处理本地 PDF 轻量文本抽取，`swift-readability` 处理 arXiv/ar5iv HTML 正文抽取，SwiftSoup 处理 HTML 本地化和 HTML 段落翻译。项目最低 macOS 版本为 14.0，Swift 版本为 6.0，Xcode 项目由 `project.yml` 描述，依赖 SwiftSoup、`swift-readability`、`SwiftOpenAI`，以及写作编辑器排版公式用的 `iosMath`（与 `SwiftStreamingMarkdown` 固定同一 revision）；扫描版 PDF 翻译用本地路径包 `../rebuild-pdf` 的 `RebuildPDFKit`（只链接 macOS target）。
 
-核心能力分成四条路径：
+核心能力分成五条路径：
 
 - 本地 PDF：导入 PDF，抽取 Info dictionary 和前几页文本，只用于标题、作者和 arXiv ID 等轻量识别；不要把 PDF 纯文本当成稳定全文结构。本地 PDF 里的 `arxivID` 只应在出现明确 arXiv 上下文时写入，例如 `arXiv:2303.08774` 或 `arxiv.org` / `ar5iv.labs.arxiv.org` 链接；不要把 DOI、Crossref 链接或其他编号片段误识别成 arXiv ID。若能从 PDF 正文或元信息中可靠提取 DOI，可把 DOI 作为无 arXiv 时的降级展示标识。
 - arXiv 论文：通过 arXiv API 获取元数据和 PDF，优先保存 `https://arxiv.org/html/{id}`，失败后回退到 `https://ar5iv.labs.arxiv.org/html/{id}`；获取 HTML 后优先用 `swift-readability` 提炼正文，再把 HTML、CSS、图片等资源本地化，若正文抽取失败再回退到原始 HTML。通过 arXiv ID/URL 导入时，不要只给一个不透明的 loading spinner；应尽量向用户暴露当前所处阶段，例如 ID 规范化、元数据获取、PDF 下载、HTML 获取/回退、最终入库保存。
 - 网页导入：输入任意 HTTP/HTTPS 网页 URL，通过 `normalizeWebPageURL` 规范化 URL（自动补齐 https、去除 fragment）。下载响应后先检查 HTTP `Content-Type`；若为 `application/pdf`，则自动路由到 PDF 导入路径：写入 `paper.pdf`、从 PDF 元数据和前几页文本提取标题/作者/arXiv ID/DOI 等轻量信息，并以 PDF 附件形式入库。其余 HTML 网页走原有流程：用 `HTMLLocalizer` 的 `swift-readability` 路径下载并提炼正文，同时本地化页面中的 CSS、图片等链接资源；若 title 元素可解析则使用提取的标题，否则依次回退到 URL path 组件和 host，最终回退到"Untitled Web Page"。通过 `WebPageImportProgress` 反馈分步骤进度（URL 校验 → 网页抓取 → 创建库条目 → 最终保存），与 arXiv 导入一样使用确定型进度条。HTML 网页内容以本地化 HTML 形式保存为 `paper.html`，与 arXiv HTML 共用同一套展示和翻译管线。导入时以 URL 去重（`htmlURLString`），不依赖 arXiv ID。
 - 翻译阅读：HTML 走 SwiftSoup DOM 分段翻译并插入 `.rp-translation-block`；完整 PDF 翻译交给 App 内嵌并签名的原生 BabelDOC helper，helper 直接使用 App Resources 中按 manifest 校验的 MuPDF、zstd、原生 Core ML layout model 与字体，输出翻译 PDF 后用双栏 PDF 阅读器展示。PDF 翻译支持按页增量生成与续翻，过程中译文 PDF 可能只是覆盖前 N 页的 partial 文档；进度与阅读器状态都要显式体现这一点。
+- 扫描版 PDF 翻译：没有文字层（或文字层不可靠）的 PDF 走 `RebuildPDFKit`：视觉模型把每页转写成受限 LaTeX、对照原稿校对，文本模型翻译，XeLaTeX 按原页面尺寸、版心和分栏排版，输出与原稿逐页对应的 `translatedPDF`，同样用双栏阅读器展示。它是第三条 PDF 翻译路线，与 BabelDOC、arXiv LaTeX 翻译并列，不经过 BabelDOC。
 
 原生 BabelDOC runtime 随 App 构建，不依赖 `tools/install_readpaper_native_runtime.sh` 或 Application Support 预安装目录。修改 Xcode 构建、资源路径或发布流程时，必须保留 `Contents/Resources/BabelDOCNative`、受信 manifest 与 helper 启动前双重验证契约。
 
@@ -55,6 +56,7 @@ GitHub Actions 构建 DMG：
 - 当前 workflow 运行在 `macos-26`，会恢复固定 commit 的本地 `swift-readability`，并从手动输入 `babeldoc_ref` 或仓库变量 `BABELDOC_REF` 恢复完整 40 位 commit 的 `../reWriteBabelDoc`。随后下载并验证模型/字体/许可证、从固定源码构建 zstd、校验 MuPDF 与 trusted runtime manifest，再安装 `xcodegen` 和 `create-dmg` 执行无签名 Release 构建。
 - CI 产物当前是 unsigned 的 `Freddie.app` 和 `Freddie-<version>-unsigned.dmg`；helper 在关闭 Xcode signing 时仍做 ad-hoc 签名以满足 App 内信任契约。artifact 同时包含记录三份源码 commit、runtime manifest hash 和版本号的 `build-provenance.txt`。tag 与手动触发都只上传 Actions artifact；在 Developer ID 签名、notarization、Corresponding Source 和完整第三方 notices 闭环前，不自动创建公开 GitHub Release。
 - 后续若调整 app 名称、scheme、产物路径、签名或打包方式，要同步更新 workflow 中的 `APP_NAME`、`APP_PATH`、`DMG_PATH` 和 release 上传逻辑，避免本地可构建但 CI 打包失效。
+- `project.yml` 依赖本地路径包 `../rebuild-pdf`（`RebuildPDFKit`），但该仓库还没有远端，workflow 也还没有像 `../reWriteBabelDoc` 那样检出它；在 CI 上构建前要先推送仓库，并在 workflow 里按固定 commit 检出、写入 `build-provenance.txt`。
 
 如果沙箱或受限终端里 `xcodebuild` 因 Xcode/SwiftPM/clang 缓存目录权限失败，不要先判断为代码失败；换到可写 Xcode 缓存的环境或使用 Xcode 运行后再确认。
 
@@ -96,7 +98,7 @@ SwiftData schema 变更要特别谨慎：历史上已经出现过“新版本删
 
 `paper.html` 必须带有正确的 `<meta charset="UTF-8">` 声明。`HTMLLocalizer.makeDocumentForLocalization` 在解析 HTML 后会通过 `reconcileCharsetDeclaration` 移除旧的 `http-equiv="content-type"` meta 标签并插入 `<meta charset="UTF-8">`，因为源 HTML 的 charset 声明（如 `ISO-8859-1`）在翻译管道注入 UTF-8 多字节文本后会导致乱码。如果在 `HTMLLocalizer` 之外重建或覆写 `paper.html`，也要确保写入 UTF-8 charset 声明。
 
-附件通过 `PaperAttachment` 记录，类型包括 `pdf`、`html`、`translatedPDF` 和 `resource`，来源包括 `arxivPDF`、`arxivHTML`、`localImport`、`webPage`、`babeldoc` 和 `generated`。`translatedPDF` 在增量翻译路径下还会用 `translatedLastPage` 表示当前已覆盖到原文的最后一页；改文件写入、合并续翻或替换译文文件时，要同时维护附件记录、`translatedLastPage` 语义和 SwiftData 保存时机。
+附件通过 `PaperAttachment` 记录，类型包括 `pdf`、`html`、`translatedPDF` 和 `resource`，来源包括 `arxivPDF`、`arxivHTML`、`localImport`、`webPage`、`babeldoc`、`latexTrans`、`scanRebuild` 和 `generated`（来源以字符串落盘，旧版 App 读到不认识的来源回退为 `generated`）。`translatedPDF` 在增量翻译路径下还会用 `translatedLastPage` 表示当前已覆盖到原文的最后一页；改文件写入、合并续翻或替换译文文件时，要同时维护附件记录、`translatedLastPage` 语义和 SwiftData 保存时机。
 
 论文库文件夹：`PaperFolder`（名称，预留 `parentID`，当前只显示一层）与 `PaperFolderMembership`（`paperID` 唯一，即一篇论文最多属于一个文件夹）。归属关系刻意不放进 `Paper`：移动论文不改 `Paper` schema，也不改按 `modifiedAt` 排序的列表顺序。删除文件夹只删归属记录，论文回到“未归档”；`PaperDeletionService` 删除论文时一并删除其归属记录；指向已不存在文件夹的归属按未归档处理。侧边栏分组统一走 `PaperLibraryGrouping`（文件夹按名称排序，组内沿用库顺序），删除论文后的下一个选中项也按它的显示顺序计算。文件夹折叠状态是视图状态，存 UserDefaults（`LibraryFolderExpansion`），不进 SwiftData。旧版 App 打开含文件夹的 store 能正常打开，但会丢弃两张文件夹表。论文拖到文件夹使用自定义 UTType `com.yiyan.ReadPaper.paper-reference`（已在 `Info.plist` 声明），不要改成文件 URL，否则会被整窗 PDF 拖入遮罩截走。侧边栏工具栏在最小宽度下只放得下“添加论文”和“删除论文”两个按钮，“新建文件夹”放在 File 菜单（⇧⌘N）和列表右键菜单里，不要再往侧边栏工具栏加按钮。
 
@@ -144,13 +146,20 @@ LLM 配置现已拆成独立 SwiftData 模型：`LLMProviderProfile` 负责 prov
 - 设置页中的 BabelDOC 安装源支持官方 PyPI 与清华 TUNA mirror 切换。该偏好当前通过 `BabelDocInstallSource.userDefaultsKey` / `@AppStorage` 落到 UserDefaults，刻意不新增 `AppSettings` SwiftData 字段以降低旧 store 兼容风险。改 BabelDOC 安装链路时，不要重新硬编码单一 PyPI 源；`BabelDocToolManager` 应根据所选源同时切换 latest metadata URL 和 `uv tool install --default-index ... BabelDOC==<version>` 参数，阅读器里的自动安装也应沿用同一默认读取逻辑。
 - macOS 设置页的字符串输入框在快速切换焦点，尤其配合中文输入法或其他有 marked text / suggestions / Writing Tools 参与的输入路径时，可能打出 `NSXPCDecoder validateAllowedClass:forKey:` 且 allowed classes 含 `NSObject` 的系统警告。当前经验判断这更像 AppKit / 输入法 / Writing Tools 的系统日志，而不是项目里某个业务 `NSSecureCoding` 白名单真的写错。遇到这类报错时，先排查是否发生在设置页输入焦点切换，而不要优先沿 SwiftData、Keychain 或业务解码链路误判。
 - Reader 和设置页里的 LLM 错误要尽量按场景区分，例如 HTML 路由缺失、PDF 路由缺失、provider 被禁用、API key 缺失、测试模型不可用，而不是统一报成一个笼统的缺配置错误。
-- 启动 PDF 翻译前，`PDFTextLayerInspector` 会用 CoreGraphics 检查字体：若整份文档没有任何可解码字体（无字体的扫描件，或 dvips/Distiller 那类无 `ToUnicode`、字形名无意义、编码按首次出现编号的 Type3 位图字体），直接以 `PDFTextLayerError.noExtractableText` 提示不支持，不再把乱码送进 BabelDOC/LLM。判定刻意保守：只要有一个可解码字体就放行；pdfTeX 风格（`/a65` 位于 code 65）的 Type3 字体视为可解码。
+- 启动 PDF 翻译前，`PDFTextLayerInspector` 会用 CoreGraphics 检查字体：若整份文档没有任何可解码字体（无字体的扫描件，或 dvips/Distiller 那类无 `ToUnicode`、字形名无意义、编码按首次出现编号的 Type3 位图字体），不再把乱码送进 BabelDOC/LLM，而是弹出“翻译扫描版 PDF”的确认框（`PDFTextLayerError.noExtractableText`）。判定刻意保守：只要有一个可解码字体就放行；pdfTeX 风格（`/a65` 位于 code 65）的 Type3 字体视为可解码。
 - BabelDOC 通过 `BabelDocRunner` 和 `ProcessRunner` 启动外部进程，参数中的模型、base URL 和 API key 来自 PDF route snapshot；API key 要使用现有 redaction 逻辑，不要把外部工具失败吞掉成静默失败。
 - BabelDOC 的 launcher 可能是 `uv tool install` 生成的 `sh` 包装器，第一行 shebang 不一定就是实际 Python 解释器；改启动逻辑时要兼容“同目录 venv `python3`/`python` + shell wrapper `exec .../python3`”这类结构，不要简单假设 `#!/usr/bin/env python3`。
 - ReadPaper 管理的 BabelDOC 安装应优先使用 uv-managed Python 3.13；已遇到 Python 3.14 下 BabelDOC 运行时报 `_WorkItem.__init__` 参数不匹配的兼容性问题。判断 BabelDOC 是否可用时不要只检查 `bin/babeldoc` 是否可执行，还要确认 launcher 背后的 Python 版本可用；如果用户把 `/Users/.../Library/Application Support/ReadPaper/Tools/BabelDOC/bin/babeldoc` 手工改成指向 `~/.local/bin/babeldoc` 一类工作版本的 symlink，后续改安装、探测或移除逻辑时要避免误判为内置版本已经健康。
 - `ProcessRunner` 需要持续 draining stdout/stderr，并正确响应取消；改动时保留大输出和取消相关测试。
 - arXiv 论文做 PDF 翻译时，`BabelDocSemanticHintService` 会下载 LaTeX 源码（含 `.bbl`），用 LaTeXTransKit 生成语义 sidecar 交给 BabelDOC 对齐。sidecar 按 `extractorAlgorithmVersion` 缓存在论文目录 `Resources/LaTeXSemantic/`；`../arxivLatex` 的语义抽取输出一旦变化，必须递增该版本，否则会继续命中旧 sidecar。helper 的 `translation_diagnostics` 事件里 `semantic_pdf_paragraphs` / `semantic_matched_pdf_paragraphs` 只统计正文流段落（不含表格、图内文字、fallback 行），状态文案也按这个口径展示。
 - layout model 把高而窄的算法清单识别成 `plain text` 时，原生段落阶段会用至少 8 条物理行、多次函数调用以及控制流/赋值信号保守识别伪代码并标为 `code`；这类块不进入正文翻译或 LaTeX reading-flow 对齐，Typesetting 必须逐字符保留源坐标、缩进、换行和公式对象。证据不足的短代码与普通多行正文继续走原流程，不要只凭公式字体或单个运算符扩大识别范围。
+
+- 扫描版 PDF 翻译（`ScannedPDFTranslationService`，仅 macOS）：
+  - 实现在 `../rebuild-pdf` 的 Swift 包 `RebuildPDFKit`，是同仓库 Python 版 rebuild-pdf 的逐条移植；Python 版仍是规则的参照实现。规则、提示词或排版改动先在 Python 里做，再移植到 Swift，并用 `uv run python tools/export_swift_fixtures.py` 重新导出对照数据（`tests/RebuildPDFKitTests/Fixtures/parity.json`；本地重建过样例时另写不入库的 `local/samples.json`），在 `../rebuild-pdf` 里 `swift test`：生成的 `main.tex`、页面测量、文档版式、翻译保护与还原都要求与 Python 逐字节/逐值一致。提示词由 `tools/export_swift_prompts.py` 复制进包资源，不要手抄。字宽表 `line-metrics.bin` 来自 PyMuPDF 的 base14 字体（含 fallback），由 `tools/export_line_metrics.py` 生成。
+  - 与 Python 版的有意差异：用 Apple Vision 代替 Tesseract 测量版心和给出 OCR 草稿（`TextRecognizing` 可注入）；页面渲染、裁剪用 CoreGraphics；单页失败不中止整次运行，该页在输出里保留原扫描页并记入 `fallbacks`，全部失败才抛 `noPagesRebuilt`；开跑前用 `TeXInstallationCheck` 排一张用到全部宏包和字体的探测页，缺包时先报错，不让用户为转写付费后才失败。
+  - 模型：转写用“设置 > 阅读器 › 翻译路由”里的“扫描页模型”（`ScannedPDFTranslationPreferences.transcriptionModelProfileIDKey`，存 UserDefaults，不进 `AppSettings`；未选时回退 PDF 模型），必须支持图像输入；翻译用 PDF 路由。`ReadPaperRebuildModelClient` 把页面 JPEG 作为 `LLMCompletionMessage(parts:)` 发送（Chat Completions `image_url`、Responses `input_image`、Anthropic base64 `image`），超时用 `.scannedPage`（思考可能持续数分钟才返回首字节），并设 `allowsTruncatedOutput`：输出被 `max_tokens` 截断时返回 `finishReason == .length`，由 RebuildPDFKit 把预算翻倍重试（32k 起，最多 128k），其他调用方仍按原来的方式报错。`identity` 写入检查点 key，只含端点、模型和采样设置，不含 key。
+  - 排版用 XeLaTeX：优先 Settings > LaTeX 选中的工具链目录，再找 `/Library/TeX/texbin` 等常见位置；与 arXiv LaTeX 翻译开关无关。编译关闭 shell escape，`openin_any/openout_any=p`。目标语言目前只支持简体中文（`zh-CN`，Fandol 宋体/楷体），其他语言在确认框前就提示。
+  - 检查点在论文目录 `Resources/ScanRebuild/`（`pages/`、`responses/`、`typeset/`、`translations/zh/`，布局同 Python 版）：重跑、取消后重跑只为没完成的页付费；页面标记 `typeset/page-NNNN.page.tex` 与 `translations/zh/typeset/page-NNNN.page.tex` 可手工修改，修改过的页不再调用模型。输出写到 `translations/scan-rebuild.zh.pdf`，与原稿页数相同（未选的页、失败的页是原扫描页），`translatedLastPage` 为 nil；重跑会替换旧的 `scanRebuild` 附件记录。确认框说明会把页面图像发给模型并给出每页约 1 分钟、5 万 token 的估计；页数超过 PDF 每批页数时提供“翻译前 N 页 / 全部”。
 
 ## 实现约定
 
@@ -211,11 +220,12 @@ xcodebuild -project ReadPaper.xcodeproj -scheme ReadPaper -destination 'platform
 - HTML 区域调整（JS 与 Swift 路径一致性、隐藏/恢复落盘、签名校验、层级与徽标、⇧ 连选、写回顺序与退出前落盘）：`HTMLRegionVisibilityTests`
 - 翻译输出校验（prompt/原文/上下文回显、重试与回退）：`TranslationOutputValidatorTests`
 - PDF 无文字层检测（Type3 无映射字体、扫描件、glyph name 判定）：`PDFTextLayerInspectorTests`
+- 扫描版 PDF 翻译（模型适配、图像消息、截断映射、扫描页路由回退、错误映射、用真实 XeLaTeX 跑通整条路线并复用检查点）：`ScannedPDFTranslationServiceTests`；RebuildPDFKit 本身（与 Python 的对照、XeLaTeX 排版、流水线检查点与失败页回退）在 `../rebuild-pdf` 里 `swift test`，`SampleReplayTests` 用 Python 运行留下的回答离线重放两篇样例（需本地 `.rebuild` 目录，约 1.5 分钟）
 - BabelDOC 安装源、latest 版本解析、uv 安装参数：`BabelDocToolManagerTests`
 - BabelDOC 参数、progress bridge、敏感信息遮蔽、子进程输出/取消：`BabelDocRunnerTests`
 - provider 校验、base URL 规范化、连接测试：`LLMProviderValidationUseCaseTests`
 - provider/model route 解析与缺配置错误：`LLMRouteResolverTests`
-- OpenAI-compatible `/v1` 回退与代理路径保留、Anthropic Messages 请求/流式解析：`OpenAICompatibleLLMProviderTests`
+- OpenAI-compatible `/v1` 回退与代理路径保留、Anthropic Messages 请求/流式解析、三种协议的图像输入、finish reason / 用量解析与截断输出：`OpenAICompatibleLLMProviderTests`
 - settings 初始化保障：`LLMConfigurationBootstrapperTests`
 - 内置 provider/model 种子、默认路由激活、快速配置（沿用已编辑的 profile、恢复已删除的内置 profile、存 key 失败不改 store）、可用路由判断、打开设置时切到 General：`LLMDefaultProfilesTests`
 - 阅读位置存储与 mode 回退：`ReadingStateStoreTests`

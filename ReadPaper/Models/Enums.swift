@@ -16,6 +16,8 @@ enum AttachmentSource: String, Codable, CaseIterable, Identifiable {
     case webPage
     case babeldoc
     case latexTrans
+    /// A scanned PDF rebuilt and translated with RebuildPDFKit.
+    case scanRebuild
     case generated
 
     var id: String { rawValue }

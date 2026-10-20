@@ -105,6 +105,16 @@
         }
       }
     },
+    "%d pages could not be rebuilt and show the scan. Translate the scanned PDF again to retry them; finished pages are reused." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "有 %1$d 页未能重建，仍显示原扫描页。再次翻译扫描版 PDF 即可重试这些页面，已完成的页面会直接复用。"
+          }
+        }
+      }
+    },
     "%d paper%@ already in your library. Use Translate in the reader toolbar." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -720,6 +730,16 @@
         }
       }
     },
+    "Assembling the translated PDF..." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在合成译文 PDF…"
+          }
+        }
+      }
+    },
     "Assistant scope" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1302,6 +1322,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在检查网页 URL"
+          }
+        }
+      }
+    },
+    "Checking XeLaTeX..." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在检查 XeLaTeX…"
           }
         }
       }
@@ -2982,6 +3012,17 @@
         }
       }
     },
+    "Freddie reads each page image with a vision model, translates the text, and typesets it on the original page layout. Use this for scans and for PDFs whose text layer is unreliable." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Freddie 会用视觉模型读取每页图像，翻译文字，再按原页面版式重新排版。适用于扫描件，以及文字层不可靠的 PDF。"
+          }
+        }
+      }
+    },
     "Freehand Draw" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -3757,6 +3798,16 @@
         }
       }
     },
+    "Invalid provider base URL: %@" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "服务的 Base URL 无效：%1$@"
+          }
+        }
+      }
+    },
     "Invalid provider Base URL: %@" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -3807,6 +3858,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "文献类型"
+          }
+        }
+      }
+    },
+    "Its pages are images, so their text cannot be translated directly. Freddie can read each page with a vision model, translate the text, and typeset it on the original page layout." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "它的页面是图像，无法直接提取文字来翻译。Freddie 可以用视觉模型读取每一页，翻译文字，再按原页面版式重新排版。"
           }
         }
       }
@@ -4639,6 +4701,16 @@
         }
       }
     },
+    "No page of the scan could be rebuilt. %@" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "扫描件中没有任何页面能够重建。%1$@"
+          }
+        }
+      }
+    },
     "No paper selected" : {
       "localizations" : {
         "zh-Hans" : {
@@ -5048,6 +5120,27 @@
         }
       }
     },
+    "Page %d of the PDF could not be rendered." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法渲染 PDF 的第 %1$d 页。"
+          }
+        }
+      }
+    },
+    "Page images go to the model chosen for scanned pages in Settings > Reader, which must accept images. Expect about a minute and 50,000 tokens per page (%d pages). Finished pages are saved, so running it again only pays for new pages. XeLaTeX (MacTeX) is required." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "页面图像会发送给“设置 > 阅读器”中为扫描页选择的模型，该模型必须支持图像输入。每页大约需要 1 分钟、5 万 token（共 %1$d 页）。已完成的页面会保存，再次运行只为新页面计费。需要安装 XeLaTeX（MacTeX）。"
+          }
+        }
+      }
+    },
     "Paper" : {
       "localizations" : {
         "zh-Hans" : {
@@ -5450,6 +5543,17 @@
         }
       }
     },
+    "Preparing scanned PDF translation..." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在准备翻译扫描版 PDF…"
+          }
+        }
+      }
+    },
     "Preprint" : {
       "comment" : "Bibliographic item type (Zotero item type name)",
       "localizations" : {
@@ -5533,6 +5637,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "配置名称仅用于 ReadPaper 内部显示。模型名称必须与 provider 接受的真实模型标识符一致。"
+          }
+        }
+      }
+    },
+    "Proofreading rebuilt pages against the scan..." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在对照原稿校对重建页…"
           }
         }
       }
@@ -5799,6 +5913,16 @@
         }
       }
     },
+    "Reading scanned pages with the vision model..." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在用视觉模型识别扫描页…"
+          }
+        }
+      }
+    },
     "READY TO READ" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -6003,6 +6127,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "重命名…"
+          }
+        }
+      }
+    },
+    "Rendering scanned pages..." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在渲染扫描页…"
           }
         }
       }
@@ -6273,6 +6407,48 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在将 %1$@ 的源 PDF 保存到你的本地资料库。"
+          }
+        }
+      }
+    },
+    "Scanned Page Model" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "扫描页模型"
+          }
+        }
+      }
+    },
+    "Scanned PDF translation completed." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "扫描版 PDF 翻译完成。"
+          }
+        }
+      }
+    },
+    "Scanned PDF translation currently translates into Simplified Chinese only. Change the target language in Settings." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "翻译扫描版 PDF 目前只支持译为简体中文。请在设置中更改目标语言。"
+          }
+        }
+      }
+    },
+    "Scanned PDF translation needs XeLaTeX. Install MacTeX, or choose its folder in Settings > LaTeX." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "翻译扫描版 PDF 需要 XeLaTeX。请安装 MacTeX，或在“设置 > LaTeX”中选择它所在的目录。"
           }
         }
       }
@@ -7206,6 +7382,16 @@
         }
       }
     },
+    "The PDF could not be opened." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法打开此 PDF。"
+          }
+        }
+      }
+    },
     "The PDF translation tool is managed separately from the reader. Updating it here keeps the BabelDOC route ready when a paper needs full-PDF translation." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -7406,6 +7592,16 @@
         }
       }
     },
+    "The translated PDF could not be saved." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法保存译文 PDF。"
+          }
+        }
+      }
+    },
     "The web search completed, but the provider did not generate an answer." : {
       "localizations" : {
         "zh-Hans" : {
@@ -7566,6 +7762,17 @@
         }
       }
     },
+    "This PDF Has No Text Layer" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此 PDF 没有文字层"
+          }
+        }
+      }
+    },
     "This PDF links to arXiv %@. Would you like to import it into your library?" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -7642,6 +7849,17 @@
         }
       }
     },
+    "Translate All %d Pages" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "翻译全部 %1$d 页"
+          }
+        }
+      }
+    },
     "Translate arXiv LaTeX" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -7649,6 +7867,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "翻译 arXiv LaTeX 源码"
+          }
+        }
+      }
+    },
+    "Translate First %d Pages" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "翻译前 %1$d 页"
           }
         }
       }
@@ -7715,6 +7944,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "翻译 PDF"
+          }
+        }
+      }
+    },
+    "Translate Scanned PDF" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "翻译扫描版 PDF"
+          }
+        }
+      }
+    },
+    "Translate Scanned PDF also typesets its pages with this distribution's XeLaTeX, whether or not arXiv LaTeX translation is enabled." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无论是否启用 arXiv LaTeX 翻译，“翻译扫描版 PDF”都会用这个发行版的 XeLaTeX 排版页面。"
+          }
+        }
+      }
+    },
+    "Translate Scanned PDF…" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "翻译扫描版 PDF…"
           }
         }
       }
@@ -7798,6 +8059,16 @@
         }
       }
     },
+    "Translating a scanned PDF sends each page image to the scanned page model, which must accept image input; the PDF/BabelDOC model then translates the transcribed text." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "翻译扫描版 PDF 时，每页图像会发送给扫描页模型（必须支持图像输入）识别，识别出的文字再由 PDF/BabelDOC 模型翻译。"
+          }
+        }
+      }
+    },
     "Translating HTML..." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -7826,6 +8097,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在使用 BabelDOC 翻译 PDF..."
+          }
+        }
+      }
+    },
+    "Translating rebuilt pages..." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在翻译重建页…"
           }
         }
       }
@@ -7967,6 +8248,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "电视广播"
+          }
+        }
+      }
+    },
+    "Typesetting translated pages..." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在排版译文页…"
           }
         }
       }
@@ -8350,6 +8641,16 @@
         }
       }
     },
+    "Use PDF/BabelDOC Model" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "使用 PDF/BabelDOC 模型"
+          }
+        }
+      }
+    },
     "Use the + button in the library to create the first paper record." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -8589,6 +8890,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "有 %lld 篇写作稿引用了这篇论文。写作稿的文字会保留，但其中的引用将无法再打开这篇论文。"
+          }
+        }
+      }
+    },
+    "XeLaTeX is missing a package or font that scanned PDF translation needs. Install the full MacTeX, or add the package with tlmgr. %@" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "XeLaTeX 缺少翻译扫描版 PDF 所需的宏包或字体。请安装完整的 MacTeX，或用 tlmgr 补装宏包。%1$@"
           }
         }
       }

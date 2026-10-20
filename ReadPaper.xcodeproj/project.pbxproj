@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		009848F8756B5F5DEC0BC6A9 /* ReadingStateStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70518A1BB9FC4CC8F8EB38DF /* ReadingStateStore.swift */; };
 		010E80FB3BCB214B4FE7B583 /* WritingEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C90AD8239062EE68720D529 /* WritingEditorView.swift */; };
+		020237F5B2D3285755ADE852 /* iosMath in Frameworks */ = {isa = PBXBuildFile; productRef = 17EA572DA218AE1F7B78C70D /* iosMath */; };
 		02EC751E02B0B56BC03B1326 /* DualPDFPageIndexSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEE226283E8433A4B2395468 /* DualPDFPageIndexSync.swift */; };
 		033F96CCF43D63FC7CF3A36F /* Temml-Local.css in Resources */ = {isa = PBXBuildFile; fileRef = 7F787DE989F5CB5CD72645D5 /* Temml-Local.css */; };
 		0379005A013F0B80E16DE77E /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 6430BCDDD5126C2478477D4B /* Assets.xcassets */; };
@@ -97,6 +98,7 @@
 		55247C9ECE01BC43C04A1B23 /* ArxivClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47E6A94B8E0829E8FD015D53 /* ArxivClientTests.swift */; };
 		55BD46855D3DDECA2DE801B1 /* SelectionAssistantOverlayTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 530B5C69AD3FCA0AFBBB8D69 /* SelectionAssistantOverlayTests.swift */; };
 		56B46CFABC0C292C04634756 /* InProcessBabelDocSmokeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3537DF7D3E85FA48AA48CF1 /* InProcessBabelDocSmokeTests.swift */; };
+		56BE0C65EA8C0A0ACDBC8745 /* ScannedPDFTranslationServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCA5D572D0C1E47ECE90927A /* ScannedPDFTranslationServiceTests.swift */; };
 		56F482A9DBBA8B631D7AA6AC /* PaperDeletionServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E7C661338A31257C85792F0 /* PaperDeletionServiceTests.swift */; };
 		58534AA053C5E19CAA3E85E8 /* WritingStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65F6E701023361108F4B535A /* WritingStoreTests.swift */; };
 		5863153059F6B2FD21F823A6 /* BabelDocRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E035274FD9E699D832B4D4E /* BabelDocRunner.swift */; };
@@ -188,7 +190,7 @@
 		B1925AEF14260ABC99D10447 /* PaperCitation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C955419205E9AA3000EE0F6 /* PaperCitation.swift */; };
 		B30982C95AC6353C33CC25AC /* PaperThemeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C862C83D4633B12FAEE816C3 /* PaperThemeTests.swift */; };
 		B3E9466A1617AEEE909CB9CF /* WritingStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1436640EE4437A54748A49C9 /* WritingStore.swift */; };
-		B464ED848E15C6520307F945 /* SwiftStreamingMarkdown in Frameworks */ = {isa = PBXBuildFile; productRef = B8EAA1B17D2824B6C3109B0B /* SwiftStreamingMarkdown */; };
+		B464ED848E15C6520307F945 /* RebuildPDFKit in Frameworks */ = {isa = PBXBuildFile; productRef = 9AEA6580455F72AA50F5D4A5 /* RebuildPDFKit */; };
 		B56A7A3AF22A9842D705F660 /* PaperItemType.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7AF6D836B623D85E6AE3073E /* PaperItemType.swift */; };
 		B5E9AC4BB627D23C838230B3 /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = EF1825DEB6A675DDCEAB79A4 /* AppIcon.icon */; };
 		B664062EB121A181B3EB6EFF /* PDFAnnotationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBF714A9776B80B13FA0B13C /* PDFAnnotationStore.swift */; };
@@ -216,6 +218,7 @@
 		C845278B8BCCC2402E86732D /* IPadSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99D1D151FD3AF4BFBBE5C55C /* IPadSettingsView.swift */; };
 		C8F6AABB3DF86612CFC8187C /* WritingInlineMedia.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2DEC97B85439C06C2472E66 /* WritingInlineMedia.swift */; };
 		C91C11D7E3F4DB83E5D3CE5D /* BabelDocProgressUpdate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D0129BA774AA8C88DA3C2CE /* BabelDocProgressUpdate.swift */; };
+		C97124D63854959F5F1BBE38 /* ScannedPDFTranslationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 883BFE2232C17D510423B377 /* ScannedPDFTranslationService.swift */; };
 		C9F4CFA06800863FB248BA2D /* PaperFolder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3AD1BFC5986F5FEF3FECC1BE /* PaperFolder.swift */; };
 		CA947ACE19F032BCC6D6AFA2 /* SelectionAssistantConversationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81402BA239EE6455F7A769DE /* SelectionAssistantConversationStore.swift */; };
 		CB62B878D017B8B63DD87EC3 /* SwiftOpenAI in Frameworks */ = {isa = PBXBuildFile; productRef = EE4DDECCCB601D6B09EF6428 /* SwiftOpenAI */; };
@@ -233,6 +236,7 @@
 		D85D3C0323E282BCC7F5C66A /* PDFAnnotationStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9FEB183330047B2163900B1 /* PDFAnnotationStoreTests.swift */; };
 		DAFA837901E941BD58A5431A /* ReadPaperApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D2246237CB8E21F487FA0FF /* ReadPaperApp.swift */; };
 		DB8C10089AED298B59CED9BC /* MarkdownLiveSyntax.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C60EA3779E092AEDB4071AA /* MarkdownLiveSyntax.swift */; };
+		DBED922E8EF8B41AC1E053C8 /* ScannedPDFTranslationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 883BFE2232C17D510423B377 /* ScannedPDFTranslationService.swift */; };
 		DCBFAAF65BDE5B8A639E9F33 /* Hashing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1451FFF74A97B956BEB980F1 /* Hashing.swift */; };
 		DD64C03F3005933BEFEEEDE3 /* SelectionAssistantModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E401FF2A9FE72D5AEAC5FA2 /* SelectionAssistantModels.swift */; };
 		DDC44D898F58CC632A59C9CA /* TranslationOutputValidator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C649099FF1E6708E43358A0 /* TranslationOutputValidator.swift */; };
@@ -241,7 +245,7 @@
 		E1EE2BA64BC3B5D1228A75A8 /* SwiftOpenAI in Frameworks */ = {isa = PBXBuildFile; productRef = 703F32046A3F245AC966A2EF /* SwiftOpenAI */; };
 		E348C9C13F3909E45D70E8B7 /* LanguageManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E342738FD553970643EE1F6D /* LanguageManager.swift */; };
 		E3E21FB65D93DBA72A3DAF49 /* SecureAPIKeyVault.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98E27C0AF4AB3AB273C35656 /* SecureAPIKeyVault.swift */; };
-		E43C66ECB175364545F45532 /* iosMath in Frameworks */ = {isa = PBXBuildFile; productRef = 17EA572DA218AE1F7B78C70D /* iosMath */; };
+		E43C66ECB175364545F45532 /* SwiftStreamingMarkdown in Frameworks */ = {isa = PBXBuildFile; productRef = B8EAA1B17D2824B6C3109B0B /* SwiftStreamingMarkdown */; };
 		E55C83D89BD90B882E38B12B /* WritingDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33FA411BFE9580A1DCB4E65B /* WritingDocument.swift */; };
 		E625C3726999AFBFC0CEF145 /* PaperSelectionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E083AAB214008E4FF489EC9 /* PaperSelectionStore.swift */; };
 		E7542A5BAFC829257053498A /* IPadInspectorPaneView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A986762144D055B297DEC92 /* IPadInspectorPaneView.swift */; };
@@ -360,6 +364,7 @@
 		4C301B412C7CD6013858282C /* CitationMarkTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CitationMarkTests.swift; sourceTree = "<group>"; };
 		51A72BDC5A78B51E6003243F /* PaperFileStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaperFileStore.swift; sourceTree = "<group>"; };
 		51DC680763D998C01CEC8F9E /* Temml-LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "Temml-LICENSE.txt"; sourceTree = "<group>"; };
+		527B9EF73BE955F99658B5AB /* rebuild-pdf */ = {isa = PBXFileReference; lastKnownFileType = folder; name = "rebuild-pdf"; path = "../rebuild-pdf"; sourceTree = SOURCE_ROOT; };
 		530B5C69AD3FCA0AFBBB8D69 /* SelectionAssistantOverlayTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectionAssistantOverlayTests.swift; sourceTree = "<group>"; };
 		56425134B5A64FC38C9DC3B1 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		585E60D2D3441D8A764523FD /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
@@ -404,6 +409,7 @@
 		86C925A200F45FCD09BF39B6 /* TranslationJob.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslationJob.swift; sourceTree = "<group>"; };
 		873608C4E855A8AC35CB5ABB /* NoteAnchor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteAnchor.swift; sourceTree = "<group>"; };
 		8817F3ED2BCD0D7DD32CE2FB /* Paper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Paper.swift; sourceTree = "<group>"; };
+		883BFE2232C17D510423B377 /* ScannedPDFTranslationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScannedPDFTranslationService.swift; sourceTree = "<group>"; };
 		885D87CD0EF660C9DC1DA8F6 /* DocumentFindBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentFindBar.swift; sourceTree = "<group>"; };
 		89688C15F321D41904F63847 /* PDFTextLayerInspectorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PDFTextLayerInspectorTests.swift; sourceTree = "<group>"; };
 		8970B5A2B0E4E782656BAFEF /* PaperAttachment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaperAttachment.swift; sourceTree = "<group>"; };
@@ -494,6 +500,7 @@
 		FA5F90BC4790B05DEB79E571 /* DocumentTextSearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentTextSearch.swift; sourceTree = "<group>"; };
 		FC648B6420FB81A2A4B8F5E6 /* SelectionAssistantService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectionAssistantService.swift; sourceTree = "<group>"; };
 		FC693E6A614F0196A8006A9A /* DocumentTextSearchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentTextSearchTests.swift; sourceTree = "<group>"; };
+		FCA5D572D0C1E47ECE90927A /* ScannedPDFTranslationServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScannedPDFTranslationServiceTests.swift; sourceTree = "<group>"; };
 		FE13574FD1F428871B141FE5 /* HTMLReaderPageScriptTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HTMLReaderPageScriptTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -519,8 +526,9 @@
 				5199A679FB036413E82260E1 /* Readability in Frameworks */,
 				FCF84C51FFF1218DAA111C54 /* BabelDocKit in Frameworks */,
 				C62F739AE4156E66737497FD /* LaTeXTransKit in Frameworks */,
-				B464ED848E15C6520307F945 /* SwiftStreamingMarkdown in Frameworks */,
-				E43C66ECB175364545F45532 /* iosMath in Frameworks */,
+				B464ED848E15C6520307F945 /* RebuildPDFKit in Frameworks */,
+				E43C66ECB175364545F45532 /* SwiftStreamingMarkdown in Frameworks */,
+				020237F5B2D3285755ADE852 /* iosMath in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -579,6 +587,7 @@
 				9572A1EC97FD75A3BA216BB0 /* PDFTranslationDebugExporter.swift */,
 				F1D66200F6C63D43F207E0E0 /* ProcessRunner.swift */,
 				70518A1BB9FC4CC8F8EB38DF /* ReadingStateStore.swift */,
+				883BFE2232C17D510423B377 /* ScannedPDFTranslationService.swift */,
 				98E27C0AF4AB3AB273C35656 /* SecureAPIKeyVault.swift */,
 				81402BA239EE6455F7A769DE /* SelectionAssistantConversationStore.swift */,
 				8FCF98219B9D57A74A7F53CB /* SelectionAssistantOrchestrator.swift */,
@@ -611,6 +620,7 @@
 			isa = PBXGroup;
 			children = (
 				F0C2DF1D53036B50E8C28964 /* arxivLatex */,
+				527B9EF73BE955F99658B5AB /* rebuild-pdf */,
 				CA58A9F6F623388F3F96A066 /* reWriteBabelDoc */,
 				703C8DC726DF6251058E63C6 /* swift-readability */,
 				785C6D14338CA3CC18D0C62D /* SwiftStreamingMarkdown */,
@@ -740,6 +750,7 @@
 				89688C15F321D41904F63847 /* PDFTextLayerInspectorTests.swift */,
 				98B4B8D536B2D3EBE2183B41 /* PDFTranslationDebugExporterTests.swift */,
 				31F4A5AE575B4BE0C4DE3E4A /* ReadingStateStoreTests.swift */,
+				FCA5D572D0C1E47ECE90927A /* ScannedPDFTranslationServiceTests.swift */,
 				738973A1A6296FAAB69D2405 /* SecureAPIKeyVaultTests.swift */,
 				D30DC0CB0ED56CD6835AA136 /* SelectionAssistantConversationStoreTests.swift */,
 				EBF7DE075E33762AAE9C79DF /* SelectionAssistantOrchestratorTests.swift */,
@@ -929,6 +940,7 @@
 				8C91D32341DE2A88D7364C3F /* Readability */,
 				BAFDD8F8E234BC26852B46CF /* BabelDocKit */,
 				92414CE9428CA4380C920377 /* LaTeXTransKit */,
+				9AEA6580455F72AA50F5D4A5 /* RebuildPDFKit */,
 				B8EAA1B17D2824B6C3109B0B /* SwiftStreamingMarkdown */,
 				17EA572DA218AE1F7B78C70D /* iosMath */,
 			);
@@ -994,6 +1006,7 @@
 				1735EA1B5DA75BD86402514B /* XCLocalSwiftPackageReference "../reWriteBabelDoc" */,
 				678FE872130B6DDB7B071640 /* XCLocalSwiftPackageReference "../arxivLatex" */,
 				EF98ECE644852981F660041E /* XCLocalSwiftPackageReference "swift-readability" */,
+				1E38C2B4966ABAC1787C82F0 /* XCLocalSwiftPackageReference "../rebuild-pdf" */,
 				6307DDA5936965F409643CBF /* XCLocalSwiftPackageReference "../SwiftStreamingMarkdown" */,
 			);
 			productRefGroup = EF36EA23E9C12D6765FFE9F9 /* Products */;
@@ -1161,6 +1174,7 @@
 				803EE05C7DF42C106290F81B /* PaperSelectionStoreTests.swift in Sources */,
 				B30982C95AC6353C33CC25AC /* PaperThemeTests.swift in Sources */,
 				68276F37DC0F83B2129BFBB5 /* ReadingStateStoreTests.swift in Sources */,
+				56BE0C65EA8C0A0ACDBC8745 /* ScannedPDFTranslationServiceTests.swift in Sources */,
 				093412E3E5A877EE8577C38B /* SecureAPIKeyVaultTests.swift in Sources */,
 				2A11330BC2F760902D108B57 /* SelectionAssistantConversationStoreTests.swift in Sources */,
 				B7742F1C9EC0DFCD82B119A7 /* SelectionAssistantOrchestratorTests.swift in Sources */,
@@ -1243,6 +1257,7 @@
 				B016E4B2B77CBAA9590D5553 /* ReadPaperiPadApp.swift in Sources */,
 				855292271CF673BFB9B75114 /* ReadingState.swift in Sources */,
 				11FCBEC3EB43769149D77038 /* ReadingStateStore.swift in Sources */,
+				DBED922E8EF8B41AC1E053C8 /* ScannedPDFTranslationService.swift in Sources */,
 				FF0BF4488AABE4686E8CCEDD /* SecureAPIKeyVault.swift in Sources */,
 				692C58F2C466CF05D89C0CA0 /* SelectionAssistantConversationStore.swift in Sources */,
 				35FD2A484B247D1692153CE6 /* SelectionAssistantModels.swift in Sources */,
@@ -1353,6 +1368,7 @@
 				F27D9396893317BF40E0BD22 /* ReaderPaneView.swift in Sources */,
 				89A6E060EB5C7613D3EC46CE /* ReadingState.swift in Sources */,
 				009848F8756B5F5DEC0BC6A9 /* ReadingStateStore.swift in Sources */,
+				C97124D63854959F5F1BBE38 /* ScannedPDFTranslationService.swift in Sources */,
 				E3E21FB65D93DBA72A3DAF49 /* SecureAPIKeyVault.swift in Sources */,
 				CA947ACE19F032BCC6D6AFA2 /* SelectionAssistantConversationStore.swift in Sources */,
 				DD64C03F3005933BEFEEEDE3 /* SelectionAssistantModels.swift in Sources */,
@@ -1462,7 +1478,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 134;
+				CURRENT_PROJECT_VERSION = 135;
 				DEVELOPMENT_LANGUAGE = en;
 				ENABLE_TESTABILITY = NO;
 				INFOPLIST_FILE = ReadPaper/Info.plist;
@@ -1473,7 +1489,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 0.8.9;
+				MARKETING_VERSION = 0.8.10;
 				PRODUCT_BUNDLE_IDENTIFIER = com.yiyan.ReadPaper;
 				PRODUCT_MODULE_NAME = ReadPaper;
 				PRODUCT_NAME = Freddie;
@@ -1629,7 +1645,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 134;
+				CURRENT_PROJECT_VERSION = 135;
 				DEVELOPMENT_LANGUAGE = en;
 				DEVELOPMENT_TEAM = 3VM5RUH8V5;
 				ENABLE_TESTABILITY = YES;
@@ -1639,7 +1655,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.8.9;
+				MARKETING_VERSION = 0.8.10;
 				PRODUCT_BUNDLE_IDENTIFIER = com.yiyan.ReadPaper.iPad;
 				PRODUCT_MODULE_NAME = ReadPaperiPad;
 				PRODUCT_NAME = Freddie;
@@ -1682,7 +1698,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 134;
+				CURRENT_PROJECT_VERSION = 135;
 				DEVELOPMENT_LANGUAGE = en;
 				DEVELOPMENT_TEAM = 3VM5RUH8V5;
 				ENABLE_TESTABILITY = YES;
@@ -1692,7 +1708,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.8.9;
+				MARKETING_VERSION = 0.8.10;
 				PRODUCT_BUNDLE_IDENTIFIER = com.yiyan.ReadPaper.iPad;
 				PRODUCT_MODULE_NAME = ReadPaperiPad;
 				PRODUCT_NAME = Freddie;
@@ -1713,7 +1729,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 134;
+				CURRENT_PROJECT_VERSION = 135;
 				DEVELOPMENT_LANGUAGE = en;
 				ENABLE_TESTABILITY = YES;
 				INFOPLIST_FILE = ReadPaper/Info.plist;
@@ -1724,7 +1740,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 0.8.9;
+				MARKETING_VERSION = 0.8.10;
 				PRODUCT_BUNDLE_IDENTIFIER = com.yiyan.ReadPaper;
 				PRODUCT_MODULE_NAME = ReadPaper;
 				PRODUCT_NAME = Freddie;
@@ -1839,6 +1855,10 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ../reWriteBabelDoc;
 		};
+		1E38C2B4966ABAC1787C82F0 /* XCLocalSwiftPackageReference "../rebuild-pdf" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = "../rebuild-pdf";
+		};
 		6307DDA5936965F409643CBF /* XCLocalSwiftPackageReference "../SwiftStreamingMarkdown" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ../SwiftStreamingMarkdown;
@@ -1912,6 +1932,10 @@
 		92414CE9428CA4380C920377 /* LaTeXTransKit */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = LaTeXTransKit;
+		};
+		9AEA6580455F72AA50F5D4A5 /* RebuildPDFKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = RebuildPDFKit;
 		};
 		A8629EE6EB6282F41BDF087D /* Readability */ = {
 			isa = XCSwiftPackageProductDependency;
