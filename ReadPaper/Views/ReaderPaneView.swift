@@ -67,9 +67,11 @@ struct ReaderPaneView: View {
 
     @Environment(\.modelContext) private var modelContext
     @Environment(\.localizationBundle) private var bundle
-    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.pdfDisplayAppearance) private var pdfDisplayAppearance
+    @Environment(\.openSettings) private var openSettings
     @Query(sort: \ReadingState.modifiedAt, order: .reverse) private var readingStates: [ReadingState]
+    @AppStorage(TranslationSetupNavigation.didHandleReaderNoticeKey)
+    private var didHandleTranslationSetupNotice = false
     @AppStorage(PDFTranslationBatchPreference.userDefaultsKey)
     private var pdfTranslationBatchSizeRawValue = PDFTranslationBatchPreference.defaultValue
     @AppStorage(HTMLReaderTypography.fontSizeUserDefaultsKey)
@@ -103,6 +105,9 @@ struct ReaderPaneView: View {
     /// Opens the writing that cites a passage marked in the reader.
     var onRevealCitation: (WritingCitationMark) -> Void = { _ in }
     var writingLibrary: WritingLibrary = .shared
+    /// Whether the library has no papers yet, for the empty reader's call to action.
+    var isLibraryEmpty = false
+    var onAddPaper: () -> Void = {}
 
     /// Read `pdfPageIndex`, for the same reason as `storedReaderMode`.
     @State private var storedPDFPageIndex = 0
@@ -122,6 +127,10 @@ struct ReaderPaneView: View {
     @State private var pdfTranslationErrorLogURL: URL?
     @State private var pdfTranslationDiagnosticsNoticeID: String?
     @State private var latexTranslationErrorLogURL: URL?
+    /// The status message of a translation that stopped because no usable model is
+    /// set up. The status row offers the setup only while it still shows that message.
+    @State private var translationSetupErrorMessage: String?
+    @State private var needsTranslationSetup = false
     @State private var lastPDFReaderMode: ReaderMode = .pdf
     @State private var suspendReadingStatePersistence = false
     @State private var pendingReadingStatePersistence: ReadingStatePersistenceSnapshot?
@@ -376,6 +385,10 @@ struct ReaderPaneView: View {
             }
             .overlay(alignment: .bottom) {
                 VStack(spacing: 10) {
+                    if needsTranslationSetup, !didHandleTranslationSetupNotice {
+                        translationSetupNotice
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
                     if let copyToastMessage {
                         copyToast(message: copyToastMessage)
                             .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -388,6 +401,10 @@ struct ReaderPaneView: View {
                 .animation(.spring(duration: 0.4, bounce: 0.15), value: translationActivityPhase == nil)
             }
             .animation(.easeOut(duration: 0.18), value: copyToastMessage != nil)
+            .animation(.easeOut(duration: 0.2), value: needsTranslationSetup && !didHandleTranslationSetupNotice)
+            .task(id: TranslationSetupCheck(settings: settings)) {
+                refreshTranslationSetupNeed()
+            }
             .toolbar {
                 readerToolbar
             }
@@ -1912,6 +1929,14 @@ struct ReaderPaneView: View {
 
             Spacer(minLength: 0)
 
+            if translationSetupErrorMessage != nil, translationSetupErrorMessage == statusMessage {
+                Button(String(localized: "Set Up Translation…", bundle: bundle)) {
+                    TranslationSetupNavigation.showQuickSetup(using: openSettings)
+                }
+                .buttonStyle(.link)
+                .font(.caption)
+            }
+
             if pdfTranslationErrorLogURL != nil {
                 Button {
                     revealPDFTranslationErrorLog()
@@ -2691,6 +2716,59 @@ struct ReaderPaneView: View {
             pdfTranslationErrorLogURL = nil
         }
         statusMessage = AppLocalization.errorMessage(error, bundle: bundle)
+        translationSetupErrorMessage = error is LLMRouteError ? statusMessage : nil
+    }
+
+    /// Looks for a usable route without reading an API key, so it never asks for
+    /// Touch ID. Runs again whenever translation settings are saved.
+    private func refreshTranslationSetupNeed() {
+        guard let settings, !didHandleTranslationSetupNotice else {
+            needsTranslationSetup = false
+            return
+        }
+        let keychainStore = KeychainStore()
+        needsTranslationSetup = !LLMTranslationSetupStatus.hasUsableRoute(
+            settings: settings,
+            modelContext: modelContext,
+            hasStoredAPIKey: { (try? keychainStore.contains(account: $0)) == true }
+        )
+    }
+
+    /// Until translation is set up, a notice at the bottom of the reader leads to the
+    /// quick setup in Settings. It goes away for good once opened or closed.
+    private var translationSetupNotice: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "translate")
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
+
+            Text("Connect a translation service to translate papers.", bundle: bundle)
+                .font(.callout.weight(.medium))
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Button(String(localized: "Set Up…", bundle: bundle)) {
+                didHandleTranslationSetupNotice = true
+                TranslationSetupNavigation.showQuickSetup(using: openSettings)
+            }
+            .readPaperGlassButtonStyle(prominent: true)
+            .controlSize(.small)
+
+            Button {
+                didHandleTranslationSetupNotice = true
+            } label: {
+                Label(String(localized: "Close", bundle: bundle), systemImage: "xmark")
+            }
+            .labelStyle(.iconOnly)
+            .buttonStyle(.borderless)
+            .controlSize(.small)
+            .help(String(localized: "Close", bundle: bundle))
+        }
+        .padding(.leading, 14)
+        .padding(.trailing, 10)
+        .padding(.vertical, 8)
+        .readPaperGlassEffect(in: Capsule())
+        .shadow(color: .black.opacity(0.14), radius: 10, y: 4)
     }
 
     private func revealPDFTranslationErrorLog() {
@@ -2876,106 +2954,44 @@ struct ReaderPaneView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
     }
 
+    /// With no paper open, the reader is the way into the library: one action, like
+    /// Zotero's empty library, instead of a tour of features.
     private var emptyReaderState: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 28) {
-                Text("Build your local paper desk", bundle: bundle)
-                    .font(.system(
-                        size: 30,
-                        weight: .semibold,
-                        design: pdfDisplayAppearance == .paper ? .serif : .rounded
-                    ))
+        VStack(spacing: 14) {
+            Image(systemName: isLibraryEmpty ? "doc.badge.plus" : "doc.text")
+                .font(.system(size: 40, weight: .regular))
+                .foregroundStyle(.tertiary)
+                .accessibilityHidden(true)
 
-                LazyVGrid(
-                    columns: [
-                        GridItem(.adaptive(minimum: 220, maximum: 320), spacing: 16, alignment: .top)
-                    ],
-                    alignment: .leading,
-                    spacing: 16
-                ) {
-                    emptyStateCard(
-                        title: String(localized: "Import", bundle: bundle),
-                        systemImage: "square.and.arrow.down",
-                        description: String(localized: "Add an arXiv ID, an arXiv URL, web page URL, or a local PDF from the library sidebar.", bundle: bundle)
-                    )
-                    emptyStateCard(
-                        title: String(localized: "Read", bundle: bundle),
-                        systemImage: "doc.richtext",
-                        description: String(localized: "Switch between localized HTML, original PDF, translated PDF, and side-by-side PDF comparison.", bundle: bundle)
-                    )
-                    emptyStateCard(
-                        title: String(localized: "Translate", bundle: bundle),
-                        systemImage: "character.book.closed",
-                        description: String(localized: "Run semantic HTML translation incrementally, or send the PDF through BabelDOC when you need a full translated document.", bundle: bundle)
-                    )
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-
+            VStack(spacing: 6) {
+                Text(isLibraryEmpty ? "Add Your First Paper" : "No Paper Selected", bundle: bundle)
+                    .font(.title3.weight(.semibold))
+                Text(
+                    isLibraryEmpty
+                        ? "Import from an arXiv ID or a web page URL, or drop a PDF here."
+                        : "Select a paper in the library, or add another one.",
+                    bundle: bundle
+                )
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
             }
-            .padding(.horizontal, 32)
-            .padding(.top, 28)
-            .padding(.bottom, 32)
-            .frame(maxWidth: 900, alignment: .leading)
+            .multilineTextAlignment(.center)
+
+            Button {
+                onAddPaper()
+            } label: {
+                Label(String(localized: "Add Paper", bundle: bundle), systemImage: "plus")
+                    .padding(.horizontal, 4)
+            }
+            .readPaperGlassButtonStyle(prominent: isLibraryEmpty)
+            .controlSize(.large)
+            .padding(.top, 4)
         }
-        .scrollIndicators(.hidden)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .frame(maxWidth: 360)
+        .padding(32)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
         .background(ReadPaperAppearanceSurface(role: .reader))
-    }
-
-    private func emptyStateCard(
-        title: String,
-        systemImage: String,
-        description: String
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Image(systemName: systemImage)
-                .font(.title2)
-                .foregroundStyle(
-                    pdfDisplayAppearance == .paper
-                        ? ReadPaperTheme.accentColor
-                        : Color.primary
-                )
-                .frame(width: 40, height: 40)
-                .background {
-                    if pdfDisplayAppearance == .paper {
-                        ReadPaperTheme.accentColor
-                            .opacity(0.10)
-                            .clipShape(RoundedRectangle(cornerRadius: 12))
-                    } else {
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(.regularMaterial)
-                    }
-                }
-
-            VStack(alignment: .leading, spacing: 6) {
-                Text(title)
-                    .font(.headline)
-                Text(description)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            Spacer(minLength: 0)
-        }
-        .frame(maxWidth: .infinity, minHeight: 168, maxHeight: .infinity, alignment: .topLeading)
-        .padding(20)
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(
-                    pdfDisplayAppearance == .paper
-                        ? ReadPaperTheme.cardColor(scheme: colorScheme)
-                        : Color(nsColor: .controlBackgroundColor)
-                )
-        )
-        .overlay {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .strokeBorder(
-                    pdfDisplayAppearance == .paper
-                        ? ReadPaperTheme.cardBorderColor(scheme: colorScheme)
-                        : Color.primary.opacity(0.06)
-                )
-        }
     }
 
     private func readerLabel(_ value: String) -> some View {
@@ -3274,6 +3290,23 @@ struct ReaderPaneView: View {
     }
 }
 
+/// What the first-run setup check depends on: the routes and the save time, which
+/// Settings bumps whenever it saves a provider key or a route.
+private struct TranslationSetupCheck: Equatable {
+    let settingsID: UUID?
+    let htmlModelID: UUID?
+    let pdfModelID: UUID?
+    let modifiedAt: Date?
+
+    @MainActor
+    init(settings: AppSettings?) {
+        settingsID = settings?.id
+        htmlModelID = settings?.selectedHTMLModelProfileID
+        pdfModelID = settings?.selectedPDFModelProfileID
+        modifiedAt = settings?.modifiedAt
+    }
+}
+
 extension ReaderPaneView: Equatable {
     /// The window redraws for much that the reader does not show, such as SwiftData refreshing
     /// its models after a save, and redrawing the reader also updates its toolbar. Bindings
@@ -3282,6 +3315,7 @@ extension ReaderPaneView: Equatable {
     nonisolated static func == (lhs: ReaderPaneView, rhs: ReaderPaneView) -> Bool {
         MainActor.assumeIsolated {
             lhs.paper === rhs.paper
+                && lhs.isLibraryEmpty == rhs.isLibraryEmpty
                 && lhs.settings === rhs.settings
                 && lhs.writingLibrary === rhs.writingLibrary
                 && lhs.attachments.elementsEqual(rhs.attachments, by: ===)

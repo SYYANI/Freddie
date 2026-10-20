@@ -138,6 +138,8 @@ LLM 配置现已拆成独立 SwiftData 模型：`LLMProviderProfile` 负责 prov
 - PDF 翻译进度在阅读器中也优先使用确定型进度条和阶段文案。当前 `BabelDocRunner` 通过受控 Python bridge 订阅 BabelDOC 内部 progress events，把结构化事件以 JSON line 输出给 Swift 侧解析；不要回退成依赖 rich/tqdm 终端文本渲染结果做正则猜测。
 - 增量 PDF 翻译时，BabelDOC 可能只产出当前批次的译文页，阅读器中的 `translatedPDF` 也可能暂时只覆盖前 N 页。改 BabelDOC 参数、译文合并或阅读器展示时，要保留“partial translation”语义：双栏模式允许原文继续翻到后续页，译文侧只在自己的可用范围内 clamp，并继续支持后续批次合并、刷新和续翻。
 - 设置页中的翻译配置已拆成 `Translation`、`Providers`、`Models` 三个区块。后续扩展优先沿用这个结构，不要再加回“单 Base URL + 三个模型名”的旧表单。
+- 设置页 `General` 顶部的“快速开始”是首次配置的连续流程：选择内置 provider（`LLMDefaultProfiles`，带 `apiKeyPageURL`）→ 填 API key → “测试并用于翻译”。`LLMQuickSetup.target` 优先用已保存的 provider/model（保留用户改过的 base URL、模型名），测试通过后 `apply` 才先存 key、再恢复/启用该 provider 和内置模型并把 HTML 与 PDF 路由都指向它；存 key 失败时不改 store。阅读助手路由不动。独立的 Providers / Models / Reader 页照常保留，其他服务和按用途分配模型仍在那里配置；并发数、QPS、每批页数放在 General 的“高级 › 翻译性能”，BabelDOC runtime 版本放在“高级 › 诊断”，默认折叠。
+- 快速配置有两个 App 内入口，都经 `TranslationSetupNavigation.showQuickSetup`（切到 General，并重新显示被“跳过”的引导，再 `openSettings`）：阅读器翻译因 `LLMRouteError` 失败时，状态行出现“设置翻译…”；还没有可用路由时，阅读器底部浮层栈（与复制链接 toast、翻译胶囊同一处）显示一次性提示，点“设置…”或关闭后写入 `TranslationSetupNavigation.didHandleReaderNoticeKey`，不再出现，配置好路由也会自动消失。“可用”由 `LLMTranslationSetupStatus.hasUsableRoute` 判断：HTML 或 PDF 任一路由指向启用的模型和 provider，且钥匙串里有 key；只用 `KeychainStore.contains`，不读取 key，避免触发 Touch ID。
 - 设置页中的 BabelDOC 区域要区分“当前已安装版本”和“目标版本”：当前版本应来自对本地 `babeldoc` 可执行文件的实际探测并只读展示，目标版本才是用户可编辑、用于 `uv tool install ... BabelDOC==<version>` 的配置值；不要把可编辑输入框误当成已安装状态展示。
 - 设置页中的 BabelDOC 安装源支持官方 PyPI 与清华 TUNA mirror 切换。该偏好当前通过 `BabelDocInstallSource.userDefaultsKey` / `@AppStorage` 落到 UserDefaults，刻意不新增 `AppSettings` SwiftData 字段以降低旧 store 兼容风险。改 BabelDOC 安装链路时，不要重新硬编码单一 PyPI 源；`BabelDocToolManager` 应根据所选源同时切换 latest metadata URL 和 `uv tool install --default-index ... BabelDOC==<version>` 参数，阅读器里的自动安装也应沿用同一默认读取逻辑。
 - macOS 设置页的字符串输入框在快速切换焦点，尤其配合中文输入法或其他有 marked text / suggestions / Writing Tools 参与的输入路径时，可能打出 `NSXPCDecoder validateAllowedClass:forKey:` 且 allowed classes 含 `NSObject` 的系统警告。当前经验判断这更像 AppKit / 输入法 / Writing Tools 的系统日志，而不是项目里某个业务 `NSSecureCoding` 白名单真的写错。遇到这类报错时，先排查是否发生在设置页输入焦点切换，而不要优先沿 SwiftData、Keychain 或业务解码链路误判。
@@ -215,6 +217,7 @@ xcodebuild -project ReadPaper.xcodeproj -scheme ReadPaper -destination 'platform
 - provider/model route 解析与缺配置错误：`LLMRouteResolverTests`
 - OpenAI-compatible `/v1` 回退与代理路径保留、Anthropic Messages 请求/流式解析：`OpenAICompatibleLLMProviderTests`
 - settings 初始化保障：`LLMConfigurationBootstrapperTests`
+- 内置 provider/model 种子、默认路由激活、快速配置（沿用已编辑的 profile、恢复已删除的内置 profile、存 key 失败不改 store）、可用路由判断、打开设置时切到 General：`LLMDefaultProfilesTests`
 - 阅读位置存储与 mode 回退：`ReadingStateStoreTests`
 - 文内查找的文本规范化（PDF 空格/断词/连字容错、短词误命中保护、HTML 分段偏移）：`DocumentTextSearchTests`
 - 拖入 PDF 的整窗接收、PDF 过滤、导入中拒收，以及 `WKWebView` 上方的拖拽归属：`PDFDropTargetTests`

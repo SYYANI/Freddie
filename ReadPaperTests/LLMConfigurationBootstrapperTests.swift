@@ -377,6 +377,224 @@ final class LLMDefaultProfilesTests: XCTestCase {
         XCTAssertEqual(settings.selectedPDFModelProfileID, LLMDefaultProfiles.anthropicModelID)
     }
 
+    @MainActor
+    func testQuickSetupTargetKeepsEditedBuiltInProfiles() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let styleStore = LLMProviderAPIStyleStore(userDefaults: defaults)
+        try LLMDefaultProfileSeeder(
+            apiStyleStore: styleStore,
+            deletionStore: LLMDefaultProfileDeletionStore(userDefaults: defaults)
+        ).ensureDefaults(modelContext: context)
+        let providers = try context.fetch(FetchDescriptor<LLMProviderProfile>())
+        let models = try context.fetch(FetchDescriptor<LLMModelProfile>())
+        let provider = try XCTUnwrap(providers.first { $0.id == LLMDefaultProfiles.deepSeekProviderID })
+        let model = try XCTUnwrap(models.first { $0.id == LLMDefaultProfiles.deepSeekModelID })
+        provider.baseURL = "https://proxy.example.com/deepseek"
+        styleStore.setAPIStyle(.chatCompletions, for: provider.id)
+        model.modelName = "deepseek-v4-pro"
+        model.thinkingModeValue = .enabled
+        let descriptor = try XCTUnwrap(LLMDefaultProfiles.provider(for: LLMDefaultProfiles.deepSeekProviderID))
+
+        let target = LLMQuickSetup(apiStyleStore: styleStore).target(
+            for: descriptor,
+            providers: providers,
+            models: models
+        )
+
+        XCTAssertEqual(target.baseURL, "https://proxy.example.com/deepseek")
+        XCTAssertEqual(target.apiStyle, .chatCompletions)
+        XCTAssertEqual(target.modelName, "deepseek-v4-pro")
+        XCTAssertEqual(target.thinkingMode, .enabled)
+    }
+
+    @MainActor
+    func testQuickSetupTargetUsesDescriptorWhenProfilesWereDeleted() throws {
+        let styleStore = LLMProviderAPIStyleStore(userDefaults: defaults)
+        let descriptor = try XCTUnwrap(LLMDefaultProfiles.provider(for: LLMDefaultProfiles.anthropicProviderID))
+
+        let target = LLMQuickSetup(apiStyleStore: styleStore).target(
+            for: descriptor,
+            providers: [],
+            models: []
+        )
+
+        XCTAssertEqual(target.baseURL, descriptor.baseURL)
+        XCTAssertEqual(target.apiStyle, .anthropicMessages)
+        XCTAssertEqual(target.modelName, descriptor.model.modelName)
+        XCTAssertNil(target.thinkingMode)
+    }
+
+    @MainActor
+    func testQuickSetupSavesKeyAndRoutesHTMLAndPDFToTheProvider() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let styleStore = LLMProviderAPIStyleStore(userDefaults: defaults)
+        try LLMDefaultProfileSeeder(
+            apiStyleStore: styleStore,
+            deletionStore: LLMDefaultProfileDeletionStore(userDefaults: defaults)
+        ).ensureDefaults(modelContext: context)
+        let settings = AppSettings(
+            selectedHTMLModelProfileID: LLMDefaultProfiles.openAIModelID,
+            selectedPDFModelProfileID: LLMDefaultProfiles.openAIModelID
+        )
+        context.insert(settings)
+        let models = try context.fetch(FetchDescriptor<LLMModelProfile>())
+        try XCTUnwrap(models.first { $0.id == LLMDefaultProfiles.deepSeekModelID }).isEnabled = false
+        try context.save()
+        let descriptor = try XCTUnwrap(LLMDefaultProfiles.provider(for: LLMDefaultProfiles.deepSeekProviderID))
+        let testedAt = Date(timeIntervalSince1970: 1_800_000_000)
+        var savedKeys: [String: String] = [:]
+
+        let model = try LLMQuickSetup(apiStyleStore: styleStore).apply(
+            descriptor: descriptor,
+            apiKey: "sk-test",
+            testedAt: testedAt,
+            settings: settings,
+            modelContext: context,
+            saveAPIKey: { savedKeys[$1] = $0 }
+        )
+
+        XCTAssertEqual(model.id, LLMDefaultProfiles.deepSeekModelID)
+        XCTAssertTrue(model.isEnabled)
+        XCTAssertEqual(model.lastTestedAt, testedAt)
+        XCTAssertEqual(
+            savedKeys,
+            [LLMConfigurationBootstrapper.makeAPIKeyRef(providerID: LLMDefaultProfiles.deepSeekProviderID): "sk-test"]
+        )
+        XCTAssertFalse(context.hasChanges)
+        let savedSettings = try XCTUnwrap(ModelContext(container).fetch(FetchDescriptor<AppSettings>()).first)
+        XCTAssertEqual(savedSettings.selectedHTMLModelProfileID, LLMDefaultProfiles.deepSeekModelID)
+        XCTAssertEqual(savedSettings.selectedPDFModelProfileID, LLMDefaultProfiles.deepSeekModelID)
+    }
+
+    @MainActor
+    func testQuickSetupRestoresDeletedBuiltInProfiles() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let styleStore = LLMProviderAPIStyleStore(userDefaults: defaults)
+        let settings = AppSettings()
+        context.insert(settings)
+        try context.save()
+        let descriptor = try XCTUnwrap(LLMDefaultProfiles.provider(for: LLMDefaultProfiles.anthropicProviderID))
+
+        try LLMQuickSetup(apiStyleStore: styleStore).apply(
+            descriptor: descriptor,
+            apiKey: "sk-ant-test",
+            testedAt: Date(),
+            settings: settings,
+            modelContext: context,
+            saveAPIKey: { _, _ in }
+        )
+
+        let provider = try XCTUnwrap(context.fetch(FetchDescriptor<LLMProviderProfile>()).first)
+        let model = try XCTUnwrap(context.fetch(FetchDescriptor<LLMModelProfile>()).first)
+        XCTAssertEqual(provider.id, LLMDefaultProfiles.anthropicProviderID)
+        XCTAssertEqual(provider.baseURL, descriptor.baseURL)
+        XCTAssertEqual(styleStore.apiStyle(for: provider.id), .anthropicMessages)
+        XCTAssertEqual(model.id, LLMDefaultProfiles.anthropicModelID)
+        XCTAssertEqual(model.providerID, provider.id)
+        XCTAssertEqual(settings.selectedHTMLModelProfileID, model.id)
+        XCTAssertEqual(settings.selectedPDFModelProfileID, model.id)
+    }
+
+    @MainActor
+    func testQuickSetupKeepsStoredKeyWhenNoneIsTyped() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let styleStore = LLMProviderAPIStyleStore(userDefaults: defaults)
+        let settings = AppSettings()
+        context.insert(settings)
+        let descriptor = try XCTUnwrap(LLMDefaultProfiles.provider(for: LLMDefaultProfiles.openAIProviderID))
+        var saveCount = 0
+
+        try LLMQuickSetup(apiStyleStore: styleStore).apply(
+            descriptor: descriptor,
+            apiKey: nil,
+            testedAt: Date(),
+            settings: settings,
+            modelContext: context,
+            saveAPIKey: { _, _ in saveCount += 1 }
+        )
+
+        XCTAssertEqual(saveCount, 0)
+        XCTAssertEqual(settings.selectedHTMLModelProfileID, LLMDefaultProfiles.openAIModelID)
+    }
+
+    @MainActor
+    func testQuickSetupLeavesStoreUntouchedWhenSavingTheKeyFails() throws {
+        struct KeychainFailure: Error {}
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let settings = AppSettings()
+        context.insert(settings)
+        try context.save()
+        let descriptor = try XCTUnwrap(LLMDefaultProfiles.provider(for: LLMDefaultProfiles.deepSeekProviderID))
+
+        XCTAssertThrowsError(
+            try LLMQuickSetup(apiStyleStore: LLMProviderAPIStyleStore(userDefaults: defaults)).apply(
+                descriptor: descriptor,
+                apiKey: "sk-test",
+                testedAt: Date(),
+                settings: settings,
+                modelContext: context,
+                saveAPIKey: { _, _ in throw KeychainFailure() }
+            )
+        )
+
+        XCTAssertFalse(context.hasChanges)
+        XCTAssertNil(settings.selectedHTMLModelProfileID)
+        XCTAssertTrue(try context.fetch(FetchDescriptor<LLMProviderProfile>()).isEmpty)
+    }
+
+    @MainActor
+    func testSetupStatusNeedsAStoredKeyBehindAnEnabledRoute() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        try LLMDefaultProfileSeeder(
+            apiStyleStore: LLMProviderAPIStyleStore(userDefaults: defaults),
+            deletionStore: LLMDefaultProfileDeletionStore(userDefaults: defaults)
+        ).ensureDefaults(modelContext: context)
+        let settings = AppSettings()
+        context.insert(settings)
+        let deepSeekKeyRef = LLMConfigurationBootstrapper.makeAPIKeyRef(providerID: LLMDefaultProfiles.deepSeekProviderID)
+        let hasDeepSeekKey: (String) -> Bool = { $0 == deepSeekKeyRef }
+
+        // Seeded profiles alone are not enough: nothing is routed yet.
+        XCTAssertFalse(LLMTranslationSetupStatus.hasUsableRoute(
+            settings: settings, modelContext: context, hasStoredAPIKey: hasDeepSeekKey
+        ))
+
+        settings.selectedHTMLModelProfileID = LLMDefaultProfiles.openAIModelID
+        XCTAssertFalse(LLMTranslationSetupStatus.hasUsableRoute(
+            settings: settings, modelContext: context, hasStoredAPIKey: hasDeepSeekKey
+        ))
+
+        // Either route is enough to start translating.
+        settings.selectedPDFModelProfileID = LLMDefaultProfiles.deepSeekModelID
+        XCTAssertTrue(LLMTranslationSetupStatus.hasUsableRoute(
+            settings: settings, modelContext: context, hasStoredAPIKey: hasDeepSeekKey
+        ))
+
+        let deepSeek = try XCTUnwrap(
+            context.fetch(FetchDescriptor<LLMProviderProfile>()).first { $0.id == LLMDefaultProfiles.deepSeekProviderID }
+        )
+        deepSeek.isEnabled = false
+        XCTAssertFalse(LLMTranslationSetupStatus.hasUsableRoute(
+            settings: settings, modelContext: context, hasStoredAPIKey: hasDeepSeekKey
+        ))
+    }
+
+    func testQuickSetupNavigationOpensGeneralAndShowsASkippedGuide() {
+        defaults.set("providers", forKey: TranslationSetupNavigation.selectedTabKey)
+        defaults.set(true, forKey: TranslationSetupNavigation.didDismissGettingStartedKey)
+
+        TranslationSetupNavigation.prepareQuickSetup(defaults: defaults)
+
+        XCTAssertEqual(defaults.string(forKey: TranslationSetupNavigation.selectedTabKey), "general")
+        XCTAssertFalse(defaults.bool(forKey: TranslationSetupNavigation.didDismissGettingStartedKey))
+    }
+
     func testUnknownProviderDefaultsToChatCompletions() {
         let store = LLMProviderAPIStyleStore(userDefaults: defaults)
         let providerID = UUID()

@@ -11,6 +11,29 @@ private enum SettingsTab: String, Hashable {
     case models
 }
 
+/// Opens Settings on the quick setup card from elsewhere in the app. A guide the
+/// person skipped is shown again, since they are asking to set translation up.
+enum TranslationSetupNavigation {
+    static let selectedTabKey = "ReadPaper.Settings.SelectedTab"
+    static let didDismissGettingStartedKey = "ReadPaper.Settings.DidDismissGettingStarted"
+    /// Set once the reader's first-run notice was acted on or closed.
+    static let didHandleReaderNoticeKey = "ReadPaper.TranslationSetupNotice.Handled"
+
+    @MainActor
+    static func showQuickSetup(
+        using openSettings: OpenSettingsAction,
+        defaults: UserDefaults = .standard
+    ) {
+        prepareQuickSetup(defaults: defaults)
+        openSettings()
+    }
+
+    static func prepareQuickSetup(defaults: UserDefaults = .standard) {
+        defaults.set(SettingsTab.general.rawValue, forKey: selectedTabKey)
+        defaults.set(false, forKey: didDismissGettingStartedKey)
+    }
+}
+
 private struct NativeBabelDocSettingsProbe: Sendable {
     let isAvailable: Bool
     let installedVersion: String?
@@ -101,8 +124,8 @@ private struct SettingsForm: View {
     let models: [LLMModelProfile]
     let paperCount: Int
 
-    @AppStorage("ReadPaper.Settings.SelectedTab") private var selectedTabRawValue = SettingsTab.general.rawValue
-    @AppStorage("ReadPaper.Settings.DidDismissGettingStarted") private var didDismissGettingStarted = false
+    @AppStorage(TranslationSetupNavigation.selectedTabKey) private var selectedTabRawValue = SettingsTab.general.rawValue
+    @AppStorage(TranslationSetupNavigation.didDismissGettingStartedKey) private var didDismissGettingStarted = false
     @AppStorage(BabelDocInstallSource.userDefaultsKey) private var babelDocInstallSourceRawValue = BabelDocInstallSource.official.rawValue
     @AppStorage(PDFDisplayAppearance.userDefaultsKey)
     private var pdfDisplayAppearanceRawValue = PDFDisplayAppearance.defaultValue.rawValue
@@ -157,6 +180,14 @@ private struct SettingsForm: View {
     @State private var modelOutputPreview: String?
     @State private var isTestingModel = false
     @State private var showsModelAdvancedOptions = false
+
+    @State private var quickSetupProviderID: UUID?
+    @State private var quickSetupAPIKey = ""
+    @State private var quickSetupStatusMessage: String?
+    @State private var isRunningQuickSetup = false
+    @State private var showsQuickSetupForm = false
+    @State private var showsTranslationPerformanceOptions = false
+    @State private var showsDiagnostics = false
 
     @State private var generalStatus = SettingsGeneralStatus()
     @State private var isInstallingBabelDOC = false
@@ -216,10 +247,6 @@ private struct SettingsForm: View {
         selectedModel?.lastTestedAt
     }
 
-    private var configuredProviderCount: Int {
-        readyProviders.count
-    }
-
     private var readyProviders: [LLMProviderProfile] {
         sortedProviders.filter { provider in
             provider.isEnabled && providerIDsWithStoredAPIKeys.contains(provider.id)
@@ -238,10 +265,6 @@ private struct SettingsForm: View {
 
     private var readyModelIDs: Set<UUID> {
         Set(readyModels.map(\.id))
-    }
-
-    private var readyModelCount: Int {
-        readyModels.count
     }
 
     private var hasHTMLRouteSelection: Bool {
@@ -344,7 +367,7 @@ private struct SettingsForm: View {
             }
                 .tag(SettingsTab.general)
                 .tabItem {
-                    Label(String(localized: "General", bundle: bundle), systemImage: "gearshape")
+                    Label(settingsTabTitle(.general), systemImage: "gearshape")
                 }
 
             tabContent(for: .reader) {
@@ -352,7 +375,7 @@ private struct SettingsForm: View {
             }
                 .tag(SettingsTab.reader)
                 .tabItem {
-                    Label(String(localized: "Reader", bundle: bundle), systemImage: "book.closed")
+                    Label(settingsTabTitle(.reader), systemImage: "book.closed")
                 }
 
             tabContent(for: .latex) {
@@ -360,7 +383,7 @@ private struct SettingsForm: View {
             }
                 .tag(SettingsTab.latex)
                 .tabItem {
-                    Label(String(localized: "LaTeX", bundle: bundle), systemImage: "text.document")
+                    Label(settingsTabTitle(.latex), systemImage: "text.document")
                 }
 
             tabContent(for: .digest) {
@@ -368,7 +391,7 @@ private struct SettingsForm: View {
             }
                 .tag(SettingsTab.digest)
                 .tabItem {
-                    Label(String(localized: "Digest", bundle: bundle), systemImage: "doc.plaintext")
+                    Label(settingsTabTitle(.digest), systemImage: "doc.plaintext")
                 }
 
             tabContent(for: .providers) {
@@ -376,7 +399,7 @@ private struct SettingsForm: View {
             }
                 .tag(SettingsTab.providers)
                 .tabItem {
-                    Label(String(localized: "Providers", bundle: bundle), systemImage: "network")
+                    Label(settingsTabTitle(.providers), systemImage: "network")
                 }
 
             tabContent(for: .models) {
@@ -384,7 +407,7 @@ private struct SettingsForm: View {
             }
                 .tag(SettingsTab.models)
                 .tabItem {
-                    Label(String(localized: "Models", bundle: bundle), systemImage: "sparkles.rectangle.stack")
+                    Label(settingsTabTitle(.models), systemImage: "sparkles.rectangle.stack")
                 }
         }
         .formStyle(.grouped)
@@ -393,6 +416,7 @@ private struct SettingsForm: View {
             loadInitialSelectionIfNeeded()
             await Task.yield()
             refreshStoredAPIKeyAvailability()
+            chooseQuickSetupProviderIfNeeded()
             async let latexRefresh: Void = refreshLaTeXInstallations()
             async let babelDocRefresh: Void = refreshInstalledBabelDOCVersion()
             _ = await (latexRefresh, babelDocRefresh)
@@ -426,6 +450,23 @@ private struct SettingsForm: View {
             content()
         } else {
             Color.clear
+        }
+    }
+
+    private func settingsTabTitle(_ tab: SettingsTab) -> String {
+        switch tab {
+        case .general:
+            return String(localized: "General", bundle: bundle)
+        case .reader:
+            return String(localized: "Reader", bundle: bundle)
+        case .latex:
+            return String(localized: "LaTeX", bundle: bundle)
+        case .digest:
+            return String(localized: "Digest", bundle: bundle)
+        case .providers:
+            return String(localized: "Providers", bundle: bundle)
+        case .models:
+            return String(localized: "Models", bundle: bundle)
         }
     }
 
@@ -481,38 +522,6 @@ private struct SettingsForm: View {
                         .font(.footnote)
                         .foregroundStyle(.secondary)
 
-                    Stepper(
-                        String(
-                            format: String(localized: "HTML concurrency: %d", bundle: bundle),
-                            settings.htmlTranslationConcurrency
-                        ),
-                        value: $settings.htmlTranslationConcurrency,
-                        in: 1...12
-                    )
-                    Stepper(
-                        String(
-                            format: String(localized: "BabelDOC QPS: %d", bundle: bundle),
-                            settings.babelDocQPS
-                        ),
-                        value: $settings.babelDocQPS,
-                        in: 1...50
-                    )
-                    Stepper(
-                        String(
-                            format: String(localized: "PDF pages per batch: %d", bundle: bundle),
-                            PDFTranslationBatchPreference.normalized(pdfTranslationBatchSizeRawValue)
-                        ),
-                        value: pdfTranslationBatchSizeBinding,
-                        in: PDFTranslationBatchPreference.allowedRange
-                    )
-
-                    Text(
-                        "Controls the default translation target, HTML concurrency, BabelDOC request rate, and incremental PDF page batch size. Supported languages: English and Simplified Chinese.",
-                        bundle: bundle
-                    )
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Optional glossary", bundle: bundle)
                         SettingsTemplateTextEditor(
@@ -535,20 +544,67 @@ private struct SettingsForm: View {
                         .foregroundStyle(.secondary)
                 }
 
-                Section(String(localized: "BabelDOC", bundle: bundle)) {
-                    LabeledContent("Native runtime") {
-                        if isLoadingInstalledBabelDocVersion {
-                            ProgressView()
-                                .controlSize(.small)
-                        } else {
-                            Text(installedBabelDocVersion ?? String(localized: "Not installed", bundle: bundle))
-                                .foregroundStyle(installedBabelDocVersion == nil ? .secondary : .primary)
-                                .textSelection(.enabled)
+                Section(String(localized: "Advanced", bundle: bundle)) {
+                    DisclosureGroup(isExpanded: $showsTranslationPerformanceOptions) {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Stepper(
+                                String(
+                                    format: String(localized: "HTML concurrency: %d", bundle: bundle),
+                                    settings.htmlTranslationConcurrency
+                                ),
+                                value: $settings.htmlTranslationConcurrency,
+                                in: 1...12
+                            )
+                            Stepper(
+                                String(
+                                    format: String(localized: "BabelDOC QPS: %d", bundle: bundle),
+                                    settings.babelDocQPS
+                                ),
+                                value: $settings.babelDocQPS,
+                                in: 1...50
+                            )
+                            Stepper(
+                                String(
+                                    format: String(localized: "PDF pages per batch: %d", bundle: bundle),
+                                    PDFTranslationBatchPreference.normalized(pdfTranslationBatchSizeRawValue)
+                                ),
+                                value: pdfTranslationBatchSizeBinding,
+                                in: PDFTranslationBatchPreference.allowedRange
+                            )
+
+                            Text(
+                                "The defaults suit most providers. Lower concurrency or QPS if your provider reports rate limits. Pages per batch sets how many pages each incremental PDF translation run covers.",
+                                bundle: bundle
+                            )
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
                         }
+                        .padding(.top, 8)
+                    } label: {
+                        Text("Translation Performance", bundle: bundle)
                     }
 
-                    if let generalStatusMessage = generalStatus.message {
-                        statusLabel(generalStatusMessage)
+                    DisclosureGroup(isExpanded: $showsDiagnostics) {
+                        VStack(alignment: .leading, spacing: 10) {
+                            LabeledContent(String(localized: "BabelDOC native runtime", bundle: bundle)) {
+                                if isLoadingInstalledBabelDocVersion {
+                                    ProgressView()
+                                        .controlSize(.small)
+                                } else {
+                                    Text(installedBabelDocVersion ?? String(localized: "Not installed", bundle: bundle))
+                                        .foregroundStyle(installedBabelDocVersion == nil ? .secondary : .primary)
+                                        .textSelection(.enabled)
+                                }
+                            }
+
+                            if let generalStatusMessage = generalStatus.message {
+                                statusLabel(generalStatusMessage)
+                            }
+                        }
+                        .padding(.top, 8)
+                    } label: {
+                        Text("Diagnostics", bundle: bundle)
                     }
                 }
             }
@@ -1429,51 +1485,59 @@ private struct SettingsForm: View {
         .opacity(model.isEnabled ? 1 : 0.68)
     }
 
+    private var isTranslationRouteReady: Bool {
+        hasHTMLRouteSelection && hasPDFRouteSelection
+    }
+
+    private var quickSetupDescriptor: LLMDefaultProfiles.ProviderDescriptor {
+        quickSetupProviderID.flatMap(LLMDefaultProfiles.provider(for:))
+            ?? LLMDefaultProfiles.providers[0]
+    }
+
+    private var quickSetupProviderBinding: Binding<UUID> {
+        Binding(
+            get: { quickSetupDescriptor.id },
+            set: { newValue in
+                guard quickSetupProviderID != newValue else { return }
+                quickSetupProviderID = newValue
+                quickSetupAPIKey = ""
+                quickSetupStatusMessage = nil
+            }
+        )
+    }
+
+    private var quickSetupHasStoredAPIKey: Bool {
+        guard let provider = providers.first(where: { $0.id == quickSetupDescriptor.id }) else { return false }
+        return providerIDsWithStoredAPIKeys.contains(provider.id)
+    }
+
+    private var translationRouteSummary: String {
+        let htmlModel = models.first { $0.id == settings.selectedHTMLModelProfileID }
+        let pdfModel = models.first { $0.id == settings.selectedPDFModelProfileID }
+        guard let htmlModel, let pdfModel else { return "" }
+        if htmlModel.id == pdfModel.id {
+            return AppLocalization.format(
+                "HTML and PDF translation use %@.",
+                bundle: bundle,
+                modelDisplayName(htmlModel)
+            )
+        }
+        return AppLocalization.format(
+            "HTML translation uses %1$@; PDF translation uses %2$@.",
+            bundle: bundle,
+            modelDisplayName(htmlModel),
+            modelDisplayName(pdfModel)
+        )
+    }
+
+    /// One form row per step, so the section draws them like every other settings
+    /// group instead of opaque cards inside its translucent container.
+    @ViewBuilder
     private var gettingStartedPanel: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Set up your translation route once, then come back to the reader to import papers and translate them.", bundle: bundle)
-                .fixedSize(horizontal: false, vertical: true)
+        quickSetupCard
 
-            onboardingStep(
-                title: String(localized: "1. Save a provider API key", bundle: bundle),
-                detail: configuredProviderCount > 0
-                    ? String(
-                        format: String(localized: "%d provider%@ ready.", bundle: bundle),
-                        configuredProviderCount,
-                        configuredProviderCount == 1 ? "" : "s"
-                    )
-                    : String(localized: "Open Providers, choose OpenAI or DeepSeek, and save an API key.", bundle: bundle),
-                isComplete: configuredProviderCount > 0,
-                actionTitle: String(localized: "Open Providers", bundle: bundle),
-                targetTab: .providers
-            )
-
-            onboardingStep(
-                title: String(localized: "2. Create a model profile", bundle: bundle),
-                detail: readyModelCount > 0
-                    ? String(
-                        format: String(localized: "%d model profile%@ ready to use.", bundle: bundle),
-                        readyModelCount,
-                        readyModelCount == 1 ? "" : "s"
-                    )
-                    : String(localized: "Default OpenAI and DeepSeek model profiles are ready when their provider has a saved API key.", bundle: bundle),
-                isComplete: readyModelCount > 0,
-                actionTitle: String(localized: "Open Models", bundle: bundle),
-                targetTab: .models
-            )
-
-            onboardingStep(
-                title: String(localized: "3. Choose HTML and PDF routes", bundle: bundle),
-                detail: hasHTMLRouteSelection && hasPDFRouteSelection
-                    ? String(localized: "HTML and PDF routes are both selected.", bundle: bundle)
-                    : String(localized: "Choose which model powers HTML translation and which model is used by BabelDOC/PDF translation.", bundle: bundle),
-                isComplete: hasHTMLRouteSelection && hasPDFRouteSelection,
-                actionTitle: String(localized: "Open Reader", bundle: bundle),
-                targetTab: .reader
-            )
-
-            onboardingStep(
-                title: String(localized: "4. Import and translate papers", bundle: bundle),
+        onboardingStepHeader(
+                title: String(localized: "2. Import and translate papers", bundle: bundle),
                 detail: paperCount > 0
                     ? String(
                         format: String(localized: "%d paper%@ already in your library. Use Translate in the reader toolbar.", bundle: bundle),
@@ -1481,17 +1545,143 @@ private struct SettingsForm: View {
                         paperCount == 1 ? "" : "s"
                     )
                     : String(localized: "Return to the main window, add an arXiv paper or local PDF, then use Translate in the reader toolbar.", bundle: bundle),
-                isComplete: paperCount > 0,
-                actionTitle: nil,
-                targetTab: nil
+                isComplete: paperCount > 0
+            )
+            .padding(.vertical, 6)
+
+        Button(String(localized: "Skip", bundle: bundle)) {
+            didDismissGettingStarted = true
+        }
+        .buttonStyle(.bordered)
+    }
+
+    private var quickSetupCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            onboardingStepHeader(
+                title: String(localized: "1. Connect a translation service", bundle: bundle),
+                detail: isTranslationRouteReady
+                    ? translationRouteSummary
+                    : String(localized: "Choose a provider and paste its API key. Freddie tests the connection, then uses it for both HTML and PDF translation.", bundle: bundle),
+                isComplete: isTranslationRouteReady
             )
 
-            Button(String(localized: "Skip", bundle: bundle)) {
-                didDismissGettingStarted = true
+            if isTranslationRouteReady, !showsQuickSetupForm {
+                if let quickSetupStatusMessage {
+                    statusLabel(quickSetupStatusMessage)
+                }
+
+                Button(String(localized: "Use Another Provider", bundle: bundle)) {
+                    quickSetupStatusMessage = nil
+                    showsQuickSetupForm = true
+                }
+                .buttonStyle(.bordered)
+            } else {
+                quickSetupForm
             }
-            .buttonStyle(.bordered)
+
+            Divider()
+
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text("Other services, separate models per task, and the reading assistant model:", bundle: bundle)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Spacer(minLength: 0)
+
+                ForEach([SettingsTab.providers, .models, .reader], id: \.self) { tab in
+                    Button(settingsTabTitle(tab)) {
+                        selectedTabRawValue = tab.rawValue
+                    }
+                    .buttonStyle(.link)
+                    .font(.footnote)
+                }
+            }
         }
         .padding(.vertical, 6)
+    }
+
+    private var quickSetupForm: some View {
+        let descriptor = quickSetupDescriptor
+        let target = LLMQuickSetup(apiStyleStore: apiStyleStore).target(
+            for: descriptor,
+            providers: providers,
+            models: models
+        )
+
+        return VStack(alignment: .leading, spacing: 10) {
+            Picker(String(localized: "Provider", bundle: bundle), selection: quickSetupProviderBinding) {
+                ForEach(LLMDefaultProfiles.providers, id: \.id) { provider in
+                    Text(verbatim: provider.name).tag(provider.id)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .disabled(isRunningQuickSetup)
+
+            SettingsFieldRow(String(localized: "API key", bundle: bundle)) {
+                SettingsSecureTextField(
+                    text: $quickSetupAPIKey,
+                    placeholder: quickSetupHasStoredAPIKey && quickSetupAPIKey.isEmpty
+                        ? String(repeating: "•", count: 12)
+                        : ""
+                )
+            }
+
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(
+                    AppLocalization.format(
+                        "Uses %1$@ at %2$@.",
+                        bundle: bundle,
+                        target.modelDisplayName,
+                        target.baseURL
+                    )
+                )
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+                .textSelection(.enabled)
+
+                Spacer(minLength: 0)
+
+                Link(String(localized: "Get an API Key", bundle: bundle), destination: descriptor.apiKeyPageURL)
+                    .font(.footnote)
+            }
+
+            HStack(spacing: 10) {
+                Button(
+                    isRunningQuickSetup
+                        ? String(localized: "Testing connection...", bundle: bundle)
+                        : String(localized: "Test and Use for Translation", bundle: bundle)
+                ) {
+                    runQuickSetup()
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(
+                    isRunningQuickSetup
+                        || (quickSetupAPIKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                            && !quickSetupHasStoredAPIKey)
+                )
+
+                if isRunningQuickSetup {
+                    ProgressView()
+                        .controlSize(.small)
+                }
+
+                if isTranslationRouteReady {
+                    Button(String(localized: "Cancel", bundle: bundle)) {
+                        quickSetupAPIKey = ""
+                        quickSetupStatusMessage = nil
+                        showsQuickSetupForm = false
+                    }
+                    .disabled(isRunningQuickSetup)
+                }
+            }
+
+            if let quickSetupStatusMessage {
+                statusLabel(quickSetupStatusMessage)
+            }
+        }
     }
 
     private var dismissedGettingStartedPanel: some View {
@@ -1512,44 +1702,23 @@ private struct SettingsForm: View {
         .padding(.vertical, 6)
     }
 
-    private func onboardingStep(
-        title: String,
-        detail: String,
-        isComplete: Bool,
-        actionTitle: String?,
-        targetTab: SettingsTab?
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .top, spacing: 12) {
-                Image(systemName: isComplete ? "checkmark.circle.fill" : "circle.dashed")
-                    .foregroundStyle(isComplete ? .green : .secondary)
-                    .font(.title3)
+    private func onboardingStepHeader(title: String, detail: String, isComplete: Bool) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: isComplete ? "checkmark.circle.fill" : "circle.dashed")
+                .foregroundStyle(isComplete ? .green : .secondary)
+                .font(.title3)
 
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(title)
-                        .font(.headline)
-                    Text(detail)
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
-                Spacer(minLength: 0)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.headline)
+                Text(detail)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
-            if let actionTitle, let targetTab {
-                Button(actionTitle) {
-                    selectedTabRawValue = targetTab.rawValue
-                }
-                .buttonStyle(.bordered)
-            }
+            Spacer(minLength: 0)
         }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color(nsColor: .controlBackgroundColor))
-        )
     }
 
     private func loadInitialSelectionIfNeeded() {
@@ -2009,6 +2178,83 @@ private struct SettingsForm: View {
         }
     }
 
+    private func chooseQuickSetupProviderIfNeeded() {
+        guard quickSetupProviderID == nil else { return }
+        let routedProviderID = models
+            .first { $0.id == settings.selectedHTMLModelProfileID }
+            .map(\.providerID)
+        quickSetupProviderID = LLMDefaultProfiles.providers.first { $0.id == routedProviderID }?.id
+            ?? LLMDefaultProfiles.providers.first { providerIDsWithStoredAPIKeys.contains($0.id) }?.id
+            ?? LLMDefaultProfiles.providers.first?.id
+    }
+
+    private func runQuickSetup() {
+        let descriptor = quickSetupDescriptor
+        let quickSetup = LLMQuickSetup(apiStyleStore: apiStyleStore)
+        let target = quickSetup.target(for: descriptor, providers: providers, models: models)
+        let typedAPIKey = quickSetupAPIKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        let storedAPIKeyRef = providers.first { $0.id == descriptor.id }?.apiKeyRef
+
+        isRunningQuickSetup = true
+        quickSetupStatusMessage = AppLocalization.format("Testing connection to %@...", bundle: bundle, descriptor.name)
+
+        Task { @MainActor in
+            defer { isRunningQuickSetup = false }
+
+            do {
+                let apiKey: String
+                if typedAPIKey.isEmpty == false {
+                    apiKey = typedAPIKey
+                } else if let storedAPIKeyRef {
+                    apiKey = try loadStoredAPIKey(ref: storedAPIKeyRef)
+                } else {
+                    throw LLMProviderValidationError.emptyAPIKey
+                }
+
+                let result = try await validator.testConnection(
+                    baseURL: target.baseURL,
+                    apiStyle: target.apiStyle,
+                    apiKey: apiKey,
+                    model: target.modelName,
+                    temperature: target.temperature,
+                    topP: target.topP,
+                    maxTokens: target.maxTokens,
+                    thinkingMode: target.thinkingMode,
+                    reasoningEffort: target.reasoningEffort
+                )
+
+                try quickSetup.apply(
+                    descriptor: descriptor,
+                    apiKey: typedAPIKey.isEmpty ? nil : typedAPIKey,
+                    testedAt: Date(),
+                    settings: settings,
+                    modelContext: modelContext,
+                    saveAPIKey: { value, account in
+                        try keychainStore.save(value, account: account)
+                    }
+                )
+
+                quickSetupAPIKey = ""
+                showsQuickSetupForm = false
+                providerIDsWithStoredAPIKeys.insert(descriptor.id)
+                if selectedProviderID == descriptor.id {
+                    applySelectedProvider()
+                }
+                if selectedModelID == descriptor.model.id {
+                    applySelectedModel()
+                }
+                quickSetupStatusMessage = AppLocalization.format(
+                    "Connected to %1$@ in %2$d ms.",
+                    bundle: bundle,
+                    descriptor.name,
+                    result.latencyMs
+                )
+            } catch {
+                quickSetupStatusMessage = AppLocalization.errorMessage(error, bundle: bundle)
+            }
+        }
+    }
+
     private func installBabelDOC() {
         guard !isInstallingBabelDOC, !isRemovingBabelDOC else { return }
 
@@ -2288,9 +2534,34 @@ private struct SettingsFieldRow<Content: View>: View {
     }
 }
 
-private struct SettingsPlainTextField: NSViewRepresentable {
+/// Settings text fields draw their own translucent well instead of the system's
+/// opaque white bezel, which stands out against the translucent form. The native
+/// field inside stays borderless, and reports focus so the well can show it.
+private struct SettingsFieldWell: ViewModifier {
+    var isFocused = false
+
+    func body(content: Content) -> some View {
+        content
+            .background(
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .fill(Color(nsColor: .textBackgroundColor).opacity(0.55))
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .strokeBorder(
+                        isFocused ? Color(nsColor: .keyboardFocusIndicatorColor) : Color(nsColor: .separatorColor),
+                        lineWidth: isFocused ? 2 : 0.5
+                    )
+            )
+            .animation(.easeOut(duration: 0.12), value: isFocused)
+    }
+}
+
+private struct SettingsPlainTextField: View {
     let placeholder: String
     @Binding var text: String
+    @State private var isFocused = false
 
     init(_ placeholder: String, text: Binding<String>) {
         self.placeholder = placeholder
@@ -2302,12 +2573,64 @@ private struct SettingsPlainTextField: NSViewRepresentable {
         _text = text
     }
 
+    var body: some View {
+        SettingsNativePlainTextField(placeholder: placeholder, text: $text, isFocused: $isFocused)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 4)
+            .modifier(SettingsFieldWell(isFocused: isFocused))
+    }
+}
+
+private struct SettingsSecureTextField: View {
+    let placeholder: String
+    @Binding var text: String
+    @State private var isFocused = false
+
+    init(text: Binding<String>, placeholder: String = "") {
+        self.placeholder = placeholder
+        _text = text
+    }
+
+    var body: some View {
+        SettingsNativeSecureTextField(placeholder: placeholder, text: $text, isFocused: $isFocused)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 4)
+            .modifier(SettingsFieldWell(isFocused: isFocused))
+    }
+}
+
+private final class SettingsFocusReportingTextField: NSTextField {
+    var onFocus: (() -> Void)?
+
+    override func becomeFirstResponder() -> Bool {
+        let didBecome = super.becomeFirstResponder()
+        if didBecome { onFocus?() }
+        return didBecome
+    }
+}
+
+private final class SettingsFocusReportingSecureTextField: NSSecureTextField {
+    var onFocus: (() -> Void)?
+
+    override func becomeFirstResponder() -> Bool {
+        let didBecome = super.becomeFirstResponder()
+        if didBecome { onFocus?() }
+        return didBecome
+    }
+}
+
+private struct SettingsNativePlainTextField: NSViewRepresentable {
+    let placeholder: String
+    @Binding var text: String
+    @Binding var isFocused: Bool
+
     func makeCoordinator() -> Coordinator {
-        Coordinator(text: $text)
+        Coordinator(text: $text, isFocused: $isFocused)
     }
 
     func makeNSView(context: Context) -> NSTextField {
-        let textField = NSTextField()
+        let textField = SettingsFocusReportingTextField()
+        textField.onFocus = { [coordinator = context.coordinator] in coordinator.setFocused(true) }
         configure(textField, coordinator: context.coordinator)
         return textField
     }
@@ -2324,6 +2647,9 @@ private struct SettingsPlainTextField: NSViewRepresentable {
         textField.delegate = coordinator
         textField.placeholderString = placeholder
         textField.stringValue = text
+        textField.isBordered = false
+        textField.drawsBackground = false
+        textField.focusRingType = .none
         textField.isEditable = true
         textField.isSelectable = true
         textField.usesSingleLineMode = true
@@ -2339,26 +2665,18 @@ private struct SettingsPlainTextField: NSViewRepresentable {
     }
 }
 
-private struct SettingsSecureTextField: NSViewRepresentable {
+private struct SettingsNativeSecureTextField: NSViewRepresentable {
     let placeholder: String
     @Binding var text: String
-
-    init(_ placeholder: String, text: Binding<String>, placeholder displayPlaceholder: String = "") {
-        self.placeholder = displayPlaceholder.isEmpty ? placeholder : displayPlaceholder
-        _text = text
-    }
-
-    init(text: Binding<String>, placeholder: String = "") {
-        self.placeholder = placeholder
-        _text = text
-    }
+    @Binding var isFocused: Bool
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(text: $text)
+        Coordinator(text: $text, isFocused: $isFocused)
     }
 
     func makeNSView(context: Context) -> NSSecureTextField {
-        let textField = NSSecureTextField()
+        let textField = SettingsFocusReportingSecureTextField()
+        textField.onFocus = { [coordinator = context.coordinator] in coordinator.setFocused(true) }
         configure(textField, coordinator: context.coordinator)
         return textField
     }
@@ -2375,6 +2693,9 @@ private struct SettingsSecureTextField: NSViewRepresentable {
         textField.delegate = coordinator
         textField.placeholderString = placeholder
         textField.stringValue = text
+        textField.isBordered = false
+        textField.drawsBackground = false
+        textField.focusRingType = .none
         textField.isEditable = true
         textField.isSelectable = true
         textField.usesSingleLineMode = true
@@ -2390,7 +2711,18 @@ private struct SettingsSecureTextField: NSViewRepresentable {
     }
 }
 
-private struct SettingsTemplateTextEditor: NSViewRepresentable {
+/// A multi-line field in the same translucent well as the single-line fields.
+private struct SettingsTemplateTextEditor: View {
+    @Binding var text: String
+    @Binding var pendingInsertion: String?
+
+    var body: some View {
+        SettingsTemplateTextView(text: $text, pendingInsertion: $pendingInsertion)
+            .modifier(SettingsFieldWell())
+    }
+}
+
+private struct SettingsTemplateTextView: NSViewRepresentable {
     @Binding var text: String
     @Binding var pendingInsertion: String?
 
@@ -2403,12 +2735,14 @@ private struct SettingsTemplateTextEditor: NSViewRepresentable {
         scrollView.hasVerticalScroller = true
         scrollView.hasHorizontalScroller = false
         scrollView.autohidesScrollers = true
-        scrollView.borderType = .bezelBorder
+        scrollView.borderType = .noBorder
+        scrollView.drawsBackground = false
 
         let textView = NSTextView()
         textView.delegate = context.coordinator
         textView.string = text
         textView.isRichText = false
+        textView.drawsBackground = false
         textView.isEditable = true
         textView.isSelectable = true
         textView.allowsUndo = true
@@ -2488,9 +2822,21 @@ private struct SettingsTemplateTextEditor: NSViewRepresentable {
 
 private final class Coordinator: NSObject, NSTextFieldDelegate {
     @Binding private var text: String
+    @Binding private var isFocused: Bool
 
-    init(text: Binding<String>) {
+    init(text: Binding<String>, isFocused: Binding<Bool>) {
         _text = text
+        _isFocused = isFocused
+    }
+
+    func setFocused(_ focused: Bool) {
+        guard isFocused != focused else { return }
+        isFocused = focused
+    }
+
+    /// Sent when the field editor leaves the field, whether or not anything was typed.
+    func controlTextDidEndEditing(_ notification: Notification) {
+        setFocused(false)
     }
 
     func controlTextDidChange(_ notification: Notification) {

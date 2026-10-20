@@ -105,17 +105,6 @@
         }
       }
     },
-    "%d model profile%@ ready to use." : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$d 个模型配置已可使用。"
-          }
-        }
-      }
-    },
     "%d paper%@ already in your library. Use Translate in the reader toolbar." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -134,17 +123,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "已将 %1$d 个 PDF 标注导出到 %2$@。"
-          }
-        }
-      }
-    },
-    "%d provider%@ ready." : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$d 个 provider 已就绪。"
           }
         }
       }
@@ -195,46 +173,24 @@
         }
       }
     },
-    "1. Save a provider API key" : {
+    "1. Connect a translation service" : {
       "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "1. 保存 provider API key"
+            "value" : "1. 连接翻译服务"
           }
         }
       }
     },
-    "2. Create a model profile" : {
+    "2. Import and translate papers" : {
       "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "2. 创建模型配置"
-          }
-        }
-      }
-    },
-    "3. Choose HTML and PDF routes" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "3. 选择 HTML 和 PDF 路由"
-          }
-        }
-      }
-    },
-    "4. Import and translate papers" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "4. 导入并翻译论文"
+            "value" : "2. 导入并翻译论文"
           }
         }
       }
@@ -319,17 +275,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "从资料库侧边栏添加 arXiv ID、arXiv URL，或本地 PDF。"
-          }
-        }
-      }
-    },
-    "Add an arXiv ID, an arXiv URL, web page URL, or a local PDF from the library sidebar." : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "从资料库侧边栏添加 arXiv ID、arXiv URL、网页 URL，或本地 PDF。"
           }
         }
       }
@@ -421,12 +366,34 @@
         }
       }
     },
+    "Add Your First Paper" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "添加第一篇论文"
+          }
+        }
+      }
+    },
     "Adds a localized HTML copy for HTML reading and translation. Import may take longer." : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "同时保存本地化的 HTML 副本，用于 HTML 阅读和翻译；导入可能需要更长时间。"
+          }
+        }
+      }
+    },
+    "Advanced" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "高级"
           }
         }
       }
@@ -957,6 +924,17 @@
         }
       }
     },
+    "BabelDOC native runtime" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "BabelDOC 原生运行时"
+          }
+        }
+      }
+    },
     "BabelDOC QPS: %d" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1161,16 +1139,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "浏览"
-          }
-        }
-      }
-    },
-    "Build your local paper desk" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "搭建你的本地论文书桌"
           }
         }
       }
@@ -1392,6 +1360,17 @@
         }
       }
     },
+    "Choose a provider and paste its API key. Freddie tests the connection, then uses it for both HTML and PDF translation." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选择 Provider 并粘贴 API key。Freddie 会先测试连接，通过后同时用于 HTML 和 PDF 翻译。"
+          }
+        }
+      }
+    },
     "Choose a reading assistant model in Settings first." : {
       "localizations" : {
         "zh-Hans" : {
@@ -1485,17 +1464,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "选择翻译范围"
-          }
-        }
-      }
-    },
-    "Choose which model powers HTML translation and which model is used by BabelDOC/PDF translation." : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "选择哪个模型驱动 HTML 翻译，以及哪个模型用于 BabelDOC/PDF 翻译。"
           }
         }
       }
@@ -1700,6 +1668,27 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "配置"
+          }
+        }
+      }
+    },
+    "Connect a translation service to translate papers." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "连接翻译服务后即可翻译论文。"
+          }
+        }
+      }
+    },
+    "Connected to %1$@ in %2$d ms." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已连接 %1$@，耗时 %2$d ms。"
           }
         }
       }
@@ -1978,17 +1967,6 @@
         }
       }
     },
-    "Default OpenAI and DeepSeek model profiles are ready when their provider has a saved API key." : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "保存对应 Provider 的 API 密钥后，即可使用默认的 OpenAI 和 DeepSeek 模型配置。"
-          }
-        }
-      }
-    },
     "Default Provider" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2116,6 +2094,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "开发"
+          }
+        }
+      }
+    },
+    "Diagnostics" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "诊断"
           }
         }
       }
@@ -3071,6 +3059,17 @@
         }
       }
     },
+    "Get an API Key" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "获取 API key"
+          }
+        }
+      }
+    },
     "Getting Started" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -3270,13 +3269,13 @@
     "HTML" : {
 
     },
-    "HTML and PDF routes are both selected." : {
+    "HTML and PDF translation use %@." : {
       "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "HTML 和 PDF 路由都已选择。"
+            "value" : "HTML 与 PDF 翻译均使用 %@。"
           }
         }
       }
@@ -3364,6 +3363,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "HTML 翻译完成。"
+          }
+        }
+      }
+    },
+    "HTML translation uses %1$@; PDF translation uses %2$@." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "HTML 翻译使用 %1$@，PDF 翻译使用 %2$@。"
           }
         }
       }
@@ -3536,6 +3546,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "导入 arXiv 论文？"
+          }
+        }
+      }
+    },
+    "Import from an arXiv ID or a web page URL, or drop a PDF here." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "输入 arXiv ID 或网页地址导入，或把 PDF 拖到这里。"
           }
         }
       }
@@ -4628,6 +4649,16 @@
         }
       }
     },
+    "No Paper Selected" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未选择论文"
+          }
+        }
+      }
+    },
     "No Papers" : {
       "localizations" : {
         "zh-Hans" : {
@@ -4917,39 +4948,6 @@
         }
       }
     },
-    "Open Models" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "打开 Models"
-          }
-        }
-      }
-    },
-    "Open Providers" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "打开 Providers"
-          }
-        }
-      }
-    },
-    "Open Providers, choose OpenAI or DeepSeek, and save an API key." : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "打开 Providers，选择 OpenAI 或 DeepSeek，然后保存 API 密钥。"
-          }
-        }
-      }
-    },
     "Open Providers, fill in the base URL, API key, and test model, then save and test it." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -4957,17 +4955,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "打开 Providers，填写 base URL、API key 和测试模型，然后保存并测试。"
-          }
-        }
-      }
-    },
-    "Open Reader" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "打开 Reader"
           }
         }
       }
@@ -5030,6 +5017,16 @@
         }
       }
     },
+    "Other services, separate models per task, and the reading assistant model:" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "其他服务、按用途分配模型、阅读助手模型："
+          }
+        }
+      }
+    },
     "Page" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -5057,16 +5054,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "论文"
-          }
-        }
-      }
-    },
-    "Paper details will appear here" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "论文详情会显示在这里"
           }
         }
       }
@@ -5769,17 +5756,6 @@
         }
       }
     },
-    "Read" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "阅读"
-          }
-        }
-      }
-    },
     "Reader" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -6192,17 +6168,6 @@
         }
       }
     },
-    "Run semantic HTML translation incrementally, or send the PDF through BabelDOC when you need a full translated document." : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "可以增量执行语义化 HTML 翻译，或者在需要完整译文文档时把 PDF 交给 BabelDOC。"
-          }
-        }
-      }
-    },
     "Save" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -6365,6 +6330,17 @@
         }
       }
     },
+    "Select a paper in the library, or add another one." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在论文库中选择一篇论文，或添加新的论文。"
+          }
+        }
+      }
+    },
     "Select a paper to start reading" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -6383,16 +6359,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "请为该模型选择一个 provider。"
-          }
-        }
-      }
-    },
-    "Select or import a paper to view metadata, abstract, and notes in this panel." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "选择或导入一篇论文，即可在此面板查看元数据、摘要和笔记。"
           }
         }
       }
@@ -6515,12 +6481,24 @@
         }
       }
     },
-    "Set up your translation route once, then come back to the reader to import papers and translate them." : {
+    "Set Up Translation…" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "先把翻译路由设置好，然后回到阅读器导入论文并开始翻译。"
+            "value" : "设置翻译…"
+          }
+        }
+      }
+    },
+    "Set Up…" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "设置…"
           }
         }
       }
@@ -6770,17 +6748,6 @@
         }
       }
     },
-    "Switch between localized HTML, original PDF, translated PDF, and side-by-side PDF comparison." : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在本地化 HTML、原始 PDF、翻译 PDF，以及左右并排 PDF 对照之间切换。"
-          }
-        }
-      }
-    },
     "Switch Writing" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -6868,6 +6835,17 @@
         }
       }
     },
+    "Test and Use for Translation" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "测试并用于翻译"
+          }
+        }
+      }
+    },
     "Test model" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -6897,6 +6875,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "测试联网搜索"
+          }
+        }
+      }
+    },
+    "Testing connection to %@..." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在测试 %@ 连接..."
+          }
+        }
+      }
+    },
+    "Testing connection..." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在测试连接..."
           }
         }
       }
@@ -7015,6 +7015,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "已配置的导出目录不可用。"
+          }
+        }
+      }
+    },
+    "The defaults suit most providers. Lower concurrency or QPS if your provider reports rate limits. Pages per batch sets how many pages each incremental PDF translation run covers." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "默认值适合大多数 Provider。如果 Provider 提示触发速率限制，可调低并发数或 QPS。每批页数决定每次增量 PDF 翻译覆盖多少页。"
           }
         }
       }
@@ -7885,6 +7895,16 @@
         }
       }
     },
+    "Translation Performance" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "翻译性能"
+          }
+        }
+      }
+    },
     "Translation Routes" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -8277,6 +8297,17 @@
         }
       }
     },
+    "Use Another Provider" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "换用其他 Provider"
+          }
+        }
+      }
+    },
     "Use arXiv LaTeX structure for PDF translation" : {
       "localizations" : {
         "zh-Hans" : {
@@ -8336,6 +8367,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "用户笔记"
+          }
+        }
+      }
+    },
+    "Uses %1$@ at %2$@." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "使用 %1$@（%2$@）。"
           }
         }
       }

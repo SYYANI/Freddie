@@ -31,6 +31,8 @@ enum LLMDefaultProfiles {
         let baseURL: String
         let testModel: String
         let apiStyle: LLMAPIStyle
+        /// Where the quick setup sends people to create an API key.
+        let apiKeyPageURL: URL
         let model: ModelDescriptor
     }
 
@@ -56,6 +58,7 @@ enum LLMDefaultProfiles {
             baseURL: "https://api.openai.com/v1",
             testModel: "gpt-5.6-terra",
             apiStyle: .responses,
+            apiKeyPageURL: URL(string: "https://platform.openai.com/api-keys")!,
             model: ModelDescriptor(
                 id: openAIModelID,
                 name: "OpenAI GPT-5.6 Terra",
@@ -70,6 +73,7 @@ enum LLMDefaultProfiles {
             baseURL: "https://api.deepseek.com",
             testModel: "deepseek-v4-flash",
             apiStyle: .responses,
+            apiKeyPageURL: URL(string: "https://platform.deepseek.com/api_keys")!,
             model: ModelDescriptor(
                 id: deepSeekModelID,
                 name: "DeepSeek V4 Flash",
@@ -84,6 +88,7 @@ enum LLMDefaultProfiles {
             baseURL: "https://api.anthropic.com/v1",
             testModel: "claude-opus-5-5",
             apiStyle: .anthropicMessages,
+            apiKeyPageURL: URL(string: "https://console.anthropic.com/settings/keys")!,
             model: ModelDescriptor(
                 id: anthropicModelID,
                 name: "Claude Opus 5.5",
@@ -274,5 +279,166 @@ struct LLMDefaultRouteActivator {
               provider.isEnabled
         else { return false }
         return provider.id == newlyReadyProviderID || hasStoredAPIKey(provider.apiKeyRef)
+    }
+}
+
+/// The connection the quick setup tests before it changes anything.
+struct LLMQuickSetupTarget: Equatable {
+    let baseURL: String
+    let apiStyle: LLMAPIStyle
+    let modelName: String
+    let modelDisplayName: String
+    let temperature: Double?
+    let topP: Double?
+    let maxTokens: Int?
+    let thinkingMode: LLMThinkingMode?
+    let reasoningEffort: LLMReasoningEffort?
+}
+
+/// One-step setup for a built-in provider: save its API key and route HTML and
+/// PDF translation to its default model. Saved profiles win over the built-in
+/// descriptor, so edits such as a proxy base URL or another model name are
+/// kept; profiles the user deleted or disabled are restored.
+@MainActor
+struct LLMQuickSetup {
+    let apiStyleStore: LLMProviderAPIStyleStore
+
+    init(apiStyleStore: LLMProviderAPIStyleStore = LLMProviderAPIStyleStore()) {
+        self.apiStyleStore = apiStyleStore
+    }
+
+    func target(
+        for descriptor: LLMDefaultProfiles.ProviderDescriptor,
+        providers: [LLMProviderProfile],
+        models: [LLMModelProfile]
+    ) -> LLMQuickSetupTarget {
+        let provider = providers.first { $0.id == descriptor.id }
+        let model = models.first { $0.id == descriptor.model.id }
+        return LLMQuickSetupTarget(
+            baseURL: provider?.baseURL ?? descriptor.baseURL,
+            apiStyle: provider == nil ? descriptor.apiStyle : apiStyleStore.apiStyle(for: descriptor.id),
+            modelName: model?.modelName ?? descriptor.model.modelName,
+            modelDisplayName: model?.name ?? descriptor.model.name,
+            temperature: model?.temperature,
+            topP: model?.topP,
+            maxTokens: model?.maxTokens,
+            thinkingMode: model == nil ? descriptor.model.thinkingMode : model?.thinkingModeValue,
+            reasoningEffort: model == nil ? descriptor.model.reasoningEffort : model?.reasoningEffortValue
+        )
+    }
+
+    /// Call only after the connection test passed. A nil `apiKey` keeps the
+    /// provider's stored key. The key is saved before any model change, so a
+    /// Keychain failure leaves the store untouched.
+    @discardableResult
+    func apply(
+        descriptor: LLMDefaultProfiles.ProviderDescriptor,
+        apiKey: String?,
+        testedAt: Date,
+        settings: AppSettings,
+        modelContext: ModelContext,
+        saveAPIKey: (_ value: String, _ account: String) throws -> Void
+    ) throws -> LLMModelProfile {
+        let providerID = descriptor.id
+        let modelID = descriptor.model.id
+        let existingProvider = try modelContext.fetch(
+            FetchDescriptor<LLMProviderProfile>(predicate: #Predicate { $0.id == providerID })
+        ).first
+        let existingModel = try modelContext.fetch(
+            FetchDescriptor<LLMModelProfile>(predicate: #Predicate { $0.id == modelID })
+        ).first
+        let apiKeyRef = existingProvider?.apiKeyRef
+            ?? LLMConfigurationBootstrapper.makeAPIKeyRef(providerID: providerID)
+
+        if let apiKey {
+            try saveAPIKey(apiKey, apiKeyRef)
+        }
+
+        let provider: LLMProviderProfile
+        if let existingProvider {
+            provider = existingProvider
+        } else {
+            provider = LLMProviderProfile(
+                id: providerID,
+                name: descriptor.name,
+                baseURL: descriptor.baseURL,
+                apiKeyRef: apiKeyRef,
+                testModel: descriptor.testModel,
+                createdAt: testedAt,
+                modifiedAt: testedAt
+            )
+            modelContext.insert(provider)
+            apiStyleStore.setAPIStyle(descriptor.apiStyle, for: providerID)
+        }
+        provider.isEnabled = true
+        provider.modifiedAt = testedAt
+
+        let model: LLMModelProfile
+        if let existingModel {
+            model = existingModel
+        } else {
+            model = LLMModelProfile(
+                id: modelID,
+                providerID: providerID,
+                name: descriptor.model.name,
+                modelName: descriptor.model.modelName,
+                thinkingMode: descriptor.model.thinkingMode,
+                reasoningEffort: descriptor.model.reasoningEffort,
+                createdAt: testedAt,
+                modifiedAt: testedAt
+            )
+            modelContext.insert(model)
+        }
+        model.providerID = providerID
+        model.isEnabled = true
+        model.lastTestedAt = testedAt
+        model.modifiedAt = testedAt
+
+        settings.selectedHTMLModelProfileID = modelID
+        settings.selectedPDFModelProfileID = modelID
+        settings.modifiedAt = testedAt
+        try modelContext.save()
+        return model
+    }
+}
+
+/// Whether HTML or PDF translation can start without a visit to Settings. Judged
+/// from what is stored, without reading an API key: reading one asks for Touch ID.
+@MainActor
+enum LLMTranslationSetupStatus {
+    static func hasUsableRoute(
+        settings: AppSettings,
+        modelContext: ModelContext,
+        hasStoredAPIKey: (String) -> Bool
+    ) -> Bool {
+        let routedModelIDs = [settings.selectedHTMLModelProfileID, settings.selectedPDFModelProfileID]
+            .compactMap { $0 }
+        guard routedModelIDs.isEmpty == false,
+              let providers = try? modelContext.fetch(FetchDescriptor<LLMProviderProfile>()),
+              let models = try? modelContext.fetch(FetchDescriptor<LLMModelProfile>())
+        else { return false }
+        return hasUsableRoute(
+            settings: settings,
+            providers: providers,
+            models: models,
+            hasStoredAPIKey: hasStoredAPIKey
+        )
+    }
+
+    static func hasUsableRoute(
+        settings: AppSettings,
+        providers: [LLMProviderProfile],
+        models: [LLMModelProfile],
+        hasStoredAPIKey: (String) -> Bool
+    ) -> Bool {
+        [settings.selectedHTMLModelProfileID, settings.selectedPDFModelProfileID].contains { modelID in
+            guard let modelID,
+                  let model = models.first(where: { $0.id == modelID }),
+                  model.isEnabled,
+                  let provider = providers.first(where: { $0.id == model.providerID }),
+                  provider.isEnabled
+            else { return false }
+            return hasStoredAPIKey(provider.apiKeyRef)
+        }
     }
 }

@@ -67,19 +67,24 @@ struct InspectorPaneView: View {
             switch mode {
             case .paper:
                 if let paper {
+                    // Flat sections split by dividers, like the Writing tab: no cards.
                     ScrollView {
-                        VStack(alignment: .leading, spacing: 18) {
+                        VStack(alignment: .leading, spacing: 0) {
                             metadataSection(paper)
+                                .padding(16)
+                            Divider()
                             notesSection()
+                                .padding(16)
+                            Divider()
                             PaperWritingsSection(
                                 library: writingCenter.library,
                                 paperID: paper.id,
                                 onOpenWriting: onOpenWriting,
                                 onCreateWriting: { onCreateWritingAboutPaper(paper) }
                             )
+                            .padding(16)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(16)
                     }
                 } else {
                     emptyInspectorState
@@ -187,169 +192,77 @@ struct InspectorPaneView: View {
     }
     
     private func abstractView(_ abstractText: String) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("Abstract", bundle: bundle)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.primary)
-                Spacer()
-                
-                HStack(spacing: 8) {
-                    if abstractTranslationState.translatedText != nil {
-                        Button {
-                            abstractTranslationState.showOriginal()
-                        } label: {
-                            HStack(spacing: 4) {
-                                Text(String(localized: "Original", bundle: bundle))
-                                    .font(.caption.weight(.medium))
-                                    .fixedSize()
-                                Image(systemName: "arrow.uturn.backward")
-                                    .font(.caption2.weight(.semibold))
-                            }
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(
-                                Capsule()
-                                    .fill(Color.primary.opacity(0.05))
-                            )
-                            .overlay(
-                                Capsule()
-                                    .strokeBorder(Color.primary.opacity(0.1), lineWidth: 1)
-                            )
-                        }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(.secondary)
-                    } else if !abstractTranslationState.isTranslating {
-                        Button {
-                            translateAbstract()
-                        } label: {
-                            HStack(spacing: 4) {
-                                Text(String(localized: "Translate", bundle: bundle))
-                                    .font(.caption.weight(.medium))
-                                    .fixedSize()
-                                Image(systemName: "character.book.closed")
-                                    .font(.caption2.weight(.semibold))
-                            }
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(
-                                Capsule()
-                                    .fill(Color.primary.opacity(0.05))
-                            )
-                            .overlay(
-                                Capsule()
-                                    .strokeBorder(Color.primary.opacity(0.1), lineWidth: 1)
-                            )
-                        }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(.secondary)
-                        .disabled(abstractTranslationState.isTranslating)
+        VStack(alignment: .leading, spacing: 6) {
+            InspectorSectionHeader(title: String(localized: "Abstract", bundle: bundle)) {
+                if abstractTranslationState.translatedText != nil {
+                    InspectorIconButton(
+                        title: String(localized: "Original", bundle: bundle),
+                        systemImage: "arrow.uturn.backward"
+                    ) {
+                        abstractTranslationState.showOriginal()
                     }
-                    
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            isAbstractExpanded.toggle()
-                        }
-                    } label: {
-                        HStack(spacing: 4) {
-                            Text(
-                                isAbstractExpanded 
-                                    ? String(localized: "Less", bundle: bundle)
-                                    : String(localized: "More", bundle: bundle)
-                            )
-                            .font(.caption.weight(.medium))
-                            .fixedSize()
-                            Image(systemName: isAbstractExpanded ? "chevron.up" : "chevron.down")
-                                .font(.caption2.weight(.semibold))
-                        }
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(
-                            Capsule()
-                                .fill(Color.primary.opacity(0.05))
-                        )
-                        .overlay(
-                            Capsule()
-                                .strokeBorder(Color.primary.opacity(0.1), lineWidth: 1)
-                        )
+                } else if !abstractTranslationState.isTranslating {
+                    InspectorIconButton(
+                        title: String(localized: "Translate", bundle: bundle),
+                        systemImage: "character.book.closed"
+                    ) {
+                        translateAbstract()
                     }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.secondary)
+                }
+
+                InspectorIconButton(
+                    title: isAbstractExpanded
+                        ? String(localized: "Less", bundle: bundle)
+                        : String(localized: "More", bundle: bundle),
+                    systemImage: isAbstractExpanded ? "chevron.up" : "chevron.down"
+                ) {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        isAbstractExpanded.toggle()
+                    }
                 }
             }
-            
+
             if let error = abstractTranslationState.errorMessage {
                 Text(error)
                     .font(.caption)
                     .foregroundStyle(.red)
-                    .padding(.vertical, 4)
             }
-            
-            ZStack(alignment: .bottom) {
-                if abstractTranslationState.isTranslating {
-                    HStack(spacing: 8) {
-                        ProgressView()
-                            .controlSize(.small)
-                        Text(String(localized: "Translating abstract...", bundle: bundle))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
+
+            if abstractTranslationState.isTranslating {
+                HStack(spacing: 8) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text(String(localized: "Translating abstract...", bundle: bundle))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 4)
+            } else {
+                Text(abstractTranslationState.translatedText ?? abstractText)
+                    .font(.callout)
+                    .textSelection(.enabled)
+                    .lineLimit(isAbstractExpanded ? nil : 8)
+                    .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.vertical, 8)
-                } else {
-                    Text(abstractTranslationState.translatedText ?? abstractText)
-                        .font(.callout)
-                        .textSelection(.enabled)
-                        .lineLimit(isAbstractExpanded ? nil : 8)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .animation(.easeInOut(duration: 0.2), value: isAbstractExpanded)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        // macOS can draw the full selectable text on double-click,
-                        // even while lineLimit keeps the collapsed layout at eight lines.
-                        .clipped()
-                }
-                
-                if !isAbstractExpanded && !abstractTranslationState.isTranslating {
-                    LinearGradient(
-                        gradient: Gradient(colors: [
-                            .clear,
-                            Color(nsColor: .controlBackgroundColor).opacity(0.9)
-                        ]),
-                        startPoint: .center,
-                        endPoint: .bottom
-                    )
-                    .frame(height: 40)
-                    .allowsHitTesting(false)
-                }
+                    // macOS can draw the full selectable text on double-click,
+                    // even while lineLimit keeps the collapsed layout at eight lines.
+                    .clipped()
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(Color(nsColor: .controlBackgroundColor))
-        )
-        .overlay {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
-        }
+        .padding(.top, 8)
     }
 
     private func notesSection() -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text("Notes", bundle: bundle)
-                    .font(.headline)
-                Spacer()
-                Button {
+            InspectorSectionHeader(title: String(localized: "Notes", bundle: bundle)) {
+                InspectorIconButton(
+                    title: currentSelectionContext != nil
+                        ? String(localized: "Add Note to Current Selection", bundle: bundle)
+                        : String(localized: "Add Note", bundle: bundle),
+                    systemImage: "plus"
+                ) {
                     onCreateNote()
-                } label: {
-                    Label(
-                        currentSelectionContext != nil
-                            ? String(localized: "Add Note to Current Selection", bundle: bundle)
-                            : String(localized: "Add Note", bundle: bundle),
-                        systemImage: "plus"
-                    )
                 }
             }
 
@@ -504,46 +417,52 @@ struct InspectorPaneView: View {
     }
 
     private var emptyInspectorState: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
+        VStack(spacing: 14) {
+            Image(systemName: "doc.text")
+                .font(.system(size: 32, weight: .regular))
+                .foregroundStyle(.tertiary)
+                .accessibilityHidden(true)
 
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Paper details will appear here", bundle: bundle)
-                        .font(.title3.weight(.semibold))
-                    Text("Select or import a paper to view metadata, abstract, and notes in this panel.", bundle: bundle)
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-            .padding(16)
+            Text("No Paper Selected", bundle: bundle)
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
         }
-        .scrollIndicators(.hidden)
-        .fontDesign(displayAppearance == .paper ? .serif : .default)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .padding(24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
     }
+}
 
-    private func inspectorHintRow(
-        title: String,
-        systemImage: String,
-        description: String
-    ) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: systemImage)
-                .font(.body.weight(.semibold))
-                .foregroundStyle(.primary)
-                .frame(width: 30, height: 30)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+/// A section title in the inspector's Paper tab, with its actions as icon buttons on the
+/// trailing edge, the way the Writing tab's header keeps its controls.
+struct InspectorSectionHeader<Actions: View>: View {
+    let title: String
+    @ViewBuilder var actions: Actions
 
-            VStack(alignment: .leading, spacing: 3) {
-                Text(title)
-                    .font(.subheadline.weight(.semibold))
-                Text(description)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+    var body: some View {
+        HStack(spacing: 8) {
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.secondary)
+            Spacer(minLength: 8)
+            actions
         }
+        .frame(minHeight: 22)
+    }
+}
+
+struct InspectorIconButton: View {
+    let title: String
+    let systemImage: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Label(title, systemImage: systemImage)
+                .labelStyle(.iconOnly)
+        }
+        .buttonStyle(.borderless)
+        .help(title)
     }
 }
 
@@ -744,13 +663,13 @@ private struct NoteEditor: View {
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .textSelection(.enabled)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 8)
+                    .padding(.leading, 10)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .fill(Color(nsColor: .controlBackgroundColor))
-                    )
+                    .overlay(alignment: .leading) {
+                        Capsule()
+                            .fill(Color.secondary.opacity(0.35))
+                            .frame(width: 2)
+                    }
             }
 
             if isEditing {
