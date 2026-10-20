@@ -173,6 +173,8 @@ struct ReaderPaneView: View {
     @State private var sidenotePendingDeletion: Note?
     @State private var pdfSidenoteLayout = PDFSidenoteLayoutModel()
     @State private var originalPDFPageCount: Int?
+    /// Enable ordinary PDF translation only after inspecting this exact attachment.
+    @State private var extractablePDFRequest: PDFPageCountRequest?
     @State private var isFindBarVisible = false
     @State private var findQuery = ""
     @State private var committedFindQuery = ""
@@ -256,6 +258,10 @@ struct ReaderPaneView: View {
 
     private var canTranslatePDF: Bool {
         pdfAttachment != nil && settings != nil
+    }
+
+    private var canTranslateTextPDF: Bool {
+        canTranslatePDF && extractablePDFRequest == originalPDFPageCountRequest
     }
 
     private var canTranslateLaTeX: Bool {
@@ -1335,7 +1341,7 @@ struct ReaderPaneView: View {
                         .labelStyle(.titleAndIcon)
                 }
             }
-            .disabled(canTranslatePDF == false)
+            .disabled(canTranslateTextPDF == false)
 
             Button {
                 offerScannedPDFTranslation(hasNoTextLayer: false)
@@ -2056,6 +2062,15 @@ struct ReaderPaneView: View {
             }
 
             Button {
+                copyStatusMessage()
+            } label: {
+                Label(String(localized: "Copy Message", bundle: bundle), systemImage: "doc.on.doc")
+            }
+            .labelStyle(.iconOnly)
+            .buttonStyle(.borderless)
+            .help(String(localized: "Copy Message", bundle: bundle))
+
+            Button {
                 dismissStatusMessage()
             } label: {
                 Label(String(localized: "Close", bundle: bundle), systemImage: "xmark")
@@ -2065,6 +2080,12 @@ struct ReaderPaneView: View {
             .controlSize(.small)
             .help(String(localized: "Close", bundle: bundle))
         }
+    }
+
+    private func copyStatusMessage() {
+        guard let statusMessage else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(statusMessage, forType: .string)
     }
 
     private var translationActivityPhase: TranslationActivityCapsule.Phase? {
@@ -2572,10 +2593,13 @@ struct ReaderPaneView: View {
     }
 
     private func translatePDF() {
-        guard let pdfAttachment else { return }
+        guard canTranslateTextPDF, let pdfAttachment else { return }
 
         do {
             try PDFTextLayerInspector().requireExtractableText(at: pdfAttachment.fileURL)
+        } catch PDFTextLayerError.scannedWithOCR {
+            offerScannedPDFTranslation(hasNoTextLayer: false)
+            return
         } catch PDFTextLayerError.noExtractableText {
             offerScannedPDFTranslation(hasNoTextLayer: true)
             return
@@ -2602,7 +2626,7 @@ struct ReaderPaneView: View {
     }
 
     private func startPDFTranslation(scope: PDFTranslationScope) {
-        guard let paper, let pdfAttachment, let settings else { return }
+        guard canTranslateTextPDF, let paper, let pdfAttachment, let settings else { return }
         let preferences = TranslationPreferencesSnapshot(settings)
         let attachmentToReplace = isFullPDFTranslationComplete
             ? translatedPDFAttachment
@@ -2739,6 +2763,7 @@ struct ReaderPaneView: View {
     }
 
     private func extendPDFTranslation(to requestedLastPage: Int? = nil) {
+        guard canTranslateTextPDF else { return }
         guard let paper, let pdfAttachment, let settings, let existingAttachment = translatedPDFAttachment, let currentLastPage = existingAttachment.translatedLastPage else { return }
         guard let total = originalPDFPageCount, currentLastPage < total else { return }
 
@@ -3098,6 +3123,7 @@ struct ReaderPaneView: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
         .background(ReadPaperAppearanceHeaderSurface(role: .reader))
+        .disabled(canTranslateTextPDF == false)
     }
 
     private func syncReaderModeWithAvailableContent() {
@@ -3476,14 +3502,20 @@ struct ReaderPaneView: View {
     private func refreshOriginalPDFPageCount(for request: PDFPageCountRequest?) async {
         guard let request else {
             originalPDFPageCount = nil
+            extractablePDFRequest = nil
             return
         }
 
-        let pageCount = await Task.detached(priority: .utility) {
-            CGPDFDocument(request.fileURL as CFURL)?.numberOfPages
+        let (pageCount, hasExtractableText) = await Task.detached(priority: .utility) {
+            guard let document = CGPDFDocument(request.fileURL as CFURL) else {
+                return (nil as Int?, false)
+            }
+            let verdict = PDFTextLayerInspector().inspect(document)
+            return (document.numberOfPages, verdict == .extractable)
         }.value
-        guard originalPDFPageCountRequest == request else { return }
+        guard !Task.isCancelled, originalPDFPageCountRequest == request else { return }
         originalPDFPageCount = pageCount
+        extractablePDFRequest = hasExtractableText ? request : nil
     }
 
     private func readingStatePersistenceSnapshot() -> ReadingStatePersistenceSnapshot? {

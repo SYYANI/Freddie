@@ -84,6 +84,97 @@ final class PDFTextLayerInspectorTests: XCTestCase {
 
     // MARK: - Fixtures
 
+    func testPageImageWithInvisibleOCRIsRejectedAcrossContentStreams() throws {
+        let data = makeOCRPDFData(contents: [
+            "BT /F0 12 Tf 3 Tr (Searchable OCR text) Tj ET",
+            "q 200 0 0 200 0 0 cm /Im0 Do Q",
+        ])
+        XCTAssertEqual(try inspect(data), .scannedWithOCR)
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("\(UUID().uuidString).pdf")
+        defer { try? FileManager.default.removeItem(at: url) }
+        try data.write(to: url)
+        XCTAssertThrowsError(try PDFTextLayerInspector().requireExtractableText(at: url)) {
+            XCTAssertEqual($0 as? PDFTextLayerError, .scannedWithOCR)
+        }
+    }
+
+    func testOrdinaryTextOverFullPageImageIsStillAccepted() throws {
+        XCTAssertEqual(try inspect(makeOCRPDFData(contents: [
+            "q 200 0 0 200 0 0 cm /Im0 Do Q BT /F0 12 Tf 0 Tr (Visible text) Tj ET",
+        ])), .extractable)
+    }
+
+    func testSmallFigureOrUnusedImageDoesNotCountAsScannedPage() throws {
+        for image in ["", "q 40 0 0 40 0 0 cm /Im0 Do Q"] {
+            XCTAssertEqual(try inspect(makeOCRPDFData(contents: [
+                "BT /F0 12 Tf 3 Tr (Hidden search text) Tj ET \(image)",
+            ])), .extractable)
+        }
+    }
+
+    func testTextRenderingModeRestoresWithGraphicsState() throws {
+        XCTAssertEqual(try inspect(makeOCRPDFData(contents: [
+            "q BT /F0 12 Tf 3 Tr (OCR) Tj ET Q",
+            "BT /F0 12 Tf (Visible text after restore) Tj ET",
+            "q 200 0 0 200 0 0 cm /Im0 Do Q",
+        ])), .extractable)
+    }
+
+    func testOCRInTransformedFormIsRejected() throws {
+        XCTAssertEqual(try inspect(makeOCRPDFData(contents: [
+            "BT /F0 12 Tf 3 Tr [(Hidden) 20 (OCR)] TJ ET q 100 0 0 100 0 0 cm /Im0 Do Q",
+        ], formMatrix: "2 0 0 2 0 0")), .scannedWithOCR)
+    }
+
+    func testTypesetFirstPageDoesNotHideLaterOCRScan() throws {
+        XCTAssertEqual(try inspect(makeOCRPDFData(contents: [
+            "BT /F0 12 Tf 3 Tr (OCR) Tj ET q 200 0 0 200 0 0 cm /Im0 Do Q",
+        ], prependTextPage: true)), .scannedWithOCR)
+    }
+
+    private func inspect(_ data: Data) throws -> PDFTextLayerInspector.Verdict {
+        let provider = try XCTUnwrap(CGDataProvider(data: data as CFData))
+        return PDFTextLayerInspector().inspect(try XCTUnwrap(CGPDFDocument(provider)))
+    }
+
+    private func makeOCRPDFData(
+        contents: [String], formMatrix: String? = nil, prependTextPage: Bool = false
+    ) -> Data {
+        let resources = "<< /Font << /F0 4 0 R >> /XObject << /Im0 5 0 R >> >>"
+        var objects = [
+            "<< /Type /Catalog /Pages 2 0 R >>",
+            "", "",
+            "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+            "<< /Type /XObject /Subtype /Image /Width 1 /Height 1 /ColorSpace /DeviceGray /BitsPerComponent 8 /Length 1 >>\nstream\nX\nendstream",
+        ]
+        func append(_ object: String) -> String {
+            objects.append(object)
+            return "\(objects.count) 0 R"
+        }
+        func stream(_ commands: String, entries: String = "") -> String {
+            "<< \(entries) /Length \(commands.utf8.count) >>\nstream\n\(commands)\nendstream"
+        }
+        var pageResources = resources
+        let contentReferences: [String]
+        if let formMatrix {
+            let form = append(stream(contents.joined(separator: "\n"),
+                entries: "/Type /XObject /Subtype /Form /BBox [0 0 200 200] /Matrix [\(formMatrix)] /Resources \(resources)"))
+            pageResources = "<< /XObject << /Form0 \(form) >> >>"
+            contentReferences = [append(stream("/Form0 Do"))]
+        } else {
+            contentReferences = contents.map { append(stream($0)) }
+        }
+        objects[2] = "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Resources \(pageResources) /Contents [\(contentReferences.joined(separator: " "))] >>"
+        var pages = ["3 0 R"]
+        if prependTextPage {
+            let content = append(stream("BT /F0 12 Tf (Typeset cover page) Tj ET"))
+            let page = append("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Resources \(resources) /Contents \(content) >>")
+            pages.insert(page, at: 0)
+        }
+        objects[1] = "<< /Type /Pages /Kids [\(pages.joined(separator: " "))] /Count \(pages.count) >>"
+        return pdfData(objects: objects)
+    }
+
     private func type3Font(differences: String, glyphNames: [String], extra: String = "") -> String {
         let charProcs = glyphNames.map { "/\($0) 4 0 R" }.joined(separator: " ")
         return """
@@ -113,6 +204,10 @@ final class PDFTextLayerInspectorTests: XCTestCase {
         ]
         objects.append(contentsOf: fonts)
 
+        return pdfData(objects: objects)
+    }
+
+    private func pdfData(objects: [String]) -> Data {
         var output = "%PDF-1.4\n"
         var offsets: [Int] = []
         for (index, object) in objects.enumerated() {

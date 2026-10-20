@@ -376,6 +376,19 @@ final class PDFMergerTests: XCTestCase {
             translatedPageCount: 10
         ), 9)
         XCTAssertEqual(savedState.pageIndex, 14)
+
+        // An image-only original remains navigable beyond a partial translation,
+        // even though ordinary PDF translation is unavailable for scanned pages.
+        let originalURL = tempDirectory.appendingPathComponent("scanned-original.pdf")
+        XCTAssertTrue(originalDocument.write(to: originalURL))
+        XCTAssertEqual(PDFTextLayerInspector().inspect(documentAt: originalURL), .noFonts)
+        originalView.go(to: try XCTUnwrap(originalDocument.page(at: 19)))
+        coordinator.updateCurrentPageIndexIfNeeded()
+        XCTAssertEqual(savedState.pageIndex, 19)
+        XCTAssertEqual(DualPDFPageIndexSync.translatedPageIndex(
+            forOriginalPageIndex: savedState.pageIndex,
+            translatedPageCount: 10
+        ), 9)
     }
 
     @MainActor

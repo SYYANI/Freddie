@@ -9,6 +9,10 @@ final class LocalizationBehaviorTests: XCTestCase {
 
         LanguageManager.shared.setLanguage("zh-Hans")
         XCTAssertEqual(PaperImportError.missingPDF.localizedDescription, "这篇论文没有可用的 PDF 附件。")
+        XCTAssertEqual(
+            PDFTextLayerError.scannedWithOCR.localizedDescription,
+            "此 PDF 由扫描页面图像和 OCR 文字层组成。请使用“翻译扫描版 PDF”。"
+        )
         XCTAssertEqual(LLMProviderValidationError.emptyAPIKey.localizedDescription, "API key 不能为空。")
         XCTAssertEqual(
             AppLocalization.localized("Use arXiv LaTeX structure for PDF translation"),
@@ -25,6 +29,10 @@ final class LocalizationBehaviorTests: XCTestCase {
 
         LanguageManager.shared.setLanguage("en")
         XCTAssertEqual(PaperImportError.missingPDF.localizedDescription, "No PDF attachment is available for this paper.")
+        XCTAssertEqual(
+            PDFTextLayerError.scannedWithOCR.localizedDescription,
+            "This PDF uses scanned page images with an OCR text layer. Use Translate Scanned PDF instead."
+        )
         XCTAssertEqual(AppLocalization.localized("PDF Annotations"), "PDF Annotations")
         XCTAssertEqual(AppLocalization.localized("Retranslate PDF"), "Retranslate PDF")
         XCTAssertEqual(AppLocalization.localized("Export HTML as PDF"), "Export HTML as PDF")

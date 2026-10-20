@@ -6,13 +6,14 @@ import Foundation
 /// glyphs in first-use order without a `ToUnicode` map. Translating those files
 /// only sends gibberish to the LLM, so PDF translation is refused up front.
 ///
-/// The check is deliberately conservative: a document is rejected only when no
-/// page uses a font whose text could plausibly be decoded.
+/// Hidden OCR text over a page-sized scan is not a typeset text layer either.
+/// Otherwise, font decoding remains conservative.
 struct PDFTextLayerInspector {
     enum Verdict: Equatable {
         case extractable
         case noFonts
         case undecodableFonts
+        case scannedWithOCR
     }
 
     private enum FontDecodability {
@@ -25,6 +26,7 @@ struct PDFTextLayerInspector {
 
     func requireExtractableText(at url: URL) throws {
         guard let verdict = inspect(documentAt: url), verdict != .extractable else { return }
+        if verdict == .scannedWithOCR { throw PDFTextLayerError.scannedWithOCR }
         throw PDFTextLayerError.noExtractableText
     }
 
@@ -40,11 +42,15 @@ struct PDFTextLayerInspector {
 
         var state = ScanState()
         for pageNumber in 1...document.numberOfPages {
-            guard let pageDictionary = document.page(at: pageNumber)?.dictionary,
+            guard let page = document.page(at: pageNumber),
+                  let pageDictionary = page.dictionary,
                   let resources = Self.inheritedResources(of: pageDictionary) else { continue }
-            scan(resources: resources, depth: 0, state: &state)
-            if state.hasDecodableFont { return .extractable }
+            if PDFOCRScanInspector.isScannedPage(page, resources: resources) { return .scannedWithOCR }
+            if !state.hasDecodableFont {
+                scan(resources: resources, depth: 0, state: &state)
+            }
         }
+        if state.hasDecodableFont { return .extractable }
         return state.hasFont ? .undecodableFonts : .noFonts
     }
 
@@ -185,6 +191,158 @@ struct PDFTextLayerInspector {
     }
 }
 
+/// Reads drawing operators without rendering images or extracting full text.
+/// Require both an actually painted page-sized image and exclusively invisible
+/// text, so figures, unused image resources and ordinary text pages stay enabled.
+private final class PDFOCRScanInspector {
+    private struct GraphicsState {
+        var transform = CGAffineTransform.identity
+        var textRenderingMode = 0
+    }
+
+    private var graphics = GraphicsState()
+    private var stack: [GraphicsState] = []
+    private var hasHiddenText = false
+    private var hasVisibleText = false
+    private var hasPageImage = false
+    private var complete = true
+    private let pageBounds: CGRect
+    private let depth: Int
+    private let resources: CGPDFDictionaryRef
+
+    private init(pageBounds: CGRect, resources: CGPDFDictionaryRef, depth: Int = 0) {
+        self.pageBounds = pageBounds
+        self.depth = depth
+        self.resources = resources
+    }
+
+    static func isScannedPage(_ page: CGPDFPage, resources: CGPDFDictionaryRef) -> Bool {
+        let inspector = PDFOCRScanInspector(pageBounds: page.getBoxRect(.cropBox), resources: resources)
+        let content = CGPDFContentStreamCreateWithPage(page)
+        defer { CGPDFContentStreamRelease(content) }
+        inspector.scan(content)
+        return inspector.complete && inspector.hasPageImage
+            && inspector.hasHiddenText && !inspector.hasVisibleText
+    }
+
+    private static func context(_ info: UnsafeMutableRawPointer?) -> PDFOCRScanInspector {
+        Unmanaged<PDFOCRScanInspector>.fromOpaque(info!).takeUnretainedValue()
+    }
+
+    private func recordText(_ string: CGPDFStringRef) {
+        guard CGPDFStringGetLength(string) > 0 else { return }
+        if graphics.textRenderingMode == 3 {
+            hasHiddenText = true
+        } else {
+            hasVisibleText = true
+        }
+    }
+
+    private func scan(_ content: CGPDFContentStreamRef) {
+        guard let table = CGPDFOperatorTableCreate() else { complete = false; return }
+        defer { CGPDFOperatorTableRelease(table) }
+        CGPDFOperatorTableSetCallback(table, "q") { _, info in
+            let state = PDFOCRScanInspector.context(info)
+            state.stack.append(state.graphics)
+        }
+        CGPDFOperatorTableSetCallback(table, "Q") { _, info in
+            let state = PDFOCRScanInspector.context(info)
+            if let saved = state.stack.popLast() { state.graphics = saved }
+        }
+        CGPDFOperatorTableSetCallback(table, "cm") { scanner, info in
+            var values = [CGPDFReal](repeating: 0, count: 6)
+            for index in (0..<6).reversed() {
+                guard CGPDFScannerPopNumber(scanner, &values[index]) else { return }
+            }
+            let state = PDFOCRScanInspector.context(info)
+            state.graphics.transform = CGAffineTransform(
+                a: values[0], b: values[1], c: values[2],
+                d: values[3], tx: values[4], ty: values[5]
+            ).concatenating(state.graphics.transform)
+        }
+        CGPDFOperatorTableSetCallback(table, "Tr") { scanner, info in
+            var mode: CGPDFInteger = 0
+            if CGPDFScannerPopInteger(scanner, &mode) {
+                PDFOCRScanInspector.context(info).graphics.textRenderingMode = mode
+            }
+        }
+        for name in ["Tj", "'", "\""] {
+            CGPDFOperatorTableSetCallback(table, name) { scanner, info in
+                var string: CGPDFStringRef?
+                if CGPDFScannerPopString(scanner, &string), let string {
+                    PDFOCRScanInspector.context(info).recordText(string)
+                }
+            }
+        }
+        CGPDFOperatorTableSetCallback(table, "TJ") { scanner, info in
+            var array: CGPDFArrayRef?
+            guard CGPDFScannerPopArray(scanner, &array), let array else { return }
+            for index in 0..<CGPDFArrayGetCount(array) {
+                var string: CGPDFStringRef?
+                if CGPDFArrayGetString(array, index, &string), let string {
+                    PDFOCRScanInspector.context(info).recordText(string)
+                }
+            }
+        }
+        CGPDFOperatorTableSetCallback(table, "Do") { scanner, info in
+            PDFOCRScanInspector.context(info).drawXObject(scanner)
+        }
+        let scanner = CGPDFScannerCreate(content, table, Unmanaged.passUnretained(self).toOpaque())
+        defer { CGPDFScannerRelease(scanner) }
+        if !CGPDFScannerScan(scanner) { complete = false }
+    }
+
+    private func drawXObject(_ scanner: CGPDFScannerRef) {
+        var name: UnsafePointer<CChar>?
+        let parent = CGPDFScannerGetContentStream(scanner)
+        guard CGPDFScannerPopName(scanner, &name), let name,
+              let object = CGPDFContentStreamGetResource(parent, "XObject", name) else { return }
+        var stream: CGPDFStreamRef?
+        guard CGPDFObjectGetValue(object, .stream, &stream), let stream,
+              let dictionary = CGPDFStreamGetDictionary(stream) else { return }
+        var subtype: UnsafePointer<CChar>?
+        guard CGPDFDictionaryGetName(dictionary, "Subtype", &subtype), let subtype else { return }
+        switch String(cString: subtype) {
+        case "Image":
+            var isMask: CGPDFBoolean = 0
+            CGPDFDictionaryGetBoolean(dictionary, "ImageMask", &isMask)
+            guard isMask == 0, pageBounds.width > 0, pageBounds.height > 0 else { return }
+            let drawn = CGRect(x: 0, y: 0, width: 1, height: 1)
+                .applying(graphics.transform).intersection(pageBounds)
+            if !drawn.isNull, drawn.width * drawn.height >= pageBounds.width * pageBounds.height * 0.8 {
+                hasPageImage = true
+            }
+        case "Form":
+            guard depth < 8 else { complete = false; return }
+            var formResources: CGPDFDictionaryRef?
+            CGPDFDictionaryGetDictionary(dictionary, "Resources", &formResources)
+            let child = PDFOCRScanInspector(
+                pageBounds: pageBounds, resources: formResources ?? resources, depth: depth + 1
+            )
+            child.graphics = graphics
+            var matrix: CGPDFArrayRef?
+            if CGPDFDictionaryGetArray(dictionary, "Matrix", &matrix), let matrix,
+               CGPDFArrayGetCount(matrix) == 6 {
+                var values = [CGPDFReal](repeating: 0, count: 6)
+                for index in 0..<6 { CGPDFArrayGetNumber(matrix, index, &values[index]) }
+                child.graphics.transform = CGAffineTransform(
+                    a: values[0], b: values[1], c: values[2],
+                    d: values[3], tx: values[4], ty: values[5]
+                ).concatenating(graphics.transform)
+            }
+            let content = CGPDFContentStreamCreateWithStream(stream, child.resources, parent)
+            defer { CGPDFContentStreamRelease(content) }
+            child.scan(content)
+            hasHiddenText = hasHiddenText || child.hasHiddenText
+            hasVisibleText = hasVisibleText || child.hasVisibleText
+            hasPageImage = hasPageImage || child.hasPageImage
+            complete = complete && child.complete
+        default:
+            break
+        }
+    }
+}
+
 enum PDFGlyphName {
     private static let knownNames: Set<String> = [
         "space", "exclam", "quotedbl", "numbersign", "dollar", "percent", "ampersand",
@@ -241,12 +399,17 @@ enum PDFGlyphName {
 
 enum PDFTextLayerError: LocalizedError, Equatable {
     case noExtractableText
+    case scannedWithOCR
 
     var errorDescription: String? {
         switch self {
         case .noExtractableText:
             AppLocalization.localized(
                 "This PDF has no extractable text layer (for example, scanned pages or bitmap fonts without character mapping). PDF translation is not supported for it."
+            )
+        case .scannedWithOCR:
+            AppLocalization.localized(
+                "This PDF uses scanned page images with an OCR text layer. Use Translate Scanned PDF instead."
             )
         }
     }

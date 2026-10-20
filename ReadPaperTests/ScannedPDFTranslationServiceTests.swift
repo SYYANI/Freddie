@@ -228,7 +228,7 @@ final class ScannedPDFTranslationServiceTests: XCTestCase {
             }
             \end{multicols}
             </body>
-            <footer>\copyright 1984 75\cents</footer>
+            <footer>\textcopyright 1984 75\cent</footer>
             </page>
             """#)
     }

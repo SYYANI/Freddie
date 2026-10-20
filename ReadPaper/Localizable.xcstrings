@@ -1787,6 +1787,17 @@
         }
       }
     },
+    "Copy Message" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "复制信息"
+          }
+        }
+      }
+    },
     "Copy Trace" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -7781,6 +7792,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "此 PDF 共 %1$d 页。翻译前 10 页速度更快。"
+          }
+        }
+      }
+    },
+    "This PDF uses scanned page images with an OCR text layer. Use Translate Scanned PDF instead." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This PDF uses scanned page images with an OCR text layer. Use Translate Scanned PDF instead."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此 PDF 由扫描页面图像和 OCR 文字层组成。请使用“翻译扫描版 PDF”。"
           }
         }
       }
