@@ -68,7 +68,10 @@ struct ReaderPaneView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.localizationBundle) private var bundle
     @Environment(\.pdfDisplayAppearance) private var pdfDisplayAppearance
+    @Environment(\.openSettings) private var openSettings
     @Query(sort: \ReadingState.modifiedAt, order: .reverse) private var readingStates: [ReadingState]
+    @AppStorage(TranslationSetupNavigation.didHandleReaderNoticeKey)
+    private var didHandleTranslationSetupNotice = false
     @AppStorage(PDFTranslationBatchPreference.userDefaultsKey)
     private var pdfTranslationBatchSizeRawValue = PDFTranslationBatchPreference.defaultValue
     @AppStorage(HTMLReaderTypography.fontSizeUserDefaultsKey)
@@ -124,6 +127,10 @@ struct ReaderPaneView: View {
     @State private var pdfTranslationErrorLogURL: URL?
     @State private var pdfTranslationDiagnosticsNoticeID: String?
     @State private var latexTranslationErrorLogURL: URL?
+    /// The status message of a translation that stopped because no usable model is
+    /// set up. The status row offers the setup only while it still shows that message.
+    @State private var translationSetupErrorMessage: String?
+    @State private var needsTranslationSetup = false
     @State private var lastPDFReaderMode: ReaderMode = .pdf
     @State private var suspendReadingStatePersistence = false
     @State private var pendingReadingStatePersistence: ReadingStatePersistenceSnapshot?
@@ -378,6 +385,10 @@ struct ReaderPaneView: View {
             }
             .overlay(alignment: .bottom) {
                 VStack(spacing: 10) {
+                    if needsTranslationSetup, !didHandleTranslationSetupNotice {
+                        translationSetupNotice
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
                     if let copyToastMessage {
                         copyToast(message: copyToastMessage)
                             .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -390,6 +401,10 @@ struct ReaderPaneView: View {
                 .animation(.spring(duration: 0.4, bounce: 0.15), value: translationActivityPhase == nil)
             }
             .animation(.easeOut(duration: 0.18), value: copyToastMessage != nil)
+            .animation(.easeOut(duration: 0.2), value: needsTranslationSetup && !didHandleTranslationSetupNotice)
+            .task(id: TranslationSetupCheck(settings: settings)) {
+                refreshTranslationSetupNeed()
+            }
             .toolbar {
                 readerToolbar
             }
@@ -1914,6 +1929,14 @@ struct ReaderPaneView: View {
 
             Spacer(minLength: 0)
 
+            if translationSetupErrorMessage != nil, translationSetupErrorMessage == statusMessage {
+                Button(String(localized: "Set Up Translation…", bundle: bundle)) {
+                    TranslationSetupNavigation.showQuickSetup(using: openSettings)
+                }
+                .buttonStyle(.link)
+                .font(.caption)
+            }
+
             if pdfTranslationErrorLogURL != nil {
                 Button {
                     revealPDFTranslationErrorLog()
@@ -2693,6 +2716,59 @@ struct ReaderPaneView: View {
             pdfTranslationErrorLogURL = nil
         }
         statusMessage = AppLocalization.errorMessage(error, bundle: bundle)
+        translationSetupErrorMessage = error is LLMRouteError ? statusMessage : nil
+    }
+
+    /// Looks for a usable route without reading an API key, so it never asks for
+    /// Touch ID. Runs again whenever translation settings are saved.
+    private func refreshTranslationSetupNeed() {
+        guard let settings, !didHandleTranslationSetupNotice else {
+            needsTranslationSetup = false
+            return
+        }
+        let keychainStore = KeychainStore()
+        needsTranslationSetup = !LLMTranslationSetupStatus.hasUsableRoute(
+            settings: settings,
+            modelContext: modelContext,
+            hasStoredAPIKey: { (try? keychainStore.contains(account: $0)) == true }
+        )
+    }
+
+    /// Until translation is set up, a notice at the bottom of the reader leads to the
+    /// quick setup in Settings. It goes away for good once opened or closed.
+    private var translationSetupNotice: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "translate")
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
+
+            Text("Connect a translation service to translate papers.", bundle: bundle)
+                .font(.callout.weight(.medium))
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Button(String(localized: "Set Up…", bundle: bundle)) {
+                didHandleTranslationSetupNotice = true
+                TranslationSetupNavigation.showQuickSetup(using: openSettings)
+            }
+            .readPaperGlassButtonStyle(prominent: true)
+            .controlSize(.small)
+
+            Button {
+                didHandleTranslationSetupNotice = true
+            } label: {
+                Label(String(localized: "Close", bundle: bundle), systemImage: "xmark")
+            }
+            .labelStyle(.iconOnly)
+            .buttonStyle(.borderless)
+            .controlSize(.small)
+            .help(String(localized: "Close", bundle: bundle))
+        }
+        .padding(.leading, 14)
+        .padding(.trailing, 10)
+        .padding(.vertical, 8)
+        .readPaperGlassEffect(in: Capsule())
+        .shadow(color: .black.opacity(0.14), radius: 10, y: 4)
     }
 
     private func revealPDFTranslationErrorLog() {
@@ -3211,6 +3287,23 @@ struct ReaderPaneView: View {
         DispatchQueue.main.async {
             suspendReadingStatePersistence = false
         }
+    }
+}
+
+/// What the first-run setup check depends on: the routes and the save time, which
+/// Settings bumps whenever it saves a provider key or a route.
+private struct TranslationSetupCheck: Equatable {
+    let settingsID: UUID?
+    let htmlModelID: UUID?
+    let pdfModelID: UUID?
+    let modifiedAt: Date?
+
+    @MainActor
+    init(settings: AppSettings?) {
+        settingsID = settings?.id
+        htmlModelID = settings?.selectedHTMLModelProfileID
+        pdfModelID = settings?.selectedPDFModelProfileID
+        modifiedAt = settings?.modifiedAt
     }
 }
 
