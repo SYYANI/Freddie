@@ -675,6 +675,124 @@ final class PaperImporterTests: XCTestCase {
     }
 
     @MainActor
+    func testImportForbiddenWebPageRetriesInBrowserBeforeLocalizing() async throws {
+        let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: rootURL) }
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [MockPaperImporterURLProtocol.self]
+        let session = URLSession(configuration: configuration)
+        let sourceURL = try XCTUnwrap(URL(string: "https://zhuanlan.zhihu.com/p/2095560295930508953"))
+        let paragraph = String(repeating: "浏览器加载完成后得到的文章正文，应当经过正文提取并保存到本地。", count: 20)
+        let renderer = MockWebPageHTMLRenderer(renderedHTML: """
+        <html><head><title>知乎文章</title></head>
+        <body><article><h1>知乎文章</h1><p>\(paragraph)</p></article></body></html>
+        """)
+        MockPaperImporterURLProtocol.requestHandler = { request in
+            let url = try XCTUnwrap(request.url)
+            return (
+                HTTPURLResponse(url: url, statusCode: 403, httpVersion: nil, headerFields: ["Content-Type": "text/html"])!,
+                Data("<html><head><meta id='zh-zse-ck'></head><body>浏览器验证中</body></html>".utf8)
+            )
+        }
+        let importer = PaperImporter(
+            fileStore: PaperFileStore(applicationSupportDirectory: rootURL),
+            htmlLocalizer: HTMLLocalizer(session: session),
+            webPageHTMLRenderer: renderer,
+            session: session
+        )
+        let context = ModelContext(try makeContainer())
+
+        let paper = try await importer.importWebPage(sourceURL.absoluteString, modelContext: context)
+
+        XCTAssertEqual(renderer.renderedRequests.map(\.url), [sourceURL])
+        XCTAssertEqual(paper.htmlURLString, sourceURL.absoluteString)
+        XCTAssertEqual(try context.fetch(FetchDescriptor<Paper>()).count, 1)
+        let attachment = try XCTUnwrap(context.fetch(FetchDescriptor<PaperAttachment>()).first)
+        XCTAssertEqual(attachment.kind, .html)
+        XCTAssertEqual(attachment.source, .webPage)
+        let html = try String(contentsOf: attachment.fileURL, encoding: .utf8)
+        XCTAssertTrue(html.contains("知乎文章"))
+        XCTAssertTrue(html.contains("rp-readability-content"))
+        XCTAssertTrue(html.contains(paragraph))
+        XCTAssertFalse(html.contains("zh-zse-ck"))
+    }
+
+    @MainActor
+    func testImportForbiddenWebPageDoesNotSaveUnsuccessfulBrowserRetry() async throws {
+        let challenge = """
+        <html><head><meta id="zh-zse-ck" charset="UTF-8"></head>
+        <body>\(String(repeating: "知乎，让每一次点击都充满意义 —— 欢迎来到知乎，发现问题背后的世界。", count: 4))</body></html>
+        """
+        for (html, rendererError, cancelsTask) in [
+            (challenge, nil, false),
+            ("<html><body></body></html>", nil, false),
+            ("", URLError(.timedOut), false),
+            ("", nil, true)
+        ] as [(String, Error?, Bool)] {
+            let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+            defer { try? FileManager.default.removeItem(at: rootURL) }
+            let configuration = URLSessionConfiguration.ephemeral
+            configuration.protocolClasses = [MockPaperImporterURLProtocol.self]
+            let session = URLSession(configuration: configuration)
+            let renderer = MockWebPageHTMLRenderer(
+                renderedHTML: html,
+                cancelsCurrentTask: cancelsTask,
+                error: rendererError
+            )
+            MockPaperImporterURLProtocol.requestHandler = { request in
+                let url = try XCTUnwrap(request.url)
+                return (HTTPURLResponse(url: url, statusCode: 403, httpVersion: nil, headerFields: nil)!, Data())
+            }
+            let importer = PaperImporter(
+                fileStore: PaperFileStore(applicationSupportDirectory: rootURL),
+                htmlLocalizer: HTMLLocalizer(session: session),
+                webPageHTMLRenderer: renderer,
+                session: session
+            )
+            let context = ModelContext(try makeContainer())
+            let task = Task { @MainActor () -> Error? in
+                do {
+                    _ = try await importer.importWebPage("https://example.com/blocked", modelContext: context)
+                    return nil
+                } catch { return error }
+            }
+            let error = await task.value
+            if cancelsTask {
+                XCTAssertTrue(error is CancellationError)
+            } else if case .webPageHTTPError(let statusCode) = error as? PaperImportError {
+                XCTAssertEqual(statusCode, 403)
+            } else {
+                XCTFail("Expected HTTP 403, got \(String(describing: error))")
+            }
+            XCTAssertEqual(renderer.renderedRequests.count, 1)
+            XCTAssertTrue(try context.fetch(FetchDescriptor<Paper>()).isEmpty)
+            XCTAssertTrue(try context.fetch(FetchDescriptor<PaperAttachment>()).isEmpty)
+            let leftoverHTML = FileManager.default.enumerator(at: rootURL, includingPropertiesForKeys: nil)?
+                .compactMap { $0 as? URL }.filter { $0.lastPathComponent == "paper.html" } ?? []
+            XCTAssertTrue(leftoverHTML.isEmpty)
+        }
+    }
+
+    @MainActor
+    func testZhihuVerificationRedirectDetectionChecksHostAndPath() throws {
+        for value in [
+            "https://www.zhihu.com/account/unhuman?need_login=true&next=%2Fsignin",
+            "https://www.zhihu.com/signin",
+            "https://zhihu.com/login"
+        ] {
+            XCTAssertTrue(WebKitWebPageHTMLRenderer.requiresUserVerification(at: try XCTUnwrap(URL(string: value))))
+        }
+        for value in [
+            "https://zhuanlan.zhihu.com/p/2095560295930508953",
+            "https://zhihu.com.example.com/signin",
+            "https://notzhihu.com/signin",
+            "https://example.com/account/unhuman"
+        ] {
+            XCTAssertFalse(WebKitWebPageHTMLRenderer.requiresUserVerification(at: try XCTUnwrap(URL(string: value))))
+        }
+    }
+
+    @MainActor
     func testImportWebPageThrowsDescriptiveErrorOnNon200StatusCode() async throws {
         let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: rootURL) }
@@ -686,14 +804,16 @@ final class PaperImporterTests: XCTestCase {
         MockPaperImporterURLProtocol.requestHandler = { request in
             let url = try XCTUnwrap(request.url)
             return (
-                HTTPURLResponse(url: url, statusCode: 403, httpVersion: nil, headerFields: ["Content-Type": "text/html"])!,
+                HTTPURLResponse(url: url, statusCode: 404, httpVersion: nil, headerFields: ["Content-Type": "text/html"])!,
                 Data()
             )
         }
 
+        let renderer = MockWebPageHTMLRenderer(renderedHTML: "")
         let importer = PaperImporter(
             fileStore: PaperFileStore(applicationSupportDirectory: rootURL),
             htmlLocalizer: HTMLLocalizer(session: session, fileManager: .default),
+            webPageHTMLRenderer: renderer,
             session: session
         )
         let modelContext = ModelContext(try makeContainer())
@@ -703,8 +823,9 @@ final class PaperImporterTests: XCTestCase {
             XCTFail("Expected error")
         } catch {
             let localized = error.localizedDescription
-            XCTAssertTrue(localized.contains("403") || localized.contains("error"), "Message: \(localized)")
+            XCTAssertTrue(localized.contains("404"), "Message: \(localized)")
         }
+        XCTAssertTrue(renderer.renderedRequests.isEmpty)
     }
 
     @MainActor
@@ -758,11 +879,13 @@ private final class MockPaperImporterURLProtocol: URLProtocol {
 private final class MockWebPageHTMLRenderer: WebPageHTMLRendering {
     let renderedHTML: String
     let cancelsCurrentTask: Bool
+    let error: Error?
     private(set) var renderedRequests: [URLRequest] = []
 
-    init(renderedHTML: String, cancelsCurrentTask: Bool = false) {
+    init(renderedHTML: String, cancelsCurrentTask: Bool = false, error: Error? = nil) {
         self.renderedHTML = renderedHTML
         self.cancelsCurrentTask = cancelsCurrentTask
+        self.error = error
     }
 
     func renderHTML(for request: URLRequest) async throws -> String {
@@ -770,6 +893,7 @@ private final class MockWebPageHTMLRenderer: WebPageHTMLRendering {
         if cancelsCurrentTask {
             withUnsafeCurrentTask { $0?.cancel() }
         }
+        if let error { throw error }
         return renderedHTML
     }
 }

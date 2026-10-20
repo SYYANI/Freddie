@@ -214,11 +214,20 @@ final class PaperImporter {
             onProgress?(.fetchingHTML(from: sourceURL))
             let request = BrowserRequestHeaders.request(for: sourceURL, accept: .document)
             let (data, response) = try await session.data(for: request)
+            var htmlData = data
             if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
-                throw PaperImportError.webPageHTTPError(statusCode: http.statusCode)
-            }
-
-            if (response as? HTTPURLResponse)?.mimeType?.lowercased() == "application/pdf" {
+                guard http.statusCode == 403 else {
+                    throw PaperImportError.webPageHTTPError(statusCode: http.statusCode)
+                }
+                // Some sites (e.g. Zhihu) answer URLSession with a 403 browser check
+                // that a real web view passes. Keep the 403 if the retry fails too.
+                let renderedHTML = try? await webPageHTMLRenderer.renderHTML(for: request)
+                try Task.checkCancellation()
+                guard let renderedHTML, htmlLocalizer.hasMeaningfulHTMLContent(renderedHTML) else {
+                    throw PaperImportError.webPageHTTPError(statusCode: 403)
+                }
+                htmlData = Data(renderedHTML.utf8)
+            } else if (response as? HTTPURLResponse)?.mimeType?.lowercased() == "application/pdf" {
                 return try await importWebPagePDF(
                     data: data,
                     sourceURL: sourceURL,
@@ -229,8 +238,7 @@ final class PaperImporter {
                 )
             }
 
-            var htmlData = data
-            let originalHTML = String(data: data, encoding: .utf8) ?? String(decoding: data, as: UTF8.self)
+            let originalHTML = String(data: htmlData, encoding: .utf8) ?? String(decoding: htmlData, as: UTF8.self)
             if htmlLocalizer.requiresBrowserRendering(originalHTML) {
                 let renderedHTML = try await webPageHTMLRenderer.renderHTML(for: request)
                 guard htmlLocalizer.shouldUseRenderedHTML(renderedHTML, insteadOf: originalHTML) else {
@@ -591,6 +599,7 @@ final class WebKitWebPageHTMLRenderer: NSObject, WebPageHTMLRendering, WKNavigat
     private var webView: WKWebView?
     private var timeoutWorkItem: DispatchWorkItem?
     private var isCapturingDOM = false
+    private var mainFrameStatusCode: Int?
 
     init(timeout: TimeInterval = 20) {
         self.timeout = timeout
@@ -611,9 +620,13 @@ final class WebKitWebPageHTMLRenderer: NSObject, WebPageHTMLRendering, WKNavigat
                 configuration.preferences.javaScriptCanOpenWindowsAutomatically = false
                 configuration.mediaTypesRequiringUserActionForPlayback = .all
 
-                let webView = WKWebView(frame: .zero, configuration: configuration)
+                // Use a normal viewport and WebKit's own user agent: claiming Chrome
+                // disagrees with the JavaScript engine, and Zhihu then blocks the page.
+                let webView = WKWebView(
+                    frame: CGRect(x: 0, y: 0, width: 1024, height: 768),
+                    configuration: configuration
+                )
                 webView.navigationDelegate = self
-                webView.customUserAgent = BrowserRequestHeaders.chromeUserAgent
                 self.webView = webView
 
                 let timeoutWorkItem = DispatchWorkItem { [weak self] in
@@ -625,7 +638,8 @@ final class WebKitWebPageHTMLRenderer: NSObject, WebPageHTMLRendering, WKNavigat
                     execute: timeoutWorkItem
                 )
 
-                webView.load(request)
+                // Drop URLSession's Chrome headers; WebKit supplies its own.
+                webView.load(URLRequest(url: request.url!))
             }
         } onCancel: {
             Task { @MainActor [weak self] in
@@ -642,12 +656,41 @@ final class WebKitWebPageHTMLRenderer: NSObject, WebPageHTMLRendering, WKNavigat
         captureDOM(from: webView)
     }
 
+    func webView(
+        _ webView: WKWebView,
+        decidePolicyFor navigationResponse: WKNavigationResponse,
+        decisionHandler: @escaping @MainActor @Sendable (WKNavigationResponsePolicy) -> Void
+    ) {
+        guard navigationResponse.isForMainFrame,
+              let response = navigationResponse.response as? HTTPURLResponse else {
+            decisionHandler(.allow)
+            return
+        }
+        // Error pages (e.g. a 403 browser check that reloads into the article)
+        // still run, but are never captured as the document.
+        mainFrameStatusCode = response.statusCode
+        if let url = response.url, Self.requiresUserVerification(at: url) {
+            decisionHandler(.cancel)
+            finish(with: .failure(URLError(.userAuthenticationRequired)))
+            return
+        }
+        decisionHandler(.allow)
+    }
+
+    /// Zhihu sends suspected bots to a sign-in or verification page; never import it.
+    static func requiresUserVerification(at url: URL) -> Bool {
+        guard let host = url.host?.lowercased(),
+              host == "zhihu.com" || host.hasSuffix(".zhihu.com") else { return false }
+        return ["/account/unhuman", "/signin", "/login"].contains(url.path)
+    }
+
     private func captureDOM(from webView: WKWebView) {
-        guard !isCapturingDOM else { return }
+        guard let mainFrameStatusCode, (200..<300).contains(mainFrameStatusCode),
+              !isCapturingDOM else { return }
         isCapturingDOM = true
 
         let script = """
-        new Promise(resolve => {
+        return await new Promise(resolve => {
             const startedAt = Date.now();
             let lastHTML = '';
             let stableSince = Date.now();
@@ -659,27 +702,34 @@ final class WebKitWebPageHTMLRenderer: NSObject, WebPageHTMLRendering, WKNavigat
                     stableSince = Date.now();
                 }
                 const textLength = (document.body?.innerText || '').trim().length;
-                if ((textLength >= 40 && Date.now() - stableSince >= 300) || Date.now() - startedAt >= 10000) {
+                const isChallenge = !!document.querySelector('meta#zh-zse-ck');
+                if (!isChallenge && ((textLength >= 40 && Date.now() - stableSince >= 300) || Date.now() - startedAt >= 10000)) {
                     resolve(html);
                     return;
                 }
                 setTimeout(sample, 100);
             };
 
-            requestAnimationFrame(() => requestAnimationFrame(sample));
+            // This web view is offscreen; animation frames may never run.
+            sample();
         });
         """
 
-        webView.evaluateJavaScript(script) { [weak self, weak webView] value, error in
+        // callAsyncJavaScript awaits the promise; evaluateJavaScript cannot bridge
+        // a Promise result and would fall back to an early, unfinished DOM.
+        webView.callAsyncJavaScript(script, arguments: [:], in: nil, in: .page) { [weak self, weak webView] result in
             Task { @MainActor in
                 guard let self, let webView else { return }
                 self.isCapturingDOM = false
-                if error != nil {
+                switch result {
+                case .failure:
                     self.captureCurrentDOM(from: webView)
-                } else if let html = value as? String, !html.isEmpty {
+                case .success(let value):
+                    guard let html = value as? String, !html.isEmpty else {
+                        self.finish(with: .failure(URLError(.cannotDecodeContentData)))
+                        return
+                    }
                     self.finish(with: .success(html))
-                } else {
-                    self.finish(with: .failure(URLError(.cannotDecodeContentData)))
                 }
             }
         }
@@ -694,10 +744,12 @@ final class WebKitWebPageHTMLRenderer: NSObject, WebPageHTMLRendering, WKNavigat
     }
 
     private func captureCurrentDOM(from webView: WKWebView) {
+        guard let mainFrameStatusCode, (200..<300).contains(mainFrameStatusCode) else { return }
         let script = """
         (() => {
             const textLength = (document.body?.innerText || '').trim().length;
-            return textLength >= 40 ? (document.documentElement?.outerHTML || '') : null;
+            return textLength >= 40 && !document.querySelector('meta#zh-zse-ck')
+                ? (document.documentElement?.outerHTML || '') : null;
         })();
         """
         webView.evaluateJavaScript(script) { [weak self] value, _ in
@@ -721,6 +773,7 @@ final class WebKitWebPageHTMLRenderer: NSObject, WebPageHTMLRendering, WKNavigat
         timeoutWorkItem?.cancel()
         timeoutWorkItem = nil
         isCapturingDOM = false
+        mainFrameStatusCode = nil
         webView?.navigationDelegate = nil
         webView?.stopLoading()
         webView = nil

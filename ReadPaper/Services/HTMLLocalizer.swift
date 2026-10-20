@@ -221,6 +221,7 @@ struct HTMLLocalizer: @unchecked Sendable {
               let body = document.body() else {
             return false
         }
+        if isBrowserChallengePage(document) { return true }
 
         let visibleText = ((try? body.text()) ?? "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -229,18 +230,25 @@ struct HTMLLocalizer: @unchecked Sendable {
     }
 
     func shouldUseRenderedHTML(_ renderedHTML: String, insteadOf originalHTML: String) -> Bool {
-        visibleBodyTextLength(in: renderedHTML) >= 40 &&
+        hasMeaningfulHTMLContent(renderedHTML) &&
             visibleBodyTextLength(in: renderedHTML) > visibleBodyTextLength(in: originalHTML)
     }
 
     func hasMeaningfulHTMLContent(_ html: String) -> Bool {
         guard let document = try? SwiftSoup.parse(html),
-              let body = document.body() else {
+              let body = document.body(),
+              !isBrowserChallengePage(document) else {
             return false
         }
         let content = (try? document.select(".rp-readability-content").first()) ?? body
         return ((try? meaningfulText(in: content).count) ?? 0) >= 40 &&
             !needsXPostParagraphRepair(html)
+    }
+
+    private func isBrowserChallengePage(_ document: Document) -> Bool {
+        // Zhihu serves this JavaScript challenge with HTTP 403 (and sometimes 200).
+        // Its welcome sentence is long enough to pass a plain text-length check.
+        (try? document.select("meta#zh-zse-ck").first()) != nil
     }
 
     func rewriteCSS(_ css: String, baseURL: URL, localizedFilenames: [URL: String]) throws -> String {
