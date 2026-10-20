@@ -159,7 +159,8 @@ LLM 配置现已拆成独立 SwiftData 模型：`LLMProviderProfile` 负责 prov
   - 与 Python 版的有意差异：用 Apple Vision 代替 Tesseract 测量版心和给出 OCR 草稿（`TextRecognizing` 可注入）；页面渲染、裁剪用 CoreGraphics；单页失败不中止整次运行，该页在输出里保留原扫描页并记入 `fallbacks`，全部失败才抛 `noPagesRebuilt`；开跑前用 `TeXInstallationCheck` 排一张用到全部宏包和字体的探测页，缺包时先报错，不让用户为转写付费后才失败。
   - 模型：转写用“设置 > 阅读器 › 翻译路由”里的“扫描页模型”（`ScannedPDFTranslationPreferences.transcriptionModelProfileIDKey`，存 UserDefaults，不进 `AppSettings`；未选时回退 PDF 模型），必须支持图像输入；翻译用 PDF 路由。`ReadPaperRebuildModelClient` 把页面 JPEG 作为 `LLMCompletionMessage(parts:)` 发送（Chat Completions `image_url`、Responses `input_image`、Anthropic base64 `image`），超时用 `.scannedPage`（思考可能持续数分钟才返回首字节），并设 `allowsTruncatedOutput`：输出被 `max_tokens` 截断时返回 `finishReason == .length`，由 RebuildPDFKit 把预算翻倍重试（32k 起，最多 128k），其他调用方仍按原来的方式报错。`identity` 写入检查点 key，只含端点、模型和采样设置，不含 key。
   - 排版用 XeLaTeX：优先 Settings > LaTeX 选中的工具链目录，再找 `/Library/TeX/texbin` 等常见位置；与 arXiv LaTeX 翻译开关无关。编译关闭 shell escape，`openin_any/openout_any=p`。目标语言目前只支持简体中文（`zh-CN`，Fandol 宋体/楷体），其他语言在确认框前就提示。
-  - 检查点在论文目录 `Resources/ScanRebuild/`（`pages/`、`responses/`、`typeset/`、`translations/zh/`，布局同 Python 版）：重跑、取消后重跑只为没完成的页付费；页面标记 `typeset/page-NNNN.page.tex` 与 `translations/zh/typeset/page-NNNN.page.tex` 可手工修改，修改过的页不再调用模型。输出写到 `translations/scan-rebuild.zh.pdf`，与原稿页数相同（未选的页、失败的页是原扫描页），`translatedLastPage` 为 nil；重跑会替换旧的 `scanRebuild` 附件记录。确认框说明会把页面图像发给模型并给出每页约 1 分钟、5 万 token 的估计；页数超过 PDF 每批页数时提供“翻译前 N 页 / 全部”。
+  - 检查点在论文目录 `Resources/ScanRebuild/`（`pages/`、`responses/`、`typeset/`、`translations/zh/`，布局同 Python 版）：重跑、取消后重跑只为没完成的页付费；页面标记 `typeset/page-NNNN.page.tex` 与 `translations/zh/typeset/page-NNNN.page.tex` 可手工修改，修改过的页不再调用模型。输出写到 `translations/scan-rebuild.zh.pdf`，与原稿页数相同（未选的页、失败的页是原扫描页），`translatedLastPage` 为 nil；重跑原地更新已有的 `scanRebuild` 附件记录（保留 ID，挂在上面的笔记和批注不丢，更新 `createdAt` 使其成为显示的译文）。
+  - 同一次运行还会组装矫正转写版 `Resources/ScanRebuild/transcription.pdf`（`RebuildPipeline.run(sourceOutput:)`：校对后的原文页按原版面排版，有真实文字层；某页翻译失败但转写成功时，转写版里照样有这一页），以 `resource` + `scanRebuild` 附件记录（`ScannedPDFTranscription.attachment(in:)`）。有转写版时，单栏原文和双栏左侧的“原文”标签变成“扫描原稿 / 矫正转写”菜单，选择按论文存在 UserDefaults（`ScannedPDFTranscription.displayedPaperIDsKey`，只在用户切换时写入），默认扫描原稿。两版的批注、笔记锚点各自挂在自己的附件上；打开挂在另一版上的笔记或引用时会自动切到那一版。阅读助手的全文索引在有转写版时用转写版的页面文字（扫描件本身没有文字）。确认框说明会把页面图像发给模型并给出每页约 1 分钟、5 万 token 的估计；页数超过 PDF 每批页数时提供“翻译前 N 页 / 全部”。
 
 ## 实现约定
 
@@ -220,7 +221,7 @@ xcodebuild -project ReadPaper.xcodeproj -scheme ReadPaper -destination 'platform
 - HTML 区域调整（JS 与 Swift 路径一致性、隐藏/恢复落盘、签名校验、层级与徽标、⇧ 连选、写回顺序与退出前落盘）：`HTMLRegionVisibilityTests`
 - 翻译输出校验（prompt/原文/上下文回显、重试与回退）：`TranslationOutputValidatorTests`
 - PDF 无文字层检测（Type3 无映射字体、扫描件、glyph name 判定）：`PDFTextLayerInspectorTests`
-- 扫描版 PDF 翻译（模型适配、图像消息、截断映射、扫描页路由回退、错误映射、用真实 XeLaTeX 跑通整条路线并复用检查点）：`ScannedPDFTranslationServiceTests`；RebuildPDFKit 本身（与 Python 的对照、XeLaTeX 排版、流水线检查点与失败页回退）在 `../rebuild-pdf` 里 `swift test`，`SampleReplayTests` 用 Python 运行留下的回答离线重放两篇样例（需本地 `.rebuild` 目录，约 1.5 分钟）
+- 扫描版 PDF 翻译（模型适配、图像消息、截断映射、扫描页路由回退、错误映射、转写附件与显示选择、用真实 XeLaTeX 跑通整条路线并产出译文与矫正转写、复用检查点）：`ScannedPDFTranslationServiceTests`；全文索引优先用矫正转写的文字：`PaperFullTextSearchServiceTests`；RebuildPDFKit 本身（与 Python 的对照、XeLaTeX 排版、流水线检查点与失败页回退）在 `../rebuild-pdf` 里 `swift test`，`SampleReplayTests` 用 Python 运行留下的回答离线重放两篇样例（需本地 `.rebuild` 目录，约 1.5 分钟）
 - BabelDOC 安装源、latest 版本解析、uv 安装参数：`BabelDocToolManagerTests`
 - BabelDOC 参数、progress bridge、敏感信息遮蔽、子进程输出/取消：`BabelDocRunnerTests`
 - provider 校验、base URL 规范化、连接测试：`LLMProviderValidationUseCaseTests`

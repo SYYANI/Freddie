@@ -87,6 +87,8 @@ struct ReaderPaneView: View {
     private var babelDocSemanticHintsEnabled = BabelDocSemanticHintPreference.defaultValue
     @AppStorage(LaTeXIntegrationPreferences.translationEnabledKey)
     private var latexTranslationEnabled = false
+    @AppStorage(ScannedPDFTranscription.displayedPaperIDsKey)
+    private var transcriptionPaperIDsStorage = ""
 
     var paper: Paper?
     var attachments: [PaperAttachment]
@@ -204,6 +206,21 @@ struct ReaderPaneView: View {
         attachments
             .filter { $0.kind == .resource && $0.source == .latexTrans }
             .max { $0.createdAt < $1.createdAt }
+    }
+
+    /// The corrected transcription of a scanned PDF: an alternative original with real text.
+    private var scanTranscriptionAttachment: PaperAttachment? {
+        ScannedPDFTranscription.attachment(in: attachments)
+    }
+
+    private var showsScanTranscription: Bool {
+        guard let paper, scanTranscriptionAttachment != nil else { return false }
+        return ScannedPDFTranscription.decode(transcriptionPaperIDsStorage).contains(paper.id)
+    }
+
+    /// The original as read: the PDF, or its corrected transcription when the reader chose it.
+    private var originalPDFAttachment: PaperAttachment? {
+        showsScanTranscription ? scanTranscriptionAttachment : pdfAttachment
     }
 
     private var originalPDFPageCountRequest: PDFPageCountRequest? {
@@ -1839,10 +1856,11 @@ struct ReaderPaneView: View {
                         }
                     case .pdf:
                         labeledPDFReader(
-                            fileURL: pdfAttachment?.fileURL,
-                            attachmentID: pdfAttachment?.id,
+                            fileURL: originalPDFAttachment?.fileURL,
+                            attachmentID: originalPDFAttachment?.id,
                             includesUnattributedSidenotes: true,
                             label: String(localized: "Original", bundle: bundle),
+                            showsOriginalVersionMenu: true,
                             emptyTitle: String(localized: "No PDF available", bundle: bundle),
                             emptyDescription: String(localized: "Import a PDF or fetch one from arXiv to read it here.", bundle: bundle)
                         )
@@ -1850,8 +1868,9 @@ struct ReaderPaneView: View {
                         if translatedPDFAttachment != nil {
                             DualPDFReaderView(
                                 paperID: paper?.id,
-                                originalURL: pdfAttachment?.fileURL,
-                                originalAttachmentID: pdfAttachment?.id,
+                                originalURL: originalPDFAttachment?.fileURL,
+                                originalAttachmentID: originalPDFAttachment?.id,
+                                originalLabel: scanTranscriptionAttachment == nil ? nil : AnyView(originalVersionMenu),
                                 translatedURL: translatedPDFAttachment?.fileURL,
                                 translatedAttachmentID: translatedPDFAttachment?.id,
                                 translatedLastPage: translatedPDFAttachment?.translatedLastPage,
@@ -2410,7 +2429,8 @@ struct ReaderPaneView: View {
         }
 
         let jobID = job.id
-        let previousAttachments = attachments.filter { $0.kind == .translatedPDF && $0.source == .scanRebuild }
+        let previousTranslation = attachments.first { $0.kind == .translatedPDF && $0.source == .scanRebuild }
+        let previousTranscription = ScannedPDFTranscription.attachment(in: attachments)
         translationProgress = nil
         pdfTranslationErrorLogURL = nil
         pdfTranslationDiagnosticsNoticeID = nil
@@ -2441,18 +2461,18 @@ struct ReaderPaneView: View {
                 }
                 try Task.checkCancellation()
 
-                // A rerun writes the same file; the new record makes it the shown translation.
-                for attachment in previousAttachments {
-                    modelContext.delete(attachment)
-                }
-                let attachment = PaperAttachment(
-                    paperID: paper.id,
-                    kind: .translatedPDF,
-                    source: .scanRebuild,
-                    filename: output.outputPDF.lastPathComponent,
-                    filePath: output.outputPDF.path
+                // A rerun rewrites the same files. Their records keep their IDs, so notes and
+                // annotations made on them stay attached; the new date makes them the shown versions.
+                let attachment = upsertScanRebuildAttachment(
+                    previousTranslation, kind: .translatedPDF, paperID: paper.id, fileURL: output.outputPDF
                 )
-                modelContext.insert(attachment)
+                if let transcriptionPDF = output.transcriptionPDF {
+                    _ = upsertScanRebuildAttachment(
+                        previousTranscription, kind: .resource, paperID: paper.id, fileURL: transcriptionPDF
+                    )
+                } else if let previousTranscription {
+                    modelContext.delete(previousTranscription)
+                }
                 let fallbackMessage = output.fallbacks.isEmpty
                     ? nil
                     : ScannedPDFTranslationService.fallbackMessage(count: output.fallbacks.count, bundle: bundle)
@@ -2485,6 +2505,29 @@ struct ReaderPaneView: View {
             }
             endTranslationRun(runOutcome)
         }
+    }
+
+    private func upsertScanRebuildAttachment(
+        _ existing: PaperAttachment?,
+        kind: AttachmentKind,
+        paperID: UUID,
+        fileURL: URL
+    ) -> PaperAttachment {
+        if let existing {
+            existing.filename = fileURL.lastPathComponent
+            existing.filePath = fileURL.path
+            existing.createdAt = Date()
+            return existing
+        }
+        let attachment = PaperAttachment(
+            paperID: paperID,
+            kind: kind,
+            source: .scanRebuild,
+            filename: fileURL.lastPathComponent,
+            filePath: fileURL.path
+        )
+        modelContext.insert(attachment)
+        return attachment
     }
 
     private func applyScannedPDFProgress(_ update: ScannedPDFTranslationProgress, jobID: UUID) {
@@ -3058,6 +3101,7 @@ struct ReaderPaneView: View {
         attachmentID: UUID?,
         includesUnattributedSidenotes: Bool,
         label: String,
+        showsOriginalVersionMenu: Bool = false,
         emptyTitle: String,
         emptyDescription: String,
         reloadToken: Int = 0,
@@ -3116,7 +3160,11 @@ struct ReaderPaneView: View {
                 }
             }
                 .overlay(alignment: .topLeading) {
-                    readerLabel(label)
+                    if showsOriginalVersionMenu, scanTranscriptionAttachment != nil {
+                        originalVersionMenu
+                    } else {
+                        readerLabel(label)
+                    }
                 }
         } else {
             centeredUnavailableView(
@@ -3191,6 +3239,53 @@ struct ReaderPaneView: View {
             .padding(.vertical, 4)
             .readPaperGlassEffect(in: RoundedRectangle(cornerRadius: 6, style: .continuous))
             .padding(8)
+    }
+
+    /// The Original label of a scanned PDF with a corrected transcription: chooses which one to read.
+    private var originalVersionMenu: some View {
+        let title = showsScanTranscription
+            ? String(localized: "Corrected Transcription", bundle: bundle)
+            : String(localized: "Scanned Original", bundle: bundle)
+        return Menu {
+            Toggle(String(localized: "Scanned Original", bundle: bundle), isOn: Binding(
+                get: { !showsScanTranscription },
+                set: { if $0 { setShowsScanTranscription(false) } }
+            ))
+            Toggle(String(localized: "Corrected Transcription", bundle: bundle), isOn: Binding(
+                get: { showsScanTranscription },
+                set: { if $0 { setShowsScanTranscription(true) } }
+            ))
+        } label: {
+            HStack(spacing: 3) {
+                Text(title)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 8, weight: .bold))
+            }
+            .font(.caption.weight(.semibold))
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .readPaperGlassEffect(in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+            .contentShape(Rectangle())
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .padding(8)
+        .help(String(localized: "Read the scanned pages or the corrected transcription typeset from them", bundle: bundle))
+        .accessibilityLabel(String(localized: "Original", bundle: bundle))
+        .accessibilityValue(title)
+    }
+
+    private func setShowsScanTranscription(_ shows: Bool) {
+        guard let paperID = paper?.id else { return }
+        var paperIDs = ScannedPDFTranscription.decode(transcriptionPaperIDsStorage)
+        if shows {
+            paperIDs.insert(paperID)
+        } else {
+            paperIDs.remove(paperID)
+        }
+        transcriptionPaperIDsStorage = ScannedPDFTranscription.encode(paperIDs)
     }
 
     private func handleNoteSelectionChange(_ selection: NoteSelectionContext?) {
@@ -3287,6 +3382,14 @@ struct ReaderPaneView: View {
 
         guard let targetPageIndex = request.pageIndex else { return }
         let targetMode = preferredReaderMode(for: request)
+        // A note or citation made on the scan or on its transcription opens that version.
+        if let attachmentID = request.attachmentID, scanTranscriptionAttachment != nil {
+            if attachmentID == scanTranscriptionAttachment?.id, !showsScanTranscription {
+                setShowsScanTranscription(true)
+            } else if attachmentID == pdfAttachment?.id, showsScanTranscription {
+                setShowsScanTranscription(false)
+            }
+        }
 
         updateWithoutPersistingReadingState {
             readerMode = targetMode

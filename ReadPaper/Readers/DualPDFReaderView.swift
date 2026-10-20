@@ -31,6 +31,8 @@ struct DualPDFReaderView: View {
     var paperID: UUID? = nil
     var originalURL: URL?
     var originalAttachmentID: UUID? = nil
+    /// Replaces the Original label, such as a menu choosing the scan or its transcription.
+    var originalLabel: AnyView? = nil
     var translatedURL: URL?
     var translatedAttachmentID: UUID? = nil
     var translatedLastPage: Int? = nil
@@ -100,7 +102,11 @@ struct DualPDFReaderView: View {
             handleSelectionChange(selection, source: .original)
         }
         .overlay(alignment: .topLeading) {
-            readerLabel(String(localized: "Original", bundle: bundle))
+            if let originalLabel {
+                originalLabel
+            } else {
+                readerLabel(String(localized: "Original", bundle: bundle))
+            }
         }
     }
 

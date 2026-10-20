@@ -1,3 +1,5 @@
+import CoreGraphics
+import CoreText
 import Foundation
 import XCTest
 @testable import ReadPaper
@@ -96,6 +98,52 @@ final class PaperFullTextSearchServiceTests: XCTestCase {
         let rebuilt = try XCTUnwrap(service.loadOrRebuild(paper: paper, attachments: [attachment]))
         XCTAssertNotEqual(rebuilt.sourceFingerprint, first.sourceFingerprint)
         XCTAssertTrue(rebuilt.blocks.contains(where: { $0.text.contains("new external dataset") }))
+    }
+
+    /// A scanned PDF has no text; its corrected transcription has the text, page for page.
+    @MainActor
+    func testPDFIndexPrefersTheScanTranscriptionText() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("PaperFullTextSearchTranscriptionTests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let fileStore = PaperFileStore(applicationSupportDirectory: root)
+        let paper = Paper(title: "Scanned Paper")
+        let directory = try fileStore.directory(for: paper.id)
+        paper.localDirectoryPath = directory.path
+        let scanURL = directory.appendingPathComponent("paper.pdf")
+        try Self.makePDF(at: scanURL, pages: ["", ""])
+        let transcriptionURL = directory.appendingPathComponent("transcription.pdf")
+        try Self.makePDF(at: transcriptionURL, pages: ["Applicative languages define functions", "by recursion equations"])
+        let scan = PaperAttachment(paperID: paper.id, kind: .pdf, source: .localImport, filename: "paper.pdf", filePath: scanURL.path)
+        let transcription = PaperAttachment(
+            paperID: paper.id, kind: .resource, source: .scanRebuild, filename: "transcription.pdf", filePath: transcriptionURL.path
+        )
+        let service = PaperFullTextSearchService(fileStore: fileStore)
+
+        let index = try XCTUnwrap(service.loadOrRebuild(paper: paper, attachments: [scan, transcription]))
+        XCTAssertEqual(index.blocks.map(\.pageIndex), [0, 1])
+        XCTAssertEqual(Set(index.blocks.map(\.attachmentID)), [transcription.id])
+        let hit = try XCTUnwrap(service.search(query: "recursion equations", in: index, topK: 1).first)
+        XCTAssertEqual(hit.block.pageIndex, 1)
+
+        try FileManager.default.removeItem(at: transcriptionURL)
+        let withoutTranscription = try XCTUnwrap(service.rebuild(paper: paper, attachments: [scan, transcription]))
+        XCTAssertTrue(withoutTranscription.blocks.isEmpty)
+    }
+
+    private static func makePDF(at url: URL, pages: [String]) throws {
+        var box = CGRect(x: 0, y: 0, width: 300, height: 400)
+        let context = try XCTUnwrap(CGContext(url as CFURL, mediaBox: &box, nil))
+        for text in pages {
+            context.beginPDFPage(nil)
+            let line = CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: [
+                NSAttributedString.Key(kCTFontAttributeName as String): CTFontCreateWithName("Times-Roman" as CFString, 11, nil),
+            ]))
+            context.textPosition = CGPoint(x: 30, y: 340)
+            CTLineDraw(line, context)
+            context.endPDFPage()
+        }
+        context.closePDF()
     }
 
     @MainActor

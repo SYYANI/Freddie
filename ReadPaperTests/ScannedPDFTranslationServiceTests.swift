@@ -134,6 +134,21 @@ final class ScannedPDFTranslationServiceTests: XCTestCase {
         XCTAssertNotEqual(client.identity, other.identity)
     }
 
+    func testTranscriptionIsTheNewestScanRebuildResourceAndDisplayChoicesRoundTrip() {
+        let paperID = UUID()
+        let translation = PaperAttachment(paperID: paperID, kind: .translatedPDF, source: .scanRebuild, filename: "t.pdf", filePath: "t.pdf")
+        let latexSource = PaperAttachment(paperID: paperID, kind: .resource, source: .latexTrans, filename: "src", filePath: "src")
+        let older = PaperAttachment(paperID: paperID, kind: .resource, source: .scanRebuild, filename: "a.pdf", filePath: "a.pdf")
+        let newer = PaperAttachment(paperID: paperID, kind: .resource, source: .scanRebuild, filename: "b.pdf", filePath: "b.pdf")
+        newer.createdAt = older.createdAt.addingTimeInterval(1)
+        XCTAssertNil(ScannedPDFTranscription.attachment(in: [translation, latexSource]))
+        XCTAssertTrue(ScannedPDFTranscription.attachment(in: [newer, translation, older]) === newer)
+
+        let ids: Set<UUID> = [UUID(), UUID()]
+        XCTAssertEqual(ScannedPDFTranscription.decode(ScannedPDFTranscription.encode(ids)), ids)
+        XCTAssertEqual(ScannedPDFTranscription.decode(""), [])
+    }
+
     func testOnlySimplifiedChineseIsSupported() {
         XCTAssertTrue(ScannedPDFTranslationPreferences.supports(targetLanguage: TranslationTargetLanguage.simplifiedChinese.code))
         XCTAssertFalse(ScannedPDFTranslationPreferences.supports(targetLanguage: TranslationTargetLanguage.english.code))
@@ -213,6 +228,9 @@ final class ScannedPDFTranslationServiceTests: XCTestCase {
         XCTAssertTrue(output.fallbacks.isEmpty)
         let text = try XCTUnwrap(PDFDocument(url: output.outputPDF)?.page(at: 0)?.string).replacingOccurrences(of: " ", with: "")
         XCTAssertTrue(text.contains("原文译文"), text)
+        let transcription = try XCTUnwrap(output.transcriptionPDF)
+        XCTAssertEqual(transcription, try service.artifactsDirectory(for: paperID).appendingPathComponent("transcription.pdf"))
+        XCTAssertTrue(try XCTUnwrap(PDFDocument(url: transcription)?.page(at: 0)?.string).contains("Source words"))
         XCTAssertEqual(log.all.first, .checkingTeX)
         XCTAssertEqual(log.all.last, .rebuilding(.assembling))
         XCTAssertEqual(provider.requests.count, 3)  // transcription, proofreading, translation

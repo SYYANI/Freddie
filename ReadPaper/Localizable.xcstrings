@@ -1798,6 +1798,17 @@
         }
       }
     },
+    "Corrected Transcription" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "矫正转写"
+          }
+        }
+      }
+    },
     "Could not compile the translated LaTeX source." : {
       "localizations" : {
         "zh-Hans" : {
@@ -5870,6 +5881,17 @@
         }
       }
     },
+    "Read the scanned pages or the corrected transcription typeset from them" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "查看扫描页，或由扫描页校对后重新排版的矫正转写"
+          }
+        }
+      }
+    },
     "Reader" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -6407,6 +6429,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在将 %1$@ 的源 PDF 保存到你的本地资料库。"
+          }
+        }
+      }
+    },
+    "Scanned Original" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "扫描原稿"
           }
         }
       }

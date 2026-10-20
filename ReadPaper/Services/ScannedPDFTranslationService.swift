@@ -11,6 +11,27 @@ enum ScannedPDFTranslationPreferences {
     }
 }
 
+/// The corrected transcription that scanned-PDF translation typesets next to the translation:
+/// the proofread original-language pages, page for page like the scan, with real text.
+enum ScannedPDFTranscription {
+    /// Papers whose original is shown as the transcription instead of the scan.
+    static let displayedPaperIDsKey = "ReadPaper.ScannedPDF.TranscriptionPaperIDs"
+
+    static func attachment(in attachments: [PaperAttachment]) -> PaperAttachment? {
+        attachments
+            .filter { $0.kind == .resource && $0.source == .scanRebuild }
+            .max { $0.createdAt < $1.createdAt }
+    }
+
+    static func decode(_ storage: String) -> Set<UUID> {
+        Set(storage.split(separator: "\n").compactMap { UUID(uuidString: String($0)) })
+    }
+
+    static func encode(_ paperIDs: Set<UUID>) -> String {
+        paperIDs.map(\.uuidString).sorted().joined(separator: "\n")
+    }
+}
+
 #if os(macOS)
 import RebuildPDFKit
 
@@ -105,6 +126,8 @@ struct ScannedPDFTranslationRequest: Sendable {
 
 struct ScannedPDFTranslationOutput: Sendable {
     var outputPDF: URL
+    /// The corrected transcription; pages that could not be transcribed show the scan.
+    var transcriptionPDF: URL?
     var rebuiltPages: [Int]
     /// Pages that kept the scanned page, with the reason.
     var fallbacks: [Int: String]
@@ -198,12 +221,14 @@ enum ScannedPDFTranslationError: LocalizedError, Equatable {
 /// Translates scanned PDFs (and PDFs with an unreliable text layer) by rebuilding each page
 /// with RebuildPDFKit: a vision model transcribes the page as LaTeX, the text model
 /// translates it, and XeLaTeX typesets it on the original page geometry. The result has the
-/// same pages as the original, so it opens side by side like any translated PDF.
+/// same pages as the original, so it opens side by side like any translated PDF. The
+/// proofread transcription is typeset too, as an alternative original with selectable text.
 ///
 /// Checkpoints live in the paper's `Resources/ScanRebuild` folder: an interrupted or
 /// repeated run reuses every page already transcribed or translated.
 struct ScannedPDFTranslationService {
     static let outputFilename = "scan-rebuild.zh.pdf"
+    static let transcriptionFilename = "transcription.pdf"
 
     var fileStore = PaperFileStore()
     var recognizer: any TextRecognizing = VisionTextRecognizer()
@@ -264,7 +289,12 @@ struct ScannedPDFTranslationService {
             )
         )
         do {
-            let result = try await pipeline.run(input: request.inputPDF, output: output, artifacts: artifacts) { update in
+            let result = try await pipeline.run(
+                input: request.inputPDF,
+                output: output,
+                artifacts: artifacts,
+                sourceOutput: artifacts.appendingPathComponent(Self.transcriptionFilename)
+            ) { update in
                 progress(ScannedPDFTranslationProgress(
                     stage: .rebuilding(update.stage),
                     fractionCompleted: update.fractionCompleted,
@@ -274,6 +304,7 @@ struct ScannedPDFTranslationService {
             }
             return ScannedPDFTranslationOutput(
                 outputPDF: result.output,
+                transcriptionPDF: result.sourceRebuiltPages.isEmpty ? nil : result.sourceOutput,
                 rebuiltPages: result.rebuiltPages,
                 fallbacks: result.fallbacks,
                 totalTokens: result.usage.totalTokens
