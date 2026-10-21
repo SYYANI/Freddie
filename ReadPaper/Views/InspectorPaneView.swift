@@ -158,14 +158,7 @@ struct InspectorPaneView: View {
                 .padding(.horizontal, 8)
                 .padding(.vertical, 6)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(Color(nsColor: .textBackgroundColor))
-                )
-                .overlay {
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .strokeBorder(Color.accentColor.opacity(0.22), lineWidth: 1)
-                }
+                .readPaperFieldWell(isFocused: focusedMetadataField == .authors)
                 .focused($focusedMetadataField, equals: .authors)
                 .onSubmit {
                     commitAuthorsEdits(for: paper)
@@ -693,15 +686,7 @@ private struct NoteEditor: View {
                     usesPaperTypography: displayAppearance == .paper
                 )
                     .frame(minHeight: 90)
-                    .background(
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .fill(Color(nsColor: .textBackgroundColor))
-                    )
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .stroke(.quaternary)
-                            .allowsHitTesting(false)
-                    }
+                    .readPaperFieldWell(isFocused: isEditing)
 
                 if note.body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
                     notePreviewCard(isInteractive: false)

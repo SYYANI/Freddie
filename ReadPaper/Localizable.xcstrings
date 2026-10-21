@@ -418,16 +418,6 @@
         }
       }
     },
-    "After selecting routes here, go back to the main window, import a paper, open it in the reader, and use the Translate button in the toolbar." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在这里选好路由后，回到主窗口，导入论文，在阅读器中打开它，然后使用工具栏里的 Translate 按钮。"
-          }
-        }
-      }
-    },
     "AI Explanation" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -816,6 +806,7 @@
       }
     },
     "Automatic detection checks the app's PATH and common MacTeX, Homebrew, and /usr/local locations. A manually selected directory takes precedence and must contain an executable latexmk." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -1390,17 +1381,6 @@
         }
       }
     },
-    "Choose a provider and paste its API key. Freddie tests the connection, then uses it for both HTML and PDF translation." : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "选择 Provider 并粘贴 API key。Freddie 会先测试连接，通过后同时用于 HTML 和 PDF 翻译。"
-          }
-        }
-      }
-    },
     "Choose a reading assistant model in Settings first." : {
       "localizations" : {
         "zh-Hans" : {
@@ -1462,16 +1442,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "选择服务商"
-          }
-        }
-      }
-    },
-    "Choose separate saved model profiles for translation and reading assistance. When enabled, external questions are answered through the selected model's server-side web search (Responses API or Anthropic Messages API), instead of calling academic search services directly." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "可分别为翻译与阅读助手选择已保存的模型配置。启用后，外部资料问题会通过所选模型的 Responses API 或 Anthropic Messages API 服务端联网搜索来回答，不再直接调用学术检索服务。"
           }
         }
       }
@@ -1719,16 +1689,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "已连接 %1$@，耗时 %2$d ms。"
-          }
-        }
-      }
-    },
-    "Controls the base font size used for localized HTML reader content and translations." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "控制本地化 HTML 阅读内容和译文使用的基础字号。"
           }
         }
       }
@@ -2493,16 +2453,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "请输入针对所选文字的问题。"
-          }
-        }
-      }
-    },
-    "Enter one preferred term mapping per line, for example “large language model = 大语言模型”. The glossary is optional and is used as reference context by both HTML and PDF translation." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "每行输入一条首选术语映射，例如“large language model = 大语言模型”。术语表可留空，HTML 和 PDF 翻译都会将其作为参考上下文。"
           }
         }
       }
@@ -3318,17 +3268,6 @@
         }
       }
     },
-    "How to use translation" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "如何使用翻译"
-          }
-        }
-      }
-    },
     "HTML" : {
 
     },
@@ -3437,16 +3376,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "HTML 翻译使用 %1$@，PDF 翻译使用 %2$@。"
-          }
-        }
-      }
-    },
-    "HTML translation works best for arXiv papers with HTML content. PDF translation uses the PDF/BabelDOC route and can produce translated or side-by-side PDF reading modes." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "HTML 翻译最适合带有 HTML 内容的 arXiv 论文。PDF 翻译使用 PDF/BabelDOC 路由，可生成译文 PDF 或左右对照的阅读模式。"
           }
         }
       }
@@ -4225,6 +4154,16 @@
         }
       }
     },
+    "Lower concurrency or QPS if your provider reports rate limits." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "如果 Provider 提示触发速率限制，可调低并发数或 QPS。"
+          }
+        }
+      }
+    },
     "MacTeX" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -4494,6 +4433,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "更多"
+          }
+        }
+      }
+    },
+    "More options:" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "更多选项："
           }
         }
       }
@@ -4965,6 +4914,16 @@
         }
       }
     },
+    "One term per line, for example “large language model = 大语言模型”." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "每行一条，例如“large language model = 大语言模型”。"
+          }
+        }
+      }
+    },
     "Only http:// or https:// Base URL is supported." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -5111,16 +5070,6 @@
         }
       }
     },
-    "Other services, separate models per task, and the reading assistant model:" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "其他服务、按用途分配模型、阅读助手模型："
-          }
-        }
-      }
-    },
     "Page" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -5242,6 +5191,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在解析 LaTeX 源码..."
+          }
+        }
+      }
+    },
+    "Paste an API key to use it for HTML and PDF translation." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "粘贴 API key，测试通过后同时用于 HTML 和 PDF 翻译。"
           }
         }
       }
@@ -7249,16 +7209,6 @@
         }
       }
     },
-    "The defaults suit most providers. Lower concurrency or QPS if your provider reports rate limits. Pages per batch sets how many pages each incremental PDF translation run covers." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "默认值适合大多数 Provider。如果 Provider 提示触发速率限制，可调低并发数或 QPS。每批页数决定每次增量 PDF 翻译覆盖多少页。"
-          }
-        }
-      }
-    },
     "The embedded BabelDOC fonts are missing." : {
       "localizations" : {
         "zh-Hans" : {
@@ -7806,22 +7756,6 @@
         }
       }
     },
-    "This PDF uses scanned page images with an OCR text layer. Use Translate Scanned PDF instead." : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "This PDF uses scanned page images with an OCR text layer. Use Translate Scanned PDF instead."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "此 PDF 由扫描页面图像和 OCR 文字层组成。请使用“翻译扫描版 PDF”。"
-          }
-        }
-      }
-    },
     "This PDF has no extractable text layer (for example, scanned pages or bitmap fonts without character mapping). PDF translation is not supported for it." : {
       "localizations" : {
         "zh-Hans" : {
@@ -7850,6 +7784,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "此 PDF 链接到 arXiv %@。要将其导入资料库吗？"
+          }
+        }
+      }
+    },
+    "This PDF uses scanned page images with an OCR text layer. Use Translate Scanned PDF instead." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This PDF uses scanned page images with an OCR text layer. Use Translate Scanned PDF instead."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此 PDF 由扫描页面图像和 OCR 文字层组成。请使用“翻译扫描版 PDF”。"
           }
         }
       }
@@ -8029,12 +7979,12 @@
         }
       }
     },
-    "Translate Scanned PDF also typesets its pages with this distribution's XeLaTeX, whether or not arXiv LaTeX translation is enabled." : {
+    "Translate Scanned PDF always uses this distribution's XeLaTeX." : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "无论是否启用 arXiv LaTeX 翻译，“翻译扫描版 PDF”都会用这个发行版的 XeLaTeX 排版页面。"
+            "value" : "“翻译扫描版 PDF”始终用这个发行版的 XeLaTeX 排版。"
           }
         }
       }
@@ -8130,6 +8080,7 @@
       }
     },
     "Translating a scanned PDF sends each page image to the scanned page model, which must accept image input; the PDF/BabelDOC model then translates the transcribed text." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -8753,6 +8704,17 @@
         }
       }
     },
+    "Uses the selected model's server-side web search (Responses API or Anthropic Messages API)." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "使用所选模型的服务端联网搜索（Responses API 或 Anthropic Messages API）。"
+          }
+        }
+      }
+    },
     "Using cached LaTeX structure to improve PDF translation." : {
       "localizations" : {
         "zh-Hans" : {
@@ -8859,6 +8821,7 @@
       }
     },
     "When enabled, Translate arXiv LaTeX appears in the reader's Translate menu. It downloads the paper source, translates its semantic units, and uses the selected external TeX distribution to compile the translated PDF." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {

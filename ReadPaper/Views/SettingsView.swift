@@ -523,13 +523,7 @@ private struct SettingsForm: View {
                         String(localized: "Use arXiv LaTeX structure for PDF translation", bundle: bundle),
                         isOn: $babelDocSemanticHintsEnabled
                     )
-
-                    Text(
-                        "When enabled, ReadPaper uses available arXiv source to improve BabelDOC structure and translation context. No TeX installation is required, and failures fall back to PDF-only analysis.",
-                        bundle: bundle
-                    )
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+                    .help(String(localized: "When enabled, ReadPaper uses available arXiv source to improve BabelDOC structure and translation context. No TeX installation is required, and failures fall back to PDF-only analysis.", bundle: bundle))
 
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Optional glossary", bundle: bundle)
@@ -545,10 +539,7 @@ private struct SettingsForm: View {
                     }
                     .disabled(translationGlossary.isEmpty)
 
-                    Text(
-                        "Enter one preferred term mapping per line, for example “large language model = 大语言模型”. The glossary is optional and is used as reference context by both HTML and PDF translation.",
-                        bundle: bundle
-                    )
+                    Text("One term per line, for example “large language model = 大语言模型”.", bundle: bundle)
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
@@ -581,10 +572,7 @@ private struct SettingsForm: View {
                                 in: PDFTranslationBatchPreference.allowedRange
                             )
 
-                            Text(
-                                "The defaults suit most providers. Lower concurrency or QPS if your provider reports rate limits. Pages per batch sets how many pages each incremental PDF translation run covers.",
-                                bundle: bundle
-                            )
+                            Text("Lower concurrency or QPS if your provider reports rate limits.", bundle: bundle)
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
@@ -644,11 +632,6 @@ private struct SettingsForm: View {
                         htmlReaderFontSize = HTMLReaderTypography.defaultFontSize
                     }
                     .disabled(htmlReaderFontSizeValue == Int(HTMLReaderTypography.defaultFontSize))
-
-                    Text("Controls the base font size used for localized HTML reader content and translations.", bundle: bundle)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
                 }
 
                 Section(String(localized: "Reader Appearance", bundle: bundle)) {
@@ -660,21 +643,7 @@ private struct SettingsForm: View {
                         Text("Paper Tone", bundle: bundle).tag(PDFDisplayAppearance.paper)
                     }
                     .pickerStyle(.segmented)
-
-                    Text("System appearance changes automatically select Default for Light Mode and Paper Tone for Dark Mode. You can switch either option manually afterward.", bundle: bundle)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
-                Section(String(localized: "How to use translation", bundle: bundle)) {
-                    Text("After selecting routes here, go back to the main window, import a paper, open it in the reader, and use the Translate button in the toolbar.", bundle: bundle)
-                        .fixedSize(horizontal: false, vertical: true)
-
-                    Text("HTML translation works best for arXiv papers with HTML content. PDF translation uses the PDF/BabelDOC route and can produce translated or side-by-side PDF reading modes.", bundle: bundle)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                    .help(String(localized: "System appearance changes automatically select Default for Light Mode and Paper Tone for Dark Mode. You can switch either option manually afterward.", bundle: bundle))
                 }
 
                 Section(String(localized: "Translation Routes", bundle: bundle)) {
@@ -701,6 +670,7 @@ private struct SettingsForm: View {
                             Text(modelDisplayName(model)).tag(Optional(model.id))
                         }
                     }
+                    .help(String(localized: "Translating a scanned PDF sends each page image to the scanned page model, which must accept image input; the PDF/BabelDOC model then translates the transcribed text.", bundle: bundle))
 
                     Picker(
                         String(localized: "Reading Assistant Model", bundle: bundle),
@@ -716,15 +686,7 @@ private struct SettingsForm: View {
                         String(localized: "Allow external search for the reading assistant", bundle: bundle),
                         isOn: $externalAssistantSearchEnabled
                     )
-
-                    Text("Choose separate saved model profiles for translation and reading assistance. When enabled, external questions are answered through the selected model's server-side web search (Responses API or Anthropic Messages API), instead of calling academic search services directly.", bundle: bundle)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-
-                    Text("Translating a scanned PDF sends each page image to the scanned page model, which must accept image input; the PDF/BabelDOC model then translates the transcribed text.", bundle: bundle)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                    .help(String(localized: "Uses the selected model's server-side web search (Responses API or Anthropic Messages API).", bundle: bundle))
                 }
             }
             .formStyle(.grouped)
@@ -744,19 +706,9 @@ private struct SettingsForm: View {
                         String(localized: "Enable arXiv LaTeX translation", bundle: bundle),
                         isOn: $latexTranslationEnabled
                     )
+                    .help(String(localized: "When enabled, Translate arXiv LaTeX appears in the reader's Translate menu. It downloads the paper source, translates its semantic units, and uses the selected external TeX distribution to compile the translated PDF.", bundle: bundle))
 
-                    Text(
-                        "When enabled, Translate arXiv LaTeX appears in the reader's Translate menu. It downloads the paper source, translates its semantic units, and uses the selected external TeX distribution to compile the translated PDF.",
-                        bundle: bundle
-                    )
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                    Text(
-                        "Translate Scanned PDF also typesets its pages with this distribution's XeLaTeX, whether or not arXiv LaTeX translation is enabled.",
-                        bundle: bundle
-                    )
+                    Text("Translate Scanned PDF always uses this distribution's XeLaTeX.", bundle: bundle)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -812,6 +764,7 @@ private struct SettingsForm: View {
                         }
                     }
                     .pickerStyle(.menu)
+                    .help(String(localized: "Automatic detection checks the app's PATH and common MacTeX, Homebrew, and /usr/local locations. A manually selected directory takes precedence and must contain an executable latexmk.", bundle: bundle))
 
                     HStack(spacing: 10) {
                         Button(String(localized: "Refresh", bundle: bundle)) {
@@ -829,14 +782,6 @@ private struct SettingsForm: View {
                         }
                         .disabled(latexToolchainDirectoryPath.isEmpty)
                     }
-
-                    Text(
-                        "Automatic detection checks the app's PATH and common MacTeX, Homebrew, and /usr/local locations. A manually selected directory takes precedence and must contain an executable latexmk.",
-                        bundle: bundle
-                    )
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
                 }
 
                 Section(String(localized: "Current LaTeX Toolchain", bundle: bundle)) {
@@ -1265,6 +1210,7 @@ private struct SettingsForm: View {
                             }
                             .labelsHidden()
                         }
+                        .help(String(localized: "Thinking mode controls whether the model outputs a chain of thought before answering (for example DeepSeek V4). Reasoning effort is omitted while thinking is disabled.", bundle: bundle))
                         SettingsFieldRow(String(localized: "Reasoning Effort", bundle: bundle)) {
                             Picker(String(localized: "Reasoning Effort", bundle: bundle), selection: $modelReasoningEffort) {
                                 Text(String(localized: "Default", bundle: bundle))
@@ -1277,9 +1223,6 @@ private struct SettingsForm: View {
                             .labelsHidden()
                             .disabled(modelThinkingMode == .disabled)
                         }
-                        Text("Thinking mode controls whether the model outputs a chain of thought before answering (for example DeepSeek V4). Reasoning effort is omitted while thinking is disabled.", bundle: bundle)
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
                         SettingsFieldRow(String(localized: "Temperature", bundle: bundle)) {
                             SettingsPlainTextField(text: $modelTemperature)
                         }
@@ -1593,7 +1536,7 @@ private struct SettingsForm: View {
                 title: String(localized: "1. Connect a translation service", bundle: bundle),
                 detail: isTranslationRouteReady
                     ? translationRouteSummary
-                    : String(localized: "Choose a provider and paste its API key. Freddie tests the connection, then uses it for both HTML and PDF translation.", bundle: bundle),
+                    : String(localized: "Paste an API key to use it for HTML and PDF translation.", bundle: bundle),
                 isComplete: isTranslationRouteReady
             )
 
@@ -1614,7 +1557,7 @@ private struct SettingsForm: View {
             Divider()
 
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text("Other services, separate models per task, and the reading assistant model:", bundle: bundle)
+                Text("More options:", bundle: bundle)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -2577,30 +2520,8 @@ private struct SettingsFieldRow<Content: View>: View {
     }
 }
 
-/// Settings text fields draw their own translucent well instead of the system's
-/// opaque white bezel, which stands out against the translucent form. The native
-/// field inside stays borderless, and reports focus so the well can show it.
-private struct SettingsFieldWell: ViewModifier {
-    var isFocused = false
-
-    func body(content: Content) -> some View {
-        content
-            .background(
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(Color(nsColor: .textBackgroundColor).opacity(0.55))
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .strokeBorder(
-                        isFocused ? Color(nsColor: .keyboardFocusIndicatorColor) : Color(nsColor: .separatorColor),
-                        lineWidth: isFocused ? 2 : 0.5
-                    )
-            )
-            .animation(.easeOut(duration: 0.12), value: isFocused)
-    }
-}
-
+// Settings text fields draw the shared translucent well (`readPaperFieldWell`)
+// around a borderless native field, which reports focus so the well can show it.
 private struct SettingsPlainTextField: View {
     let placeholder: String
     @Binding var text: String
@@ -2620,7 +2541,7 @@ private struct SettingsPlainTextField: View {
         SettingsNativePlainTextField(placeholder: placeholder, text: $text, isFocused: $isFocused)
             .padding(.horizontal, 7)
             .padding(.vertical, 4)
-            .modifier(SettingsFieldWell(isFocused: isFocused))
+            .readPaperFieldWell(isFocused: isFocused)
     }
 }
 
@@ -2638,7 +2559,7 @@ private struct SettingsSecureTextField: View {
         SettingsNativeSecureTextField(placeholder: placeholder, text: $text, isFocused: $isFocused)
             .padding(.horizontal, 7)
             .padding(.vertical, 4)
-            .modifier(SettingsFieldWell(isFocused: isFocused))
+            .readPaperFieldWell(isFocused: isFocused)
     }
 }
 
@@ -2761,7 +2682,7 @@ private struct SettingsTemplateTextEditor: View {
 
     var body: some View {
         SettingsTemplateTextView(text: $text, pendingInsertion: $pendingInsertion)
-            .modifier(SettingsFieldWell())
+            .readPaperFieldWell()
     }
 }
 
