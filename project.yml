@@ -20,6 +20,9 @@ packages:
   LaTeXTransSwift:
     url: https://github.com/SYYANI/arxivLatex.git
     branch: main
+  RebuildPDFSwift:
+    url: https://github.com/SYYANI/rebuild-pdf.git
+    branch: main
   SwiftStreamingMarkdown:
     url: https://github.com/SYYANI/SwiftStreamingMarkdown.git
     branch: main
@@ -59,6 +62,8 @@ targets:
         product: BabelDocKit
       - package: LaTeXTransSwift
         product: LaTeXTransKit
+      - package: RebuildPDFSwift
+        product: RebuildPDFKit
       - package: SwiftStreamingMarkdown
       - package: iosMath
       - target: BabelDocHelper
@@ -114,8 +119,8 @@ targets:
         ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS: NO
         SWIFT_VERSION: 6.0
         CODE_SIGN_STYLE: Automatic
-        CURRENT_PROJECT_VERSION: 134
-        MARKETING_VERSION: 0.8.9
+        CURRENT_PROJECT_VERSION: 141
+        MARKETING_VERSION: 0.8.16
       configs:
         Debug:
           ENABLE_TESTABILITY: YES
@@ -170,8 +175,8 @@ targets:
         ENABLE_TESTABILITY: YES
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: 3VM5RUH8V5
-        CURRENT_PROJECT_VERSION: 134
-        MARKETING_VERSION: 0.8.9
+        CURRENT_PROJECT_VERSION: 141
+        MARKETING_VERSION: 0.8.16
         SUPPORTED_PLATFORMS: iphoneos iphonesimulator
         SUPPORTS_MACCATALYST: NO
         SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD: NO

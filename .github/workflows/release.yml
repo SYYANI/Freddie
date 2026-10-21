@@ -32,7 +32,7 @@ jobs:
           READPAPER_PACKAGES_TOKEN: ${{ secrets.READPAPER_PACKAGES_TOKEN }}
         run: |
           if [ -z "$READPAPER_PACKAGES_TOKEN" ]; then
-            echo "::error::Set the READPAPER_PACKAGES_TOKEN Actions secret with read access to the four SYYANI Swift package repositories."
+            echo "::error::Set the READPAPER_PACKAGES_TOKEN Actions secret with read access to the five SYYANI Swift package repositories."
             exit 1
           fi
           git config --global credential.https://github.com.useHttpPath true
@@ -143,7 +143,7 @@ jobs:
           runtime_manifest="$BABELDOC_ROOT/Sources/BabelDocKit/Resources/runtime-manifest.json"
           {
             echo "read-paper=$GITHUB_SHA"
-            for package in swift-readability BabelDOC arxivLatex SwiftStreamingMarkdown; do
+            for package in swift-readability BabelDOC arxivLatex rebuild-pdf SwiftStreamingMarkdown; do
               echo "$package=$(git -C "$DERIVED_DATA_PATH/SourcePackages/checkouts/$package" rev-parse HEAD)"
             done
             echo "layout-model-sha256=$(shasum -a 256 "$BABELDOC_ROOT/Vendor/Models/doclayout_yolo_docstructbench_imgsz1024.mlmodel" | awk '{print $1}')"

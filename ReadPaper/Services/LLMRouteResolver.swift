@@ -74,6 +74,24 @@ struct LLMRouteResolver {
         )
     }
 
+    /// The model that reads scanned pages, which must accept images; the PDF model unless
+    /// another one is chosen.
+    func resolveScannedPageRoute(
+        settings: AppSettings,
+        modelContext: ModelContext
+    ) throws -> ResolvedLLMModelRoute {
+        let storedValue = userDefaults.string(
+            forKey: ScannedPDFTranslationPreferences.transcriptionModelProfileIDKey
+        )
+        let selectedModelID = storedValue.flatMap(UUID.init(uuidString:))
+            ?? settings.selectedPDFModelProfileID
+        return try resolve(
+            selectedModelID: selectedModelID,
+            missingSelectionError: .pdfModelNotSelected,
+            modelContext: modelContext
+        )
+    }
+
     func resolveAssistantRoute(
         settings: AppSettings,
         modelContext: ModelContext

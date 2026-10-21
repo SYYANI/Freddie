@@ -352,6 +352,46 @@ final class PDFMergerTests: XCTestCase {
     }
 
     @MainActor
+    func testReopeningPartialTranslationPreservesSavedOriginalPageBeyondTranslatedPages() throws {
+        let savedState = ReadingState(paperID: UUID(), readerMode: .bilingualPDF, pageIndex: 14)
+        let originalDocument = createPDFDocument(withPageCount: 20)
+        let originalView = PDFView()
+        originalView.document = originalDocument
+        let coordinator = PDFReaderView.Coordinator(
+            attachmentID: nil,
+            pageIndex: Binding(
+                get: { savedState.pageIndex },
+                set: { savedState.pageIndex = $0 }
+            ),
+            onNoteSelectionChanged: nil
+        )
+        coordinator.attach(to: originalView)
+        coordinator.prepareForProgrammaticPageRestore(to: PDFReadingPosition(pageIndex: savedState.pageIndex))
+        originalView.go(to: try XCTUnwrap(originalDocument.page(at: savedState.pageIndex)))
+        coordinator.updateCurrentPageIndexIfNeeded()
+
+        XCTAssertEqual(originalDocument.index(for: try XCTUnwrap(originalView.currentPage)), 14)
+        XCTAssertEqual(DualPDFPageIndexSync.translatedPageIndex(
+            forOriginalPageIndex: savedState.pageIndex,
+            translatedPageCount: 10
+        ), 9)
+        XCTAssertEqual(savedState.pageIndex, 14)
+
+        // An image-only original remains navigable beyond a partial translation,
+        // even though ordinary PDF translation is unavailable for scanned pages.
+        let originalURL = tempDirectory.appendingPathComponent("scanned-original.pdf")
+        XCTAssertTrue(originalDocument.write(to: originalURL))
+        XCTAssertEqual(PDFTextLayerInspector().inspect(documentAt: originalURL), .noFonts)
+        originalView.go(to: try XCTUnwrap(originalDocument.page(at: 19)))
+        coordinator.updateCurrentPageIndexIfNeeded()
+        XCTAssertEqual(savedState.pageIndex, 19)
+        XCTAssertEqual(DualPDFPageIndexSync.translatedPageIndex(
+            forOriginalPageIndex: savedState.pageIndex,
+            translatedPageCount: 10
+        ), 9)
+    }
+
+    @MainActor
     func testTranslatedPDFCoordinatorDoesNotPushPartialClampBackToOriginalBinding() throws {
         let document = createPDFDocument(withPageCount: 10)
         let pdfView = PDFView()
@@ -398,6 +438,164 @@ final class PDFMergerTests: XCTestCase {
         coordinator.updateCurrentPageIndexIfNeeded()
         XCTAssertEqual(originalPageIndex, 8)
         XCTAssertEqual(originalBindingWriteCount, 1)
+    }
+
+    @MainActor
+    private func makeScrollSyncPane(pageCount: Int, width: CGFloat) -> (NSWindow, PDFView) {
+        let document = PDFDocument()
+        for index in 0..<pageCount {
+            let image = NSImage(size: NSSize(width: 300, height: 400))
+            image.lockFocus()
+            NSColor.white.setFill()
+            NSRect(x: 0, y: 0, width: 300, height: 400).fill()
+            image.unlockFocus()
+            document.insert(PDFPage(image: image)!, at: index)
+        }
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: width, height: 500),
+            styleMask: [.titled],
+            backing: .buffered,
+            defer: false
+        )
+        window.isReleasedWhenClosed = false
+        let pdfView = PDFView(frame: NSRect(x: 0, y: 0, width: width, height: 500))
+        pdfView.displayMode = .singlePageContinuous
+        pdfView.displaysPageBreaks = true
+        pdfView.autoScales = true
+        window.contentView = pdfView
+        pdfView.document = document
+        pdfView.layoutDocumentView()
+        return (window, pdfView)
+    }
+
+    @MainActor
+    func testDualPDFScrollSyncKeepsFollowingPaneAtSamePlaceWithinPage() throws {
+        // Differently sized panes show the pages at different scales.
+        let (originalWindow, original) = makeScrollSyncPane(pageCount: 10, width: 320)
+        let (translatedWindow, translated) = makeScrollSyncPane(pageCount: 10, width: 520)
+        defer {
+            originalWindow.close()
+            translatedWindow.close()
+        }
+        var scrolledSide: DualPDFSelectionSource?
+        var originalUserScrolls = 0
+        let sync = DualPDFScrollSync()
+        sync.isUserScroll = { _, side, _ in side == scrolledSide }
+        sync.register(original, side: .original) { originalUserScrolls += 1 }
+        sync.register(translated, side: .translated) {}
+
+        scrolledSide = .original
+        let page = try XCTUnwrap(original.document?.page(at: 4))
+        original.go(to: PDFDestination(page: page, at: CGPoint(x: 0, y: 250)))
+
+        let leading = try XCTUnwrap(DualPDFScrollSync.anchor(in: original))
+        let following = try XCTUnwrap(DualPDFScrollSync.anchor(in: translated))
+        XCTAssertEqual(leading.pageIndex, following.pageIndex)
+        XCTAssertEqual(leading.fraction, following.fraction, accuracy: 0.02)
+        XCTAssertGreaterThan(leading.fraction, 0.1)
+        XCTAssertEqual(sync.leader, .original)
+        XCTAssertTrue(sync.isFollowing(.translated))
+        XCTAssertGreaterThan(originalUserScrolls, 0)
+
+        // Programmatic moves, such as restoring the shared page, do not lead.
+        let translatedFirstPage = try XCTUnwrap(translated.document?.page(at: 0))
+        sync.withoutLeading(.translated) {
+            translated.go(to: translatedFirstPage)
+        }
+        XCTAssertEqual(sync.leader, .original)
+        XCTAssertEqual(try XCTUnwrap(DualPDFScrollSync.anchor(in: original)).pageIndex, 4)
+    }
+
+    @MainActor
+    func testDualPDFScrollSyncFollowsLiveScrollsOnlyAndKeepsReplacementPane() throws {
+        let (originalWindow, original) = makeScrollSyncPane(pageCount: 10, width: 400)
+        let (translatedWindow, translated) = makeScrollSyncPane(pageCount: 10, width: 400)
+        let (replacementWindow, replacement) = makeScrollSyncPane(pageCount: 10, width: 400)
+        defer {
+            originalWindow.close()
+            translatedWindow.close()
+            replacementWindow.close()
+        }
+        // The real gate: trackpad and wheel scrolls are known by their live-scroll notifications,
+        // since `NSApp.currentEvent` is stale for most of such a gesture.
+        let sync = DualPDFScrollSync()
+        sync.register(original, side: .original) {}
+        sync.register(translated, side: .translated) {}
+        // SwiftUI sets up a replacement pane before tearing down the old one.
+        sync.register(replacement, side: .translated) {}
+        sync.unregister(translated, side: .translated)
+
+        let scrollView = try XCTUnwrap(original.subviews.compactMap { $0 as? NSScrollView }.first)
+        NotificationCenter.default.post(name: NSScrollView.willStartLiveScrollNotification, object: scrollView)
+        original.go(to: PDFDestination(page: try XCTUnwrap(original.document?.page(at: 5)), at: CGPoint(x: 0, y: 200)))
+        let followed = try XCTUnwrap(DualPDFScrollSync.anchor(in: replacement))
+        XCTAssertEqual(followed.pageIndex, 5)
+        XCTAssertEqual(followed.fraction, try XCTUnwrap(DualPDFScrollSync.anchor(in: original)).fraction, accuracy: 0.02)
+        XCTAssertEqual(sync.leader, .original)
+
+        // Outside a live scroll, programmatic moves of the original do not move the other pane.
+        NotificationCenter.default.post(name: NSScrollView.didEndLiveScrollNotification, object: scrollView)
+        original.go(to: try XCTUnwrap(original.document?.page(at: 1)))
+        XCTAssertEqual(try XCTUnwrap(DualPDFScrollSync.anchor(in: replacement)), followed)
+    }
+
+    @MainActor
+    func testDualPDFScrollSyncLeavesPartialTranslationAtItsLastPages() throws {
+        let (originalWindow, original) = makeScrollSyncPane(pageCount: 10, width: 400)
+        let (translatedWindow, translated) = makeScrollSyncPane(pageCount: 3, width: 400)
+        defer {
+            originalWindow.close()
+            translatedWindow.close()
+        }
+        let sync = DualPDFScrollSync()
+        sync.isUserScroll = { _, side, _ in side == .original }
+        sync.register(original, side: .original) {}
+        sync.register(translated, side: .translated) {}
+
+        original.go(to: try XCTUnwrap(original.document?.page(at: 1)))
+        let followed = try XCTUnwrap(DualPDFScrollSync.anchor(in: translated))
+        XCTAssertEqual(followed.pageIndex, 1)
+
+        original.go(to: try XCTUnwrap(original.document?.page(at: 7)))
+        XCTAssertEqual(try XCTUnwrap(DualPDFScrollSync.anchor(in: original)).pageIndex, 7)
+        XCTAssertEqual(try XCTUnwrap(DualPDFScrollSync.anchor(in: translated)), followed)
+    }
+
+    @MainActor
+    func testFollowingPaneNeitherReportsNorRestoresVisiblePage() throws {
+        let (originalWindow, original) = makeScrollSyncPane(pageCount: 10, width: 400)
+        let (translatedWindow, translated) = makeScrollSyncPane(pageCount: 10, width: 400)
+        defer {
+            originalWindow.close()
+            translatedWindow.close()
+        }
+        let sync = DualPDFScrollSync()
+        sync.isUserScroll = { _, side, _ in side == .original }
+        var sharedPageIndex = 3
+        var translatedWrites = 0
+        let coordinator = PDFReaderView.Coordinator(
+            attachmentID: nil,
+            pageIndex: Binding(get: { sharedPageIndex }, set: { sharedPageIndex = $0; translatedWrites += 1 }),
+            onNoteSelectionChanged: nil
+        )
+        coordinator.attach(to: translated)
+        coordinator.attachScrollSync(sync, side: .translated, to: translated)
+        sync.register(original, side: .original) {}
+
+        let page = try XCTUnwrap(original.document?.page(at: 3))
+        original.go(to: PDFDestination(page: page, at: CGPoint(x: 0, y: 120)))
+        XCTAssertTrue(sync.isFollowing(.translated))
+        coordinator.updateCurrentPageIndexIfNeeded()
+        XCTAssertEqual(translatedWrites, 0)
+
+        // The shared page moves on while the follower still shows it: no jump to its top.
+        sharedPageIndex = 4
+        let visible = translated.visiblePages.compactMap { translated.document?.index(for: $0) }
+        if visible.contains(4) {
+            XCTAssertFalse(coordinator.shouldRestorePageIndex(4, in: translated))
+        }
+        XCTAssertTrue(coordinator.shouldRestorePageIndex(8, in: translated))
+        coordinator.detach()
     }
 
     @MainActor

@@ -57,6 +57,15 @@ struct ReaderPaneView: View {
         case allPages
     }
 
+    /// A pending offer to translate the PDF as a scan, shown before any page image is sent.
+    private struct ScannedPDFTranslationOffer: Equatable {
+        var pageCount: Int
+        /// Set when the offer replaces a refused text translation.
+        var hasNoTextLayer: Bool
+        /// The last page of an earlier scanned translation of the first pages, or 0.
+        var translatedLastPage: Int = 0
+    }
+
     private struct PendingHTMLRegionChanges {
         var fileURL: URL
         /// Each change sets an element's final state, so the latest one per element wins.
@@ -80,6 +89,10 @@ struct ReaderPaneView: View {
     private var babelDocSemanticHintsEnabled = BabelDocSemanticHintPreference.defaultValue
     @AppStorage(LaTeXIntegrationPreferences.translationEnabledKey)
     private var latexTranslationEnabled = false
+    @AppStorage(ScannedPDFTranslationPreferences.didConfirmTranslationKey)
+    private var didConfirmScannedPDFTranslation = false
+    @AppStorage(ScannedPDFTranscription.displayedPaperIDsKey)
+    private var transcriptionPaperIDsStorage = ""
 
     var paper: Paper?
     var attachments: [PaperAttachment]
@@ -137,6 +150,7 @@ struct ReaderPaneView: View {
     @State private var readingStatePersistenceTask: Task<Void, Never>?
     @State private var showPDFTranslationScopeDialog = false
     @State private var pdfTranslationTotalPages: Int = 0
+    @State private var scannedPDFTranslationOffer: ScannedPDFTranslationOffer?
     @State private var digestNoticeMessage: String?
     @State private var digestNoticeTitle: String?
     @State private var digestErrorMessage: String?
@@ -161,6 +175,8 @@ struct ReaderPaneView: View {
     @State private var sidenotePendingDeletion: Note?
     @State private var pdfSidenoteLayout = PDFSidenoteLayoutModel()
     @State private var originalPDFPageCount: Int?
+    /// Enable ordinary PDF translation only after inspecting this exact attachment.
+    @State private var extractablePDFRequest: PDFPageCountRequest?
     @State private var isFindBarVisible = false
     @State private var findQuery = ""
     @State private var committedFindQuery = ""
@@ -198,6 +214,21 @@ struct ReaderPaneView: View {
             .max { $0.createdAt < $1.createdAt }
     }
 
+    /// The corrected transcription of a scanned PDF: an alternative original with real text.
+    private var scanTranscriptionAttachment: PaperAttachment? {
+        ScannedPDFTranscription.attachment(in: attachments)
+    }
+
+    private var showsScanTranscription: Bool {
+        guard let paper, scanTranscriptionAttachment != nil else { return false }
+        return ScannedPDFTranscription.decode(transcriptionPaperIDsStorage).contains(paper.id)
+    }
+
+    /// The original as read: the PDF, or its corrected transcription when the reader chose it.
+    private var originalPDFAttachment: PaperAttachment? {
+        showsScanTranscription ? scanTranscriptionAttachment : pdfAttachment
+    }
+
     private var originalPDFPageCountRequest: PDFPageCountRequest? {
         guard let attachment = pdfAttachment else { return nil }
         return PDFPageCountRequest(
@@ -229,6 +260,20 @@ struct ReaderPaneView: View {
 
     private var canTranslatePDF: Bool {
         pdfAttachment != nil && settings != nil
+    }
+
+    private var canTranslateTextPDF: Bool {
+        canTranslatePDF && extractablePDFRequest == originalPDFPageCountRequest
+    }
+
+    /// The shown translation was rebuilt from page images rather than translated by BabelDOC.
+    private var isScanRebuildTranslation: Bool {
+        translatedPDFAttachment?.source == .scanRebuild
+    }
+
+    /// A partial translation continues on the route that made it.
+    private var canContinuePDFTranslation: Bool {
+        isScanRebuildTranslation ? canTranslatePDF : canTranslateTextPDF
     }
 
     private var canTranslateLaTeX: Bool {
@@ -524,8 +569,59 @@ struct ReaderPaneView: View {
             }
     }
 
+    private var scannedPDFTranslationDialogTitle: String {
+        if didConfirmScannedPDFTranslation {
+            return String(localized: "Choose Translation Scope", bundle: bundle)
+        }
+        return scannedPDFTranslationOffer?.hasNoTextLayer == true
+            ? String(localized: "This PDF Has No Text Layer", bundle: bundle)
+            : String(localized: "Translate Scanned PDF", bundle: bundle)
+    }
+
+    /// Shows the page-image notice once; later dialogs only choose the page range.
+    private func scannedPDFTranslationDialog<Content: View>(_ content: Content) -> some View {
+        content
+            .confirmationDialog(
+                scannedPDFTranslationDialogTitle,
+                isPresented: Binding(
+                    get: { scannedPDFTranslationOffer != nil },
+                    set: { if !$0 { scannedPDFTranslationOffer = nil } }
+                ),
+                titleVisibility: .visible,
+                presenting: scannedPDFTranslationOffer
+            ) { offer in
+                let nextLastPage = offer.translatedLastPage + pdfTranslationBatchSize
+                if offer.pageCount > nextLastPage {
+                    if offer.translatedLastPage > 0 {
+                        Button(AppLocalization.format(
+                            "Translate pages %@–%@",
+                            bundle: bundle,
+                            "\(offer.translatedLastPage + 1)",
+                            "\(nextLastPage)"
+                        )) {
+                            startScannedPDFTranslation(pages: Array(1...nextLastPage))
+                        }
+                    } else {
+                        Button(AppLocalization.format("Translate First %d Pages", bundle: bundle, pdfTranslationBatchSize)) {
+                            startScannedPDFTranslation(pages: Array(1...pdfTranslationBatchSize))
+                        }
+                    }
+                    Button(AppLocalization.format("Translate All %d Pages", bundle: bundle, offer.pageCount)) {
+                        startScannedPDFTranslation(pages: nil)
+                    }
+                } else {
+                    Button(String(localized: "Translate", bundle: bundle)) {
+                        startScannedPDFTranslation(pages: nil)
+                    }
+                }
+                Button(String(localized: "Cancel", bundle: bundle), role: .cancel) {}
+            } message: { offer in
+                Text(scannedPDFTranslationOfferMessage(offer))
+            }
+    }
+
     var body: some View {
-        readerBody
+        scannedPDFTranslationDialog(readerBody)
             .modifier(WritingQuoteSupport(
                 errorMessage: $writingQuoteErrorMessage,
                 action: quoteInWritingAction
@@ -1258,7 +1354,7 @@ struct ReaderPaneView: View {
             Button {
                 translatePDF()
             } label: {
-                if isPartialPDFTranslation {
+                if isPartialPDFTranslation && !isScanRebuildTranslation {
                     Label(String(localized: "Translate More PDF Pages", bundle: bundle), systemImage: "doc")
                         .labelStyle(.titleAndIcon)
                 } else if isFullPDFTranslationComplete {
@@ -1268,6 +1364,14 @@ struct ReaderPaneView: View {
                     Label(String(localized: "Translate PDF", bundle: bundle), systemImage: "doc")
                         .labelStyle(.titleAndIcon)
                 }
+            }
+            .disabled(canTranslateTextPDF == false)
+
+            Button {
+                offerScannedPDFTranslation(hasNoTextLayer: false)
+            } label: {
+                Label(String(localized: "Translate Scanned PDF…", bundle: bundle), systemImage: "doc.viewfinder")
+                    .labelStyle(.titleAndIcon)
             }
             .disabled(canTranslatePDF == false)
 
@@ -1791,10 +1895,11 @@ struct ReaderPaneView: View {
                         }
                     case .pdf:
                         labeledPDFReader(
-                            fileURL: pdfAttachment?.fileURL,
-                            attachmentID: pdfAttachment?.id,
+                            fileURL: originalPDFAttachment?.fileURL,
+                            attachmentID: originalPDFAttachment?.id,
                             includesUnattributedSidenotes: true,
                             label: String(localized: "Original", bundle: bundle),
+                            showsOriginalVersionMenu: true,
                             emptyTitle: String(localized: "No PDF available", bundle: bundle),
                             emptyDescription: String(localized: "Import a PDF or fetch one from arXiv to read it here.", bundle: bundle)
                         )
@@ -1802,8 +1907,9 @@ struct ReaderPaneView: View {
                         if translatedPDFAttachment != nil {
                             DualPDFReaderView(
                                 paperID: paper?.id,
-                                originalURL: pdfAttachment?.fileURL,
-                                originalAttachmentID: pdfAttachment?.id,
+                                originalURL: originalPDFAttachment?.fileURL,
+                                originalAttachmentID: originalPDFAttachment?.id,
+                                originalLabel: scanTranscriptionAttachment == nil ? nil : AnyView(originalVersionMenu),
                                 translatedURL: translatedPDFAttachment?.fileURL,
                                 translatedAttachmentID: translatedPDFAttachment?.id,
                                 translatedLastPage: translatedPDFAttachment?.translatedLastPage,
@@ -1980,6 +2086,15 @@ struct ReaderPaneView: View {
             }
 
             Button {
+                copyStatusMessage()
+            } label: {
+                Label(String(localized: "Copy Message", bundle: bundle), systemImage: "doc.on.doc")
+            }
+            .labelStyle(.iconOnly)
+            .buttonStyle(.borderless)
+            .help(String(localized: "Copy Message", bundle: bundle))
+
+            Button {
                 dismissStatusMessage()
             } label: {
                 Label(String(localized: "Close", bundle: bundle), systemImage: "xmark")
@@ -1989,6 +2104,12 @@ struct ReaderPaneView: View {
             .controlSize(.small)
             .help(String(localized: "Close", bundle: bundle))
         }
+    }
+
+    private func copyStatusMessage() {
+        guard let statusMessage else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(statusMessage, forType: .string)
     }
 
     private var translationActivityPhase: TranslationActivityCapsule.Phase? {
@@ -2036,6 +2157,7 @@ struct ReaderPaneView: View {
             String(localized: "Translation cancelled.", bundle: bundle),
             String(localized: "HTML translation completed.", bundle: bundle),
             String(localized: "PDF translation completed.", bundle: bundle),
+            String(localized: "Scanned PDF translation completed.", bundle: bundle),
         ]
         if let message, plainFinishes.contains(message) {
             statusMessage = nil
@@ -2256,7 +2378,7 @@ struct ReaderPaneView: View {
             } catch is CancellationError {
                 runOutcome = .cancelled
                 translationProgress = nil
-                finishLaTeXJob(
+                finishTranslationJob(
                     id: jobID,
                     state: .failed,
                     error: String(localized: "Translation cancelled.", bundle: bundle)
@@ -2264,7 +2386,7 @@ struct ReaderPaneView: View {
                 statusMessage = String(localized: "Translation cancelled.", bundle: bundle)
             } catch {
                 let message = ReadPaperLaTeXErrorPresentation.message(for: error, bundle: bundle)
-                finishLaTeXJob(id: jobID, state: .failed, error: message)
+                finishTranslationJob(id: jobID, state: .failed, error: message)
                 translationProgress = nil
                 pdfTranslationErrorLogURL = nil
                 statusMessage = message
@@ -2302,7 +2424,7 @@ struct ReaderPaneView: View {
         try? modelContext.save()
     }
 
-    private func finishLaTeXJob(id: UUID, state: TranslationJobState, error: String?) {
+    private func finishTranslationJob(id: UUID, state: TranslationJobState, error: String?) {
         guard let job = translationJob(id: id) else { return }
         job.state = state
         job.lastError = error
@@ -2317,17 +2439,214 @@ struct ReaderPaneView: View {
         return jobs.first { $0.id == id }
     }
 
-    private func translatePDF() {
-        guard let pdfAttachment else { return }
+    /// Asks for the initial notice or a page range, otherwise starts immediately.
+    private func offerScannedPDFTranslation(hasNoTextLayer: Bool) {
+        guard let pdfAttachment, let settings else { return }
+        guard ScannedPDFTranslationPreferences.supports(targetLanguage: settings.targetLanguage) else {
+            handleTranslationError(ScannedPDFTranslationError.unsupportedTargetLanguage)
+            return
+        }
+        guard let pageCount = PDFDocument(url: pdfAttachment.fileURL)?.pageCount, pageCount > 0 else {
+            handleTranslationError(ScannedPDFTranslationError.unreadablePDF)
+            return
+        }
+        let translatedLastPage = isScanRebuildTranslation ? translatedPDFAttachment?.translatedLastPage ?? 0 : 0
+        if didConfirmScannedPDFTranslation, pageCount <= translatedLastPage + pdfTranslationBatchSize {
+            startScannedPDFTranslation(pages: nil)
+            return
+        }
+        scannedPDFTranslationOffer = ScannedPDFTranslationOffer(
+            pageCount: pageCount,
+            hasNoTextLayer: hasNoTextLayer,
+            translatedLastPage: translatedLastPage
+        )
+    }
 
+    private func scannedPDFTranslationOfferMessage(_ offer: ScannedPDFTranslationOffer) -> String {
+        if offer.translatedLastPage > 0 {
+            return AppLocalization.format(
+                "Translated pages 1–%@ of %@.",
+                bundle: bundle,
+                "\(offer.translatedLastPage)",
+                "\(offer.pageCount)"
+            )
+        }
+        if didConfirmScannedPDFTranslation {
+            return AppLocalization.format(
+                "This PDF has %d pages. Translating the first %d pages is faster.",
+                bundle: bundle,
+                offer.pageCount,
+                pdfTranslationBatchSize
+            )
+        }
+        let explanation = offer.hasNoTextLayer
+            ? String(localized: "Its pages are images, so their text cannot be translated directly. Freddie can read each page with a vision model, translate the text, and typeset it on the original page layout.", bundle: bundle)
+            : String(localized: "Freddie reads each page image with a vision model, translates the text, and typesets it on the original page layout. Use this for scans and for PDFs whose text layer is unreliable.", bundle: bundle)
+        let cost = AppLocalization.format(
+            "Page images go to the model chosen for scanned pages in Settings > Reader, which must accept images. Expect about a minute and 50,000 tokens per page (%d pages). Finished pages are saved, so running it again only pays for new pages. XeLaTeX (MacTeX) is required.",
+            bundle: bundle,
+            offer.pageCount
+        )
+        return explanation + "\n\n" + cost
+    }
+
+    private func startScannedPDFTranslation(pages: [Int]?) {
+        guard let paper, let pdfAttachment, let settings else { return }
+        if !didConfirmScannedPDFTranslation {
+            didConfirmScannedPDFTranslation = true
+        }
+        let preferences = TranslationPreferencesSnapshot(settings)
+        let job = TranslationJob(
+            paperID: paper.id,
+            kind: "scan",
+            targetLanguage: preferences.targetLanguage,
+            state: .running
+        )
+        modelContext.insert(job)
         do {
-            try PDFTextLayerInspector().requireExtractableText(at: pdfAttachment.fileURL)
+            try modelContext.save()
         } catch {
             handleTranslationError(error)
             return
         }
 
-        if isPartialPDFTranslation {
+        let jobID = job.id
+        let previousTranslation = attachments.first { $0.kind == .translatedPDF && $0.source == .scanRebuild }
+        let previousTranscription = ScannedPDFTranscription.attachment(in: attachments)
+        translationProgress = nil
+        pdfTranslationErrorLogURL = nil
+        pdfTranslationDiagnosticsNoticeID = nil
+        latexTranslationErrorLogURL = nil
+        isWorking = true
+        isCancelling = false
+        statusMessage = String(localized: "Preparing scanned PDF translation...", bundle: bundle)
+        translationTask = Task {
+            var runOutcome: TranslationActivityCapsule.Phase?
+            do {
+                try Task.checkCancellation()
+                let resolver = LLMRouteResolver()
+                let transcriptionRoute = try resolver.resolveScannedPageRoute(settings: settings, modelContext: modelContext)
+                let translationRoute = try resolver.resolvePDFRoute(settings: settings, modelContext: modelContext)
+                let output = try await ScannedPDFTranslationService().translate(
+                    ScannedPDFTranslationRequest(
+                        paperID: paper.id,
+                        inputPDF: pdfAttachment.fileURL,
+                        pages: pages,
+                        transcriptionRoute: transcriptionRoute,
+                        translationRoute: translationRoute
+                    )
+                ) { update in
+                    Task { @MainActor in
+                        guard isWorking, !isCancelling else { return }
+                        applyScannedPDFProgress(update, jobID: jobID)
+                    }
+                }
+                try Task.checkCancellation()
+
+                // A rerun rewrites the same files. Their records keep their IDs, so notes and
+                // annotations made on them stay attached; the new date makes them the shown versions.
+                let attachment = upsertScanRebuildAttachment(
+                    previousTranslation, kind: .translatedPDF, paperID: paper.id, fileURL: output.outputPDF
+                )
+                // A run over the first pages ends there; the reader offers to continue from
+                // here, like a partial BabelDOC translation.
+                attachment.translatedLastPage = output.translatedLastPage
+                if let transcriptionPDF = output.transcriptionPDF {
+                    _ = upsertScanRebuildAttachment(
+                        previousTranscription, kind: .resource, paperID: paper.id, fileURL: transcriptionPDF
+                    )
+                } else if let previousTranscription {
+                    modelContext.delete(previousTranscription)
+                }
+                let fallbackMessage = ScannedPDFTranslationService.failureMessage(for: output, bundle: bundle)
+                if let storedJob = translationJob(id: jobID) {
+                    storedJob.attachmentID = attachment.id
+                    storedJob.progress = 1
+                    storedJob.state = .completed
+                    storedJob.lastError = fallbackMessage
+                    storedJob.modifiedAt = Date()
+                }
+                try modelContext.save()
+                pdfReloadToken += 1
+                readerMode = .bilingualPDF
+                translationProgress = nil
+                statusMessage = fallbackMessage
+                    ?? String(localized: "Scanned PDF translation completed.", bundle: bundle)
+                runOutcome = .completed
+            } catch is CancellationError {
+                runOutcome = .cancelled
+                translationProgress = nil
+                finishTranslationJob(
+                    id: jobID,
+                    state: .failed,
+                    error: String(localized: "Translation cancelled.", bundle: bundle)
+                )
+                statusMessage = String(localized: "Translation cancelled.", bundle: bundle)
+            } catch {
+                handleTranslationError(error)
+                finishTranslationJob(id: jobID, state: .failed, error: statusMessage)
+            }
+            endTranslationRun(runOutcome)
+        }
+    }
+
+    private func upsertScanRebuildAttachment(
+        _ existing: PaperAttachment?,
+        kind: AttachmentKind,
+        paperID: UUID,
+        fileURL: URL
+    ) -> PaperAttachment {
+        if let existing {
+            existing.filename = fileURL.lastPathComponent
+            existing.filePath = fileURL.path
+            existing.createdAt = Date()
+            return existing
+        }
+        let attachment = PaperAttachment(
+            paperID: paperID,
+            kind: kind,
+            source: .scanRebuild,
+            filename: fileURL.lastPathComponent,
+            filePath: fileURL.path
+        )
+        modelContext.insert(attachment)
+        return attachment
+    }
+
+    private func applyScannedPDFProgress(_ update: ScannedPDFTranslationProgress, jobID: UUID) {
+        if update.totalSteps > 0 {
+            translationProgress = TranslationProgressStatus(
+                completed: update.fractionCompleted,
+                total: 1,
+                summary: "\(Int((update.fractionCompleted * 100).rounded()))%"
+            )
+        }
+        statusMessage = update.statusMessage(bundle: bundle)
+
+        guard let job = translationJob(id: jobID) else { return }
+        job.progress = update.fractionCompleted
+        job.processedSegments = update.completedSteps
+        job.totalSegments = update.totalSteps
+        job.modifiedAt = Date()
+    }
+
+    private func translatePDF() {
+        guard canTranslateTextPDF, let pdfAttachment else { return }
+
+        do {
+            try PDFTextLayerInspector().requireExtractableText(at: pdfAttachment.fileURL)
+        } catch PDFTextLayerError.scannedWithOCR {
+            offerScannedPDFTranslation(hasNoTextLayer: false)
+            return
+        } catch PDFTextLayerError.noExtractableText {
+            offerScannedPDFTranslation(hasNoTextLayer: true)
+            return
+        } catch {
+            handleTranslationError(error)
+            return
+        }
+
+        if isPartialPDFTranslation && !isScanRebuildTranslation {
             extendPDFTranslation()
             return
         }
@@ -2345,7 +2664,7 @@ struct ReaderPaneView: View {
     }
 
     private func startPDFTranslation(scope: PDFTranslationScope) {
-        guard let paper, let pdfAttachment, let settings else { return }
+        guard canTranslateTextPDF, let paper, let pdfAttachment, let settings else { return }
         let preferences = TranslationPreferencesSnapshot(settings)
         let attachmentToReplace = isFullPDFTranslationComplete
             ? translatedPDFAttachment
@@ -2481,7 +2800,23 @@ struct ReaderPaneView: View {
         }
     }
 
+    /// Translates the next pages on the route that made the partial translation.
+    private func continuePDFTranslation(to requestedLastPage: Int? = nil) {
+        guard isScanRebuildTranslation else {
+            extendPDFTranslation(to: requestedLastPage)
+            return
+        }
+        guard canTranslatePDF,
+              let currentLastPage = translatedPDFAttachment?.translatedLastPage,
+              let total = originalPDFPageCount, currentLastPage < total
+        else { return }
+        let nextLastPage = min(requestedLastPage ?? currentLastPage + pdfTranslationBatchSize, total)
+        // Finished pages come from the checkpoints, so only the new pages are sent to the model.
+        startScannedPDFTranslation(pages: nextLastPage < total ? Array(1...nextLastPage) : nil)
+    }
+
     private func extendPDFTranslation(to requestedLastPage: Int? = nil) {
+        guard canTranslateTextPDF, !isScanRebuildTranslation else { return }
         guard let paper, let pdfAttachment, let settings, let existingAttachment = translatedPDFAttachment, let currentLastPage = existingAttachment.translatedLastPage else { return }
         guard let total = originalPDFPageCount, currentLastPage < total else { return }
 
@@ -2818,7 +3153,7 @@ struct ReaderPaneView: View {
                     .foregroundStyle(.secondary)
                 Spacer(minLength: 0)
                 Button {
-                    extendPDFTranslation()
+                    continuePDFTranslation()
                 } label: {
                     Text(AppLocalization.format("Translate pages %@–%@", "\(lastPage + 1)", "\(nextEnd)"))
                         .font(.caption)
@@ -2828,7 +3163,7 @@ struct ReaderPaneView: View {
 
                 if nextEnd < total {
                     Button {
-                        extendPDFTranslation(to: total)
+                        continuePDFTranslation(to: total)
                     } label: {
                         Text("Translate All", bundle: bundle)
                             .font(.caption)
@@ -2841,6 +3176,7 @@ struct ReaderPaneView: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
         .background(ReadPaperAppearanceHeaderSurface(role: .reader))
+        .disabled(canContinuePDFTranslation == false)
     }
 
     private func syncReaderModeWithAvailableContent() {
@@ -2868,6 +3204,7 @@ struct ReaderPaneView: View {
         attachmentID: UUID?,
         includesUnattributedSidenotes: Bool,
         label: String,
+        showsOriginalVersionMenu: Bool = false,
         emptyTitle: String,
         emptyDescription: String,
         reloadToken: Int = 0,
@@ -2926,7 +3263,11 @@ struct ReaderPaneView: View {
                 }
             }
                 .overlay(alignment: .topLeading) {
-                    readerLabel(label)
+                    if showsOriginalVersionMenu, scanTranscriptionAttachment != nil {
+                        originalVersionMenu
+                    } else {
+                        readerLabel(label)
+                    }
                 }
         } else {
             centeredUnavailableView(
@@ -3001,6 +3342,53 @@ struct ReaderPaneView: View {
             .padding(.vertical, 4)
             .readPaperGlassEffect(in: RoundedRectangle(cornerRadius: 6, style: .continuous))
             .padding(8)
+    }
+
+    /// The Original label of a scanned PDF with a corrected transcription: chooses which one to read.
+    private var originalVersionMenu: some View {
+        let title = showsScanTranscription
+            ? String(localized: "Corrected Transcription", bundle: bundle)
+            : String(localized: "Scanned Original", bundle: bundle)
+        return Menu {
+            Toggle(String(localized: "Scanned Original", bundle: bundle), isOn: Binding(
+                get: { !showsScanTranscription },
+                set: { if $0 { setShowsScanTranscription(false) } }
+            ))
+            Toggle(String(localized: "Corrected Transcription", bundle: bundle), isOn: Binding(
+                get: { showsScanTranscription },
+                set: { if $0 { setShowsScanTranscription(true) } }
+            ))
+        } label: {
+            HStack(spacing: 3) {
+                Text(title)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 8, weight: .bold))
+            }
+            .font(.caption.weight(.semibold))
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .readPaperGlassEffect(in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+            .contentShape(Rectangle())
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .padding(8)
+        .help(String(localized: "Read the scanned pages or the corrected transcription typeset from them", bundle: bundle))
+        .accessibilityLabel(String(localized: "Original", bundle: bundle))
+        .accessibilityValue(title)
+    }
+
+    private func setShowsScanTranscription(_ shows: Bool) {
+        guard let paperID = paper?.id else { return }
+        var paperIDs = ScannedPDFTranscription.decode(transcriptionPaperIDsStorage)
+        if shows {
+            paperIDs.insert(paperID)
+        } else {
+            paperIDs.remove(paperID)
+        }
+        transcriptionPaperIDsStorage = ScannedPDFTranscription.encode(paperIDs)
     }
 
     private func handleNoteSelectionChange(_ selection: NoteSelectionContext?) {
@@ -3097,6 +3485,14 @@ struct ReaderPaneView: View {
 
         guard let targetPageIndex = request.pageIndex else { return }
         let targetMode = preferredReaderMode(for: request)
+        // A note or citation made on the scan or on its transcription opens that version.
+        if let attachmentID = request.attachmentID, scanTranscriptionAttachment != nil {
+            if attachmentID == scanTranscriptionAttachment?.id, !showsScanTranscription {
+                setShowsScanTranscription(true)
+            } else if attachmentID == pdfAttachment?.id, showsScanTranscription {
+                setShowsScanTranscription(false)
+            }
+        }
 
         updateWithoutPersistingReadingState {
             readerMode = targetMode
@@ -3159,14 +3555,20 @@ struct ReaderPaneView: View {
     private func refreshOriginalPDFPageCount(for request: PDFPageCountRequest?) async {
         guard let request else {
             originalPDFPageCount = nil
+            extractablePDFRequest = nil
             return
         }
 
-        let pageCount = await Task.detached(priority: .utility) {
-            CGPDFDocument(request.fileURL as CFURL)?.numberOfPages
+        let (pageCount, hasExtractableText) = await Task.detached(priority: .utility) {
+            guard let document = CGPDFDocument(request.fileURL as CFURL) else {
+                return (nil as Int?, false)
+            }
+            let verdict = PDFTextLayerInspector().inspect(document)
+            return (document.numberOfPages, verdict == .extractable)
         }.value
-        guard originalPDFPageCountRequest == request else { return }
+        guard !Task.isCancelled, originalPDFPageCountRequest == request else { return }
         originalPDFPageCount = pageCount
+        extractablePDFRequest = hasExtractableText ? request : nil
     }
 
     private func readingStatePersistenceSnapshot() -> ReadingStatePersistenceSnapshot? {

@@ -70,8 +70,7 @@ struct PaperFullTextSearchService {
             return index
         }
 
-        if let pdfAttachment = attachments.first(where: { $0.kind == .pdf }),
-           fileStore.fileManager.fileExists(atPath: pdfAttachment.resolvedFileURL(fileStore: fileStore).path) {
+        if let pdfAttachment = textPDFAttachment(in: attachments) {
             let index = try makePDFIndex(paper: paper, attachment: pdfAttachment)
             try persist(index)
             return index
@@ -80,11 +79,20 @@ struct PaperFullTextSearchService {
         return nil
     }
 
+    /// The PDF to take page text from: a scanned PDF's corrected transcription has the text
+    /// the scan lacks, page for page, so it is preferred to the PDF itself.
+    private func textPDFAttachment(in attachments: [PaperAttachment]) -> PaperAttachment? {
+        [ScannedPDFTranscription.attachment(in: attachments), attachments.first(where: { $0.kind == .pdf })]
+            .compactMap { $0 }
+            .first { fileStore.fileManager.fileExists(atPath: $0.resolvedFileURL(fileStore: fileStore).path) }
+    }
+
     func loadOrRebuild(
         paper: Paper,
         attachments: [PaperAttachment]
     ) throws -> PaperFullTextIndex? {
         let preferredAttachment = attachments.first(where: { $0.kind == .html })
+            ?? textPDFAttachment(in: attachments)
             ?? attachments.first(where: { $0.kind == .pdf })
         guard let preferredAttachment else { return nil }
 
