@@ -23,9 +23,7 @@ It focuses on three practical reading workflows:
 
 ## Screenshots
 
-<img width="1624" height="977" alt="Image" src="https://github.com/user-attachments/assets/1f571a5f-c9b7-4b5e-8838-af7b7c1bad71" />
-<img width="1624" height="977" alt="Image" src="https://github.com/user-attachments/assets/5786b4ec-febd-4340-b10d-2d0c8e3aca1d" />
-<img width="1624" height="977" alt="Image" src="https://github.com/user-attachments/assets/bbd9c9fc-1626-4417-a6ea-da9f8255c5e9" />
+<img width="1624" height="977" alt="Image" src="https://github.com/user-attachments/assets/7accab12-26e2-4916-a317-23b205a1d4f1" />
 
 ## Requirements
 
