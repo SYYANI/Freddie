@@ -35,6 +35,7 @@ enum ScannedPDFTranscription {
 }
 
 #if os(macOS)
+import PDFKit
 import RebuildPDFKit
 
 /// Sends RebuildPDFKit's requests through a resolved provider route.
@@ -117,7 +118,8 @@ struct ReadPaperRebuildModelClient: RebuildModelClient {
 struct ScannedPDFTranslationRequest: Sendable {
     var paperID: UUID
     var inputPDF: URL
-    /// 1-based pages to translate; nil translates every page. Other pages stay as scanned.
+    /// 1-based pages to translate; nil translates every page. Skipped pages before the last
+    /// chosen one stay as scanned; the translation ends at the last chosen page.
     var pages: [Int]?
     /// Reads the page images; needs a model that accepts images.
     var transcriptionRoute: ResolvedLLMModelRoute
@@ -128,6 +130,9 @@ struct ScannedPDFTranslationRequest: Sendable {
 
 struct ScannedPDFTranslationOutput: Sendable {
     var outputPDF: URL
+    /// The last page of a translation that stops before the end of the scan, like a partial
+    /// BabelDOC translation; nil when it covers every page.
+    var translatedLastPage: Int?
     /// The corrected transcription; pages that could not be transcribed show the scan.
     var transcriptionPDF: URL?
     var rebuiltPages: [Int]
@@ -304,8 +309,16 @@ struct ScannedPDFTranslationService {
                     totalSteps: update.totalSteps
                 ))
             }
+            // RebuildPDFKit fills the pages it did not rebuild with the scan. Past the last chosen
+            // page that would pass untranslated pages off as translation, so the output ends there.
+            let pageCount = PDFDocument(url: result.output)?.pageCount ?? 0
+            let translatedLastPage = Self.translatedLastPage(pages: request.pages, pageCount: pageCount)
+            if let translatedLastPage {
+                try Self.keepFirstPages(translatedLastPage, of: result.output)
+            }
             return ScannedPDFTranslationOutput(
                 outputPDF: result.output,
+                translatedLastPage: translatedLastPage,
                 transcriptionPDF: result.sourceRebuiltPages.isEmpty ? nil : result.sourceOutput,
                 rebuiltPages: result.rebuiltPages,
                 fallbacks: result.fallbacks,
@@ -321,6 +334,22 @@ struct ScannedPDFTranslationService {
     static func translatedLastPage(pages: [Int]?, pageCount: Int) -> Int? {
         guard let lastPage = pages?.max(), lastPage < pageCount else { return nil }
         return lastPage
+    }
+
+    private static func keepFirstPages(_ count: Int, of url: URL) throws {
+        guard let document = PDFDocument(url: url) else { throw ScannedPDFTranslationError.outputNotWritten }
+        while document.pageCount > count {
+            document.removePage(at: document.pageCount - 1)
+        }
+        let temporary = url.deletingLastPathComponent()
+            .appendingPathComponent(".\(url.lastPathComponent).\(UUID().uuidString).tmp")
+        guard document.write(to: temporary) else { throw ScannedPDFTranslationError.outputNotWritten }
+        do {
+            _ = try FileManager.default.replaceItemAt(url, withItemAt: temporary)
+        } catch {
+            try? FileManager.default.removeItem(at: temporary)
+            throw ScannedPDFTranslationError.outputNotWritten
+        }
     }
 
     /// The status line after a run that kept some scanned pages.

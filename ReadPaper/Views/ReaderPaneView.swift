@@ -2492,7 +2492,6 @@ struct ReaderPaneView: View {
 
     private func startScannedPDFTranslation(pages: [Int]?) {
         guard let paper, let pdfAttachment, let settings else { return }
-        let pageCount = PDFDocument(url: pdfAttachment.fileURL)?.pageCount ?? 0
         if !didConfirmScannedPDFTranslation {
             didConfirmScannedPDFTranslation = true
         }
@@ -2549,11 +2548,9 @@ struct ReaderPaneView: View {
                 let attachment = upsertScanRebuildAttachment(
                     previousTranslation, kind: .translatedPDF, paperID: paper.id, fileURL: output.outputPDF
                 )
-                // The later pages of a run over the first pages show the scan; the reader offers
-                // to continue from here, like a partial BabelDOC translation.
-                attachment.translatedLastPage = ScannedPDFTranslationService.translatedLastPage(
-                    pages: pages, pageCount: pageCount
-                )
+                // A run over the first pages ends there; the reader offers to continue from
+                // here, like a partial BabelDOC translation.
+                attachment.translatedLastPage = output.translatedLastPage
                 if let transcriptionPDF = output.transcriptionPDF {
                     _ = upsertScanRebuildAttachment(
                         previousTranscription, kind: .resource, paperID: paper.id, fileURL: transcriptionPDF

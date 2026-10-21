@@ -239,6 +239,36 @@ final class ScannedPDFTranslationServiceTests: XCTestCase {
             """#)
     }
 
+    /// Translating the first page of a longer scan yields a partial translation, not one padded
+    /// with the untranslated scan; the transcription still has every page.
+    func testTranslatingTheFirstPagesEndsTheTranslationThere() async throws {
+        let xelatex = try XCTUnwrap(
+            ScannedPDFTranslationService.locateXeLaTeX(userDefaults: UserDefaults(suiteName: UUID().uuidString)!),
+            "XeLaTeX required"
+        )
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("ScannedPDFTranslation-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let fileStore = PaperFileStore(applicationSupportDirectory: root)
+        let paperID = UUID()
+        let input = root.appendingPathComponent("scan.pdf")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        try Self.makePDF(at: input, text: "Original scanned words", pageCount: 3)
+
+        let service = ScannedPDFTranslationService(
+            fileStore: fileStore, recognizer: NoText(), provider: ScriptedProvider(), compiler: XeLaTeXCompiler(executable: xelatex)
+        )
+        let route = ResolvedLLMModelRoute(snapshot: route(), apiKey: "sk-test")
+        let output = try await service.translate(ScannedPDFTranslationRequest(
+            paperID: paperID, inputPDF: input, pages: [1], transcriptionRoute: route, translationRoute: route
+        )) { _ in }
+
+        XCTAssertEqual(output.translatedLastPage, 1)
+        XCTAssertEqual(PDFDocument(url: output.outputPDF)?.pageCount, 1)
+        let text = try XCTUnwrap(PDFDocument(url: output.outputPDF)?.page(at: 0)?.string).replacingOccurrences(of: " ", with: "")
+        XCTAssertTrue(text.contains("原文译文"), text)
+        XCTAssertEqual(PDFDocument(url: try XCTUnwrap(output.transcriptionPDF))?.pageCount, 3)
+    }
+
     private func assertTranslationReusesFinishedPages(rejectReview: Bool = false, transcriptionResponse: String? = nil) async throws {
         let xelatex = try XCTUnwrap(
             ScannedPDFTranslationService.locateXeLaTeX(userDefaults: UserDefaults(suiteName: UUID().uuidString)!),
@@ -291,16 +321,18 @@ final class ScannedPDFTranslationServiceTests: XCTestCase {
         XCTAssertEqual(provider.requests.count, expectedRequests)
     }
 
-    private static func makePDF(at url: URL, text: String) throws {
+    private static func makePDF(at url: URL, text: String, pageCount: Int = 1) throws {
         var box = CGRect(x: 0, y: 0, width: 300, height: 400)
         let context = try XCTUnwrap(CGContext(url as CFURL, mediaBox: &box, nil))
-        context.beginPDFPage(nil)
         let line = CTLineCreateWithAttributedString(NSAttributedString(string: text, attributes: [
             NSAttributedString.Key(kCTFontAttributeName as String): CTFontCreateWithName("Times-Roman" as CFString, 11, nil),
         ]))
-        context.textPosition = CGPoint(x: 40, y: 340)
-        CTLineDraw(line, context)
-        context.endPDFPage()
+        for _ in 0..<pageCount {
+            context.beginPDFPage(nil)
+            context.textPosition = CGPoint(x: 40, y: 340)
+            CTLineDraw(line, context)
+            context.endPDFPage()
+        }
         context.closePDF()
     }
 }
