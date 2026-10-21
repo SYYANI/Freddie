@@ -302,6 +302,11 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
     var citationMarks: [WritingCitationMark] = []
     /// A single click on cited passages, with the marks under the pointer.
     var onCitationMarksActivated: (([String]) -> Void)? = nil
+    #if os(macOS)
+    /// Scrolls the other pane of a side-by-side reader along with this one.
+    var scrollSync: DualPDFScrollSync? = nil
+    var scrollSyncSide: DualPDFSelectionSource = .original
+    #endif
 
     #if os(macOS)
     func makeNSView(context: Context) -> PDFView {
@@ -381,6 +386,7 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
             )
             interactiveView.onDebugRegionSelected = onDebugRegionSelected
         }
+        context.coordinator.attachScrollSync(scrollSync, side: scrollSyncSide, to: view)
         #endif
 
         guard let fileURL else {
@@ -428,7 +434,9 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
                     context.coordinator.loadedAttachmentID == attachmentID
             )
             let document = PDFDocument(url: fileURL)
-            view.document = document
+            context.coordinator.withoutLeadingScrollSync {
+                view.document = document
+            }
             context.coordinator.loadedURL = fileURL
             context.coordinator.loadedPaperID = paperID
             context.coordinator.loadedAttachmentID = attachmentID
@@ -568,6 +576,8 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
         private var isSidenotePositionUpdateScheduled = false
         #if os(macOS)
         private weak var observedSidenoteScrollView: NSScrollView?
+        private(set) weak var scrollSync: DualPDFScrollSync?
+        private var scrollSyncSide: DualPDFSelectionSource = .original
         #endif
 
         init(
@@ -616,6 +626,47 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
                 name: "PDF View Update",
                 signpostID: signpostID
             )
+        }
+
+        #if os(macOS)
+        func attachScrollSync(_ scrollSync: DualPDFScrollSync?, side: DualPDFSelectionSource, to pdfView: PDFView) {
+            if self.scrollSync !== scrollSync || scrollSyncSide != side {
+                self.scrollSync?.unregister(pdfView, side: scrollSyncSide)
+            }
+            self.scrollSync = scrollSync
+            scrollSyncSide = side
+            // A pane the reader scrolls no longer waits for an earlier programmatic page.
+            scrollSync?.register(pdfView, side: side) { [weak self] in
+                self?.clearProgrammaticPageRestore()
+            }
+        }
+        #endif
+
+        /// Restoring a page or loading a document moves this pane without leading the other one.
+        func withoutLeadingScrollSync(_ body: () -> Void) {
+            #if os(macOS)
+            if let scrollSync {
+                scrollSync.withoutLeading(scrollSyncSide, body)
+                return
+            }
+            #endif
+            body()
+        }
+
+        /// After a jump to a note or a find match, the other pane follows this one.
+        private func leadScrollSync() {
+            #if os(macOS)
+            scrollSync?.lead(scrollSyncSide)
+            #endif
+        }
+
+        /// A following pane is placed by the pane the reader scrolls, not by the page it reports.
+        private var isFollowingScrollSync: Bool {
+            #if os(macOS)
+            return scrollSync?.isFollowing(scrollSyncSide) == true
+            #else
+            return false
+            #endif
         }
 
         func applyScalingPreference(_ usesAutomaticScaling: Bool, to pdfView: PDFView) {
@@ -805,6 +856,10 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
             findTextLoadTask = nil
             #if os(macOS)
             stopObservingSidenoteGeometry()
+            if let pdfView {
+                scrollSync?.unregister(pdfView, side: scrollSyncSide)
+            }
+            scrollSync = nil
             #endif
             removeSidenoteHighlights()
             clearNoteNavigationHighlight()
@@ -1018,6 +1073,7 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
 
             let targetPageIndex = min(max(0, pageIndex), document.pageCount - 1)
             guard let page = document.page(at: targetPageIndex) else { return }
+            defer { leadScrollSync() }
 
             guard let quote = request.quote,
                   let pageText = page.string,
@@ -1204,6 +1260,7 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
         private func revealCurrentFindMatch(in pdfView: PDFView) {
             guard let currentFindMatchIndex, findMatches.indices.contains(currentFindMatchIndex) else { return }
             pdfView.go(to: findMatches[currentFindMatchIndex].selection)
+            leadScrollSync()
             scheduleCurrentPageIndexUpdate()
         }
 
@@ -1805,7 +1862,13 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
             let targetPageIndex = min(max(0, requestedPageIndex), document.pageCount - 1)
             guard let currentPage = pdfView.currentPage else { return true }
             let currentPageIndex = document.index(for: currentPage)
-            return currentPageIndex == NSNotFound || currentPageIndex != targetPageIndex
+            guard currentPageIndex == NSNotFound || currentPageIndex != targetPageIndex else { return false }
+            // The other pane already shows the page; a jump to its top would undo the scroll sync.
+            if isFollowingScrollSync, let targetPage = document.page(at: targetPageIndex),
+               pdfView.visiblePages.contains(targetPage) {
+                return false
+            }
+            return true
         }
 
         func readingPosition(fallbackPageIndex: Int, in pdfView: PDFView) -> PDFReadingPosition {
@@ -1830,6 +1893,20 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
         }
 
         func restoreReadingPosition(
+            _ requestedPosition: PDFReadingPosition,
+            in pdfView: PDFView,
+            suppressIntermediateUpdates: Bool
+        ) {
+            withoutLeadingScrollSync {
+                moveToReadingPosition(
+                    requestedPosition,
+                    in: pdfView,
+                    suppressIntermediateUpdates: suppressIntermediateUpdates
+                )
+            }
+        }
+
+        private func moveToReadingPosition(
             _ requestedPosition: PDFReadingPosition,
             in pdfView: PDFView,
             suppressIntermediateUpdates: Bool
@@ -1900,10 +1977,12 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
             let targetPosition = position.clamped(pageCount: document.pageCount)
             guard let page = document.page(at: targetPosition.pageIndex) else { return }
 
-            if let point = targetPosition.point {
-                pdfView.go(to: PDFDestination(page: page, at: point))
-            } else if pdfView.currentPage != page {
-                pdfView.go(to: page)
+            withoutLeadingScrollSync {
+                if let point = targetPosition.point {
+                    pdfView.go(to: PDFDestination(page: page, at: point))
+                } else if pdfView.currentPage != page {
+                    pdfView.go(to: page)
+                }
             }
         }
 
@@ -1938,7 +2017,7 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
                 self.pendingProgrammaticPosition = nil
             }
 
-            guard currentIndex != pageIndex.wrappedValue else { return }
+            guard !isFollowingScrollSync, currentIndex != pageIndex.wrappedValue else { return }
             pageIndex.wrappedValue = currentIndex
         }
 

@@ -154,6 +154,12 @@ final class ScannedPDFTranslationServiceTests: XCTestCase {
         XCTAssertEqual(ScannedPDFTranscription.decode(""), [])
     }
 
+    func testRunOverFirstPagesLeavesTranslationPartial() {
+        XCTAssertEqual(ScannedPDFTranslationService.translatedLastPage(pages: [1, 2], pageCount: 9), 2)
+        XCTAssertNil(ScannedPDFTranslationService.translatedLastPage(pages: Array(1...9), pageCount: 9))
+        XCTAssertNil(ScannedPDFTranslationService.translatedLastPage(pages: nil, pageCount: 9))
+    }
+
     func testOnlySimplifiedChineseIsSupported() {
         XCTAssertTrue(ScannedPDFTranslationPreferences.supports(targetLanguage: TranslationTargetLanguage.simplifiedChinese.code))
         XCTAssertFalse(ScannedPDFTranslationPreferences.supports(targetLanguage: TranslationTargetLanguage.english.code))

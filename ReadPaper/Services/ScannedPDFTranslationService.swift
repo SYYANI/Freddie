@@ -316,6 +316,13 @@ struct ScannedPDFTranslationService {
         }
     }
 
+    /// The last page of a run over the first pages of a longer PDF, which the reader can continue;
+    /// nil when the run covers every page.
+    static func translatedLastPage(pages: [Int]?, pageCount: Int) -> Int? {
+        guard let lastPage = pages?.max(), lastPage < pageCount else { return nil }
+        return lastPage
+    }
+
     /// The status line after a run that kept some scanned pages.
     static func fallbackMessage(count: Int, bundle: Bundle) -> String {
         AppLocalization.format(

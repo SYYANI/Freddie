@@ -62,6 +62,8 @@ struct ReaderPaneView: View {
         var pageCount: Int
         /// Set when the offer replaces a refused text translation.
         var hasNoTextLayer: Bool
+        /// The last page of an earlier scanned translation of the first pages, or 0.
+        var translatedLastPage: Int = 0
     }
 
     private struct PendingHTMLRegionChanges {
@@ -262,6 +264,16 @@ struct ReaderPaneView: View {
 
     private var canTranslateTextPDF: Bool {
         canTranslatePDF && extractablePDFRequest == originalPDFPageCountRequest
+    }
+
+    /// The shown translation was rebuilt from page images rather than translated by BabelDOC.
+    private var isScanRebuildTranslation: Bool {
+        translatedPDFAttachment?.source == .scanRebuild
+    }
+
+    /// A partial translation continues on the route that made it.
+    private var canContinuePDFTranslation: Bool {
+        isScanRebuildTranslation ? canTranslatePDF : canTranslateTextPDF
     }
 
     private var canTranslateLaTeX: Bool {
@@ -578,9 +590,21 @@ struct ReaderPaneView: View {
                 titleVisibility: .visible,
                 presenting: scannedPDFTranslationOffer
             ) { offer in
-                if offer.pageCount > pdfTranslationBatchSize {
-                    Button(AppLocalization.format("Translate First %d Pages", bundle: bundle, pdfTranslationBatchSize)) {
-                        startScannedPDFTranslation(pages: Array(1...pdfTranslationBatchSize))
+                let nextLastPage = offer.translatedLastPage + pdfTranslationBatchSize
+                if offer.pageCount > nextLastPage {
+                    if offer.translatedLastPage > 0 {
+                        Button(AppLocalization.format(
+                            "Translate pages %@–%@",
+                            bundle: bundle,
+                            "\(offer.translatedLastPage + 1)",
+                            "\(nextLastPage)"
+                        )) {
+                            startScannedPDFTranslation(pages: Array(1...nextLastPage))
+                        }
+                    } else {
+                        Button(AppLocalization.format("Translate First %d Pages", bundle: bundle, pdfTranslationBatchSize)) {
+                            startScannedPDFTranslation(pages: Array(1...pdfTranslationBatchSize))
+                        }
                     }
                     Button(AppLocalization.format("Translate All %d Pages", bundle: bundle, offer.pageCount)) {
                         startScannedPDFTranslation(pages: nil)
@@ -1330,7 +1354,7 @@ struct ReaderPaneView: View {
             Button {
                 translatePDF()
             } label: {
-                if isPartialPDFTranslation {
+                if isPartialPDFTranslation && !isScanRebuildTranslation {
                     Label(String(localized: "Translate More PDF Pages", bundle: bundle), systemImage: "doc")
                         .labelStyle(.titleAndIcon)
                 } else if isFullPDFTranslationComplete {
@@ -2426,14 +2450,27 @@ struct ReaderPaneView: View {
             handleTranslationError(ScannedPDFTranslationError.unreadablePDF)
             return
         }
-        if didConfirmScannedPDFTranslation, pageCount <= pdfTranslationBatchSize {
+        let translatedLastPage = isScanRebuildTranslation ? translatedPDFAttachment?.translatedLastPage ?? 0 : 0
+        if didConfirmScannedPDFTranslation, pageCount <= translatedLastPage + pdfTranslationBatchSize {
             startScannedPDFTranslation(pages: nil)
             return
         }
-        scannedPDFTranslationOffer = ScannedPDFTranslationOffer(pageCount: pageCount, hasNoTextLayer: hasNoTextLayer)
+        scannedPDFTranslationOffer = ScannedPDFTranslationOffer(
+            pageCount: pageCount,
+            hasNoTextLayer: hasNoTextLayer,
+            translatedLastPage: translatedLastPage
+        )
     }
 
     private func scannedPDFTranslationOfferMessage(_ offer: ScannedPDFTranslationOffer) -> String {
+        if offer.translatedLastPage > 0 {
+            return AppLocalization.format(
+                "Translated pages 1–%@ of %@.",
+                bundle: bundle,
+                "\(offer.translatedLastPage)",
+                "\(offer.pageCount)"
+            )
+        }
         if didConfirmScannedPDFTranslation {
             return AppLocalization.format(
                 "This PDF has %d pages. Translating the first %d pages is faster.",
@@ -2455,6 +2492,7 @@ struct ReaderPaneView: View {
 
     private func startScannedPDFTranslation(pages: [Int]?) {
         guard let paper, let pdfAttachment, let settings else { return }
+        let pageCount = PDFDocument(url: pdfAttachment.fileURL)?.pageCount ?? 0
         if !didConfirmScannedPDFTranslation {
             didConfirmScannedPDFTranslation = true
         }
@@ -2510,6 +2548,11 @@ struct ReaderPaneView: View {
                 // annotations made on them stay attached; the new date makes them the shown versions.
                 let attachment = upsertScanRebuildAttachment(
                     previousTranslation, kind: .translatedPDF, paperID: paper.id, fileURL: output.outputPDF
+                )
+                // The later pages of a run over the first pages show the scan; the reader offers
+                // to continue from here, like a partial BabelDOC translation.
+                attachment.translatedLastPage = ScannedPDFTranslationService.translatedLastPage(
+                    pages: pages, pageCount: pageCount
                 )
                 if let transcriptionPDF = output.transcriptionPDF {
                     _ = upsertScanRebuildAttachment(
@@ -2608,7 +2651,7 @@ struct ReaderPaneView: View {
             return
         }
 
-        if isPartialPDFTranslation {
+        if isPartialPDFTranslation && !isScanRebuildTranslation {
             extendPDFTranslation()
             return
         }
@@ -2762,8 +2805,23 @@ struct ReaderPaneView: View {
         }
     }
 
+    /// Translates the next pages on the route that made the partial translation.
+    private func continuePDFTranslation(to requestedLastPage: Int? = nil) {
+        guard isScanRebuildTranslation else {
+            extendPDFTranslation(to: requestedLastPage)
+            return
+        }
+        guard canTranslatePDF,
+              let currentLastPage = translatedPDFAttachment?.translatedLastPage,
+              let total = originalPDFPageCount, currentLastPage < total
+        else { return }
+        let nextLastPage = min(requestedLastPage ?? currentLastPage + pdfTranslationBatchSize, total)
+        // Finished pages come from the checkpoints, so only the new pages are sent to the model.
+        startScannedPDFTranslation(pages: nextLastPage < total ? Array(1...nextLastPage) : nil)
+    }
+
     private func extendPDFTranslation(to requestedLastPage: Int? = nil) {
-        guard canTranslateTextPDF else { return }
+        guard canTranslateTextPDF, !isScanRebuildTranslation else { return }
         guard let paper, let pdfAttachment, let settings, let existingAttachment = translatedPDFAttachment, let currentLastPage = existingAttachment.translatedLastPage else { return }
         guard let total = originalPDFPageCount, currentLastPage < total else { return }
 
@@ -3100,7 +3158,7 @@ struct ReaderPaneView: View {
                     .foregroundStyle(.secondary)
                 Spacer(minLength: 0)
                 Button {
-                    extendPDFTranslation()
+                    continuePDFTranslation()
                 } label: {
                     Text(AppLocalization.format("Translate pages %@–%@", "\(lastPage + 1)", "\(nextEnd)"))
                         .font(.caption)
@@ -3110,7 +3168,7 @@ struct ReaderPaneView: View {
 
                 if nextEnd < total {
                     Button {
-                        extendPDFTranslation(to: total)
+                        continuePDFTranslation(to: total)
                     } label: {
                         Text("Translate All", bundle: bundle)
                             .font(.caption)
@@ -3123,7 +3181,7 @@ struct ReaderPaneView: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
         .background(ReadPaperAppearanceHeaderSurface(role: .reader))
-        .disabled(canTranslateTextPDF == false)
+        .disabled(canContinuePDFTranslation == false)
     }
 
     private func syncReaderModeWithAvailableContent() {
