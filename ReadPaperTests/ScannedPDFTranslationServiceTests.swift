@@ -15,6 +15,8 @@ final class ScannedPDFTranslationServiceTests: XCTestCase {
         var finishReason: LLMFinishReason? = .stop
         var reviewResponse = "<changes></changes><unchanged/>"
         var transcriptionResponse: String?
+        /// Translations of this page drop the protected formula, so they never validate.
+        var failingTranslationPage: Int?
 
         func complete(request: LLMCompletionRequest) async throws -> LLMCompletionResponse {
             lock.withLock { requests.append(request) }
@@ -23,7 +25,10 @@ final class ScannedPDFTranslationServiceTests: XCTestCase {
             let text: String
             if user.parts == nil {
                 let source = String(user.content[user.content.firstIndex(of: "\n")!...].dropFirst())
-                text = source.replacingOccurrences(of: "Source words", with: "原文译文")
+                let translated = source.replacingOccurrences(of: "Source words", with: "原文译文")
+                text = failingTranslationPage.map { user.content.hasPrefix("Translate page \($0) ") } == true
+                    ? translated.replacingOccurrences(of: "REBUILDPDFPROTECTED0000TOKEN", with: "")
+                    : translated
             } else if user.content.contains("SOURCE region") {
                 text = reviewResponse
             } else if let transcriptionResponse {
@@ -158,6 +163,51 @@ final class ScannedPDFTranslationServiceTests: XCTestCase {
         XCTAssertEqual(ScannedPDFTranslationService.translatedLastPage(pages: [1, 2], pageCount: 9), 2)
         XCTAssertNil(ScannedPDFTranslationService.translatedLastPage(pages: Array(1...9), pageCount: 9))
         XCTAssertNil(ScannedPDFTranslationService.translatedLastPage(pages: nil, pageCount: 9))
+        // Failed pages at the end are left out, so continuing tries them again.
+        XCTAssertEqual(ScannedPDFTranslationService.translatedLastPage(pages: Array(1...5), pageCount: 9, failedPages: [4, 5]), 3)
+        XCTAssertEqual(ScannedPDFTranslationService.translatedLastPage(pages: Array(1...3), pageCount: 9, failedPages: [2]), 3)
+        XCTAssertEqual(ScannedPDFTranslationService.translatedLastPage(pages: nil, pageCount: 9, failedPages: [9]), 8)
+    }
+
+    /// A page that fails at the end of the run is not shown as translated with its scan; the
+    /// next run asks the model for it again instead of replaying the failed answers.
+    func testFailedLastPageEndsTheTranslationBeforeItAndIsRetried() async throws {
+        let xelatex = try XCTUnwrap(
+            ScannedPDFTranslationService.locateXeLaTeX(userDefaults: UserDefaults(suiteName: UUID().uuidString)!),
+            "XeLaTeX required"
+        )
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("ScannedPDFTranslation-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let fileStore = PaperFileStore(applicationSupportDirectory: root)
+        let paperID = UUID()
+        let input = root.appendingPathComponent("scan.pdf")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        try Self.makePDF(at: input, text: "Original scanned words", pageCount: 2)
+        let provider = ScriptedProvider()
+        provider.failingTranslationPage = 2
+        let service = ScannedPDFTranslationService(
+            fileStore: fileStore, recognizer: NoText(), provider: provider, compiler: XeLaTeXCompiler(executable: xelatex)
+        )
+        let route = ResolvedLLMModelRoute(snapshot: route(), apiKey: "sk-test")
+        let request = ScannedPDFTranslationRequest(
+            paperID: paperID, inputPDF: input, pages: [1, 2], transcriptionRoute: route, translationRoute: route
+        )
+
+        let failed = try await service.translate(request) { _ in }
+        XCTAssertEqual(failed.translatedLastPage, 1)
+        XCTAssertEqual(PDFDocument(url: failed.outputPDF)?.pageCount, 1)
+        XCTAssertEqual(Array(failed.unfinishedPages.keys), [2])
+        XCTAssertTrue(failed.fallbacks.isEmpty)
+        XCTAssertEqual(PDFDocument(url: try XCTUnwrap(failed.transcriptionPDF))?.pageCount, 2)
+        let message = try XCTUnwrap(ScannedPDFTranslationService.failureMessage(for: failed, bundle: .main))
+        XCTAssertTrue(message.contains("2"), message)
+
+        provider.failingTranslationPage = nil
+        let retried = try await service.translate(request) { _ in }
+        XCTAssertNil(retried.translatedLastPage)
+        XCTAssertEqual(PDFDocument(url: retried.outputPDF)?.pageCount, 2)
+        XCTAssertTrue(retried.unfinishedPages.isEmpty)
+        XCTAssertNil(ScannedPDFTranslationService.failureMessage(for: retried, bundle: .main))
     }
 
     func testOnlySimplifiedChineseIsSupported() {

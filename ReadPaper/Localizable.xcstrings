@@ -5163,6 +5163,16 @@
         }
       }
     },
+    "Pages %@ could not be rebuilt and were not added to the translation. Continue translating to try them again." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "第 %@ 页未能重建，没有加入译文。继续翻译即可重试这些页面。"
+          }
+        }
+      }
+    },
     "Paper" : {
       "localizations" : {
         "zh-Hans" : {

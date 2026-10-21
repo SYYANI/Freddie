@@ -136,8 +136,11 @@ struct ScannedPDFTranslationOutput: Sendable {
     /// The corrected transcription; pages that could not be transcribed show the scan.
     var transcriptionPDF: URL?
     var rebuiltPages: [Int]
-    /// Pages that kept the scanned page, with the reason.
+    /// Pages within the translation that kept the scanned page, with the reason.
     var fallbacks: [Int: String]
+    /// Failed pages at the end of the run, left out of the translation so that continuing
+    /// tries them again, with the reason.
+    var unfinishedPages: [Int: String] = [:]
     var totalTokens: Int
 }
 
@@ -310,9 +313,16 @@ struct ScannedPDFTranslationService {
                 ))
             }
             // RebuildPDFKit fills the pages it did not rebuild with the scan. Past the last chosen
-            // page that would pass untranslated pages off as translation, so the output ends there.
+            // page, or on failed pages at the end, that would pass untranslated pages off as
+            // translation, so the output ends at the last rebuilt page.
             let pageCount = PDFDocument(url: result.output)?.pageCount ?? 0
-            let translatedLastPage = Self.translatedLastPage(pages: request.pages, pageCount: pageCount)
+            let failedPages = Set(result.fallbacks.keys)
+            guard let lastPage = Self.lastRebuiltPage(pages: request.pages, pageCount: pageCount, failedPages: failedPages) else {
+                throw ScannedPDFTranslationError.noPagesRebuilt(
+                    result.fallbacks.sorted { $0.key < $1.key }.first?.value ?? ""
+                )
+            }
+            let translatedLastPage = lastPage < pageCount ? lastPage : nil
             if let translatedLastPage {
                 try Self.keepFirstPages(translatedLastPage, of: result.output)
             }
@@ -321,7 +331,8 @@ struct ScannedPDFTranslationService {
                 translatedLastPage: translatedLastPage,
                 transcriptionPDF: result.sourceRebuiltPages.isEmpty ? nil : result.sourceOutput,
                 rebuiltPages: result.rebuiltPages,
-                fallbacks: result.fallbacks,
+                fallbacks: result.fallbacks.filter { $0.key <= lastPage },
+                unfinishedPages: result.fallbacks.filter { $0.key > lastPage },
                 totalTokens: result.usage.totalTokens
             )
         } catch let error as RebuildError {
@@ -331,9 +342,20 @@ struct ScannedPDFTranslationService {
 
     /// The last page of a run over the first pages of a longer PDF, which the reader can continue;
     /// nil when the run covers every page.
-    static func translatedLastPage(pages: [Int]?, pageCount: Int) -> Int? {
-        guard let lastPage = pages?.max(), lastPage < pageCount else { return nil }
+    static func translatedLastPage(pages: [Int]?, pageCount: Int, failedPages: Set<Int> = []) -> Int? {
+        guard let lastPage = lastRebuiltPage(pages: pages, pageCount: pageCount, failedPages: failedPages),
+              lastPage < pageCount
+        else { return nil }
         return lastPage
+    }
+
+    /// The last chosen page before any failed pages at the end of the run; nil when none is left.
+    private static func lastRebuiltPage(pages: [Int]?, pageCount: Int, failedPages: Set<Int>) -> Int? {
+        var lastPage = min(pages?.max() ?? pageCount, pageCount)
+        while lastPage > 0, failedPages.contains(lastPage) {
+            lastPage -= 1
+        }
+        return lastPage > 0 ? lastPage : nil
     }
 
     private static func keepFirstPages(_ count: Int, of url: URL) throws {
@@ -350,6 +372,23 @@ struct ScannedPDFTranslationService {
             try? FileManager.default.removeItem(at: temporary)
             throw ScannedPDFTranslationError.outputNotWritten
         }
+    }
+
+    /// The status line after a run that kept some scanned pages or stopped before failed pages;
+    /// nil when every page was rebuilt.
+    static func failureMessage(for output: ScannedPDFTranslationOutput, bundle: Bundle) -> String? {
+        var messages: [String] = []
+        if !output.fallbacks.isEmpty {
+            messages.append(fallbackMessage(count: output.fallbacks.count, bundle: bundle))
+        }
+        if !output.unfinishedPages.isEmpty {
+            messages.append(AppLocalization.format(
+                "Pages %@ could not be rebuilt and were not added to the translation. Continue translating to try them again.",
+                bundle: bundle,
+                output.unfinishedPages.keys.sorted().map(String.init).joined(separator: ", ")
+            ))
+        }
+        return messages.isEmpty ? nil : messages.joined(separator: " ")
     }
 
     /// The status line after a run that kept some scanned pages.

@@ -2558,9 +2558,7 @@ struct ReaderPaneView: View {
                 } else if let previousTranscription {
                     modelContext.delete(previousTranscription)
                 }
-                let fallbackMessage = output.fallbacks.isEmpty
-                    ? nil
-                    : ScannedPDFTranslationService.fallbackMessage(count: output.fallbacks.count, bundle: bundle)
+                let fallbackMessage = ScannedPDFTranslationService.failureMessage(for: output, bundle: bundle)
                 if let storedJob = translationJob(id: jobID) {
                     storedJob.attachmentID = attachment.id
                     storedJob.progress = 1
