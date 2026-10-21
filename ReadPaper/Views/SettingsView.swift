@@ -2577,30 +2577,8 @@ private struct SettingsFieldRow<Content: View>: View {
     }
 }
 
-/// Settings text fields draw their own translucent well instead of the system's
-/// opaque white bezel, which stands out against the translucent form. The native
-/// field inside stays borderless, and reports focus so the well can show it.
-private struct SettingsFieldWell: ViewModifier {
-    var isFocused = false
-
-    func body(content: Content) -> some View {
-        content
-            .background(
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(Color(nsColor: .textBackgroundColor).opacity(0.55))
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .strokeBorder(
-                        isFocused ? Color(nsColor: .keyboardFocusIndicatorColor) : Color(nsColor: .separatorColor),
-                        lineWidth: isFocused ? 2 : 0.5
-                    )
-            )
-            .animation(.easeOut(duration: 0.12), value: isFocused)
-    }
-}
-
+// Settings text fields draw the shared translucent well (`readPaperFieldWell`)
+// around a borderless native field, which reports focus so the well can show it.
 private struct SettingsPlainTextField: View {
     let placeholder: String
     @Binding var text: String
@@ -2620,7 +2598,7 @@ private struct SettingsPlainTextField: View {
         SettingsNativePlainTextField(placeholder: placeholder, text: $text, isFocused: $isFocused)
             .padding(.horizontal, 7)
             .padding(.vertical, 4)
-            .modifier(SettingsFieldWell(isFocused: isFocused))
+            .readPaperFieldWell(isFocused: isFocused)
     }
 }
 
@@ -2638,7 +2616,7 @@ private struct SettingsSecureTextField: View {
         SettingsNativeSecureTextField(placeholder: placeholder, text: $text, isFocused: $isFocused)
             .padding(.horizontal, 7)
             .padding(.vertical, 4)
-            .modifier(SettingsFieldWell(isFocused: isFocused))
+            .readPaperFieldWell(isFocused: isFocused)
     }
 }
 
@@ -2761,7 +2739,7 @@ private struct SettingsTemplateTextEditor: View {
 
     var body: some View {
         SettingsTemplateTextView(text: $text, pendingInsertion: $pendingInsertion)
-            .modifier(SettingsFieldWell())
+            .readPaperFieldWell()
     }
 }
 

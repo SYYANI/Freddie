@@ -127,14 +127,7 @@ struct DocumentFindBar: View {
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 5)
-        .background {
-            RoundedRectangle(cornerRadius: 7, style: .continuous)
-                .fill(Color(nsColor: .textBackgroundColor))
-        }
-        .overlay {
-            RoundedRectangle(cornerRadius: 7, style: .continuous)
-                .strokeBorder(Color.primary.opacity(isQueryFocused ? 0.22 : 0.1))
-        }
+        .readPaperFieldWell(isFocused: isQueryFocused)
     }
 
     @ViewBuilder

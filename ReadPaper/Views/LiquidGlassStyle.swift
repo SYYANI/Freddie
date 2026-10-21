@@ -56,6 +56,34 @@ extension View {
     func readPaperInspectorBackground() -> some View {
         modifier(ReadPaperInspectorBackgroundModifier())
     }
+
+    /// The well behind the app's own text fields (Settings, the find bar): a soft
+    /// translucent fill with a hairline edge, instead of the system's opaque white
+    /// field that stands out against translucent surfaces.
+    func readPaperFieldWell(isFocused: Bool = false) -> some View {
+        modifier(ReadPaperFieldWell(isFocused: isFocused))
+    }
+}
+
+private struct ReadPaperFieldWell: ViewModifier {
+    let isFocused: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .background(
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .fill(Color(nsColor: .textBackgroundColor).opacity(0.55))
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .strokeBorder(
+                        isFocused ? Color(nsColor: .keyboardFocusIndicatorColor) : Color(nsColor: .separatorColor),
+                        lineWidth: isFocused ? 2 : 0.5
+                    )
+            )
+            .animation(.easeOut(duration: 0.12), value: isFocused)
+    }
 }
 
 private struct ReadPaperInspectorBackgroundModifier: ViewModifier {
