@@ -6,14 +6,17 @@ import Foundation
 /// glyphs in first-use order without a `ToUnicode` map. Translating those files
 /// only sends gibberish to the LLM, so PDF translation is refused up front.
 ///
-/// Hidden OCR text over a page-sized scan is not a typeset text layer either.
-/// Otherwise, font decoding remains conservative.
+/// Hidden OCR text over a page-sized scan is not a typeset text layer either,
+/// nor is the short "Downloaded from …" stamp archives draw on every scanned
+/// page. Otherwise, font decoding remains conservative.
 struct PDFTextLayerInspector {
     enum Verdict: Equatable {
         case extractable
         case noFonts
         case undecodableFonts
         case scannedWithOCR
+        /// Most pages are scans whose only text is a short visible stamp.
+        case scannedWithoutOCR
     }
 
     private enum FontDecodability {
@@ -41,17 +44,25 @@ struct PDFTextLayerInspector {
         guard document.numberOfPages > 0 else { return .extractable }
 
         var state = ScanState()
+        var scannedPages = 0
         for pageNumber in 1...document.numberOfPages {
             guard let page = document.page(at: pageNumber),
                   let pageDictionary = page.dictionary,
                   let resources = Self.inheritedResources(of: pageDictionary) else { continue }
-            if PDFOCRScanInspector.isScannedPage(page, resources: resources) { return .scannedWithOCR }
+            switch PDFOCRScanInspector.classify(page, resources: resources) {
+            case .scanWithOCR: return .scannedWithOCR
+            case .scan: scannedPages += 1
+            case .other: break
+            }
             if !state.hasDecodableFont {
                 scan(resources: resources, depth: 0, state: &state)
             }
         }
-        if state.hasDecodableFont { return .extractable }
-        return state.hasFont ? .undecodableFonts : .noFonts
+        guard state.hasDecodableFont else { return state.hasFont ? .undecodableFonts : .noFonts }
+        // A stamp's font decodes fine, so count scanned pages instead. A majority keeps
+        // a typeset paper with a full-page figure enabled and still catches the scans
+        // behind a typeset cover page (JSTOR).
+        return scannedPages * 2 > document.numberOfPages ? .scannedWithoutOCR : .extractable
     }
 
     private struct ScanState {
@@ -192,9 +203,19 @@ struct PDFTextLayerInspector {
 }
 
 /// Reads drawing operators without rendering images or extracting full text.
-/// Require both an actually painted page-sized image and exclusively invisible
-/// text, so figures, unused image resources and ordinary text pages stay enabled.
+/// Require an actually painted page-sized image and at most a stamp's worth of
+/// visible text, so figures, unused image resources and ordinary text pages stay enabled.
 private final class PDFOCRScanInspector {
+    enum PageKind {
+        case scanWithOCR
+        case scan
+        case other
+    }
+
+    /// Archive stamps ("Downloaded from … by guest on …", JSTOR's terms line) run
+    /// about 100–150 characters, two bytes each in CID fonts; a typeset page has thousands.
+    private static let maxStampTextLength = 400
+
     private struct GraphicsState {
         var transform = CGAffineTransform.identity
         var textRenderingMode = 0
@@ -203,7 +224,7 @@ private final class PDFOCRScanInspector {
     private var graphics = GraphicsState()
     private var stack: [GraphicsState] = []
     private var hasHiddenText = false
-    private var hasVisibleText = false
+    private var visibleTextLength = 0
     private var hasPageImage = false
     private var complete = true
     private let pageBounds: CGRect
@@ -216,13 +237,14 @@ private final class PDFOCRScanInspector {
         self.resources = resources
     }
 
-    static func isScannedPage(_ page: CGPDFPage, resources: CGPDFDictionaryRef) -> Bool {
+    static func classify(_ page: CGPDFPage, resources: CGPDFDictionaryRef) -> PageKind {
         let inspector = PDFOCRScanInspector(pageBounds: page.getBoxRect(.cropBox), resources: resources)
         let content = CGPDFContentStreamCreateWithPage(page)
         defer { CGPDFContentStreamRelease(content) }
         inspector.scan(content)
-        return inspector.complete && inspector.hasPageImage
-            && inspector.hasHiddenText && !inspector.hasVisibleText
+        guard inspector.complete, inspector.hasPageImage,
+              inspector.visibleTextLength <= maxStampTextLength else { return .other }
+        return inspector.hasHiddenText ? .scanWithOCR : .scan
     }
 
     private static func context(_ info: UnsafeMutableRawPointer?) -> PDFOCRScanInspector {
@@ -230,11 +252,12 @@ private final class PDFOCRScanInspector {
     }
 
     private func recordText(_ string: CGPDFStringRef) {
-        guard CGPDFStringGetLength(string) > 0 else { return }
+        let length = CGPDFStringGetLength(string)
+        guard length > 0 else { return }
         if graphics.textRenderingMode == 3 {
             hasHiddenText = true
         } else {
-            hasVisibleText = true
+            visibleTextLength += length
         }
     }
 
@@ -334,7 +357,7 @@ private final class PDFOCRScanInspector {
             defer { CGPDFContentStreamRelease(content) }
             child.scan(content)
             hasHiddenText = hasHiddenText || child.hasHiddenText
-            hasVisibleText = hasVisibleText || child.hasVisibleText
+            visibleTextLength += child.visibleTextLength
             hasPageImage = hasPageImage || child.hasPageImage
             complete = complete && child.complete
         default:
