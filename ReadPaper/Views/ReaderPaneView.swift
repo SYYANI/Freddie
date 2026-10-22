@@ -2450,7 +2450,10 @@ struct ReaderPaneView: View {
             handleTranslationError(ScannedPDFTranslationError.unreadablePDF)
             return
         }
-        let translatedLastPage = isScanRebuildTranslation ? translatedPDFAttachment?.translatedLastPage ?? 0 : 0
+        // A translation of every page has no last page; running it again only retries the pages
+        // that kept the scan, so there is no range to choose.
+        let previousTranslation = isScanRebuildTranslation ? translatedPDFAttachment : nil
+        let translatedLastPage = previousTranslation.map { $0.translatedLastPage ?? pageCount } ?? 0
         if didConfirmScannedPDFTranslation, pageCount <= translatedLastPage + pdfTranslationBatchSize {
             startScannedPDFTranslation(pages: nil)
             return

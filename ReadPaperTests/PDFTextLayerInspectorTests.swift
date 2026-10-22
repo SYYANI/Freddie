@@ -100,8 +100,39 @@ final class PDFTextLayerInspectorTests: XCTestCase {
 
     func testOrdinaryTextOverFullPageImageIsStillAccepted() throws {
         XCTAssertEqual(try inspect(makeOCRPDFData(contents: [
-            "q 200 0 0 200 0 0 cm /Im0 Do Q BT /F0 12 Tf 0 Tr (Visible text) Tj ET",
+            "q 200 0 0 200 0 0 cm /Im0 Do Q BT /F0 12 Tf 0 Tr (\(typesetPageText)) Tj ET",
         ])), .extractable)
+    }
+
+    func testScanWhoseOnlyTextIsADownloadStampIsRejected() throws {
+        let data = makeOCRPDFData(contents: [
+            "q 200 0 0 200 0 0 cm /Im0 Do Q BT /F0 8 Tf (\(downloadStamp)) Tj ET",
+        ], scanPageCount: 3)
+        XCTAssertEqual(try inspect(data), .scannedWithoutOCR)
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("\(UUID().uuidString).pdf")
+        defer { try? FileManager.default.removeItem(at: url) }
+        try data.write(to: url)
+        XCTAssertThrowsError(try PDFTextLayerInspector().requireExtractableText(at: url)) {
+            XCTAssertEqual($0 as? PDFTextLayerError, .noExtractableText)
+        }
+    }
+
+    func testDownloadStampDoesNotHideOCRScan() throws {
+        XCTAssertEqual(try inspect(makeOCRPDFData(contents: [
+            "q 200 0 0 200 0 0 cm /Im0 Do Q BT /F0 12 Tf 3 Tr (OCR) Tj 0 Tr (\(downloadStamp)) Tj ET",
+        ])), .scannedWithOCR)
+    }
+
+    func testStampedScansAfterTypesetCoverPageAreRejected() throws {
+        XCTAssertEqual(try inspect(makeOCRPDFData(contents: [
+            "q 200 0 0 200 0 0 cm /Im0 Do Q BT /F0 8 Tf (\(downloadStamp)) Tj ET",
+        ], prependTextPage: true, scanPageCount: 2)), .scannedWithoutOCR)
+    }
+
+    func testFullPageFigureInTypesetPaperIsStillAccepted() throws {
+        XCTAssertEqual(try inspect(makeOCRPDFData(contents: [
+            "q 200 0 0 200 0 0 cm /Im0 Do Q BT /F0 8 Tf (Figure 3: Results.) Tj ET",
+        ], prependTextPage: true)), .extractable)
     }
 
     func testSmallFigureOrUnusedImageDoesNotCountAsScannedPage() throws {
@@ -115,7 +146,7 @@ final class PDFTextLayerInspectorTests: XCTestCase {
     func testTextRenderingModeRestoresWithGraphicsState() throws {
         XCTAssertEqual(try inspect(makeOCRPDFData(contents: [
             "q BT /F0 12 Tf 3 Tr (OCR) Tj ET Q",
-            "BT /F0 12 Tf (Visible text after restore) Tj ET",
+            "BT /F0 12 Tf (\(typesetPageText)) Tj ET",
             "q 200 0 0 200 0 0 cm /Im0 Do Q",
         ])), .extractable)
     }
@@ -132,13 +163,16 @@ final class PDFTextLayerInspectorTests: XCTestCase {
         ], prependTextPage: true)), .scannedWithOCR)
     }
 
+    private let downloadStamp = "Downloaded from https://academic.oup.com/comjnl/article/5/1/10/395338 by guest on 08 April 2024"
+    private let typesetPageText = String(repeating: "Body text set on an ordinary page. ", count: 20)
+
     private func inspect(_ data: Data) throws -> PDFTextLayerInspector.Verdict {
         let provider = try XCTUnwrap(CGDataProvider(data: data as CFData))
         return PDFTextLayerInspector().inspect(try XCTUnwrap(CGPDFDocument(provider)))
     }
 
     private func makeOCRPDFData(
-        contents: [String], formMatrix: String? = nil, prependTextPage: Bool = false
+        contents: [String], formMatrix: String? = nil, prependTextPage: Bool = false, scanPageCount: Int = 1
     ) -> Data {
         let resources = "<< /Font << /F0 4 0 R >> /XObject << /Im0 5 0 R >> >>"
         var objects = [
@@ -164,8 +198,9 @@ final class PDFTextLayerInspectorTests: XCTestCase {
         } else {
             contentReferences = contents.map { append(stream($0)) }
         }
-        objects[2] = "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Resources \(pageResources) /Contents [\(contentReferences.joined(separator: " "))] >>"
-        var pages = ["3 0 R"]
+        let scanPage = "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Resources \(pageResources) /Contents [\(contentReferences.joined(separator: " "))] >>"
+        objects[2] = scanPage
+        var pages = ["3 0 R"] + (1..<scanPageCount).map { _ in append(scanPage) }
         if prependTextPage {
             let content = append(stream("BT /F0 12 Tf (Typeset cover page) Tj ET"))
             let page = append("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Resources \(resources) /Contents \(content) >>")
