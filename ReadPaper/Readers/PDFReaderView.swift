@@ -1025,7 +1025,11 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
             for (id, anchor) in sidenotePageRects {
                 guard let page = document.page(at: anchor.pageIndex) else { continue }
                 let viewRect = pdfView.convert(anchor.rect, from: page)
+                #if os(macOS)
                 tops[id] = pdfView.isFlipped ? viewRect.minY : pdfView.bounds.height - viewRect.maxY
+                #else
+                tops[id] = viewRect.minY
+                #endif
             }
             layout.update(anchorTops: tops)
         }

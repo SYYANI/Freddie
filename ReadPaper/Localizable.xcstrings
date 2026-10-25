@@ -429,6 +429,9 @@
         }
       }
     },
+    "After selecting routes here, go back to the main window, import a paper, open it in the reader, and use the Translate button in the toolbar." : {
+
+    },
     "AI Explanation" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2490,6 +2493,9 @@
         }
       }
     },
+    "Enter one preferred term mapping per line, for example “large language model = 大语言模型”. The glossary is optional and is used as reference context by both HTML and PDF translation." : {
+
+    },
     "Enter the note to attach at this PDF position." : {
       "localizations" : {
         "zh-Hans" : {
@@ -2921,6 +2927,7 @@
       }
     },
     "First Paper" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -3412,6 +3419,9 @@
           }
         }
       }
+    },
+    "HTML translation works best for arXiv papers with HTML content. PDF translation uses the PDF/BabelDOC route and can produce translated or side-by-side PDF reading modes." : {
+
     },
     "HTML Typography" : {
       "extractionState" : "stale",
