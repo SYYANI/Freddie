@@ -69,6 +69,13 @@ enum PDFDisplayAppearance: String, CaseIterable, Identifiable {
     }
 }
 
+enum PDFReaderControlPreferences {
+    static let handToolEnabledKey = "ReadPaper.Reader.PDFHandToolEnabled"
+    static let showZoomButtonsKey = "ReadPaper.Reader.ShowPDFZoomButtons"
+    static let defaultHandToolEnabled = false
+    static let defaultShowZoomButtons = false
+}
+
 private struct PDFDisplayAppearanceEnvironmentKey: EnvironmentKey {
     static let defaultValue = PDFDisplayAppearance.defaultValue
 }
@@ -289,6 +296,7 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
     var noteNavigationRequest: NoteNavigationRequest? = nil
     var selectionAssistantHistoryAnchors: [SelectionAssistantHistoryAnchor] = []
     var annotationSession: PDFAnnotationSession? = nil
+    var handToolEnabled = PDFReaderControlPreferences.defaultHandToolEnabled
     var onNoteSelectionChanged: ((NoteSelectionContext?) -> Void)? = nil
     var onArxivLinkActivated: ((URL) -> Void)? = nil
     var onDocumentPageCountChanged: ((Int) -> Void)? = nil
@@ -382,6 +390,7 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
                 debugRegionSelectionEnabled: debugRegionSelectionEnabled,
                 annotationSession: annotationSession,
                 displayAppearance: displayAppearance,
+                handToolEnabled: handToolEnabled,
                 to: interactiveView
             )
             interactiveView.onDebugRegionSelected = onDebugRegionSelected
@@ -496,6 +505,7 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
             var colorPreset: PDFAnnotationColorPreset
             var lineWidth: Double
             var displayAppearance: PDFDisplayAppearance
+            var handToolEnabled: Bool
         }
         #endif
 
@@ -638,6 +648,7 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
             // A pane the reader scrolls no longer waits for an earlier programmatic page.
             scrollSync?.register(pdfView, side: side) { [weak self] in
                 self?.clearProgrammaticPageRestore()
+                self?.activateAnnotationDocument()
             }
         }
         #endif
@@ -726,6 +737,7 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
             debugRegionSelectionEnabled: Bool,
             annotationSession: PDFAnnotationSession?,
             displayAppearance: PDFDisplayAppearance,
+            handToolEnabled: Bool,
             to pdfView: InteractivePDFView
         ) {
             let configuration = InteractionConfiguration(
@@ -734,7 +746,8 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
                     : annotationSession?.interactionMode ?? .browse,
                 colorPreset: annotationSession?.colorPreset ?? .yellow,
                 lineWidth: annotationSession?.lineWidth ?? 2,
-                displayAppearance: displayAppearance
+                displayAppearance: displayAppearance,
+                handToolEnabled: handToolEnabled
             )
             guard appliedInteractionConfiguration != configuration else { return }
             appliedInteractionConfiguration = configuration
@@ -743,6 +756,7 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
                 .color(for: .ink)
                 .platformColor(inverted: false)
             pdfView.inkPreviewLineWidth = configuration.lineWidth
+            pdfView.handToolEnabled = configuration.handToolEnabled
         }
         #endif
 
@@ -1674,6 +1688,25 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
             publishAnnotationCapabilities()
         }
 
+        func zoomPDFIn() {
+            zoomPDF(by: 1.2)
+        }
+
+        func zoomPDFOut() {
+            zoomPDF(by: 1 / 1.2)
+        }
+
+        /// Like a pinch, a button zoom keeps its scale until the split divider is dragged near fit.
+        private func zoomPDF(by factor: CGFloat) {
+            guard let pdfView, pdfView.document != nil else { return }
+            let minimumScale = max(pdfView.minScaleFactor, 0.01)
+            let maximumScale = max(pdfView.maxScaleFactor, minimumScale)
+            let nextScale = min(max(pdfView.scaleFactor * factor, minimumScale), maximumScale)
+            guard abs(nextScale - pdfView.scaleFactor) > 0.0001 else { return }
+            pdfView.autoScales = false
+            pdfView.scaleFactor = nextScale
+        }
+
         private func addInkAnnotation(on page: PDFPage, points: [CGPoint]) {
             guard let document = pdfView?.document,
                   points.count >= 2,
@@ -2086,6 +2119,16 @@ private final class InteractivePDFView: PDFView {
             window?.invalidateCursorRects(for: self)
         }
     }
+    var handToolEnabled = false {
+        didSet {
+            guard oldValue != handToolEnabled else { return }
+            if handToolEnabled == false {
+                cancelHandPan()
+            }
+            installHandCursorTrackingArea()
+            window?.invalidateCursorRects(for: self)
+        }
+    }
     var inkPreviewColor: NSColor = .systemYellow {
         didSet { interactionOverlay.inkColor = inkPreviewColor }
     }
@@ -2104,11 +2147,20 @@ private final class InteractivePDFView: PDFView {
     var onTextNoteRequested: ((PDFPage, CGPoint) -> Void)?
 
     private let interactionOverlay = PDFInteractionOverlayView()
+    private struct HandPan {
+        var scrollView: NSScrollView
+        var startLocationInWindow: CGPoint
+        var startOrigin: CGPoint
+        var didMove = false
+    }
+
     private weak var interactionPage: PDFPage?
     private var interactionStartPoint: CGPoint?
     private var inkViewPoints: [CGPoint] = []
     private var suppressBrowseMouseSequence = false
     private var pendingSingleClick: Task<Void, Never>?
+    private var handPan: HandPan?
+    private var handCursorTrackingArea: NSTrackingArea?
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -2130,6 +2182,53 @@ private final class InteractivePDFView: PDFView {
         case .ink, .textNote, .erase, .debugRegion:
             addCursorRect(bounds, cursor: .crosshair)
         }
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        installHandCursorTrackingArea()
+    }
+
+    /// Only the hand tool needs mouse moves: `cursorUpdate` is sent once on entering the view,
+    /// while text, images and blank areas inside it want different cursors.
+    private func installHandCursorTrackingArea() {
+        if let handCursorTrackingArea {
+            removeTrackingArea(handCursorTrackingArea)
+            self.handCursorTrackingArea = nil
+        }
+        guard handToolEnabled else { return }
+        let trackingArea = NSTrackingArea(
+            rect: .zero,
+            options: [.activeInKeyWindow, .cursorUpdate, .mouseMoved, .inVisibleRect],
+            owner: self,
+            userInfo: nil
+        )
+        addTrackingArea(trackingArea)
+        handCursorTrackingArea = trackingArea
+    }
+
+    override func cursorUpdate(with event: NSEvent) {
+        if updateHandCursor(with: event) { return }
+        super.cursorUpdate(with: event)
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+        super.mouseMoved(with: event)
+        // PDFKit sets its own cursor on every move, so the hand is set again afterwards.
+        _ = updateHandCursor(with: event)
+    }
+
+    private func updateHandCursor(with event: NSEvent) -> Bool {
+        guard handToolEnabled else { return false }
+        if handPan != nil {
+            NSCursor.closedHand.set()
+            return true
+        }
+        guard shouldBeginHandPan(at: convert(event.locationInWindow, from: nil), modifiers: event.modifierFlags) else {
+            return false
+        }
+        NSCursor.openHand.set()
+        return true
     }
 
     override func perform(_ action: PDFAction) {
@@ -2182,9 +2281,14 @@ private final class InteractivePDFView: PDFView {
                         suppressBrowseMouseSequence = true
                         return
                     }
-                    if event.clickCount == 1 {
-                        scheduleSingleClick(on: page, at: pagePoint)
-                    }
+                }
+                if let page = page(for: viewPoint, nearest: false), event.clickCount == 1 {
+                    scheduleSingleClick(on: page, at: convert(viewPoint, to: page))
+                }
+                if event.clickCount == 1,
+                   shouldBeginHandPan(at: viewPoint, modifiers: event.modifierFlags),
+                   beginHandPan(with: event) {
+                    return
                 }
             }
             super.mouseDown(with: event)
@@ -2241,6 +2345,9 @@ private final class InteractivePDFView: PDFView {
     }
 
     override func mouseDragged(with event: NSEvent) {
+        if updateHandPan(with: event) {
+            return
+        }
         let currentPoint = convert(event.locationInWindow, from: nil)
         switch interactionMode {
         case .browse:
@@ -2266,6 +2373,15 @@ private final class InteractivePDFView: PDFView {
     }
 
     override func mouseUp(with event: NSEvent) {
+        if let handPan {
+            cancelHandPan()
+            // PDFKit never saw this click, so a click without a drag clears the selection here.
+            if handPan.didMove == false {
+                clearSelection()
+            }
+            cursorUpdate(with: event)
+            return
+        }
         switch interactionMode {
         case .browse:
             if suppressBrowseMouseSequence {
@@ -2348,7 +2464,96 @@ private final class InteractivePDFView: PDFView {
         addSubview(interactionOverlay, positioned: .above, relativeTo: nil)
     }
 
+    /// Modifier clicks, such as Shift to extend a selection, stay with PDFKit.
+    private func shouldBeginHandPan(at viewPoint: CGPoint, modifiers: NSEvent.ModifierFlags) -> Bool {
+        guard handToolEnabled, interactionMode == .browse else { return false }
+        guard modifiers.intersection([.shift, .command, .option, .control]).isEmpty else { return false }
+        guard let page = page(for: viewPoint, nearest: false) else {
+            return true
+        }
+        let pagePoint = convert(viewPoint, to: page)
+        if let annotation = page.annotation(at: pagePoint), Self.isInteractive(annotation) {
+            return false
+        }
+        if let selection = page.selectionForWord(at: pagePoint),
+           let selectedText = selection.string?.trimmingCharacters(in: .whitespacesAndNewlines),
+           selectedText.isEmpty == false {
+            // PDFKit may return the nearest word even when the pointer is in page whitespace,
+            // especially after zooming. Preserve text selection only over the word itself.
+            let screenPointTolerance: CGFloat = 2
+            let pagePointTolerance = screenPointTolerance / max(scaleFactor, 0.01)
+            let textBounds = selection.bounds(for: page).insetBy(
+                dx: -pagePointTolerance,
+                dy: -pagePointTolerance
+            )
+            if textBounds.contains(pagePoint) {
+                return false
+            }
+        }
+        return true
+    }
+
+    /// Links, form fields and pop-up notes take the click. Markup, including the temporary
+    /// underlines for citations, assistant history and note quotes, does not block a pan.
+    private static func isInteractive(_ annotation: PDFAnnotation) -> Bool {
+        switch annotation.type {
+        case "Link", "Widget", "Text", "Popup":
+            return true
+        default:
+            return annotation.action != nil
+        }
+    }
+
+    private func beginHandPan(with event: NSEvent) -> Bool {
+        guard let scrollView = subviews.lazy.compactMap({ $0 as? NSScrollView }).first else {
+            return false
+        }
+        window?.makeFirstResponder(self)
+        handPan = HandPan(
+            scrollView: scrollView,
+            startLocationInWindow: event.locationInWindow,
+            startOrigin: scrollView.contentView.bounds.origin
+        )
+        // A pan is a live scroll, so a dual-pane reader follows it the same way it follows the
+        // trackpad, even after the pointer leaves this pane.
+        NotificationCenter.default.post(name: NSScrollView.willStartLiveScrollNotification, object: scrollView)
+        NSCursor.closedHand.set()
+        return true
+    }
+
+    private func updateHandPan(with event: NSEvent) -> Bool {
+        guard var handPan else { return false }
+        let deltaX = event.locationInWindow.x - handPan.startLocationInWindow.x
+        let deltaY = event.locationInWindow.y - handPan.startLocationInWindow.y
+        if handPan.didMove == false {
+            handPan.didMove = true
+            self.handPan = handPan
+            pendingSingleClick?.cancel()
+            pendingSingleClick = nil
+        }
+        NSCursor.closedHand.set()
+        let clipView = handPan.scrollView.contentView
+        let proposedOrigin = CGPoint(
+            x: handPan.startOrigin.x - deltaX,
+            y: handPan.startOrigin.y - deltaY
+        )
+        let constrainedOrigin = clipView.constrainBoundsRect(
+            CGRect(origin: proposedOrigin, size: clipView.bounds.size)
+        ).origin
+        clipView.scroll(to: constrainedOrigin)
+        handPan.scrollView.reflectScrolledClipView(clipView)
+        return true
+    }
+
+    private func cancelHandPan() {
+        guard let handPan else { return }
+        self.handPan = nil
+        NotificationCenter.default.post(name: NSScrollView.didEndLiveScrollNotification, object: handPan.scrollView)
+        window?.invalidateCursorRects(for: self)
+    }
+
     private func cancelInteraction() {
+        cancelHandPan()
         suppressBrowseMouseSequence = false
         interactionStartPoint = nil
         interactionPage = nil

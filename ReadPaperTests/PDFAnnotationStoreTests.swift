@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import CoreText
 import PDFKit
 import SwiftUI
@@ -326,6 +327,44 @@ final class PDFAnnotationStoreTests: XCTestCase {
         XCTAssertEqual(session.activeAttachmentID, secondAttachmentID)
     }
 
+    @MainActor
+    func testZoomCommandsUseTheActivePDFAttachment() {
+        let session = PDFAnnotationSession()
+        let originalAttachmentID = UUID()
+        let translatedAttachmentID = UUID()
+        let original = PDFAnnotationSessionHandlerStub(attachmentID: originalAttachmentID)
+        let translated = PDFAnnotationSessionHandlerStub(attachmentID: translatedAttachmentID)
+        session.register(original, for: originalAttachmentID)
+        session.register(translated, for: translatedAttachmentID)
+
+        session.activate(attachmentID: translatedAttachmentID)
+        session.zoomIn()
+        session.zoomOut()
+
+        XCTAssertEqual(original.zoomInCount, 0)
+        XCTAssertEqual(original.zoomOutCount, 0)
+        XCTAssertEqual(translated.zoomInCount, 1)
+        XCTAssertEqual(translated.zoomOutCount, 1)
+    }
+
+    @MainActor
+    func testActivatingTheActiveAttachmentDoesNotRepublish() {
+        let session = PDFAnnotationSession()
+        let attachmentID = UUID()
+        let handler = PDFAnnotationSessionHandlerStub(attachmentID: attachmentID)
+        session.register(handler, for: attachmentID)
+        var changeCount = 0
+        let subscription = session.objectWillChange.sink { changeCount += 1 }
+        defer { subscription.cancel() }
+
+        // A scrolling pane activates itself on every frame.
+        for _ in 0..<5 {
+            session.activate(attachmentID: attachmentID)
+        }
+
+        XCTAssertEqual(changeCount, 0)
+    }
+
     private func makeHighlightRecord(pageIndex: Int) -> PDFAnnotationRecord {
         let date = Date(timeIntervalSince1970: 1_700_000_000)
         return PDFAnnotationRecord(
@@ -387,6 +426,8 @@ private final class PDFAnnotationSessionHandlerStub: PDFAnnotationSessionHandler
     var canUndoPDFAnnotation = false
     var canRedoPDFAnnotation = false
     var hasPDFAnnotations = false
+    var zoomInCount = 0
+    var zoomOutCount = 0
 
     init(attachmentID: UUID) {
         annotationAttachmentID = attachmentID
@@ -396,4 +437,6 @@ private final class PDFAnnotationSessionHandlerStub: PDFAnnotationSessionHandler
     func addTextNote(pageIndex: Int, point: CGPoint, contents: String, preset: PDFAnnotationColorPreset) {}
     func undoPDFAnnotation() {}
     func redoPDFAnnotation() {}
+    func zoomPDFIn() { zoomInCount += 1 }
+    func zoomPDFOut() { zoomOutCount += 1 }
 }
