@@ -85,6 +85,10 @@ struct ReaderPaneView: View {
     private var pdfTranslationBatchSizeRawValue = PDFTranslationBatchPreference.defaultValue
     @AppStorage(HTMLReaderTypography.fontSizeUserDefaultsKey)
     private var htmlReaderFontSize = HTMLReaderTypography.defaultFontSize
+    @AppStorage(PDFReaderControlPreferences.handToolEnabledKey)
+    private var pdfHandToolEnabled = PDFReaderControlPreferences.defaultHandToolEnabled
+    @AppStorage(PDFReaderControlPreferences.showZoomButtonsKey)
+    private var showPDFZoomButtons = PDFReaderControlPreferences.defaultShowZoomButtons
     @AppStorage(BabelDocSemanticHintPreference.userDefaultsKey)
     private var babelDocSemanticHintsEnabled = BabelDocSemanticHintPreference.defaultValue
     @AppStorage(LaTeXIntegrationPreferences.translationEnabledKey)
@@ -163,6 +167,7 @@ struct ReaderPaneView: View {
     @State private var pdfDebugExportDirectoryURL: URL?
     @State private var pdfDebugDirectoryHasSecurityScope = false
     @StateObject private var pdfAnnotationSession = PDFAnnotationSession()
+    @State private var isHoveringPDFZoomControls = false
     @State private var pdfAnnotationNoteText = ""
     @State private var selectionAssistantSelection: NoteSelectionContext?
     @State private var isSelectionAssistantPinned = false
@@ -827,6 +832,9 @@ struct ReaderPaneView: View {
             ToolbarItem(placement: .primaryAction) {
                 readerToolsMenu
             }
+            ToolbarItem(placement: .primaryAction) {
+                pdfZoomControls
+            }
             if readerMode == .html {
                 ToolbarItem(placement: .primaryAction) {
                     htmlRegionEditButton
@@ -878,6 +886,63 @@ struct ReaderPaneView: View {
         .keyboardShortcut("f", modifiers: .command)
         .disabled(isFindAvailable == false)
         .help(String(localized: "Find in Document", bundle: bundle))
+    }
+
+    /// Zooms the PDF, or steps the font size in HTML mode, so that the toolbar item keeps the
+    /// same control when the mode changes.
+    @ViewBuilder
+    private var pdfZoomControls: some View {
+        if showPDFZoomButtons {
+            let isHTML = readerMode == .html
+            ControlGroup {
+                Button {
+                    if isHTML {
+                        decreaseHTMLReaderFontSize()
+                    } else {
+                        pdfAnnotationSession.zoomOut()
+                    }
+                } label: {
+                    Label(String(localized: "Zoom Out", bundle: bundle), systemImage: "minus")
+                }
+                .labelStyle(.iconOnly)
+                .disabled(isHTML && htmlReaderFontSize <= HTMLReaderTypography.fontSizeRange.lowerBound)
+                .help(isHTML
+                    ? String(localized: "Decrease Font Size", bundle: bundle)
+                    : String(localized: "Zoom Out", bundle: bundle))
+
+                Button {
+                    if isHTML {
+                        increaseHTMLReaderFontSize()
+                    } else {
+                        pdfAnnotationSession.zoomIn()
+                    }
+                } label: {
+                    Label(String(localized: "Zoom In", bundle: bundle), systemImage: "plus")
+                }
+                .labelStyle(.iconOnly)
+                .disabled(isHTML && htmlReaderFontSize >= HTMLReaderTypography.fontSizeRange.upperBound)
+                .help(isHTML
+                    ? String(localized: "Increase Font Size", bundle: bundle)
+                    : String(localized: "Zoom In", bundle: bundle))
+            }
+            .onHover { isHovering in
+                isHoveringPDFZoomControls = isHovering
+            }
+            // A control removed under the pointer never receives the hover exit.
+            .onDisappear {
+                isHoveringPDFZoomControls = false
+            }
+        }
+    }
+
+    private var pdfZoomHighlightAttachmentID: UUID? {
+        guard readerMode == .bilingualPDF,
+              showPDFZoomButtons,
+              isHoveringPDFZoomControls
+        else {
+            return nil
+        }
+        return pdfAnnotationSession.activeAttachmentID ?? originalPDFAttachment?.id
     }
 
     private func showFindBar() {
@@ -1921,6 +1986,8 @@ struct ReaderPaneView: View {
                                 citationMarks: citationMarks,
                                 onCitationMarksActivated: handleCitationMarksActivated,
                                 annotationSession: pdfAnnotationSession,
+                                handToolEnabled: pdfHandToolEnabled,
+                                zoomHighlightAttachmentID: pdfZoomHighlightAttachmentID,
                                 debugRegionSelectionEnabled: pdfDebugModeEnabled,
                                 onDebugRegionSelected: handlePDFDebugRegionSelection,
                                 onNoteSelectionChanged: handleNoteSelectionChange,
@@ -3236,6 +3303,7 @@ struct ReaderPaneView: View {
                             noteNavigationRequest: noteNavigationRequest,
                             selectionAssistantHistoryAnchors: selectionAssistantHistoryAnchors,
                             annotationSession: pdfAnnotationSession,
+                            handToolEnabled: pdfHandToolEnabled,
                             onNoteSelectionChanged: handleNoteSelectionChange,
                             onArxivLinkActivated: onArxivLinkActivated,
                             debugRegionSelectionEnabled: debugRegionSelectionEnabled,

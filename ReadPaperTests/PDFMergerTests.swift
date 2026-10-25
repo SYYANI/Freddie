@@ -762,6 +762,95 @@ final class PDFMergerTests: XCTestCase {
         XCTAssertEqual(pdfView.scaleFactor, zoomedScale, accuracy: 0.001)
     }
 
+    @MainActor
+    func testToolbarZoomUsesTwentyPercentStepsAndLeavesAutomaticScaling() {
+        let pdfView = PDFView()
+        pdfView.document = createPDFDocument(withPageCount: 1)
+        pdfView.minScaleFactor = 0.25
+        pdfView.maxScaleFactor = 4
+        pdfView.autoScales = false
+        pdfView.scaleFactor = 1
+        pdfView.autoScales = true
+        let coordinator = PDFReaderView.Coordinator(
+            attachmentID: nil,
+            pageIndex: .constant(0),
+            onNoteSelectionChanged: nil
+        )
+        coordinator.pdfView = pdfView
+        let startingScale = pdfView.scaleFactor
+
+        coordinator.zoomPDFIn()
+        XCTAssertFalse(pdfView.autoScales)
+        XCTAssertEqual(pdfView.scaleFactor, startingScale * 1.2, accuracy: 0.001)
+
+        coordinator.zoomPDFOut()
+        XCTAssertEqual(pdfView.scaleFactor, startingScale, accuracy: 0.001)
+    }
+
+    @MainActor
+    func testHandToolDragsThePDFScrollViewFromBlankCanvas() async throws {
+        let harness = try await makeHandToolHarness()
+        defer { harness.window.close() }
+        let clipView = harness.scrollView.contentView
+        let startingOrigin = clipView.bounds.origin
+        var liveScrollNotifications: [Notification.Name] = []
+        let observers = [NSScrollView.willStartLiveScrollNotification, NSScrollView.didEndLiveScrollNotification].map { name in
+            NotificationCenter.default.addObserver(forName: name, object: harness.scrollView, queue: nil) { notification in
+                liveScrollNotifications.append(notification.name)
+            }
+        }
+        defer { observers.forEach(NotificationCenter.default.removeObserver) }
+
+        try harness.drag(by: 40)
+
+        XCTAssertLessThan(clipView.bounds.origin.y, startingOrigin.y - 20)
+        // The other pane of a dual reader follows live scrolls, wherever the pointer goes.
+        XCTAssertEqual(liveScrollNotifications, [
+            NSScrollView.willStartLiveScrollNotification,
+            NSScrollView.didEndLiveScrollNotification
+        ])
+    }
+
+    @MainActor
+    private func makeHandToolHarness() async throws -> HandToolHarness {
+        let url = tempDirectory.appendingPathComponent("hand-tool.pdf")
+        try savePDFDocument(createPDFDocument(withPageCount: 12), to: url)
+        let model = AutomaticScalingHarnessModel(fileURL: url, handToolEnabled: true)
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 500, height: 600),
+            styleMask: [.titled],
+            backing: .buffered,
+            defer: false
+        )
+        window.isReleasedWhenClosed = false
+        window.contentView = NSHostingView(rootView: AutomaticScalingHarness(model: model))
+        window.makeKeyAndOrderFront(nil)
+        window.contentView?.layoutSubtreeIfNeeded()
+        let pdfView = try XCTUnwrap(firstDescendant(PDFView.self, in: try XCTUnwrap(window.contentView)))
+        try await waitUntil { pdfView.document?.documentURL == url }
+        pdfView.autoScales = false
+        pdfView.scaleFactor = 2
+        pdfView.layoutDocumentView()
+        let scrollView = try XCTUnwrap(firstDescendant(NSScrollView.self, in: pdfView))
+        let clipView = scrollView.contentView
+        let startingOrigin = clipView.constrainBoundsRect(
+            CGRect(x: clipView.bounds.origin.x, y: 160, width: clipView.bounds.width, height: clipView.bounds.height)
+        ).origin
+        clipView.scroll(to: startingOrigin)
+        scrollView.reflectScrolledClipView(clipView)
+
+        let visiblePage = try XCTUnwrap(pdfView.currentPage)
+        let pageBounds = visiblePage.bounds(for: pdfView.displayBox)
+        let blankPagePoint = CGPoint(x: pageBounds.maxX - 8, y: pageBounds.minY + 8)
+        let viewPoint = pdfView.convert(blankPagePoint, from: visiblePage)
+        return HandToolHarness(
+            window: window,
+            pdfView: pdfView,
+            scrollView: scrollView,
+            blankWindowPoint: pdfView.convert(viewPoint, to: nil)
+        )
+    }
+
     func testPDFDisplayAppearanceOnlyCompositesWhenAnOverlayNeedsBlending() {
         XCTAssertFalse(PDFDisplayAppearance.defaultMode.requiresOverlayCompositing)
         #if os(macOS)
@@ -834,12 +923,43 @@ final class PDFMergerTests: XCTestCase {
 }
 
 @MainActor
+private struct HandToolHarness {
+    let window: NSWindow
+    let pdfView: PDFView
+    let scrollView: NSScrollView
+    let blankWindowPoint: CGPoint
+
+    // Only drags the hand tool takes: PDFKit tracks other mouse downs in its own loop.
+    func drag(by distance: CGFloat) throws {
+        let end = CGPoint(x: blankWindowPoint.x, y: blankWindowPoint.y + distance)
+        pdfView.mouseDown(with: try event(.leftMouseDown, at: blankWindowPoint, number: 1))
+        pdfView.mouseDragged(with: try event(.leftMouseDragged, at: end, number: 2))
+        pdfView.mouseUp(with: try event(.leftMouseUp, at: end, number: 3))
+    }
+
+    private func event(_ type: NSEvent.EventType, at location: CGPoint, number: Int) throws -> NSEvent {
+        try XCTUnwrap(NSEvent.mouseEvent(
+            with: type,
+            location: location,
+            modifierFlags: [],
+            timestamp: TimeInterval(number),
+            windowNumber: window.windowNumber,
+            context: nil,
+            eventNumber: number,
+            clickCount: 1,
+            pressure: type == .leftMouseUp ? 0 : 1
+        ))
+    }
+}
+
 private final class AutomaticScalingHarnessModel: ObservableObject {
     @Published var fileURL: URL
     @Published var pageIndex = 0
+    let handToolEnabled: Bool
 
-    init(fileURL: URL) {
+    init(fileURL: URL, handToolEnabled: Bool = false) {
         self.fileURL = fileURL
+        self.handToolEnabled = handToolEnabled
     }
 }
 
@@ -850,7 +970,8 @@ private struct AutomaticScalingHarness: View {
         PDFReaderView(
             fileURL: model.fileURL,
             usesAutomaticScaling: true,
-            pageIndex: $model.pageIndex
+            pageIndex: $model.pageIndex,
+            handToolEnabled: model.handToolEnabled
         )
         .frame(width: 500, height: 600)
     }

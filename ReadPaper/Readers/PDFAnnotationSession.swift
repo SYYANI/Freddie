@@ -47,6 +47,8 @@ protocol PDFAnnotationSessionHandler: AnyObject {
     func addTextNote(pageIndex: Int, point: CGPoint, contents: String, preset: PDFAnnotationColorPreset)
     func undoPDFAnnotation()
     func redoPDFAnnotation()
+    func zoomPDFIn()
+    func zoomPDFOut()
 }
 
 @MainActor
@@ -86,6 +88,8 @@ final class PDFAnnotationSession: ObservableObject {
 
     func activate(attachmentID: UUID?) {
         guard let attachmentID, handlers[attachmentID]?.value != nil else { return }
+        // Scrolling a pane activates it on every frame; republishing would redraw the reader.
+        guard activeAttachmentID != attachmentID else { return }
         activeAttachmentID = attachmentID
         refreshCapabilities()
     }
@@ -162,6 +166,14 @@ final class PDFAnnotationSession: ObservableObject {
     func redo() {
         activeHandler?.redoPDFAnnotation()
         refreshCapabilities()
+    }
+
+    func zoomIn() {
+        activeHandler?.zoomPDFIn()
+    }
+
+    func zoomOut() {
+        activeHandler?.zoomPDFOut()
     }
 
     func handlerDidChange(_ handler: any PDFAnnotationSessionHandler) {

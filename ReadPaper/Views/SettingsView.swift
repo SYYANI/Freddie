@@ -129,6 +129,10 @@ private struct SettingsForm: View {
     @AppStorage(BabelDocInstallSource.userDefaultsKey) private var babelDocInstallSourceRawValue = BabelDocInstallSource.official.rawValue
     @AppStorage(PDFDisplayAppearance.userDefaultsKey)
     private var pdfDisplayAppearanceRawValue = PDFDisplayAppearance.defaultValue.rawValue
+    @AppStorage(PDFReaderControlPreferences.handToolEnabledKey)
+    private var pdfHandToolEnabled = PDFReaderControlPreferences.defaultHandToolEnabled
+    @AppStorage(PDFReaderControlPreferences.showZoomButtonsKey)
+    private var showPDFZoomButtons = PDFReaderControlPreferences.defaultShowZoomButtons
     @AppStorage(PDFTranslationBatchPreference.userDefaultsKey)
     private var pdfTranslationBatchSizeRawValue = PDFTranslationBatchPreference.defaultValue
     @AppStorage(HTMLReaderTypography.fontSizeUserDefaultsKey)
@@ -644,6 +648,20 @@ private struct SettingsForm: View {
                     }
                     .pickerStyle(.segmented)
                     .help(String(localized: "System appearance changes automatically select Default for Light Mode and Paper Tone for Dark Mode. You can switch either option manually afterward.", bundle: bundle))
+                }
+
+                Section(String(localized: "Reader Controls", bundle: bundle)) {
+                    Toggle(
+                        String(localized: "Enable PDF Hand Tool", bundle: bundle),
+                        isOn: $pdfHandToolEnabled
+                    )
+                    .help(String(localized: "Drag to pan over images and blank areas; selectable text keeps the text-selection cursor. When disabled, non-text areas use the standard arrow cursor.", bundle: bundle))
+
+                    Toggle(
+                        String(localized: "Show PDF Zoom Buttons", bundle: bundle),
+                        isOn: $showPDFZoomButtons
+                    )
+                    .help(String(localized: "Adds zoom-out and zoom-in buttons to the reader toolbar. In HTML they change the font size.", bundle: bundle))
                 }
 
                 Section(String(localized: "Translation Routes", bundle: bundle)) {

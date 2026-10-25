@@ -218,6 +218,9 @@ struct DualPDFReaderView: View {
     var citationMarks: [WritingCitationMark] = []
     var onCitationMarksActivated: (([String]) -> Void)? = nil
     var annotationSession: PDFAnnotationSession? = nil
+    var handToolEnabled = PDFReaderControlPreferences.defaultHandToolEnabled
+    /// Briefly outlines the pane affected by the shared zoom buttons.
+    var zoomHighlightAttachmentID: UUID? = nil
     var debugRegionSelectionEnabled = false
     var onDebugRegionSelected: ((PDFDebugRegionSelection) -> Void)? = nil
     var onNoteSelectionChanged: ((NoteSelectionContext?) -> Void)? = nil
@@ -258,6 +261,7 @@ struct DualPDFReaderView: View {
             selectionOwnership.reset()
             onNoteSelectionChanged?(nil)
         }
+        .animation(.easeOut(duration: 0.14), value: zoomHighlightAttachmentID)
     }
 
     private var originalReader: some View {
@@ -283,6 +287,9 @@ struct DualPDFReaderView: View {
             } else {
                 readerLabel(String(localized: "Original", bundle: bundle))
             }
+        }
+        .overlay {
+            zoomTargetOverlay(for: originalAttachmentID)
         }
     }
 
@@ -310,6 +317,9 @@ struct DualPDFReaderView: View {
             } else {
                 readerLabel(String(localized: "Translation", bundle: bundle))
             }
+        }
+        .overlay {
+            zoomTargetOverlay(for: translatedAttachmentID)
         }
     }
 
@@ -377,6 +387,7 @@ struct DualPDFReaderView: View {
                 noteNavigationRequest: noteNavigationRequest,
                 selectionAssistantHistoryAnchors: selectionAssistantHistoryAnchors,
                 annotationSession: annotationSession,
+                handToolEnabled: handToolEnabled,
                 onNoteSelectionChanged: onSelectionChanged,
                 onArxivLinkActivated: onArxivLinkActivated,
                 onDocumentPageCountChanged: onDocumentPageCountChanged,
@@ -389,6 +400,21 @@ struct DualPDFReaderView: View {
                 scrollSync: scrollSync,
                 scrollSyncSide: side
             )
+        }
+    }
+
+    @ViewBuilder
+    private func zoomTargetOverlay(for attachmentID: UUID?) -> some View {
+        if let attachmentID, zoomHighlightAttachmentID == attachmentID {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color.accentColor.opacity(0.05))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .stroke(Color.accentColor.opacity(0.7), lineWidth: 2)
+                }
+                .padding(5)
+                .allowsHitTesting(false)
+                .transition(.opacity)
         }
     }
 

@@ -397,6 +397,17 @@
         }
       }
     },
+    "Adds zoom-out and zoom-in buttons to the reader toolbar. In HTML they change the font size." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在阅读器工具栏中添加缩小和放大按钮；HTML 中用于调整字号。"
+          }
+        }
+      }
+    },
     "Advanced" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2338,6 +2349,17 @@
         }
       }
     },
+    "Drag to pan over images and blank areas; selectable text keeps the text-selection cursor. When disabled, non-text areas use the standard arrow cursor." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在图片和空白区域拖动以平移；可选文字仍使用划词光标。关闭后，非文字区域使用原来的箭头光标。"
+          }
+        }
+      }
+    },
     "Drawing Width" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2410,6 +2432,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "启用 arXiv LaTeX 翻译"
+          }
+        }
+      }
+    },
+    "Enable PDF Hand Tool" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "启用 PDF 手形工具"
           }
         }
       }
@@ -5905,6 +5938,17 @@
         }
       }
     },
+    "Reader Controls" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "阅读器控制"
+          }
+        }
+      }
+    },
     "Reading Assistant Model" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -6799,6 +6843,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "显示 LaTeX 编译日志"
+          }
+        }
+      }
+    },
+    "Show PDF Zoom Buttons" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "显示 PDF 缩放按钮"
           }
         }
       }
@@ -8944,6 +8999,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "黄色"
+          }
+        }
+      }
+    },
+    "Zoom In" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "放大"
+          }
+        }
+      }
+    },
+    "Zoom Out" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "缩小"
           }
         }
       }
