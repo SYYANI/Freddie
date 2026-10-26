@@ -10,6 +10,24 @@ private enum IPadSettingsTab: String, Hashable {
     case models
 }
 
+private enum IPadSettingsStyle {
+    static let cardCornerRadius: CGFloat = 10
+}
+
+private struct IPadSettingsCardStyle: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(18)
+            .background(Color(uiColor: .systemBackground))
+            .clipShape(RoundedRectangle(cornerRadius: IPadSettingsStyle.cardCornerRadius, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: IPadSettingsStyle.cardCornerRadius, style: .continuous)
+                    .stroke(Color.secondary.opacity(0.14), lineWidth: 1)
+            }
+    }
+}
+
 struct IPadSettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
@@ -200,9 +218,9 @@ struct IPadSettingsView: View {
     }
 
     private func generalTab(_ settings: AppSettings) -> some View {
-        Form {
-            Section(String(localized: "Language", bundle: bundle)) {
-                Picker(String(localized: "App language", bundle: bundle), selection: appLanguageBinding) {
+        settingsForm {
+            settingsFormSection(String(localized: "Language", bundle: bundle)) {
+                settingsFormPicker(String(localized: "App language", bundle: bundle), selection: appLanguageBinding) {
                     Text("Follow System", bundle: bundle).tag(Optional<String>.none)
                     ForEach(AppLocalization.supportedLanguages) { language in
                         Text(verbatim: language.displayName).tag(Optional(language.code))
@@ -210,24 +228,32 @@ struct IPadSettingsView: View {
                 }
             }
 
-            Section(String(localized: "Translation", bundle: bundle)) {
-                Picker(String(localized: "Target language", bundle: bundle), selection: targetLanguageBinding(settings)) {
+            settingsFormSection(String(localized: "Translation", bundle: bundle)) {
+                settingsFormPicker(String(localized: "Target language", bundle: bundle), selection: targetLanguageBinding(settings)) {
                     ForEach(TranslationTargetLanguage.supported) { language in
                         Text(language.nativeName).tag(language.code)
                     }
                 }
 
-                Toggle(
-                    String(localized: "Use arXiv LaTeX structure for PDF translation", bundle: bundle),
-                    isOn: $babelDocSemanticHintsEnabled
-                )
+                Divider()
+                    .opacity(0.35)
 
-                Text(
-                    "When enabled, ReadPaper uses available arXiv source to improve BabelDOC structure and translation context. No TeX installation is required, and failures fall back to PDF-only analysis.",
-                    bundle: bundle
-                )
-                .font(.footnote)
-                .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 8) {
+                    Toggle(
+                        String(localized: "Use arXiv LaTeX structure for PDF translation", bundle: bundle),
+                        isOn: $babelDocSemanticHintsEnabled
+                    )
+
+                    Text(
+                        "When enabled, ReadPaper uses available arXiv source to improve BabelDOC structure and translation context. No TeX installation is required, and failures fall back to PDF-only analysis.",
+                        bundle: bundle
+                    )
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                }
+
+                Divider()
+                    .opacity(0.35)
 
                 Stepper(value: htmlConcurrencyBinding(settings), in: 1...12) {
                     Text(AppLocalization.format(
@@ -237,6 +263,9 @@ struct IPadSettingsView: View {
                     ))
                 }
 
+                Divider()
+                    .opacity(0.35)
+
                 Stepper(value: babelDocQPSBinding(settings), in: 1...20) {
                     Text(AppLocalization.format(
                         "BabelDOC QPS: %d",
@@ -244,6 +273,9 @@ struct IPadSettingsView: View {
                         settings.babelDocQPS
                     ))
                 }
+
+                Divider()
+                    .opacity(0.35)
 
                 Stepper(value: pdfTranslationBatchSizeBinding, in: PDFTranslationBatchPreference.allowedRange) {
                     Text(AppLocalization.format(
@@ -260,10 +292,18 @@ struct IPadSettingsView: View {
                 .font(.footnote)
                 .foregroundStyle(.secondary)
 
+                Divider()
+                    .opacity(0.35)
+
                 Text("Optional glossary", bundle: bundle)
 
                 TextEditor(text: $translationGlossary)
                     .frame(minHeight: 110)
+                    .padding(8)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .stroke(Color.secondary.opacity(0.16), lineWidth: 0.5)
+                    }
 
                 Button(String(localized: "Clear glossary", bundle: bundle), role: .destructive) {
                     translationGlossary = ""
@@ -278,7 +318,7 @@ struct IPadSettingsView: View {
                 .foregroundStyle(.secondary)
             }
 
-            Section(String(localized: "BabelDOC", bundle: bundle)) {
+            settingsFormSection(String(localized: "BabelDOC", bundle: bundle)) {
                 HStack(spacing: 12) {
                     Text("BabelDOC", bundle: bundle)
 
@@ -304,8 +344,8 @@ struct IPadSettingsView: View {
     }
 
     private func readerTab(_ settings: AppSettings) -> some View {
-        Form {
-            Section(String(localized: "HTML Typography", bundle: bundle)) {
+        settingsForm {
+            settingsFormSection(String(localized: "HTML Typography", bundle: bundle)) {
                 Stepper(value: htmlReaderFontSizeBinding, in: HTMLReaderTypography.fontSizeRange, step: 1) {
                     HStack {
                         Text("HTML Font Size", bundle: bundle)
@@ -316,13 +356,16 @@ struct IPadSettingsView: View {
                     }
                 }
 
+                Divider()
+                    .opacity(0.35)
+
                 Button(String(localized: "Reset Font Size", bundle: bundle)) {
                     htmlReaderFontSize = HTMLReaderTypography.defaultFontSize
                 }
                 .disabled(htmlReaderFontSize == HTMLReaderTypography.defaultFontSize)
             }
 
-            Section {
+            settingsFormSection {
                 HStack {
                     Text("Reader Appearance", bundle: bundle)
 
@@ -339,15 +382,18 @@ struct IPadSettingsView: View {
                 }
             }
 
-            Section(String(localized: "Translation Routes", bundle: bundle)) {
-                Picker(String(localized: "HTML Model", bundle: bundle), selection: htmlModelBinding(settings)) {
+            settingsFormSection(String(localized: "Translation Routes", bundle: bundle)) {
+                settingsFormPicker(String(localized: "HTML Model", bundle: bundle), selection: htmlModelBinding(settings)) {
                     Text("Not Selected", bundle: bundle).tag(Optional<UUID>.none)
                     ForEach(sortedModels) { model in
                         Text(modelDisplayName(model)).tag(Optional(model.id))
                     }
                 }
 
-                Picker(String(localized: "PDF/BabelDOC Model", bundle: bundle), selection: pdfModelBinding(settings)) {
+                Divider()
+                    .opacity(0.35)
+
+                settingsFormPicker(String(localized: "PDF/BabelDOC Model", bundle: bundle), selection: pdfModelBinding(settings)) {
                     Text("Not Selected", bundle: bundle).tag(Optional<UUID>.none)
                     ForEach(sortedModels) { model in
                         Text(modelDisplayName(model)).tag(Optional(model.id))
@@ -387,8 +433,8 @@ struct IPadSettingsView: View {
     }
 
     private var digestTab: some View {
-        Form {
-            Section(String(localized: "Digest Export", bundle: bundle)) {
+        settingsForm {
+            settingsFormSection(String(localized: "Digest Export", bundle: bundle)) {
                 LabeledContent(String(localized: "Export directory", bundle: bundle)) {
                     Text(
                         digestExportDirectoryPath.isEmpty
@@ -400,9 +446,15 @@ struct IPadSettingsView: View {
                     .truncationMode(.middle)
                 }
 
+                Divider()
+                    .opacity(0.35)
+
                 Button(String(localized: "Choose Folder", bundle: bundle)) {
                     showsDigestDirectoryImporter = true
                 }
+
+                Divider()
+                    .opacity(0.35)
 
                 Button(String(localized: "Clear", bundle: bundle), role: .destructive) {
                     PaperDigestExportConfiguration().clearExportDirectory()
@@ -419,12 +471,15 @@ struct IPadSettingsView: View {
                 .foregroundStyle(.secondary)
             }
 
-            Section(String(localized: "Markdown Template", bundle: bundle)) {
+            settingsFormSection(String(localized: "Markdown Template", bundle: bundle)) {
                 TextEditor(text: $digestExportTemplate)
                     .font(.system(.body, design: .monospaced))
                     .frame(minHeight: 260)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
+
+                Divider()
+                    .opacity(0.35)
 
                 Menu {
                     ForEach(PaperDigestExportPolicy.templatePlaceholderTokens, id: \.self) { token in
@@ -433,6 +488,9 @@ struct IPadSettingsView: View {
                 } label: {
                     Label(String(localized: "Insert Placeholder", bundle: bundle), systemImage: "text.badge.plus")
                 }
+
+                Divider()
+                    .opacity(0.35)
 
                 Button(String(localized: "Reset Default Template", bundle: bundle)) {
                     digestExportTemplate = PaperDigestExportPolicy.defaultMarkdownTemplate
@@ -447,6 +505,8 @@ struct IPadSettingsView: View {
                 .foregroundStyle(.secondary)
 
                 if let digestStatusMessage {
+                    Divider()
+                        .opacity(0.35)
                     statusLabel(digestStatusMessage)
                 }
             }
@@ -996,6 +1056,44 @@ struct IPadSettingsView: View {
         }
     }
 
+    private func settingsForm<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24, content: content)
+                .padding(20)
+        }
+        .background(Color(uiColor: .systemGroupedBackground))
+        .buttonStyle(.borderless)
+    }
+
+    private func settingsFormSection<Content: View>(
+        _ title: String? = nil,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let title {
+                Text(title)
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+                    .padding(.horizontal, 18)
+            }
+
+            VStack(alignment: .leading, spacing: 12, content: content)
+                .modifier(IPadSettingsCardStyle())
+        }
+    }
+
+    private func settingsFormPicker<Selection: Hashable, Content: View>(
+        _ title: String,
+        selection: Binding<Selection>,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        LabeledContent(title) {
+            Picker(title, selection: selection, content: content)
+                .labelsHidden()
+                .pickerStyle(.menu)
+        }
+    }
+
     private func settingsDetailSection<Content: View>(
         title: String,
         @ViewBuilder content: () -> Content
@@ -1006,14 +1104,7 @@ struct IPadSettingsView: View {
 
             content()
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(18)
-        .background(Color(uiColor: .systemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .stroke(Color.secondary.opacity(0.14), lineWidth: 1)
-        }
+        .modifier(IPadSettingsCardStyle())
     }
 
     private func settingsDetailField<Content: View>(
@@ -1110,9 +1201,9 @@ struct IPadSettingsView: View {
             .padding(.vertical, 11)
         }
         .background(Color(uiColor: .secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: IPadSettingsStyle.cardCornerRadius, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
+            RoundedRectangle(cornerRadius: IPadSettingsStyle.cardCornerRadius, style: .continuous)
                 .stroke(Color.secondary.opacity(0.12), lineWidth: 1)
         }
     }
