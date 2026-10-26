@@ -346,7 +346,7 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
         #if os(macOS)
         let view = InteractivePDFView()
         #else
-        let view = PDFView()
+        let view = TouchPDFView()
         #endif
         context.coordinator.applyScalingPreference(usesAutomaticScaling, to: view)
         view.displayMode = .singlePageContinuous
@@ -1927,6 +1927,9 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
 
         func clearProgrammaticPageRestore() {
             pendingProgrammaticPosition = nil
+            #if os(iOS)
+            (pdfView as? TouchPDFView)?.onInitialLayoutReady = nil
+            #endif
         }
 
         func restoreReadingPosition(
@@ -1934,6 +1937,23 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
             in pdfView: PDFView,
             suppressIntermediateUpdates: Bool
         ) {
+            #if os(iOS)
+            if let touchView = pdfView as? TouchPDFView,
+               let document = pdfView.document,
+               touchView.window == nil || touchView.bounds.isEmpty {
+                // PDFKit accepts go(to:) before it has a viewport, then discards that
+                // position when it first fits the document. Keep page-zero callbacks
+                // suppressed until the real layout can restore the requested page.
+                let position = requestedPosition.clamped(pageCount: document.pageCount)
+                pendingProgrammaticPosition = position
+                touchView.onInitialLayoutReady = { [weak self, weak touchView, weak document] in
+                    guard let self, let touchView, let document,
+                          touchView.document === document else { return }
+                    self.restoreReadingPosition(position, in: touchView, suppressIntermediateUpdates: true)
+                }
+                return
+            }
+            #endif
             withoutLeadingScrollSync {
                 moveToReadingPosition(
                     requestedPosition,

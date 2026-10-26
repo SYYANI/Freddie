@@ -50,6 +50,7 @@ struct IPadReaderPaneView: View {
     @State private var translatedPageIndex = 0
     @State private var pendingProgrammaticTranslatedPageTargets: Set<Int> = []
     @State private var pdfReloadToken = 0
+    @State private var automaticScalingRestoreToken = 0
     @State private var htmlScrollRatio = 0.0
     @State private var htmlReloadToken = 0
     @State private var htmlSegmentUpdate: HTMLTranslationSegmentUpdate?
@@ -433,23 +434,29 @@ struct IPadReaderPaneView: View {
             }
         case .bilingualPDF:
             if let pdfAttachment, let translatedPDFAttachment {
-                HStack(spacing: 0) {
+                StableHorizontalPDFSplitView(onDividerDragBegan: {
+                    automaticScalingRestoreToken &+= 1
+                }) {
                     PDFDisplaySurface(appearance: appearance) {
                         PDFReaderView(
                             fileURL: pdfAttachment.fileURL,
                             attachmentID: pdfAttachment.id,
                             displayAppearance: appearance,
+                            usesAutomaticScaling: true,
+                            automaticScalingRestoreToken: automaticScalingRestoreToken,
                             pageIndex: $pdfPageIndex,
                             reloadToken: pdfReloadToken,
                             onNoteSelectionChanged: { noteSelectionContext = $0 }
                         )
                     }
-                    Divider()
+                } trailing: {
                     PDFDisplaySurface(appearance: appearance) {
                         PDFReaderView(
                             fileURL: translatedPDFAttachment.fileURL,
                             attachmentID: translatedPDFAttachment.id,
                             displayAppearance: appearance,
+                            usesAutomaticScaling: true,
+                            automaticScalingRestoreToken: automaticScalingRestoreToken,
                             pageIndex: translatedPageBinding,
                             reloadToken: pdfReloadToken,
                             onNoteSelectionChanged: { noteSelectionContext = $0 }
