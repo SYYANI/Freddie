@@ -970,7 +970,7 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
                 touchView.onPencilDoubleTap = { [weak self] in
                     guard let self else { return }
                     self.activateAnnotationDocument()
-                    self.annotationSession?.toggleBrowseAndInk()
+                    self.annotationSession?.toggleInkAndEraser()
                 }
                 touchView.onPencilShortcutAction = { [weak self] action in
                     guard let self else { return }
@@ -978,10 +978,10 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
                     switch action {
                     case .undo:
                         self.annotationSession?.undo()
-                    case .toggleEraser:
-                        self.annotationSession?.toggleInkAndEraser()
+                    case .selectTool(let mode):
+                        self.annotationSession?.selectInteractionMode(mode)
                     case .selectColor(let preset):
-                        self.annotationSession?.colorPreset = preset
+                        self.annotationSession?.selectInkColor(preset)
                     }
                 }
                 NotificationCenter.default.removeObserver(

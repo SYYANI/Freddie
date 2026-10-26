@@ -25,7 +25,7 @@ enum PDFPencilInkDynamics {
 
 enum PDFPencilShortcutAction: Equatable {
     case undo
-    case toggleEraser
+    case selectTool(PDFInteractionMode)
     case selectColor(PDFAnnotationColorPreset)
 }
 
@@ -35,7 +35,7 @@ final class TouchPDFView: PDFView, UIPencilInteractionDelegate {
     var onPencilDoubleTap: (() -> Void)?
     var onPencilShortcutAction: ((PDFPencilShortcutAction) -> Void)?
     var annotationInteractionMode: PDFInteractionMode = .browse {
-        didSet { radialToolPalette.showsPenAsToggleTarget = annotationInteractionMode == .erase }
+        didSet { radialToolPalette.toolTargets = annotationInteractionMode.pencilPaletteToolTargets }
     }
     var annotationColorPreset: PDFAnnotationColorPreset = .yellow {
         didSet { radialToolPalette.currentColorPreset = annotationColorPreset }
@@ -101,7 +101,7 @@ final class TouchPDFView: PDFView, UIPencilInteractionDelegate {
     }
 
     func pencilInteractionDidTap(_ interaction: UIPencilInteraction) {
-        onPencilDoubleTap?()
+        handlePencilTap(timestamp: ProcessInfo.processInfo.systemUptime, hoverLocation: nil)
     }
 
     @available(iOS 17.5, *)
@@ -109,7 +109,7 @@ final class TouchPDFView: PDFView, UIPencilInteractionDelegate {
         _ interaction: UIPencilInteraction,
         didReceiveTap tap: UIPencilInteraction.Tap
     ) {
-        onPencilDoubleTap?()
+        handlePencilTap(timestamp: tap.timestamp, hoverLocation: tap.hoverPose?.location)
     }
 
     @available(iOS 17.5, *)
@@ -120,18 +120,75 @@ final class TouchPDFView: PDFView, UIPencilInteractionDelegate {
         let location = squeeze.hoverPose?.location ?? CGPoint(x: bounds.midX, y: bounds.midY)
         switch squeeze.phase {
         case .began:
-            radialToolPalette.begin(at: location)
+            let timestamp = squeeze.timestamp
+            routePencilEvent(
+                hoverLocation: squeeze.hoverPose?.location,
+                isClaimed: { PDFPencilShortcutRouting.isSameEvent(PDFPencilShortcutRouting.squeezeTimestamp, timestamp) }
+            ) { [weak self] in
+                guard let self else { return }
+                PDFPencilShortcutRouting.squeezeOwner = self
+                PDFPencilShortcutRouting.squeezeTimestamp = timestamp
+                self.radialToolPalette.begin(at: location)
+            }
         case .changed:
+            guard PDFPencilShortcutRouting.squeezeOwner === self else { return }
             radialToolPalette.update(at: location)
         case .ended:
+            guard PDFPencilShortcutRouting.squeezeOwner === self else { return }
+            PDFPencilShortcutRouting.squeezeOwner = nil
             if let action = radialToolPalette.finish(at: location) {
                 onPencilShortcutAction?(action)
             }
         case .cancelled:
+            guard PDFPencilShortcutRouting.squeezeOwner === self else { return }
+            PDFPencilShortcutRouting.squeezeOwner = nil
             radialToolPalette.cancel()
         @unknown default:
+            guard PDFPencilShortcutRouting.squeezeOwner === self else { return }
+            PDFPencilShortcutRouting.squeezeOwner = nil
             radialToolPalette.cancel()
         }
+    }
+
+    private func handlePencilTap(timestamp: TimeInterval, hoverLocation: CGPoint?) {
+        routePencilEvent(
+            hoverLocation: hoverLocation,
+            isClaimed: { PDFPencilShortcutRouting.isSameEvent(PDFPencilShortcutRouting.tapTimestamp, timestamp) }
+        ) { [weak self] in
+            PDFPencilShortcutRouting.tapTimestamp = timestamp
+            self?.onPencilDoubleTap?()
+        }
+    }
+
+    /// The pane under the hovering Pencil handles the event right away; other panes wait
+    /// one main-queue turn, after every pane has received it, and take it only if no pane did.
+    private func routePencilEvent(
+        hoverLocation: CGPoint?,
+        isClaimed: @escaping @MainActor () -> Bool,
+        handle: @escaping @MainActor () -> Void
+    ) {
+        if let hoverLocation, bounds.contains(hoverLocation), isClaimed() == false {
+            handle()
+            return
+        }
+        Task { @MainActor in
+            guard isClaimed() == false else { return }
+            handle()
+        }
+    }
+}
+
+/// Every pencil interaction on screen receives each Pencil tap and squeeze, so both panes
+/// of the dual reader would react; with a shared annotation session the double-tap
+/// toggle then ran twice and cancelled itself, and squeeze showed two palettes.
+@MainActor
+private enum PDFPencilShortcutRouting {
+    static var tapTimestamp: TimeInterval = -1
+    static var squeezeTimestamp: TimeInterval = -1
+    static weak var squeezeOwner: TouchPDFView?
+
+    static func isSameEvent(_ claimed: TimeInterval, _ timestamp: TimeInterval) -> Bool {
+        abs(claimed - timestamp) < 0.1
     }
 }
 
@@ -515,10 +572,10 @@ private final class PDFPencilRadialToolPaletteView: UIView {
     private enum RootSelection: Equatable {
         case undo
         case colors
-        case toggleEraser
+        case tool(PDFInteractionMode)
     }
 
-    var showsPenAsToggleTarget = false {
+    var toolTargets = PDFInteractionMode.browse.pencilPaletteToolTargets {
         didSet { setNeedsDisplay() }
     }
     var currentColorPreset: PDFAnnotationColorPreset = .yellow {
@@ -601,7 +658,7 @@ private final class PDFPencilRadialToolPaletteView: UIView {
         case .root:
             switch rootSelection {
             case .undo: .undo
-            case .toggleEraser: .toggleEraser
+            case .tool(let mode): .selectTool(mode)
             case .colors, nil: nil
             }
         }
@@ -632,17 +689,17 @@ private final class PDFPencilRadialToolPaletteView: UIView {
         }
     }
 
+    private var rootItems: [RootSelection] {
+        [.undo, .colors] + toolTargets.map { .tool($0) }
+    }
+
     private func drawRootPalette() {
-        let sectorAngle = CGFloat.pi / 3
-        let items: [(RootSelection, String)] = [
-            (.undo, "arrow.uturn.backward"),
-            (.colors, "paintpalette.fill"),
-            (.toggleEraser, showsPenAsToggleTarget ? "pencil.tip" : "eraser.fill"),
-        ]
+        let items = rootItems
+        let sectorAngle = CGFloat.pi / CGFloat(items.count)
         for (index, item) in items.enumerated() {
             let start = CGFloat.pi + CGFloat(index) * sectorAngle
             let end = start + sectorAngle
-            let selected = rootSelection == item.0
+            let selected = rootSelection == item
             drawSector(
                 from: start,
                 to: end,
@@ -650,7 +707,7 @@ private final class PDFPencilRadialToolPaletteView: UIView {
                 fillColor: .secondarySystemBackground
             )
             drawSymbol(
-                item.1,
+                symbolName(for: item),
                 angle: (start + end) / 2,
                 tint: selected ? .white : .label
             )
@@ -748,10 +805,19 @@ private final class PDFPencilRadialToolPaletteView: UIView {
         for polar: (distance: CGFloat, angle: CGFloat?)
     ) -> RootSelection? {
         guard polar.distance >= 18, let angle = polar.angle else { return nil }
-        let offset = angle - .pi
-        if offset < .pi / 3 { return .undo }
-        if offset < .pi * 2 / 3 { return .colors }
-        return .toggleEraser
+        let items = rootItems
+        let normalized = min(max((angle - .pi) / .pi, 0), 0.999_999)
+        return items[min(Int(normalized * CGFloat(items.count)), items.count - 1)]
+    }
+
+    private func symbolName(for item: RootSelection) -> String {
+        switch item {
+        case .undo: "arrow.uturn.backward"
+        case .colors: "paintpalette.fill"
+        case .tool(.ink): "pencil.tip"
+        case .tool(.erase): "eraser.fill"
+        case .tool: "hand.point.up.left.fill"
+        }
     }
 
     private func colorSelection(

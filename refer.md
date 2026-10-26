@@ -240,8 +240,13 @@ Annotation（标准 Ink Annotation 本身不表达逐点压力宽度）。双栏
 后重绘。Pencil 落笔期间的工具宽度按屏幕空间解释，保存时再按当前 PDF 缩放反算成 page points，
 避免放大阅读时把细笔错误放大成软边粗带；持久墨迹由保留 `CGPath` 的 `CAShapeLayer` 矢量显示，
 缩放后重建路径而不是拉伸旧位图，覆盖层 backing scale 也随页面变换提高。Apple Pencil
-双击直接在浏览和自由画笔之间切换；Pencil Pro squeeze 在悬停点展开扇形
-工具盘，第一层提供撤回、颜色和画笔/橡皮切换，指向颜色后原位展开五色扇形供继续滑动选择。
+双击直接在自由画笔和橡皮之间切换；Pencil Pro squeeze 在悬停点展开扇形
+工具盘，第一层提供撤回、颜色和两个工具扇区：工具扇区始终显示浏览、自由画笔、橡皮中
+当前未选中的两个（按这个顺序），直接切到所示工具，不做状态相关的切换，所以不会出现两个
+相同图标；指向颜色后原位展开五色扇形供继续滑动选择；在橡皮状态下选择颜色会同时切回自由画笔。
+双栏阅读时两栏各有一个 `UIPencilInteraction`，每次双击和 squeeze 只交给一栏处理：
+Pencil 悬停在哪一栏就由哪一栏处理，没有悬停位置时由第一个收到的栏处理（`PDFPencilShortcutRouting`），
+否则共享的标注会话会被切换两次而抵消，squeeze 也会出现两个扇形工具盘。
 
 用户标注不写回 `paper.pdf` 或 BabelDOC 增量生成的译文 PDF，而是按
 `paperID + attachmentID` 保存到论文目录的

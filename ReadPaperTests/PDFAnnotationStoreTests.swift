@@ -381,14 +381,22 @@ final class PDFAnnotationStoreTests: XCTestCase {
     }
 
     @MainActor
-    func testPencilDoubleTapTogglesBrowseAndInk() {
+    func testPencilPaletteOffersEachOtherToolOnce() {
+        XCTAssertEqual(PDFInteractionMode.browse.pencilPaletteToolTargets, [.ink, .erase])
+        XCTAssertEqual(PDFInteractionMode.ink.pencilPaletteToolTargets, [.browse, .erase])
+        XCTAssertEqual(PDFInteractionMode.erase.pencilPaletteToolTargets, [.browse, .ink])
+        XCTAssertEqual(PDFInteractionMode.textNote.pencilPaletteToolTargets, [.ink, .erase])
+    }
+
+    @MainActor
+    func testSelectingInkColorLeavesEraserForInk() {
         let session = PDFAnnotationSession()
+        session.selectInteractionMode(.erase)
 
-        session.toggleBrowseAndInk()
+        session.selectInkColor(.blue)
+
+        XCTAssertEqual(session.colorPreset, .blue)
         XCTAssertEqual(session.interactionMode, .ink)
-
-        session.toggleBrowseAndInk()
-        XCTAssertEqual(session.interactionMode, .browse)
     }
 
     @MainActor

@@ -10,6 +10,16 @@ enum PDFInteractionMode: String, CaseIterable, Identifiable, Sendable {
     case debugRegion
 
     var id: String { rawValue }
+
+    /// The two tools the Pencil squeeze palette offers: always the ones that
+    /// are not current, in browse → ink → erase order, so no tool appears twice.
+    var pencilPaletteToolTargets: [PDFInteractionMode] {
+        switch self {
+        case .ink: [.browse, .erase]
+        case .erase: [.browse, .ink]
+        case .browse, .textNote, .debugRegion: [.ink, .erase]
+        }
+    }
 }
 
 enum PDFTextMarkupKind: String, CaseIterable, Identifiable, Sendable {
@@ -113,10 +123,12 @@ final class PDFAnnotationSession: ObservableObject {
         pendingTextNote = nil
     }
 
-    func toggleBrowseAndInk() {
-        guard isDebugInteractionActive == false else { return }
-        interactionMode = interactionMode == .ink ? .browse : .ink
-        pendingTextNote = nil
+    func selectInkColor(_ preset: PDFAnnotationColorPreset) {
+        colorPreset = preset
+        if interactionMode == .erase {
+            interactionMode = .ink
+            pendingTextNote = nil
+        }
     }
 
     func beginDebugInteraction() {
