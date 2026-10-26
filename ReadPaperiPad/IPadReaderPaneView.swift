@@ -21,6 +21,11 @@ struct IPadReaderPaneView: View {
         let total: Int
     }
 
+    private struct TranslationActivityOutcome: Equatable {
+        let phase: TranslationActivityCapsule.Phase
+        let message: String?
+    }
+
     @Environment(\.modelContext) private var modelContext
     @Environment(\.localizationBundle) private var bundle
     @Environment(\.pdfDisplayAppearance) private var appearance
@@ -53,6 +58,11 @@ struct IPadReaderPaneView: View {
     @State private var translationStatus: String?
     @State private var translationTask: Task<Void, Never>?
     @State private var isTranslating = false
+    @State private var isCancelling = false
+    @State private var translationActivityOutcome: TranslationActivityOutcome?
+    @State private var translationActivityDismissTask: Task<Void, Never>?
+    @State private var copyToastMessage: String?
+    @State private var copyToastDismissTask: Task<Void, Never>?
     @State private var showPDFTranslationScopeDialog = false
     @State private var pdfTranslationTotalPages = 0
 
@@ -131,7 +141,7 @@ struct IPadReaderPaneView: View {
     }
 
     private var shouldShowReaderHeader: Bool {
-        isTranslating || translationStatus != nil || translationProgress != nil || pdfTranslationProgress != nil
+        !isTranslating && translationStatus != nil
     }
 
     var body: some View {
@@ -142,6 +152,23 @@ struct IPadReaderPaneView: View {
                     Divider()
                 }
                 readerSurface
+                    .overlay(alignment: .bottom) {
+                        VStack(spacing: 10) {
+                            if let copyToastMessage {
+                                Text(copyToastMessage)
+                                    .font(.system(size: 13))
+                                    .padding(.horizontal, 18)
+                                    .padding(.vertical, 12)
+                                    .readPaperGlassEffect(in: Capsule())
+                                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                            }
+                            translationActivityCapsule
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 20)
+                        .animation(.spring(duration: 0.4, bounce: 0.15), value: translationActivityPhase == nil)
+                        .animation(.easeOut(duration: 0.18), value: copyToastMessage != nil)
+                    }
                 if isNearTranslationEdge && !isTranslating {
                     Divider()
                     translateMoreBanner
@@ -190,6 +217,9 @@ struct IPadReaderPaneView: View {
         .onDisappear {
             persistReadingState()
             translationTask?.cancel()
+            dismissTranslationActivityOutcome()
+            copyToastDismissTask?.cancel()
+            copyToastMessage = nil
         }
         .confirmationDialog(
             String(localized: "Choose Translation Scope", bundle: bundle),
@@ -250,14 +280,6 @@ struct IPadReaderPaneView: View {
                 Label(String(localized: "Copy Link", bundle: bundle), systemImage: "link")
             }
             .disabled(sourceURL == nil)
-
-            if isTranslating {
-                Button {
-                    translationTask?.cancel()
-                } label: {
-                    Label(String(localized: "Cancel", bundle: bundle), systemImage: "xmark.circle")
-                }
-            }
         }
 
         if #available(iOS 26.0, *) {
@@ -273,24 +295,6 @@ struct IPadReaderPaneView: View {
 
     private var readerHeader: some View {
         VStack(alignment: .leading, spacing: 10) {
-            if let progress = pdfTranslationProgress, progress.total > 0 {
-                VStack(alignment: .leading, spacing: 4) {
-                    ProgressView(value: progress.completed, total: progress.total)
-                    if progress.summary != translationStatus {
-                        Text(progress.summary)
-                            .font(.caption.monospacedDigit())
-                            .foregroundStyle(.secondary)
-                    }
-                }
-            } else if let progress = translationProgress, progress.total > 0 {
-                VStack(alignment: .leading, spacing: 4) {
-                    ProgressView(value: Double(progress.processed), total: Double(progress.total))
-                    Text("\(progress.processed)/\(progress.total)")
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                }
-            }
-
             if let translationStatus {
                 HStack(spacing: 8) {
                     Text(translationStatus)
@@ -565,25 +569,109 @@ struct IPadReaderPaneView: View {
     private func copySourceLink() {
         guard let sourceURL else { return }
         UIPasteboard.general.string = sourceURL.absoluteString
-        translationStatus = String(localized: "Link copied to the clipboard.", bundle: bundle)
+        copyToastMessage = String(localized: "Link copied to the clipboard.", bundle: bundle)
+        copyToastDismissTask?.cancel()
+        copyToastDismissTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(2))
+            guard !Task.isCancelled else { return }
+            copyToastMessage = nil
+            copyToastDismissTask = nil
+        }
+    }
+
+    private var translationActivityPhase: TranslationActivityCapsule.Phase? {
+        isTranslating ? .running(isCancelling: isCancelling) : translationActivityOutcome?.phase
+    }
+
+    @ViewBuilder
+    private var translationActivityCapsule: some View {
+        if let phase = translationActivityPhase {
+            TranslationActivityCapsule(
+                phase: phase,
+                detail: isTranslating ? translationStatus : translationActivityOutcome?.message,
+                fraction: translationActivityFraction,
+                summary: translationActivitySummary,
+                onCancel: cancelTranslation
+            )
+            .transition(.move(edge: .bottom).combined(with: .opacity))
+        }
+    }
+
+    private var translationActivityFraction: Double? {
+        if let progress = pdfTranslationProgress, progress.total > 0 {
+            return progress.completed / progress.total
+        }
+        if let progress = translationProgress, progress.total > 0 {
+            return Double(progress.processed) / Double(progress.total)
+        }
+        return nil
+    }
+
+    private var translationActivitySummary: String? {
+        if let progress = pdfTranslationProgress { return progress.summary }
+        if let progress = translationProgress, progress.total > 0 {
+            return "\(progress.processed)/\(progress.total)"
+        }
+        return nil
+    }
+
+    private func beginTranslationRun(message: String) {
+        dismissTranslationActivityOutcome()
+        isTranslating = true
+        isCancelling = false
+        translationProgress = nil
+        pdfTranslationProgress = nil
+        translationStatus = message
+    }
+
+    private func cancelTranslation() {
+        guard isTranslating, !isCancelling else { return }
+        isCancelling = true
+        translationTask?.cancel()
+    }
+
+    /// Set the outcome before clearing the running flag so the capsule morphs in place.
+    /// Errors and warnings stay in the header until the user closes them.
+    private func endTranslationRun(_ outcome: TranslationActivityCapsule.Phase?, keepStatus: Bool = false) {
+        if let outcome {
+            translationActivityOutcome = .init(phase: outcome, message: translationStatus)
+            if !keepStatus { translationStatus = nil }
+            translationActivityDismissTask = Task { @MainActor in
+                try? await Task.sleep(for: .seconds(outcome == .completed ? 2 : 1.4))
+                guard !Task.isCancelled else { return }
+                withAnimation(.easeIn(duration: 0.25)) {
+                    translationActivityOutcome = nil
+                }
+                translationActivityDismissTask = nil
+            }
+        }
+        translationProgress = nil
+        pdfTranslationProgress = nil
+        isTranslating = false
+        isCancelling = false
+        translationTask = nil
+    }
+
+    private func dismissTranslationActivityOutcome() {
+        translationActivityDismissTask?.cancel()
+        translationActivityDismissTask = nil
+        translationActivityOutcome = nil
     }
 
     private func translateHTML() {
-        guard let paper, let htmlAttachment, let settings else { return }
-        translationTask?.cancel()
-        isTranslating = true
-        translationStatus = String(localized: "Translating HTML...", bundle: bundle)
-        translationProgress = nil
-        pdfTranslationProgress = nil
+        guard !isTranslating, let paper, let htmlAttachment, let settings else { return }
+        beginTranslationRun(message: String(localized: "Translating HTML...", bundle: bundle))
         htmlSegmentUpdate = nil
 
         translationTask = Task { @MainActor in
+            var runOutcome: TranslationActivityCapsule.Phase?
+            var keepStatus = false
             do {
                 let route = try LLMRouteResolver().resolveHTMLRoute(
                     settings: settings,
                     modelContext: modelContext
                 )
-                try await HTMLTranslationPipeline().translateHTML(
+                let outcome = try await HTMLTranslationPipeline().translateHTML(
                     attachment: htmlAttachment,
                     paper: paper,
                     preferences: TranslationPreferencesSnapshot(settings),
@@ -595,6 +683,7 @@ struct IPadReaderPaneView: View {
                         htmlReloadToken += 1
                     },
                     onProgressUpdated: { processed, total in
+                        guard !isCancelling else { return }
                         translationProgress = .init(processed: processed, total: total)
                     },
                     onSegmentTranslated: { update in
@@ -602,15 +691,19 @@ struct IPadReaderPaneView: View {
                         htmlSegmentUpdate = update
                     }
                 )
-                translationStatus = String(localized: "HTML translation completed.", bundle: bundle)
+                try Task.checkCancellation()
+                keepStatus = outcome.failedSegments > 0
+                translationStatus = keepStatus
+                    ? HTMLTranslationPipeline.skippedSegmentsMessage(count: outcome.failedSegments, bundle: bundle)
+                    : String(localized: "HTML translation completed.", bundle: bundle)
+                runOutcome = .completed
             } catch is CancellationError {
                 translationStatus = String(localized: "Translation cancelled.", bundle: bundle)
+                runOutcome = .cancelled
             } catch {
                 translationStatus = AppLocalization.errorMessage(error, bundle: bundle)
             }
-            translationProgress = nil
-            isTranslating = false
-            translationTask = nil
+            endTranslationRun(runOutcome, keepStatus: keepStatus)
         }
     }
 
@@ -636,7 +729,7 @@ struct IPadReaderPaneView: View {
     }
 
     private func startPDFTranslation(scope: PDFTranslationScope) {
-        guard let paper, let pdfAttachment, let settings else { return }
+        guard !isTranslating, let paper, let pdfAttachment, let settings else { return }
         let pageRange: ClosedRange<Int>? = {
             switch scope {
             case .firstPages(let count):
@@ -662,7 +755,10 @@ struct IPadReaderPaneView: View {
                     paperID: paper.id,
                     arxivIdentifier: arxivIdentifier
                 ) { update in
-                    Task { @MainActor in translationStatus = update.localizedMessage }
+                    Task { @MainActor in
+                        guard isTranslating, !isCancelling else { return }
+                        translationStatus = update.localizedMessage
+                    }
                 }
                 let translated = try await InProcessBabelDocRunner().translatePDF(
                     inputPDF: pdfAttachment.fileURL,
@@ -690,9 +786,9 @@ struct IPadReaderPaneView: View {
                 try modelContext.save()
                 syncTranslatedPageFromOriginal(pdfPageIndex)
                 readerMode = .bilingualPDF
-                finishPDFTranslation(message: String(localized: "PDF translation completed.", bundle: bundle))
+                finishPDFTranslation(message: String(localized: "PDF translation completed.", bundle: bundle), outcome: .completed)
             } catch is CancellationError {
-                finishPDFTranslation(message: String(localized: "Translation cancelled.", bundle: bundle))
+                finishPDFTranslation(message: String(localized: "Translation cancelled.", bundle: bundle), outcome: .cancelled)
             } catch {
                 finishPDFTranslation(message: AppLocalization.errorMessage(error, bundle: bundle))
             }
@@ -700,7 +796,7 @@ struct IPadReaderPaneView: View {
     }
 
     private func extendPDFTranslation(to requestedLastPage: Int? = nil) {
-        guard let paper, let pdfAttachment, let settings,
+        guard !isTranslating, let paper, let pdfAttachment, let settings,
               let existingAttachment = translatedPDFAttachment,
               let currentLastPage = existingAttachment.translatedLastPage,
               let totalPages = originalPDFPageCount,
@@ -725,7 +821,10 @@ struct IPadReaderPaneView: View {
                     paperID: paper.id,
                     arxivIdentifier: arxivIdentifier
                 ) { update in
-                    Task { @MainActor in translationStatus = update.localizedMessage }
+                    Task { @MainActor in
+                        guard isTranslating, !isCancelling else { return }
+                        translationStatus = update.localizedMessage
+                    }
                 }
                 let increment = try await InProcessBabelDocRunner().translatePDF(
                     inputPDF: pdfAttachment.fileURL,
@@ -759,9 +858,9 @@ struct IPadReaderPaneView: View {
                 if oldURL != mergedURL { try? FileManager.default.removeItem(at: oldURL) }
                 pdfReloadToken += 1
                 syncTranslatedPageFromOriginal(pdfPageIndex)
-                finishPDFTranslation(message: String(localized: "PDF translation completed.", bundle: bundle))
+                finishPDFTranslation(message: String(localized: "PDF translation completed.", bundle: bundle), outcome: .completed)
             } catch is CancellationError {
-                finishPDFTranslation(message: String(localized: "Translation cancelled.", bundle: bundle))
+                finishPDFTranslation(message: String(localized: "Translation cancelled.", bundle: bundle), outcome: .cancelled)
             } catch {
                 finishPDFTranslation(message: AppLocalization.errorMessage(error, bundle: bundle))
             }
@@ -769,26 +868,18 @@ struct IPadReaderPaneView: View {
     }
 
     private func beginPDFTranslation() {
-        translationTask?.cancel()
-        isTranslating = true
-        translationProgress = nil
-        pdfTranslationProgress = nil
-        translationStatus = String(localized: "Translating PDF with BabelDOC...", bundle: bundle)
+        beginTranslationRun(message: String(localized: "Translating PDF with BabelDOC...", bundle: bundle))
     }
 
     private func handlePDFProgress(_ progress: BabelDocProgressUpdate) {
-        Task { @MainActor in
-            guard isTranslating else { return }
-            pdfTranslationProgress = progress
-            translationStatus = progress.statusMessage
-        }
+        guard isTranslating, !isCancelling else { return }
+        pdfTranslationProgress = progress
+        translationStatus = progress.statusMessage
     }
 
-    private func finishPDFTranslation(message: String) {
-        pdfTranslationProgress = nil
+    private func finishPDFTranslation(message: String, outcome: TranslationActivityCapsule.Phase? = nil) {
         translationStatus = message
-        isTranslating = false
-        translationTask = nil
+        endTranslationRun(outcome)
     }
 
     private func dismissTranslationStatus() {

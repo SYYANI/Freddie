@@ -127,17 +127,17 @@ struct InProcessBabelDocRunner {
     static func progressUpdate(_ progress: BabelDocProgress) -> BabelDocProgressUpdate {
         let completed = min(max(progress.overallPercentage, 0), 100)
         let stageName = statusMessage(for: progress.stage)
-        let summary: String
+        let detail: String
         if progress.total > 0 {
-            summary = "\(stageName) \(min(max(progress.completed, 0), progress.total))/\(progress.total)"
+            detail = "\(stageName) \(min(max(progress.completed, 0), progress.total))/\(progress.total)"
         } else {
-            summary = stageName
+            detail = stageName
         }
         return BabelDocProgressUpdate(
             completed: completed,
             total: 100,
-            summary: summary,
-            statusMessage: summary
+            summary: "\(Int(completed.rounded()))%",
+            statusMessage: detail
         )
     }
 
@@ -181,7 +181,7 @@ struct InProcessBabelDocRunner {
                 result.translationDiagnostics.candidateCount
             )
         }
-        return .init(completed: 100, total: 100, summary: message, statusMessage: message)
+        return .init(completed: 100, total: 100, summary: "100%", statusMessage: message)
     }
 
     private static func babelDocThinkingMode(_ mode: LLMThinkingMode) -> BabelDocThinkingMode {
