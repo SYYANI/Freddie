@@ -150,6 +150,10 @@ struct IPadSettingsView: View {
                     }
             }
         }
+        .background {
+            Color(uiColor: .systemGroupedBackground)
+                .ignoresSafeArea()
+        }
         .navigationTitle(String(localized: "Settings", bundle: bundle))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -318,36 +322,21 @@ struct IPadSettingsView: View {
                 .disabled(htmlReaderFontSize == HTMLReaderTypography.defaultFontSize)
             }
 
-            Section(String(localized: "Reader Appearance", bundle: bundle)) {
-                Picker(
-                    String(localized: "Reader Appearance", bundle: bundle),
-                    selection: pdfDisplayAppearanceBinding
-                ) {
-                    Text("Default", bundle: bundle).tag(PDFDisplayAppearance.defaultMode)
-                    Text("Paper Tone", bundle: bundle).tag(PDFDisplayAppearance.paper)
+            Section {
+                HStack {
+                    Text("Reader Appearance", bundle: bundle)
+
+                    Spacer(minLength: 16)
+
+                    HStack(spacing: 0) {
+                        readerAppearanceSegment(String(localized: "Default", bundle: bundle), appearance: .defaultMode)
+                        readerAppearanceSegment(String(localized: "Paper Tone", bundle: bundle), appearance: .paper)
+                    }
+                    .fixedSize(horizontal: true, vertical: false)
+                    .background(Color(uiColor: .tertiarySystemFill), in: RoundedRectangle(cornerRadius: 9))
+                    .accessibilityElement(children: .contain)
+                    .accessibilityLabel(Text("Reader Appearance", bundle: bundle))
                 }
-                .pickerStyle(.segmented)
-
-                Text(
-                    "System appearance changes automatically select Default for Light Mode and Paper Tone for Dark Mode. You can switch either option manually afterward.",
-                    bundle: bundle
-                )
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-            }
-
-            Section(String(localized: "How to use translation", bundle: bundle)) {
-                Text(
-                    "After selecting routes here, go back to the main window, import a paper, open it in the reader, and use the Translate button in the toolbar.",
-                    bundle: bundle
-                )
-
-                Text(
-                    "HTML translation works best for arXiv papers with HTML content. PDF translation uses the PDF/BabelDOC route and can produce translated or side-by-side PDF reading modes.",
-                    bundle: bundle
-                )
-                .font(.footnote)
-                .foregroundStyle(.secondary)
             }
 
             Section(String(localized: "Translation Routes", bundle: bundle)) {
@@ -373,6 +362,28 @@ struct IPadSettingsView: View {
                 .foregroundStyle(.secondary)
             }
         }
+    }
+
+    private func readerAppearanceSegment(_ title: String, appearance: PDFDisplayAppearance) -> some View {
+        let isSelected = pdfDisplayAppearanceBinding.wrappedValue == appearance
+
+        return Button {
+            pdfDisplayAppearanceBinding.wrappedValue = appearance
+        } label: {
+            Text(title)
+                .font(.body.weight(.medium))
+                .foregroundStyle(isSelected ? Color.white : Color.primary)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 6)
+                .background {
+                    if isSelected {
+                        RoundedRectangle(cornerRadius: 9).fill(Color.accentColor)
+                    }
+                }
+                .contentShape(RoundedRectangle(cornerRadius: 9))
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     private var digestTab: some View {
@@ -1051,8 +1062,8 @@ struct IPadSettingsView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
         .padding(horizontalPadding)
-        .background(Color(uiColor: .systemBackground))
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(uiColor: .systemGroupedBackground))
     }
 
     private func entityListPanel<ListContent: View, ToolbarContent: View>(
@@ -1082,11 +1093,13 @@ struct IPadSettingsView: View {
             .padding(.vertical, 14)
 
             Divider()
+                .opacity(0.5)
 
             content()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             Divider()
+                .opacity(0.5)
 
             HStack(spacing: 14) {
                 toolbar()
@@ -1095,7 +1108,6 @@ struct IPadSettingsView: View {
             .buttonStyle(.borderless)
             .padding(.horizontal, 14)
             .padding(.vertical, 11)
-            .background(Color(uiColor: .tertiarySystemBackground))
         }
         .background(Color(uiColor: .secondarySystemGroupedBackground))
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))

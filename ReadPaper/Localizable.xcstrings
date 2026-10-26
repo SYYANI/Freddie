@@ -429,9 +429,6 @@
         }
       }
     },
-    "After selecting routes here, go back to the main window, import a paper, open it in the reader, and use the Translate button in the toolbar." : {
-
-    },
     "AI Explanation" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -3419,9 +3416,6 @@
           }
         }
       }
-    },
-    "HTML translation works best for arXiv papers with HTML content. PDF translation uses the PDF/BabelDOC route and can produce translated or side-by-side PDF reading modes." : {
-
     },
     "HTML Typography" : {
       "extractionState" : "stale",
