@@ -28,6 +28,13 @@ enum PDFTextMarkupKind: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
+enum PDFAnnotationLineWidthPreset {
+    static let thin = 0.5
+    static let medium = 1.0
+    static let thick = 2.0
+    static let defaultValue = medium
+}
+
 struct PDFTextNotePlacement: Identifiable, Equatable {
     let id = UUID()
     var attachmentID: UUID
@@ -55,7 +62,7 @@ protocol PDFAnnotationSessionHandler: AnyObject {
 final class PDFAnnotationSession: ObservableObject {
     @Published private(set) var interactionMode: PDFInteractionMode = .browse
     @Published var colorPreset: PDFAnnotationColorPreset = .yellow
-    @Published var lineWidth: Double = 2
+    @Published var lineWidth: Double = PDFAnnotationLineWidthPreset.defaultValue
     @Published private(set) var activeAttachmentID: UUID?
     @Published private(set) var hasTextSelection = false
     @Published private(set) var canUndo = false
@@ -97,6 +104,18 @@ final class PDFAnnotationSession: ObservableObject {
     func selectInteractionMode(_ mode: PDFInteractionMode) {
         guard mode != .debugRegion, isDebugInteractionActive == false else { return }
         interactionMode = mode
+        pendingTextNote = nil
+    }
+
+    func toggleInkAndEraser() {
+        guard isDebugInteractionActive == false else { return }
+        interactionMode = interactionMode == .erase ? .ink : .erase
+        pendingTextNote = nil
+    }
+
+    func toggleBrowseAndInk() {
+        guard isDebugInteractionActive == false else { return }
+        interactionMode = interactionMode == .ink ? .browse : .ink
         pendingTextNote = nil
     }
 

@@ -228,6 +228,21 @@ helper 会输出候选、成功、失败、provider 失败和占位符校验失�
 Quick Look/Preview 或另一个渲染内核。支持高亮、下划线、删除线、文本批注、自由画笔、擦除、
 颜色与线宽、撤销/重做，并可导出包含标准 PDF Annotation 的新文件。
 
+iPad 阅读器复用同一套 `PDFAnnotationSession` 和 sidecar；Apple Pencil 输入通过
+`PDFPageOverlayViewProvider` 提供的逐页透明覆盖层采集，手指仍交给 PDFKit 滚动与缩放。自由画笔
+只持久化 Pencil 的实际与 coalesced samples，阅读时也在同一覆盖层按 PDF page 坐标矢量重绘，避免
+抬笔时切到 PDFKit annotation 缓存造成闪烁或变糊；导出时仍用中心线与基础宽度转换成标准 PDF Ink
+Annotation（标准 Ink Annotation 本身不表达逐点压力宽度）。双栏模式仍由最近落笔或选择的一侧激活
+对应 attachment handler。
+
+压力墨迹使用 sidecar v2 的逐采样点宽度（PDF page points）；v1 固定宽度记录继续按原语义读取。
+输入端对位置和压力分别做低延迟平滑，覆盖层用填充轮廓而不是半透明定宽描边，保证墨迹实心且缩放
+后重绘。Pencil 落笔期间的工具宽度按屏幕空间解释，保存时再按当前 PDF 缩放反算成 page points，
+避免放大阅读时把细笔错误放大成软边粗带；持久墨迹由保留 `CGPath` 的 `CAShapeLayer` 矢量显示，
+缩放后重建路径而不是拉伸旧位图，覆盖层 backing scale 也随页面变换提高。Apple Pencil
+双击直接在浏览和自由画笔之间切换；Pencil Pro squeeze 在悬停点展开扇形
+工具盘，第一层提供撤回、颜色和画笔/橡皮切换，指向颜色后原位展开五色扇形供继续滑动选择。
+
 用户标注不写回 `paper.pdf` 或 BabelDOC 增量生成的译文 PDF，而是按
 `paperID + attachmentID` 保存到论文目录的
 `notes/pdf-annotations-{attachment UUID}.json`。阅读器每次加载附件时把 sidecar 记录恢复为

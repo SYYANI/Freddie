@@ -1326,9 +1326,18 @@ struct ReaderPaneView: View {
         }
 
         Menu(String(localized: "Drawing Width", bundle: bundle)) {
-            annotationLineWidthButton(1, title: String(localized: "Thin", bundle: bundle))
-            annotationLineWidthButton(2, title: String(localized: "Medium", bundle: bundle))
-            annotationLineWidthButton(5, title: String(localized: "Thick", bundle: bundle))
+            annotationLineWidthButton(
+                PDFAnnotationLineWidthPreset.thin,
+                title: String(localized: "Thin", bundle: bundle)
+            )
+            annotationLineWidthButton(
+                PDFAnnotationLineWidthPreset.medium,
+                title: String(localized: "Medium", bundle: bundle)
+            )
+            annotationLineWidthButton(
+                PDFAnnotationLineWidthPreset.thick,
+                title: String(localized: "Thick", bundle: bundle)
+            )
         }
 
         Divider()

@@ -58,6 +58,65 @@ final class PDFAnnotationStoreTests: XCTestCase {
         )
     }
 
+    func testPressureInkRoundTripUsesVersionTwoAndKeepsSampleWidths() throws {
+        let samples = [
+            PDFAnnotationInkSample(point: CGPoint(x: 10, y: 12), width: 0.45),
+            PDFAnnotationInkSample(point: CGPoint(x: 20, y: 18), width: 0.9),
+            PDFAnnotationInkSample(point: CGPoint(x: 30, y: 20), width: 1.6),
+        ]
+        let record = PDFAnnotationRecord(
+            pageIndex: 0,
+            kind: .ink,
+            bounds: CGRect(x: 9, y: 11, width: 23, height: 11),
+            color: PDFAnnotationColorPreset.blue.color(for: .ink),
+            lineWidth: 1,
+            inkPaths: [samples.map(\.cgPoint)],
+            inkSamplePaths: [samples]
+        )
+
+        try annotationStore.save([record], paperID: paperID, attachmentID: attachmentID)
+
+        XCTAssertEqual(
+            try annotationStore.load(paperID: paperID, attachmentID: attachmentID),
+            [record]
+        )
+        let sidecarData = try Data(contentsOf: annotationStore.sidecarURL(
+            paperID: paperID,
+            attachmentID: attachmentID
+        ))
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: sidecarData) as? [String: Any])
+        XCTAssertEqual(object["version"] as? Int, 2)
+    }
+
+    func testVersionOneSidecarWithoutPressureSamplesStillLoads() throws {
+        let record = PDFAnnotationRecord(
+            pageIndex: 0,
+            kind: .ink,
+            bounds: CGRect(x: 10, y: 10, width: 40, height: 20),
+            color: PDFAnnotationColorPreset.red.color(for: .ink),
+            lineWidth: 2,
+            inkPaths: [[CGPoint(x: 12, y: 12), CGPoint(x: 48, y: 28)]]
+        )
+        var sidecar = PDFAnnotationSidecar(
+            paperID: paperID,
+            attachmentID: attachmentID,
+            annotations: [record]
+        )
+        sidecar.version = 1
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        try encoder.encode(sidecar).write(
+            to: annotationStore.sidecarURL(paperID: paperID, attachmentID: attachmentID),
+            options: .atomic
+        )
+
+        let loaded = try XCTUnwrap(
+            try annotationStore.load(paperID: paperID, attachmentID: attachmentID).first
+        )
+        XCTAssertNil(loaded.inkSamplePaths)
+        XCTAssertEqual(loaded.inkPaths, record.inkPaths)
+    }
+
     func testSidecarRejectsContentCopiedToAnotherAttachmentScope() throws {
         let otherAttachmentID = UUID()
         try annotationStore.save(
@@ -306,6 +365,29 @@ final class PDFAnnotationStoreTests: XCTestCase {
 
         session.selectInteractionMode(.textNote)
         session.cancelPendingTextNote()
+        XCTAssertEqual(session.interactionMode, .browse)
+    }
+
+    @MainActor
+    func testPencilShortcutTogglesInkAndEraser() {
+        let session = PDFAnnotationSession()
+
+        session.selectInteractionMode(.ink)
+        session.toggleInkAndEraser()
+        XCTAssertEqual(session.interactionMode, .erase)
+
+        session.toggleInkAndEraser()
+        XCTAssertEqual(session.interactionMode, .ink)
+    }
+
+    @MainActor
+    func testPencilDoubleTapTogglesBrowseAndInk() {
+        let session = PDFAnnotationSession()
+
+        session.toggleBrowseAndInk()
+        XCTAssertEqual(session.interactionMode, .ink)
+
+        session.toggleBrowseAndInk()
         XCTAssertEqual(session.interactionMode, .browse)
     }
 

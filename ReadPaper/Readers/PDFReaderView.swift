@@ -396,6 +396,14 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
             interactiveView.onDebugRegionSelected = onDebugRegionSelected
         }
         context.coordinator.attachScrollSync(scrollSync, side: scrollSyncSide, to: view)
+        #else
+        if let touchView = view as? TouchPDFView {
+            touchView.annotationInteractionMode = annotationSession?.interactionMode ?? .browse
+            touchView.annotationColorPreset = annotationSession?.colorPreset ?? .yellow
+            context.coordinator.applyPencilInteractionConfiguration(
+                annotationSession: annotationSession
+            )
+        }
         #endif
 
         guard let fileURL else {
@@ -507,6 +515,12 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
             var displayAppearance: PDFDisplayAppearance
             var handToolEnabled: Bool
         }
+        #else
+        private struct PencilInteractionConfiguration: Equatable {
+            var mode: PDFInteractionMode
+            var colorPreset: PDFAnnotationColorPreset
+            var lineWidth: Double
+        }
         #endif
 
         private static let performanceLog = OSLog(
@@ -548,6 +562,9 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
         private var appliedDisplayAppearance: PDFDisplayAppearance?
         #if os(macOS)
         private var appliedInteractionConfiguration: InteractionConfiguration?
+        #else
+        private var appliedPencilInteractionConfiguration: PencilInteractionConfiguration?
+        private let pencilPageOverlays = NSHashTable<PDFPencilPageOverlayView>.weakObjects()
         #endif
         private var pendingDocumentPageCount: Int?
         private var pendingDocumentPageCountForce = false
@@ -745,7 +762,7 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
                     ? .debugRegion
                     : annotationSession?.interactionMode ?? .browse,
                 colorPreset: annotationSession?.colorPreset ?? .yellow,
-                lineWidth: annotationSession?.lineWidth ?? 2,
+                lineWidth: annotationSession?.lineWidth ?? PDFAnnotationLineWidthPreset.defaultValue,
                 displayAppearance: displayAppearance,
                 handToolEnabled: handToolEnabled
             )
@@ -757,6 +774,91 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
                 .platformColor(inverted: false)
             pdfView.inkPreviewLineWidth = configuration.lineWidth
             pdfView.handToolEnabled = configuration.handToolEnabled
+        }
+        #endif
+
+        #if os(iOS)
+        fileprivate func applyPencilInteractionConfiguration(
+            annotationSession: PDFAnnotationSession?
+        ) {
+            let configuration = PencilInteractionConfiguration(
+                mode: annotationSession?.interactionMode ?? .browse,
+                colorPreset: annotationSession?.colorPreset ?? .yellow,
+                lineWidth: annotationSession?.lineWidth ?? PDFAnnotationLineWidthPreset.defaultValue
+            )
+            guard appliedPencilInteractionConfiguration != configuration else { return }
+            appliedPencilInteractionConfiguration = configuration
+            for overlay in pencilPageOverlays.allObjects {
+                configurePencilOverlay(overlay, with: configuration)
+            }
+        }
+
+        private func configurePencilOverlay(
+            _ overlay: PDFPencilPageOverlayView,
+            with configuration: PencilInteractionConfiguration
+        ) {
+            overlay.interactionMode = configuration.mode
+            overlay.inkColor = configuration.colorPreset
+                .color(for: .ink)
+                .platformColor(inverted: false)
+            overlay.inkLineWidth = max(0.5, configuration.lineWidth)
+        }
+
+        private func refreshPencilInkOverlays(in pdfView: PDFView) {
+            for overlay in pencilPageOverlays.allObjects {
+                guard let page = overlay.pdfPage else { continue }
+                refreshPencilInk(on: overlay, for: page, in: pdfView)
+            }
+        }
+
+        private func refreshPencilInk(
+            on overlay: PDFPencilPageOverlayView,
+            for page: PDFPage,
+            in pdfView: PDFView
+        ) {
+            guard let document = pdfView.document else {
+                overlay.displayPersistedInk([])
+                return
+            }
+            let pageIndex = document.index(for: page)
+            guard pageIndex != NSNotFound else {
+                overlay.displayPersistedInk([])
+                return
+            }
+            overlay.displayPersistedInk(
+                annotationRecords.filter { $0.pageIndex == pageIndex && $0.kind == .ink }
+            )
+        }
+
+        private func pencilPagePoint(
+            for overlayPoint: CGPoint,
+            overlay: PDFPencilPageOverlayView,
+            pdfView: PDFView,
+            page: PDFPage
+        ) -> CGPoint {
+            pdfView.convert(overlay.convert(overlayPoint, to: pdfView), to: page)
+        }
+
+        private func pencilPageWidth(
+            at overlayPoint: CGPoint,
+            displayWidth: CGFloat,
+            overlay: PDFPencilPageOverlayView,
+            pdfView: PDFView,
+            page: PDFPage
+        ) -> CGFloat {
+            let pageStart = pencilPagePoint(
+                for: overlayPoint,
+                overlay: overlay,
+                pdfView: pdfView,
+                page: page
+            )
+            let pageEnd = pencilPagePoint(
+                for: CGPoint(x: overlayPoint.x + displayWidth, y: overlayPoint.y),
+                overlay: overlay,
+                pdfView: pdfView,
+                page: page
+            )
+            return max(0.1, hypot(pageEnd.x - pageStart.x, pageEnd.y - pageStart.y))
         }
         #endif
 
@@ -862,6 +964,38 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
                     self?.requestTextNote(on: page, at: point)
                 }
             }
+            #else
+            if let touchView = pdfView as? TouchPDFView {
+                touchView.pageOverlayViewProvider = self
+                touchView.onPencilDoubleTap = { [weak self] in
+                    guard let self else { return }
+                    self.activateAnnotationDocument()
+                    self.annotationSession?.toggleBrowseAndInk()
+                }
+                touchView.onPencilShortcutAction = { [weak self] action in
+                    guard let self else { return }
+                    self.activateAnnotationDocument()
+                    switch action {
+                    case .undo:
+                        self.annotationSession?.undo()
+                    case .toggleEraser:
+                        self.annotationSession?.toggleInkAndEraser()
+                    case .selectColor(let preset):
+                        self.annotationSession?.colorPreset = preset
+                    }
+                }
+                NotificationCenter.default.removeObserver(
+                    self,
+                    name: Notification.Name.PDFViewScaleChanged,
+                    object: touchView
+                )
+                NotificationCenter.default.addObserver(
+                    self,
+                    selector: #selector(handlePencilScaleChanged(_:)),
+                    name: Notification.Name.PDFViewScaleChanged,
+                    object: touchView
+                )
+            }
             #endif
         }
 
@@ -874,6 +1008,18 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
                 scrollSync?.unregister(pdfView, side: scrollSyncSide)
             }
             scrollSync = nil
+            #else
+            if let touchView = pdfView as? TouchPDFView,
+               touchView.pageOverlayViewProvider === self {
+                touchView.pageOverlayViewProvider = nil
+                touchView.onPencilDoubleTap = nil
+                touchView.onPencilShortcutAction = nil
+                touchView.cancelPencilShortcutPalette()
+            }
+            for overlay in pencilPageOverlays.allObjects {
+                overlay.cancelInteraction()
+            }
+            pencilPageOverlays.removeAllObjects()
             #endif
             removeSidenoteHighlights()
             clearNoteNavigationHighlight()
@@ -890,6 +1036,13 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
                     name: Notification.Name.PDFViewSelectionChanged,
                     object: pdfView
                 )
+                #if os(iOS)
+                NotificationCenter.default.removeObserver(
+                    self,
+                    name: Notification.Name.PDFViewScaleChanged,
+                    object: pdfView
+                )
+                #endif
             }
             if let registeredAnnotationAttachmentID, let registeredAnnotationSession {
                 Task { @MainActor [weak self, weak registeredAnnotationSession] in
@@ -1741,19 +1894,119 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
             ])
         }
 
+        #if os(iOS)
+        private func addPressureInkAnnotation(
+            on page: PDFPage,
+            samples: [PDFAnnotationInkSample],
+            basePageWidth: CGFloat
+        ) {
+            guard let document = pdfView?.document, samples.count >= 2 else { return }
+            let pageIndex = document.index(for: page)
+            guard pageIndex != NSNotFound else { return }
+
+            let points = samples.map(\.cgPoint)
+            let maximumWidth = CGFloat(samples.map(\.width).max() ?? Double(basePageWidth))
+            let rawBounds = points.reduce(CGRect.null) { partial, point in
+                partial.union(CGRect(origin: point, size: .zero))
+            }
+            let bounds = rawBounds
+                .insetBy(dx: -maximumWidth / 2, dy: -maximumWidth / 2)
+                .intersection(page.bounds(for: .cropBox))
+                .standardized
+            guard bounds.width >= 1, bounds.height >= 1 else { return }
+
+            addAnnotationRecords([
+                PDFAnnotationRecord(
+                    pageIndex: pageIndex,
+                    kind: .ink,
+                    bounds: bounds,
+                    color: annotationSession?.colorPreset.color(for: .ink)
+                        ?? PDFAnnotationColorPreset.yellow.color(for: .ink),
+                    lineWidth: Double(basePageWidth),
+                    inkPaths: [points],
+                    inkSamplePaths: [samples]
+                )
+            ])
+        }
+        #endif
+
         private func eraseAnnotation(on page: PDFPage, at point: CGPoint) {
             activateAnnotationDocument()
             let hitTolerance: CGFloat = 6
-            guard let annotation = page.annotations.reversed().first(where: { annotation in
-                PDFAnnotationRenderer.recordID(for: annotation) != nil &&
-                    annotation.bounds.insetBy(dx: -hitTolerance, dy: -hitTolerance).contains(point)
-            }),
-            let recordID = PDFAnnotationRenderer.recordID(for: annotation),
-            let record = annotationRecords.first(where: { $0.id == recordID })
-            else {
+            let renderedRecord = page.annotations.reversed().compactMap { annotation -> PDFAnnotationRecord? in
+                guard annotation.bounds.insetBy(dx: -hitTolerance, dy: -hitTolerance).contains(point),
+                      let recordID = PDFAnnotationRenderer.recordID(for: annotation)
+                else {
+                    return nil
+                }
+                return annotationRecords.first { $0.id == recordID }
+            }.first
+            let pageIndex = pdfView?.document?.index(for: page) ?? NSNotFound
+            let overlayInkRecord = annotationRecords.reversed().first { record in
+                record.kind == .ink &&
+                    pageIndex != NSNotFound &&
+                    record.pageIndex == pageIndex &&
+                    Self.inkRecord(record, contains: point, tolerance: hitTolerance)
+            }
+            guard let record = renderedRecord ?? overlayInkRecord else {
                 return
             }
             removeAnnotationRecords([record])
+        }
+
+        private static func inkRecord(
+            _ record: PDFAnnotationRecord,
+            contains point: CGPoint,
+            tolerance: CGFloat
+        ) -> Bool {
+            let hitDistance = tolerance + CGFloat(record.lineWidth) / 2
+            guard record.bounds.cgRect.insetBy(dx: -hitDistance, dy: -hitDistance).contains(point) else {
+                return false
+            }
+            if let samplePaths = record.inkSamplePaths, samplePaths.isEmpty == false {
+                return samplePaths.contains { path in
+                    guard let first = path.first else { return false }
+                    if path.count == 1 {
+                        return hypot(point.x - first.x, point.y - first.y)
+                            <= tolerance + CGFloat(first.width) / 2
+                    }
+                    return zip(path, path.dropFirst()).contains { start, end in
+                        let segmentTolerance = tolerance + CGFloat(max(start.width, end.width)) / 2
+                        return distance(
+                            from: point,
+                            toSegmentFrom: start.cgPoint,
+                            to: end.cgPoint
+                        ) <= segmentTolerance
+                    }
+                }
+            }
+            return record.inkPaths.contains { path in
+                let points = path.map(\.cgPoint)
+                guard let first = points.first else { return false }
+                if points.count == 1 {
+                    return hypot(point.x - first.x, point.y - first.y) <= hitDistance
+                }
+                return zip(points, points.dropFirst()).contains { start, end in
+                    distance(from: point, toSegmentFrom: start, to: end) <= hitDistance
+                }
+            }
+        }
+
+        private static func distance(
+            from point: CGPoint,
+            toSegmentFrom start: CGPoint,
+            to end: CGPoint
+        ) -> CGFloat {
+            let dx = end.x - start.x
+            let dy = end.y - start.y
+            let squaredLength = dx * dx + dy * dy
+            guard squaredLength > 0 else {
+                return hypot(point.x - start.x, point.y - start.y)
+            }
+            let projection = ((point.x - start.x) * dx + (point.y - start.y) * dy) / squaredLength
+            let t = min(max(projection, 0), 1)
+            let closest = CGPoint(x: start.x + t * dx, y: start.y + t * dy)
+            return hypot(point.x - closest.x, point.y - closest.y)
         }
 
         private func requestTextNote(on page: PDFPage, at point: CGPoint) {
@@ -1827,6 +2080,12 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
             renderedAnnotations = [:]
             guard let document = pdfView.document else { return }
             for record in annotationRecords {
+                #if os(iOS)
+                // Keep iPad ink in the page overlay. Switching from the live
+                // overlay to PDFKit's cached annotation renderer causes a
+                // visible flash and a softer-looking stroke after Pencil-up.
+                if record.kind == .ink { continue }
+                #endif
                 guard let page = document.page(at: record.pageIndex) else { continue }
                 let annotation = PDFAnnotationRenderer.makeAnnotation(
                     from: record,
@@ -1835,6 +2094,9 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
                 page.addAnnotation(annotation)
                 renderedAnnotations[record.id] = annotation
             }
+            #if os(iOS)
+            refreshPencilInkOverlays(in: pdfView)
+            #endif
         }
 
         private func activateAnnotationDocument() {
@@ -1860,6 +2122,11 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
             renderedAnnotations = [:]
             undoAnnotationHistory = []
             redoAnnotationHistory = []
+            #if os(iOS)
+            if let pdfView {
+                refreshPencilInkOverlays(in: pdfView)
+            }
+            #endif
             publishAnnotationCapabilities()
         }
 
@@ -2093,6 +2360,15 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
             scheduleSelectionUpdate()
         }
 
+        #if os(iOS)
+        @objc
+        private func handlePencilScaleChanged(_ notification: Notification) {
+            for overlay in pencilPageOverlays.allObjects {
+                overlay.refreshVectorInk()
+            }
+        }
+        #endif
+
         func publishSelection(_ selection: NoteSelectionContext?) {
             guard lastPublishedSelection != selection else { return }
             lastPublishedSelection = selection
@@ -2132,6 +2408,100 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
         }
     }
 }
+
+#if os(iOS)
+extension PDFReaderView.Coordinator: @preconcurrency PDFPageOverlayViewProvider {
+    func pdfView(_ pdfView: PDFView, overlayViewFor page: PDFPage) -> UIView? {
+        let overlay = PDFPencilPageOverlayView()
+        overlay.bind(to: page, in: pdfView)
+        pencilPageOverlays.add(overlay)
+        configurePencilOverlay(
+            overlay,
+            with: appliedPencilInteractionConfiguration ?? PencilInteractionConfiguration(
+                mode: .browse,
+                colorPreset: .yellow,
+                lineWidth: PDFAnnotationLineWidthPreset.defaultValue
+            )
+        )
+        refreshPencilInk(on: overlay, for: page, in: pdfView)
+
+        overlay.onInteractionBegan = { [weak self] in
+            self?.activateAnnotationDocument()
+        }
+        overlay.onInkStrokeCompleted = { [weak self, weak overlay, weak pdfView, weak page] samples in
+            guard let self, let overlay, let pdfView, let page else { return }
+            let baseDisplayWidth = CGFloat(
+                self.annotationSession?.lineWidth ?? PDFAnnotationLineWidthPreset.defaultValue
+            )
+            let pageSamples = samples.map { sample in
+                return PDFAnnotationInkSample(
+                    point: self.pencilPagePoint(
+                        for: sample.point,
+                        overlay: overlay,
+                        pdfView: pdfView,
+                        page: page
+                    ),
+                    width: self.pencilPageWidth(
+                        at: sample.point,
+                        displayWidth: PDFPencilInkDynamics.displayWidth(
+                            baseWidth: baseDisplayWidth,
+                            pressure: sample.pressure
+                        ),
+                        overlay: overlay,
+                        pdfView: pdfView,
+                        page: page
+                    )
+                )
+            }
+            let basePageWidth = samples.first.map {
+                self.pencilPageWidth(
+                    at: $0.point,
+                    displayWidth: baseDisplayWidth,
+                    overlay: overlay,
+                    pdfView: pdfView,
+                    page: page
+                )
+            } ?? baseDisplayWidth
+            self.addPressureInkAnnotation(
+                on: page,
+                samples: pageSamples,
+                basePageWidth: basePageWidth
+            )
+        }
+        overlay.onEraseRequested = { [weak self, weak overlay, weak pdfView, weak page] point in
+            guard let self, let overlay, let pdfView, let page else { return }
+            let viewPoint = overlay.convert(point, to: pdfView)
+            self.eraseAnnotation(on: page, at: pdfView.convert(viewPoint, to: page))
+        }
+        overlay.onTextNoteRequested = { [weak self, weak overlay, weak pdfView, weak page] point in
+            guard let self, let overlay, let pdfView, let page else { return }
+            let viewPoint = overlay.convert(point, to: pdfView)
+            self.requestTextNote(on: page, at: pdfView.convert(viewPoint, to: page))
+        }
+        return overlay
+    }
+
+    func pdfView(
+        _ pdfView: PDFView,
+        willDisplayOverlayView overlayView: UIView,
+        for page: PDFPage
+    ) {
+        guard let overlay = overlayView as? PDFPencilPageOverlayView else { return }
+        overlay.bind(to: page, in: pdfView)
+        refreshPencilInk(on: overlay, for: page, in: pdfView)
+    }
+
+    func pdfView(
+        _ pdfView: PDFView,
+        willEndDisplayingOverlayView overlayView: UIView,
+        for page: PDFPage
+    ) {
+        guard let overlay = overlayView as? PDFPencilPageOverlayView else { return }
+        overlay.cancelInteraction()
+        pencilPageOverlays.remove(overlay)
+    }
+}
+#endif
 
 #if os(macOS)
 @MainActor

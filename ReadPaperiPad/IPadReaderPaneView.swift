@@ -66,6 +66,8 @@ struct IPadReaderPaneView: View {
     @State private var copyToastDismissTask: Task<Void, Never>?
     @State private var showPDFTranslationScopeDialog = false
     @State private var pdfTranslationTotalPages = 0
+    @State private var pdfAnnotationNoteText = ""
+    @StateObject private var pdfAnnotationSession = PDFAnnotationSession()
 
     private var pdfAttachment: PaperAttachment? {
         attachments.first { $0.kind == .pdf }
@@ -195,6 +197,7 @@ struct IPadReaderPaneView: View {
         .onAppear { restoreReadingState() }
         .onChange(of: paper?.id) { _, _ in
             noteSelectionContext = nil
+            pdfAnnotationSession.resetForDocumentChange()
             restoreReadingState()
         }
         .onChange(of: attachments.map {
@@ -215,6 +218,11 @@ struct IPadReaderPaneView: View {
         }
         .onChange(of: htmlScrollRatio) { _, _ in persistReadingState() }
         .onChange(of: noteNavigationRequest?.id) { _, _ in revealNoteAnchor() }
+        .onChange(of: pdfAnnotationSession.pendingTextNote?.id) { _, newValue in
+            if newValue != nil {
+                pdfAnnotationNoteText = ""
+            }
+        }
         .onDisappear {
             persistReadingState()
             translationTask?.cancel()
@@ -242,6 +250,51 @@ struct IPadReaderPaneView: View {
                 pdfTranslationBatchSize
             ))
         }
+        .alert(
+            String(localized: "Add PDF Note", bundle: bundle),
+            isPresented: pdfTextNoteAlertPresented
+        ) {
+            TextField(String(localized: "Note", bundle: bundle), text: $pdfAnnotationNoteText)
+            Button(String(localized: "Cancel", bundle: bundle), role: .cancel) {
+                pdfAnnotationSession.cancelPendingTextNote()
+            }
+            Button(String(localized: "Save", bundle: bundle)) {
+                pdfAnnotationSession.commitPendingTextNote(contents: pdfAnnotationNoteText)
+            }
+            .disabled(pdfAnnotationNoteText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        } message: {
+            Text("Enter the note to attach at this PDF position.", bundle: bundle)
+        }
+        .alert(
+            String(localized: "PDF Annotation Error", bundle: bundle),
+            isPresented: pdfAnnotationErrorAlertPresented
+        ) {
+            Button(String(localized: "OK", bundle: bundle), role: .cancel) {}
+        } message: {
+            Text(pdfAnnotationSession.errorMessage ?? "")
+        }
+    }
+
+    private var pdfTextNoteAlertPresented: Binding<Bool> {
+        Binding(
+            get: { pdfAnnotationSession.pendingTextNote != nil },
+            set: { isPresented in
+                if isPresented == false {
+                    pdfAnnotationSession.cancelPendingTextNote()
+                }
+            }
+        )
+    }
+
+    private var pdfAnnotationErrorAlertPresented: Binding<Bool> {
+        Binding(
+            get: { pdfAnnotationSession.errorMessage != nil },
+            set: { isPresented in
+                if isPresented == false {
+                    pdfAnnotationSession.errorMessage = nil
+                }
+            }
+        )
     }
 
     @ToolbarContentBuilder
@@ -275,6 +328,10 @@ struct IPadReaderPaneView: View {
         }
 
         ToolbarItemGroup(placement: .primaryAction) {
+            if readerMode != .html {
+                pdfAnnotationMenu
+            }
+
             translationMenu
 
             Button(action: copySourceLink) {
@@ -361,6 +418,169 @@ struct IPadReaderPaneView: View {
         .labelsHidden()
     }
 
+    private var pdfAnnotationMenu: some View {
+        Menu {
+            pdfAnnotationMenuItems
+        } label: {
+            Label(
+                String(localized: "PDF Annotations", bundle: bundle),
+                systemImage: pdfAnnotationToolSystemImage
+            )
+            .labelStyle(.iconOnly)
+            .foregroundStyle(
+                pdfAnnotationSession.interactionMode == .browse
+                    ? Color.primary
+                    : Color.accentColor
+            )
+        }
+        .menuIndicator(.hidden)
+        .accessibilityLabel(Text("PDF Annotations", bundle: bundle))
+    }
+
+    @ViewBuilder
+    private var pdfAnnotationMenuItems: some View {
+        annotationModeButton(
+            .browse,
+            title: String(localized: "Browse", bundle: bundle),
+            systemImage: "cursorarrow"
+        )
+        annotationModeButton(
+            .ink,
+            title: String(localized: "Freehand Draw", bundle: bundle),
+            systemImage: "pencil.tip"
+        )
+        annotationModeButton(
+            .textNote,
+            title: String(localized: "Place PDF Note", bundle: bundle),
+            systemImage: "note.text.badge.plus"
+        )
+        annotationModeButton(
+            .erase,
+            title: String(localized: "Erase Annotation", bundle: bundle),
+            systemImage: "eraser"
+        )
+
+        Divider()
+
+        Button {
+            pdfAnnotationSession.applyTextMarkup(.highlight)
+        } label: {
+            Label(String(localized: "Highlight Selection", bundle: bundle), systemImage: "highlighter")
+        }
+        .disabled(pdfAnnotationSession.hasTextSelection == false)
+
+        Button {
+            pdfAnnotationSession.applyTextMarkup(.underline)
+        } label: {
+            Label(String(localized: "Underline Selection", bundle: bundle), systemImage: "underline")
+        }
+        .disabled(pdfAnnotationSession.hasTextSelection == false)
+
+        Button {
+            pdfAnnotationSession.applyTextMarkup(.strikeOut)
+        } label: {
+            Label(String(localized: "Strike Through Selection", bundle: bundle), systemImage: "strikethrough")
+        }
+        .disabled(pdfAnnotationSession.hasTextSelection == false)
+
+        Divider()
+
+        Menu(String(localized: "Annotation Color", bundle: bundle)) {
+            annotationColorButton(.yellow, title: String(localized: "Yellow", bundle: bundle))
+            annotationColorButton(.green, title: String(localized: "Green", bundle: bundle))
+            annotationColorButton(.blue, title: String(localized: "Blue", bundle: bundle))
+            annotationColorButton(.red, title: String(localized: "Red", bundle: bundle))
+            annotationColorButton(.purple, title: String(localized: "Purple", bundle: bundle))
+        }
+
+        Menu(String(localized: "Drawing Width", bundle: bundle)) {
+            annotationLineWidthButton(
+                PDFAnnotationLineWidthPreset.thin,
+                title: String(localized: "Thin", bundle: bundle)
+            )
+            annotationLineWidthButton(
+                PDFAnnotationLineWidthPreset.medium,
+                title: String(localized: "Medium", bundle: bundle)
+            )
+            annotationLineWidthButton(
+                PDFAnnotationLineWidthPreset.thick,
+                title: String(localized: "Thick", bundle: bundle)
+            )
+        }
+
+        Divider()
+
+        Button {
+            pdfAnnotationSession.undo()
+        } label: {
+            Label(String(localized: "Undo PDF Annotation", bundle: bundle), systemImage: "arrow.uturn.backward")
+        }
+        .disabled(pdfAnnotationSession.canUndo == false)
+
+        Button {
+            pdfAnnotationSession.redo()
+        } label: {
+            Label(String(localized: "Redo PDF Annotation", bundle: bundle), systemImage: "arrow.uturn.forward")
+        }
+        .disabled(pdfAnnotationSession.canRedo == false)
+    }
+
+    private var pdfAnnotationToolSystemImage: String {
+        switch pdfAnnotationSession.interactionMode {
+        case .browse: return "pencil.tip.crop.circle"
+        case .ink: return "pencil.tip"
+        case .textNote: return "note.text.badge.plus"
+        case .erase: return "eraser.fill"
+        case .debugRegion: return "ladybug"
+        }
+    }
+
+    private func annotationModeButton(
+        _ mode: PDFInteractionMode,
+        title: String,
+        systemImage: String
+    ) -> some View {
+        Button {
+            pdfAnnotationSession.selectInteractionMode(mode)
+        } label: {
+            Label(
+                title,
+                systemImage: pdfAnnotationSession.interactionMode == mode
+                    ? "checkmark.circle.fill"
+                    : systemImage
+            )
+        }
+    }
+
+    private func annotationColorButton(
+        _ preset: PDFAnnotationColorPreset,
+        title: String
+    ) -> some View {
+        Button {
+            pdfAnnotationSession.colorPreset = preset
+        } label: {
+            Label(
+                title,
+                systemImage: pdfAnnotationSession.colorPreset == preset
+                    ? "checkmark.circle.fill"
+                    : "circle.fill"
+            )
+        }
+    }
+
+    private func annotationLineWidthButton(_ width: Double, title: String) -> some View {
+        Button {
+            pdfAnnotationSession.lineWidth = width
+        } label: {
+            Label(
+                title,
+                systemImage: pdfAnnotationSession.lineWidth == width
+                    ? "checkmark.circle.fill"
+                    : "line.diagonal"
+            )
+        }
+    }
+
     private var translationMenu: some View {
         Menu {
             Button {
@@ -422,10 +642,12 @@ struct IPadReaderPaneView: View {
                 PDFDisplaySurface(appearance: appearance) {
                     PDFReaderView(
                         fileURL: pdfAttachment.fileURL,
+                        paperID: paper?.id,
                         attachmentID: pdfAttachment.id,
                         displayAppearance: appearance,
                         pageIndex: $pdfPageIndex,
                         reloadToken: pdfReloadToken,
+                        annotationSession: pdfAnnotationSession,
                         onNoteSelectionChanged: { noteSelectionContext = $0 }
                     )
                 }
@@ -440,12 +662,14 @@ struct IPadReaderPaneView: View {
                     PDFDisplaySurface(appearance: appearance) {
                         PDFReaderView(
                             fileURL: pdfAttachment.fileURL,
+                            paperID: paper?.id,
                             attachmentID: pdfAttachment.id,
                             displayAppearance: appearance,
                             usesAutomaticScaling: true,
                             automaticScalingRestoreToken: automaticScalingRestoreToken,
                             pageIndex: $pdfPageIndex,
                             reloadToken: pdfReloadToken,
+                            annotationSession: pdfAnnotationSession,
                             onNoteSelectionChanged: { noteSelectionContext = $0 }
                         )
                     }
@@ -453,12 +677,14 @@ struct IPadReaderPaneView: View {
                     PDFDisplaySurface(appearance: appearance) {
                         PDFReaderView(
                             fileURL: translatedPDFAttachment.fileURL,
+                            paperID: paper?.id,
                             attachmentID: translatedPDFAttachment.id,
                             displayAppearance: appearance,
                             usesAutomaticScaling: true,
                             automaticScalingRestoreToken: automaticScalingRestoreToken,
                             pageIndex: translatedPageBinding,
                             reloadToken: pdfReloadToken,
+                            annotationSession: pdfAnnotationSession,
                             onNoteSelectionChanged: { noteSelectionContext = $0 }
                         )
                     }
@@ -478,10 +704,12 @@ struct IPadReaderPaneView: View {
                 PDFDisplaySurface(appearance: appearance) {
                     PDFReaderView(
                         fileURL: translatedPDFAttachment.fileURL,
+                        paperID: paper?.id,
                         attachmentID: translatedPDFAttachment.id,
                         displayAppearance: appearance,
                         pageIndex: translatedPageBinding,
                         reloadToken: pdfReloadToken,
+                        annotationSession: pdfAnnotationSession,
                         onNoteSelectionChanged: { noteSelectionContext = $0 }
                     )
                 }
