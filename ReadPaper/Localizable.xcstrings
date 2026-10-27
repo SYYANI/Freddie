@@ -845,6 +845,23 @@
         }
       }
     },
+    "Automatically generated" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Automatically generated"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自动生成"
+          }
+        }
+      }
+    },
     "Available placeholders: {{dateISO}}, {{title}}, {{slug}}, {{authors}}, {{identifier}}, {{sourceTitle}}, {{sourceURL}}, {{metadataBlock}}, {{abstractBlock}}, {{notesBlock}}, {{generatedBy}}." : {
       "localizations" : {
         "zh-Hans" : {
@@ -1636,6 +1653,23 @@
         }
       }
     },
+    "Close Contents" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Close Contents"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "关闭目录"
+          }
+        }
+      }
+    },
     "Code" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1718,6 +1752,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "已连接 %1$@，耗时 %2$d ms。"
+          }
+        }
+      }
+    },
+    "Contents" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Contents"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "目录"
           }
         }
       }
@@ -2460,6 +2511,40 @@
         }
       }
     },
+    "Embedded PDF" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Embedded PDF"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PDF 自带"
+          }
+        }
+      }
+    },
+    "Embedded PDF (repaired)" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Embedded PDF (repaired)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PDF 自带（已修正）"
+          }
+        }
+      }
+    },
     "Enable arXiv LaTeX translation" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2881,6 +2966,23 @@
         }
       }
     },
+    "Filter headings" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Filter headings"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "筛选标题"
+          }
+        }
+      }
+    },
     "Filter Library" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -3078,6 +3180,40 @@
         }
       }
     },
+    "From LaTeX source" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "From LaTeX source"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "从 LaTeX 源码"
+          }
+        }
+      }
+    },
+    "From scan reconstruction" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "From scan reconstruction"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "从扫描重建"
+          }
+        }
+      }
+    },
     "Full Paper" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -3241,6 +3377,23 @@
         }
       }
     },
+    "Heading candidates will be sent to your PDF model. API charges may apply." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Heading candidates will be sent to your PDF model. API charges may apply."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "候选标题将发送给 PDF 模型，可能产生 API 费用。"
+          }
+        }
+      }
+    },
     "Hearing" : {
       "comment" : "Bibliographic item type (Zotero item type name)",
       "localizations" : {
@@ -3393,6 +3546,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "HTML 字号：%1$d"
+          }
+        }
+      }
+    },
+    "HTML headings" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "HTML headings"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "HTML 标题"
           }
         }
       }
@@ -4769,6 +4939,23 @@
         }
       }
     },
+    "No matching headings." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No matching headings."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "没有匹配的标题。"
+          }
+        }
+      }
+    },
     "No Matching Papers" : {
       "localizations" : {
         "zh-Hans" : {
@@ -4857,6 +5044,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "没有可用的 PDF"
+          }
+        }
+      }
+    },
+    "No reliable headings were found." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No reliable headings were found."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未找到可靠的目录标题。"
           }
         }
       }
@@ -4984,6 +5188,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "未选择"
+          }
+        }
+      }
+    },
+    "Not translated" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not translated"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未翻译"
           }
         }
       }
@@ -5177,12 +5398,63 @@
         }
       }
     },
+    "Organize with AI…" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Organize with AI…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "用 AI 整理…"
+          }
+        }
+      }
+    },
+    "Organized with AI" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Organized with AI"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "AI 整理"
+          }
+        }
+      }
+    },
     "Original" : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "原文"
+          }
+        }
+      }
+    },
+    "Outline source" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Outline source"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "目录来源"
           }
         }
       }
@@ -5541,6 +5813,23 @@
     },
     "PDFKit · SwiftSoup" : {
 
+    },
+    "Pin Contents" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pin Contents"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "钉住目录"
+          }
+        }
+      }
     },
     "Place PDF Note" : {
       "extractionState" : "stale",
@@ -6055,6 +6344,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "阅读助手模型"
+          }
+        }
+      }
+    },
+    "Reading headings…" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reading headings…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在读取标题…"
           }
         }
       }
@@ -6809,6 +7115,23 @@
         }
       }
     },
+    "Send heading candidates" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Send heading candidates"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "发送候选标题"
+          }
+        }
+      }
+    },
     "Send Question" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -7149,6 +7472,7 @@
       }
     },
     "System appearance changes automatically select Default for Light Mode and Paper Tone for Dark Mode. You can switch either option manually afterward." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -7404,6 +7728,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "已配置的导出目录不可用。"
+          }
+        }
+      }
+    },
+    "The document changed. Please try again." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The document changed. Please try again."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "文档已更改，请重试。"
           }
         }
       }

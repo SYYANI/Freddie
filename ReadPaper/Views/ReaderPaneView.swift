@@ -127,6 +127,9 @@ struct ReaderPaneView: View {
     var onAddPaper: () -> Void = {}
 
     /// Read `pdfPageIndex`, for the same reason as `storedReaderMode`.
+    @State private var outlineModel = DocumentOutlineModel()
+    @State private var outlineNavigationRequest: NoteNavigationRequest?
+
     @State private var storedPDFPageIndex = 0
     /// The paper whose reading state `storedReaderMode` and `storedPDFPageIndex` hold.
     @State private var readingStatePaperID: UUID?
@@ -363,6 +366,7 @@ struct ReaderPaneView: View {
                 readerMode == .html ? .html : .pdf
             },
             set: { newValue in
+                outlineNavigationRequest = nil
                 switch newValue {
                 case .html:
                     if readerMode != .html {
@@ -382,6 +386,7 @@ struct ReaderPaneView: View {
                 normalizedPDFReaderMode(readerMode == .html ? lastPDFReaderMode : readerMode)
             },
             set: { newValue in
+                outlineNavigationRequest = nil
                 let normalizedMode = normalizedPDFReaderMode(newValue)
                 lastPDFReaderMode = normalizedMode
                 readerMode = normalizedMode
@@ -463,10 +468,14 @@ struct ReaderPaneView: View {
                 restorePDFTranslationDiagnostics()
                 refreshSelectionAssistantHistoryAnchors()
             }
+            .task(id: outlineLoadIdentity) {
+                await outlineModel.load(outlineRequest, paperID: paper?.id, fetch: outlineModel.isPresented)
+            }
             .task(id: originalPDFPageCountRequest) {
                 await refreshOriginalPDFPageCount(for: originalPDFPageCountRequest)
             }
             .onChange(of: paper?.id) { _, _ in
+                outlineNavigationRequest = nil
                 dismissTranslationActivityOutcome()
                 finishHTMLRegionEditing()
                 htmlHiddenRegionCount = 0
@@ -499,6 +508,7 @@ struct ReaderPaneView: View {
                 scheduleReadingStatePersistence()
             }
             .onChange(of: noteNavigationRequest?.id) { _, _ in
+                outlineNavigationRequest = nil
                 revealNoteAnchorIfNeeded()
             }
             .onChange(of: htmlScrollRatio) { _, _ in
@@ -514,6 +524,7 @@ struct ReaderPaneView: View {
                 HTMLRegionWriter.shared.finishBeforeTermination()
             }
             .onDisappear {
+                outlineModel.cancel()
                 finishHTMLRegionEditing()
                 flushReadingStatePersistence()
                 deactivatePDFTranslationDebugMode()
@@ -786,13 +797,72 @@ struct ReaderPaneView: View {
                 Divider()
             }
 
-            content
+            GeometryReader { geometry in
+                let width = min(300.0, max(240.0, geometry.size.width - 100))
+                content
+                    .padding(.leading, outlineModel.isPresented && outlineModel.isPinned ? width + 16 : 0)
+                    .overlay(alignment: .topLeading) {
+                        if outlineModel.isPresented, paper != nil {
+                            DocumentOutlinePanel(
+                                model: outlineModel,
+                                isHTML: readerMode == .html,
+                                translatedLastPage: translatedPDFAttachment?.translatedLastPage,
+                                isTranslatedOnly: readerMode == .translatedPDF,
+                                onNavigate: navigateOutline,
+                                onOrganize: organizeOutline
+                            )
+                            .frame(width: width)
+                            .readPaperGlassEffect(in: RoundedRectangle(cornerRadius: 14))
+                            .overlay(RoundedRectangle(cornerRadius: 14).stroke(.primary.opacity(0.08)))
+                            .shadow(color: .black.opacity(0.12), radius: 12, y: 4)
+                            .padding(8)
+                            .transition(.move(edge: .leading).combined(with: .opacity))
+                        }
+                    }
+            }
 
             if isNearTranslationEdge && !isWorking {
                 translateMoreBanner
                 Divider()
             }
         }
+    }
+
+    private var outlineRequest: DocumentOutlineRequest? {
+        guard let paper, let pdfAttachment else { return nil }
+        return .init(paperID: paper.id, pdfURL: pdfAttachment.fileURL, arxivID: paper.arxivID, revision: pdfReloadToken)
+    }
+
+    private var outlineLoadIdentity: String {
+        "\(paper?.id.uuidString ?? "")|\(pdfAttachment?.filePath ?? "")|\(paper?.arxivID ?? "")|\(pdfReloadToken)|\(isWorking)|\(outlineModel.isPresented)"
+    }
+
+    private func navigateOutline(_ entry: DocumentOutlineEntry) {
+        if readerMode == .html {
+            outlineNavigationRequest = .init(attachmentID: htmlAttachment?.id, htmlSelector: entry.anchor)
+            return
+        }
+        guard let page = entry.pageIndex else { return }
+        let destination = DocumentOutlineNavigation.pdfDestination(
+            entry: entry, translatedOnly: readerMode == .translatedPDF,
+            translatedLastPage: translatedPDFAttachment?.translatedLastPage
+        )
+        if destination.opensOriginal { readerMode = .pdf }
+        let attachment = readerMode == .translatedPDF ? translatedPDFAttachment : originalPDFAttachment
+        pdfPageIndex = page
+        // No quote: matching the title text could land on a mention in the body. Without a
+        // known heading position the page opens at its top.
+        outlineNavigationRequest = .init(
+            attachmentID: attachment?.id, pageIndex: page,
+            outlineFraction: entry.fraction ?? 0
+        )
+    }
+
+    private func organizeOutline() {
+        do {
+            guard let settings else { throw LLMRouteError.pdfModelNotSelected }
+            outlineModel.organize(route: try LLMRouteResolver().resolvePDFRoute(settings: settings, modelContext: modelContext))
+        } catch { outlineModel.errorMessage = error.localizedDescription }
     }
 
     private var paneHeader: some View {
@@ -842,6 +912,12 @@ struct ReaderPaneView: View {
             }
 
             ToolbarItemGroup(placement: .primaryAction) {
+                Button {
+                    withAnimation(.easeOut(duration: 0.18)) { outlineModel.isPresented.toggle() }
+                } label: {
+                    Label(String(localized: "Contents", bundle: bundle), systemImage: "list.bullet.indent")
+                }
+                .help(String(localized: "Contents", bundle: bundle))
                 findButton
                 noteSelectionButton
                 translationMenu
@@ -1939,7 +2015,7 @@ struct ReaderPaneView: View {
                                 initialScrollRatio: restoredHTMLScrollRatio,
                                 scrollRatio: $htmlScrollRatio,
                                 segmentUpdate: htmlSegmentUpdate,
-                                noteNavigationRequest: noteNavigationRequest,
+                                noteNavigationRequest: outlineNavigationRequest ?? noteNavigationRequest,
                                 selectionAssistantHistoryAnchors: selectionAssistantHistoryAnchors,
                                 citationMarks: citationMarks,
                                 onCitationMarksActivated: handleCitationMarksActivated,
@@ -1958,7 +2034,8 @@ struct ReaderPaneView: View {
                                 isRegionEditing: isEditingHTMLRegions,
                                 regionEditLabels: htmlRegionEditLabels,
                                 regionEditCommand: htmlRegionEditCommand,
-                                onRegionEditEvent: handleHTMLRegionEditEvent
+                                onRegionEditEvent: handleHTMLRegionEditEvent,
+                                onOutlineChanged: { entries, current in outlineModel.updateHTML(entries, currentID: current) }
                             )
                         } else {
                             centeredUnavailableView(
@@ -1990,7 +2067,7 @@ struct ReaderPaneView: View {
                                 displayAppearance: pdfDisplayAppearance,
                                 pageIndex: pdfPageIndexBinding,
                                 reloadToken: pdfReloadToken,
-                                noteNavigationRequest: noteNavigationRequest,
+                                noteNavigationRequest: outlineNavigationRequest ?? noteNavigationRequest,
                                 selectionAssistantHistoryAnchors: selectionAssistantHistoryAnchors,
                                 citationMarks: citationMarks,
                                 onCitationMarksActivated: handleCitationMarksActivated,
@@ -2003,7 +2080,8 @@ struct ReaderPaneView: View {
                                 onArxivLinkActivated: onArxivLinkActivated,
                                 findRequest: findRequest,
                                 findTarget: bilingualFindTarget,
-                                onFindStatusChanged: handleFindStatusChange
+                                onFindStatusChanged: handleFindStatusChange,
+                                onOutlineLocationChanged: { page, fraction in outlineModel.updatePDFLocation(page: page, fraction: fraction) }
                             )
                         } else {
                             centeredUnavailableView(
@@ -3309,7 +3387,7 @@ struct ReaderPaneView: View {
                             displayAppearance: pdfDisplayAppearance,
                             pageIndex: pdfPageIndexBinding,
                             reloadToken: reloadToken,
-                            noteNavigationRequest: noteNavigationRequest,
+                            noteNavigationRequest: outlineNavigationRequest ?? noteNavigationRequest,
                             selectionAssistantHistoryAnchors: selectionAssistantHistoryAnchors,
                             annotationSession: pdfAnnotationSession,
                             handToolEnabled: pdfHandToolEnabled,
@@ -3322,7 +3400,8 @@ struct ReaderPaneView: View {
                             sidenoteAnchors: anchors,
                             sidenoteLayout: pdfSidenoteLayout,
                             citationMarks: citationMarks,
-                            onCitationMarksActivated: handleCitationMarksActivated
+                            onCitationMarksActivated: handleCitationMarksActivated,
+                            onOutlineLocationChanged: { page, fraction in outlineModel.updatePDFLocation(page: page, fraction: fraction) }
                         )
 
                         if anchors.isEmpty == false {

@@ -228,6 +228,7 @@ struct DualPDFReaderView: View {
     var findRequest: DocumentFindRequest? = nil
     var findTarget: DualPDFSelectionSource = .original
     var onFindStatusChanged: ((DocumentFindStatus) -> Void)? = nil
+    var onOutlineLocationChanged: ((Int, Double) -> Void)? = nil
     @State private var translatedPageCount: Int = 0
     @State private var originalPageCount: Int = 0
     @State private var selectionOwnership = DualPDFSelectionOwnership()
@@ -397,6 +398,7 @@ struct DualPDFReaderView: View {
                 onFindStatusChanged: onFindStatusChanged,
                 citationMarks: citationMarks,
                 onCitationMarksActivated: onCitationMarksActivated,
+                onOutlineLocationChanged: side == .original ? onOutlineLocationChanged : nil,
                 scrollSync: scrollSync,
                 scrollSyncSide: side
             )

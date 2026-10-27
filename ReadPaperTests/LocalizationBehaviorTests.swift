@@ -27,6 +27,9 @@ final class LocalizationBehaviorTests: XCTestCase {
             "请选择其他位置，以保留原始 PDF。"
         )
 
+        XCTAssertEqual(DocumentOutlineSource.repairedPDF.title, "PDF 自带（已修正）")
+        XCTAssertEqual(OutlineError.noCandidates.localizedDescription, "未找到可靠的目录标题。")
+
         LanguageManager.shared.setLanguage("en")
         XCTAssertEqual(PaperImportError.missingPDF.localizedDescription, "No PDF attachment is available for this paper.")
         XCTAssertEqual(
