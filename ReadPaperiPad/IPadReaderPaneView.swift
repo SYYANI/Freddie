@@ -68,6 +68,8 @@ struct IPadReaderPaneView: View {
     @State private var showPDFTranslationScopeDialog = false
     @State private var pdfTranslationTotalPages = 0
     @State private var pdfAnnotationNoteText = ""
+    /// The toolbar shows the annotation palette in place of the reading-mode control.
+    @State private var isAnnotating = false
     @StateObject private var pdfAnnotationSession = PDFAnnotationSession()
 
     private var pdfAttachment: PaperAttachment? {
@@ -148,9 +150,10 @@ struct IPadReaderPaneView: View {
         !isTranslating && translationStatus != nil
     }
 
-    var body: some View {
+    private var readerContent: some View {
         VStack(spacing: 0) {
-            if paper != nil {
+            if let paper {
+                titleRow(paper)
                 if shouldShowReaderHeader {
                     readerHeader
                     Divider()
@@ -195,6 +198,10 @@ struct IPadReaderPaneView: View {
         .toolbar {
             readerToolbar
         }
+    }
+
+    var body: some View {
+        readerContent
         .onAppear {
             restoreReadingState()
             revealNoteAnchor()
@@ -202,6 +209,7 @@ struct IPadReaderPaneView: View {
         .onChange(of: paper?.id) { _, _ in
             noteSelectionContext = nil
             pdfAnnotationSession.resetForDocumentChange()
+            isAnnotating = false
             restoreReadingState()
             revealNoteAnchor()
         }
@@ -214,6 +222,8 @@ struct IPadReaderPaneView: View {
         .onChange(of: readerMode) { _, newValue in
             if newValue != .html {
                 lastPDFReaderMode = normalizedPDFReaderMode(newValue)
+            } else if isAnnotating {
+                endAnnotating()
             }
             persistReadingState()
         }
@@ -223,6 +233,12 @@ struct IPadReaderPaneView: View {
         }
         .onChange(of: htmlScrollRatio) { _, _ in persistReadingState() }
         .onChange(of: noteNavigationRequest?.id) { _, _ in revealNoteAnchor() }
+        .onChange(of: pdfAnnotationSession.interactionMode) { _, newValue in
+            // A Pencil double tap or squeeze can pick a tool without the toolbar.
+            if newValue != .browse, readerMode != .html {
+                isAnnotating = true
+            }
+        }
         .onChange(of: pdfAnnotationSession.pendingTextNote?.id) { _, newValue in
             if newValue != nil {
                 pdfAnnotationNoteText = ""
@@ -310,45 +326,58 @@ struct IPadReaderPaneView: View {
             }
         }
 
-        if #available(iOS 26.0, *) {
-            ToolbarItem(placement: .primaryAction) {
-                primaryReaderModePicker
-            }
-            .sharedBackgroundVisibility(.hidden)
-
-            ToolbarItem(placement: .primaryAction) {
-                if readerMode == .html {
-                    htmlDisplayPicker
-                } else {
-                    pdfDisplayPicker
+        if paper != nil {
+            if #available(iOS 26.0, *) {
+                ToolbarItem(placement: .principal) {
+                    centerToolbarControl
+                }
+                .sharedBackgroundVisibility(.hidden)
+            } else {
+                ToolbarItem(placement: .principal) {
+                    centerToolbarControl
                 }
             }
-            .sharedBackgroundVisibility(.hidden)
-        } else {
-            ToolbarItem(placement: .primaryAction) {
-                primaryReaderModePicker
-            }
 
-            ToolbarItem(placement: .primaryAction) {
-                if readerMode == .html {
-                    htmlDisplayPicker
+            ToolbarItemGroup(placement: .primaryAction) {
+                if isAnnotating {
+                    Button {
+                        pdfAnnotationSession.undo()
+                    } label: {
+                        Label(String(localized: "Undo PDF Annotation", bundle: bundle), systemImage: "arrow.uturn.backward")
+                    }
+                    .disabled(pdfAnnotationSession.canUndo == false)
+
+                    Button {
+                        pdfAnnotationSession.redo()
+                    } label: {
+                        Label(String(localized: "Redo PDF Annotation", bundle: bundle), systemImage: "arrow.uturn.forward")
+                    }
+                    .disabled(pdfAnnotationSession.canRedo == false)
+
+                    Button(action: endAnnotating) {
+                        Label(String(localized: "Done", bundle: bundle), systemImage: "checkmark")
+                    }
+                    .tint(.accentColor)
                 } else {
-                    pdfDisplayPicker
+                    if readerMode != .html {
+                        Button(action: beginAnnotating) {
+                            Label(String(localized: "PDF Annotations", bundle: bundle), systemImage: "pencil.tip.crop.circle")
+                        }
+                    }
+
+                    translationMenu
+
+                    Menu {
+                        Button(action: copySourceLink) {
+                            Label(String(localized: "Copy Link", bundle: bundle), systemImage: "link")
+                        }
+                        .disabled(sourceURL == nil)
+                    } label: {
+                        Label(String(localized: "More", bundle: bundle), systemImage: "ellipsis")
+                    }
+                    .menuIndicator(.hidden)
                 }
             }
-        }
-
-        ToolbarItemGroup(placement: .primaryAction) {
-            if readerMode != .html {
-                pdfAnnotationMenu
-            }
-
-            translationMenu
-
-            Button(action: copySourceLink) {
-                Label(String(localized: "Copy Link", bundle: bundle), systemImage: "link")
-            }
-            .disabled(sourceURL == nil)
         }
 
         if #available(iOS 26.0, *) {
@@ -360,6 +389,64 @@ struct IPadReaderPaneView: View {
                 Label(String(localized: "Inspector", bundle: bundle), systemImage: "sidebar.right")
             }
         }
+    }
+
+    @ViewBuilder
+    private var centerToolbarControl: some View {
+        if isAnnotating {
+            IPadPDFAnnotationPalette(session: pdfAnnotationSession)
+        } else if readerMode == .html {
+            readerModeControl(display: $displayMode, options: [
+                .init(value: .original, title: String(localized: "Original", bundle: bundle)),
+                .init(value: .bilingual, title: String(localized: "Bilingual", bundle: bundle)),
+                .init(value: .translated, title: String(localized: "Translated", bundle: bundle)),
+            ])
+        } else {
+            readerModeControl(display: pdfReaderModeSelection, options: [
+                .init(value: .pdf, title: String(localized: "Original", bundle: bundle)),
+                .init(value: .bilingualPDF, title: String(localized: "Bilingual", bundle: bundle)),
+                .init(value: .translatedPDF, title: String(localized: "Translated", bundle: bundle)),
+            ])
+        }
+    }
+
+    private func readerModeControl<Display: Hashable>(
+        display: Binding<Display>,
+        options: [ReadPaperSegmentedPicker<Display>.Option]
+    ) -> some View {
+        IPadReaderModeControl(
+            formatLabel: String(localized: "Reader", bundle: bundle),
+            format: primaryReaderMode,
+            formats: [
+                .init(value: .html, title: String(localized: "HTML", bundle: bundle)),
+                .init(value: .pdf, title: String(localized: "PDF", bundle: bundle)),
+            ],
+            displayLabel: String(localized: "Display", bundle: bundle),
+            display: display,
+            displays: options
+        )
+    }
+
+    private func beginAnnotating() {
+        if pdfAnnotationSession.interactionMode == .browse {
+            pdfAnnotationSession.selectInteractionMode(.ink)
+        }
+        withAnimation(.snappy(duration: 0.25)) { isAnnotating = true }
+    }
+
+    private func endAnnotating() {
+        pdfAnnotationSession.selectInteractionMode(.browse)
+        withAnimation(.snappy(duration: 0.25)) { isAnnotating = false }
+    }
+
+    private func titleRow(_ paper: Paper) -> some View {
+        Text(paper.title)
+            .font(.system(size: 17))
+            .lineLimit(1)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 20)
+            .padding(.top, 2)
+            .padding(.bottom, 8)
     }
 
     private var readerHeader: some View {
@@ -387,209 +474,6 @@ struct IPadReaderPaneView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
-    }
-
-    private var primaryReaderModePicker: some View {
-        Picker(String(localized: "Reader", bundle: bundle), selection: primaryReaderMode) {
-            Text("HTML", bundle: bundle)
-                .tag(PrimaryReaderMode.html)
-            Text("PDF", bundle: bundle)
-                .tag(PrimaryReaderMode.pdf)
-        }
-        .pickerStyle(.segmented)
-        .frame(width: 140)
-        .labelsHidden()
-    }
-
-    private var htmlDisplayPicker: some View {
-        Picker(String(localized: "Display", bundle: bundle), selection: $displayMode) {
-            Text("Original", bundle: bundle)
-                .tag(TranslationDisplayMode.original)
-            Text("Bilingual", bundle: bundle)
-                .tag(TranslationDisplayMode.bilingual)
-            Text("Translated", bundle: bundle)
-                .tag(TranslationDisplayMode.translated)
-        }
-        .pickerStyle(.segmented)
-        .frame(width: 270)
-        .labelsHidden()
-    }
-
-    private var pdfDisplayPicker: some View {
-        Picker(String(localized: "PDF Display", bundle: bundle), selection: pdfReaderModeSelection) {
-            Text("Original", bundle: bundle)
-                .tag(ReaderMode.pdf)
-            Text("Bilingual", bundle: bundle)
-                .tag(ReaderMode.bilingualPDF)
-            Text("Translated", bundle: bundle)
-                .tag(ReaderMode.translatedPDF)
-        }
-        .pickerStyle(.segmented)
-        .frame(width: 270)
-        .labelsHidden()
-    }
-
-    private var pdfAnnotationMenu: some View {
-        Menu {
-            pdfAnnotationMenuItems
-        } label: {
-            Label(
-                String(localized: "PDF Annotations", bundle: bundle),
-                systemImage: pdfAnnotationToolSystemImage
-            )
-            .labelStyle(.iconOnly)
-            .foregroundStyle(
-                pdfAnnotationSession.interactionMode == .browse
-                    ? Color.primary
-                    : Color.accentColor
-            )
-        }
-        .menuIndicator(.hidden)
-        .accessibilityLabel(Text("PDF Annotations", bundle: bundle))
-    }
-
-    @ViewBuilder
-    private var pdfAnnotationMenuItems: some View {
-        annotationModeButton(
-            .browse,
-            title: String(localized: "Browse", bundle: bundle),
-            systemImage: "cursorarrow"
-        )
-        annotationModeButton(
-            .ink,
-            title: String(localized: "Freehand Draw", bundle: bundle),
-            systemImage: "pencil.tip"
-        )
-        annotationModeButton(
-            .textNote,
-            title: String(localized: "Place PDF Note", bundle: bundle),
-            systemImage: "note.text.badge.plus"
-        )
-        annotationModeButton(
-            .erase,
-            title: String(localized: "Erase Annotation", bundle: bundle),
-            systemImage: "eraser"
-        )
-
-        Divider()
-
-        Button {
-            pdfAnnotationSession.applyTextMarkup(.highlight)
-        } label: {
-            Label(String(localized: "Highlight Selection", bundle: bundle), systemImage: "highlighter")
-        }
-        .disabled(pdfAnnotationSession.hasTextSelection == false)
-
-        Button {
-            pdfAnnotationSession.applyTextMarkup(.underline)
-        } label: {
-            Label(String(localized: "Underline Selection", bundle: bundle), systemImage: "underline")
-        }
-        .disabled(pdfAnnotationSession.hasTextSelection == false)
-
-        Button {
-            pdfAnnotationSession.applyTextMarkup(.strikeOut)
-        } label: {
-            Label(String(localized: "Strike Through Selection", bundle: bundle), systemImage: "strikethrough")
-        }
-        .disabled(pdfAnnotationSession.hasTextSelection == false)
-
-        Divider()
-
-        Menu(String(localized: "Annotation Color", bundle: bundle)) {
-            annotationColorButton(.yellow, title: String(localized: "Yellow", bundle: bundle))
-            annotationColorButton(.green, title: String(localized: "Green", bundle: bundle))
-            annotationColorButton(.blue, title: String(localized: "Blue", bundle: bundle))
-            annotationColorButton(.red, title: String(localized: "Red", bundle: bundle))
-            annotationColorButton(.purple, title: String(localized: "Purple", bundle: bundle))
-        }
-
-        Menu(String(localized: "Drawing Width", bundle: bundle)) {
-            annotationLineWidthButton(
-                PDFAnnotationLineWidthPreset.thin,
-                title: String(localized: "Thin", bundle: bundle)
-            )
-            annotationLineWidthButton(
-                PDFAnnotationLineWidthPreset.medium,
-                title: String(localized: "Medium", bundle: bundle)
-            )
-            annotationLineWidthButton(
-                PDFAnnotationLineWidthPreset.thick,
-                title: String(localized: "Thick", bundle: bundle)
-            )
-        }
-
-        Divider()
-
-        Button {
-            pdfAnnotationSession.undo()
-        } label: {
-            Label(String(localized: "Undo PDF Annotation", bundle: bundle), systemImage: "arrow.uturn.backward")
-        }
-        .disabled(pdfAnnotationSession.canUndo == false)
-
-        Button {
-            pdfAnnotationSession.redo()
-        } label: {
-            Label(String(localized: "Redo PDF Annotation", bundle: bundle), systemImage: "arrow.uturn.forward")
-        }
-        .disabled(pdfAnnotationSession.canRedo == false)
-    }
-
-    private var pdfAnnotationToolSystemImage: String {
-        switch pdfAnnotationSession.interactionMode {
-        case .browse: return "pencil.tip.crop.circle"
-        case .ink: return "pencil.tip"
-        case .textNote: return "note.text.badge.plus"
-        case .erase: return "eraser.fill"
-        case .debugRegion: return "ladybug"
-        }
-    }
-
-    private func annotationModeButton(
-        _ mode: PDFInteractionMode,
-        title: String,
-        systemImage: String
-    ) -> some View {
-        Button {
-            pdfAnnotationSession.selectInteractionMode(mode)
-        } label: {
-            Label(
-                title,
-                systemImage: pdfAnnotationSession.interactionMode == mode
-                    ? "checkmark.circle.fill"
-                    : systemImage
-            )
-        }
-    }
-
-    private func annotationColorButton(
-        _ preset: PDFAnnotationColorPreset,
-        title: String
-    ) -> some View {
-        Button {
-            pdfAnnotationSession.colorPreset = preset
-        } label: {
-            Label(
-                title,
-                systemImage: pdfAnnotationSession.colorPreset == preset
-                    ? "checkmark.circle.fill"
-                    : "circle.fill"
-            )
-        }
-    }
-
-    private func annotationLineWidthButton(_ width: Double, title: String) -> some View {
-        Button {
-            pdfAnnotationSession.lineWidth = width
-        } label: {
-            Label(
-                title,
-                systemImage: pdfAnnotationSession.lineWidth == width
-                    ? "checkmark.circle.fill"
-                    : "line.diagonal"
-            )
-        }
     }
 
     private var translationMenu: some View {

@@ -294,6 +294,7 @@
 		EDC74DFF3F1F12EFED1038D1 /* PaperDigestExportPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A5CE9583FC6BBC3FBA18158 /* PaperDigestExportPolicy.swift */; };
 		EFBF8D2475031747FA7B19ED /* AcademicTranslationPrompt.swift in Sources */ = {isa = PBXBuildFile; fileRef = 090DCC03975706C4B2B4CB9F /* AcademicTranslationPrompt.swift */; };
 		F0FF47D64E0F642E5FFFC99C /* TranslationOutputValidatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03623B2956A4F03C4093D42A /* TranslationOutputValidatorTests.swift */; };
+		F12D794F99C2B57CA00C59AD /* IPadReaderToolbarControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE9B3765E2E49EB6C22B1469 /* IPadReaderToolbarControls.swift */; };
 		F27D9396893317BF40E0BD22 /* ReaderPaneView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15605D44878CFDBFBF883E0F /* ReaderPaneView.swift */; };
 		F4CE02B3F1ECB663A0E53E44 /* Temml.woff2 in Resources */ = {isa = PBXBuildFile; fileRef = 98530D516D1FAB4EBDE7C5FE /* Temml.woff2 */; };
 		F4EDC902333FAE0E8269D73D /* ArxivImportProgress.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3B8354421E9159F37194453 /* ArxivImportProgress.swift */; };
@@ -482,6 +483,7 @@
 		AA8A3E83E7A59DCEED930598 /* PaperTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaperTheme.swift; sourceTree = "<group>"; };
 		AC93E8D9F0A4BAC6F2F383D3 /* SettingsGeneralStatusTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsGeneralStatusTests.swift; sourceTree = "<group>"; };
 		AD54166C3B9FFEEFD9687592 /* PaperLinkRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaperLinkRouter.swift; sourceTree = "<group>"; };
+		AE9B3765E2E49EB6C22B1469 /* IPadReaderToolbarControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IPadReaderToolbarControls.swift; sourceTree = "<group>"; };
 		AE9DBB2B3733C0D38087F936 /* PDFSidenoteLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PDFSidenoteLayout.swift; sourceTree = "<group>"; };
 		B491069AECD1D203747B40C5 /* PaperLinkRouterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaperLinkRouterTests.swift; sourceTree = "<group>"; };
 		B4C1F7CE766D2FF7D0EAD146 /* PaperDeletionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaperDeletionService.swift; sourceTree = "<group>"; };
@@ -653,6 +655,7 @@
 				1C32235A0E60B094C1893597 /* IPadContentView.swift */,
 				8A986762144D055B297DEC92 /* IPadInspectorPaneView.swift */,
 				89F61E0B252FB69D686188E3 /* IPadReaderPaneView.swift */,
+				AE9B3765E2E49EB6C22B1469 /* IPadReaderToolbarControls.swift */,
 				99D1D151FD3AF4BFBBE5C55C /* IPadSettingsView.swift */,
 				9AD577EC79DA6598B550F776 /* IPadSidebarContainer.swift */,
 				BF36A9FA070CD1EAD562A1C5 /* IPadWritingPaneView.swift */,
@@ -1271,6 +1274,7 @@
 				54876BAC692A5979616C95F4 /* IPadContentView.swift in Sources */,
 				E7542A5BAFC829257053498A /* IPadInspectorPaneView.swift in Sources */,
 				206925D31DE7C2D57DFCA9B6 /* IPadReaderPaneView.swift in Sources */,
+				F12D794F99C2B57CA00C59AD /* IPadReaderToolbarControls.swift in Sources */,
 				C845278B8BCCC2402E86732D /* IPadSettingsView.swift in Sources */,
 				37809930846AEB8996A1C18C /* IPadSidebarContainer.swift in Sources */,
 				A360A9CA2CCEA1CCAED1EB61 /* IPadWritingPaneView.swift in Sources */,
@@ -1561,7 +1565,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 160;
+				CURRENT_PROJECT_VERSION = 161;
 				DEVELOPMENT_LANGUAGE = en;
 				ENABLE_TESTABILITY = NO;
 				INFOPLIST_FILE = ReadPaper/Info.plist;
@@ -1572,7 +1576,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 0.9.14;
+				MARKETING_VERSION = 0.9.15;
 				PRODUCT_BUNDLE_IDENTIFIER = com.yiyan.ReadPaper;
 				PRODUCT_MODULE_NAME = ReadPaper;
 				PRODUCT_NAME = Freddie;
@@ -1728,7 +1732,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 160;
+				CURRENT_PROJECT_VERSION = 161;
 				DEVELOPMENT_LANGUAGE = en;
 				DEVELOPMENT_TEAM = 3VM5RUH8V5;
 				ENABLE_TESTABILITY = YES;
@@ -1738,7 +1742,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.9.14;
+				MARKETING_VERSION = 0.9.15;
 				PRODUCT_BUNDLE_IDENTIFIER = com.yiyan.ReadPaper.iPad;
 				PRODUCT_MODULE_NAME = ReadPaperiPad;
 				PRODUCT_NAME = Freddie;
@@ -1781,7 +1785,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 160;
+				CURRENT_PROJECT_VERSION = 161;
 				DEVELOPMENT_LANGUAGE = en;
 				DEVELOPMENT_TEAM = 3VM5RUH8V5;
 				ENABLE_TESTABILITY = YES;
@@ -1791,7 +1795,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.9.14;
+				MARKETING_VERSION = 0.9.15;
 				PRODUCT_BUNDLE_IDENTIFIER = com.yiyan.ReadPaper.iPad;
 				PRODUCT_MODULE_NAME = ReadPaperiPad;
 				PRODUCT_NAME = Freddie;
@@ -1812,7 +1816,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 160;
+				CURRENT_PROJECT_VERSION = 161;
 				DEVELOPMENT_LANGUAGE = en;
 				ENABLE_TESTABILITY = YES;
 				INFOPLIST_FILE = ReadPaper/Info.plist;
@@ -1823,7 +1827,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 0.9.14;
+				MARKETING_VERSION = 0.9.15;
 				PRODUCT_BUNDLE_IDENTIFIER = com.yiyan.ReadPaper;
 				PRODUCT_MODULE_NAME = ReadPaper;
 				PRODUCT_NAME = Freddie;

@@ -25,16 +25,31 @@ struct ReadPaperSegmentedPicker<Value: Hashable>: View {
     @Binding var selection: Value
     let options: [Option]
     var placement: Placement = .content
+    /// False when the picker sits inside a capsule drawn by its container.
+    var drawsCapsule = true
 
     #if os(macOS)
     @Environment(\.controlActiveState) private var controlActiveState
     #endif
 
+    @ViewBuilder
     var body: some View {
-        segments
-            .padding(placement == .toolbar ? 3.5 : 3)
-            .readPaperGlassEffect(in: Capsule())
+        if drawsCapsule {
+            segments
+                .padding(placement == .toolbar ? Self.toolbarInset : 3)
+                .readPaperGlassEffect(in: Capsule())
+        } else {
+            segments
+        }
     }
+
+    #if os(iOS)
+    /// iPadOS 26 toolbar glass is 44 pt tall: the inset plus `toolbarSegmentHeight`.
+    static var toolbarInset: CGFloat { 4 }
+    static var toolbarSegmentHeight: CGFloat { 36 }
+    #else
+    static var toolbarInset: CGFloat { 3.5 }
+    #endif
 
     private var segments: some View {
         HStack(spacing: 2) {
@@ -60,11 +75,8 @@ struct ReadPaperSegmentedPicker<Value: Hashable>: View {
         return Button {
             selection = option.value
         } label: {
-            Text(option.title)
-                .font(.system(size: 13))
+            segmentTitle(option.title)
                 .foregroundStyle(foregroundStyle(isAccented: isAccented))
-                .padding(.horizontal, 14)
-                .padding(.vertical, placement == .toolbar ? 6 : 5)
                 .background {
                     if isSelected {
                         Capsule().fill(isAccented ? Color.accentColor : Color.primary.opacity(0.1))
@@ -74,6 +86,29 @@ struct ReadPaperSegmentedPicker<Value: Hashable>: View {
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    @ViewBuilder
+    private func segmentTitle(_ title: String) -> some View {
+        #if os(iOS)
+        if placement == .toolbar {
+            Text(title)
+                .font(.system(size: 15))
+                .padding(.horizontal, 16)
+                .frame(height: Self.toolbarSegmentHeight)
+        } else {
+            standardTitle(title)
+        }
+        #else
+        standardTitle(title)
+        #endif
+    }
+
+    private func standardTitle(_ title: String) -> some View {
+        Text(title)
+            .font(.system(size: 13))
+            .padding(.horizontal, 14)
+            .padding(.vertical, placement == .toolbar ? 6 : 5)
     }
 
     private func foregroundStyle(isAccented: Bool) -> AnyShapeStyle {

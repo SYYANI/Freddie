@@ -6733,6 +6733,17 @@
         }
       }
     },
+    "Select Text" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选择文字"
+          }
+        }
+      }
+    },
     "Select text in PDF or HTML to attach a note." : {
       "extractionState" : "stale",
       "localizations" : {
