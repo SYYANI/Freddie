@@ -119,8 +119,8 @@ targets:
         ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS: NO
         SWIFT_VERSION: 6.0
         CODE_SIGN_STYLE: Automatic
-        CURRENT_PROJECT_VERSION: 146
-        MARKETING_VERSION: 0.9.0
+        CURRENT_PROJECT_VERSION: 161
+        MARKETING_VERSION: 0.9.15
       configs:
         Debug:
           ENABLE_TESTABILITY: YES
@@ -140,6 +140,16 @@ targets:
           - Services/BabelDocToolManager.swift
           - Services/ProcessRunner.swift
           - Views
+      - path: ReadPaper/Views/ReadPaperGlassEffect.swift
+      - path: ReadPaper/Views/TranslationActivityCapsule.swift
+      - path: ReadPaper/Views/LibrarySidebarView.swift
+      - path: ReadPaper/Views/InspectorPaneView.swift
+      - path: ReadPaper/Views/InspectorSupport.swift
+      - path: ReadPaper/Views/PaperTheme.swift
+      - path: ReadPaper/Views/LiquidGlassStyle.swift
+      - path: ReadPaper/Views/ReadPaperSegmentedPicker.swift
+      - path: ReadPaper/Views/NoteMarkdownPreview.swift
+      - path: ReadPaper/Views/ReadPaperMarkdownView.swift
       - path: ReadPaperiPad
     dependencies:
       - package: SwiftSoup
@@ -149,6 +159,7 @@ targets:
         product: BabelDocKit
       - package: LaTeXTransSwift
         product: LaTeXTransKit
+      - package: SwiftStreamingMarkdown
     postBuildScripts:
       - name: Embed BabelDOC In-Process Runtime
         script: |
@@ -175,8 +186,8 @@ targets:
         ENABLE_TESTABILITY: YES
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: 3VM5RUH8V5
-        CURRENT_PROJECT_VERSION: 146
-        MARKETING_VERSION: 0.9.0
+        CURRENT_PROJECT_VERSION: 161
+        MARKETING_VERSION: 0.9.15
         SUPPORTED_PLATFORMS: iphoneos iphonesimulator
         SUPPORTS_MACCATALYST: NO
         SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD: NO
@@ -207,6 +218,11 @@ targets:
     deploymentTarget: "17.0"
     sources:
       - path: ReadPaperiPadTests
+      - path: ReadPaperTests/SecureAPIKeyVaultTests.swift
+      - path: ReadPaperTests/PaperFolderServiceTests.swift
+      - path: ReadPaperTests/PaperLibraryFilterTests.swift
+      - path: ReadPaperTests/PaperItemTypeTests.swift
+      - path: ReadPaperTests/PaperSelectionStoreTests.swift
     dependencies:
       - target: ReadPaperiPad
     settings:

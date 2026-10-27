@@ -1,4 +1,6 @@
+#if os(macOS)
 import AppKit
+#endif
 import SwiftUI
 
 enum ReadPaperSurfaceRole {
@@ -9,6 +11,7 @@ enum ReadPaperSurfaceRole {
 
 /// Observes the system appearance independently from any light appearance
 /// applied to an individual Freddie window.
+#if os(macOS)
 @MainActor
 final class SystemAppearanceMonitor: ObservableObject {
     @Published private(set) var readerAppearance: PDFDisplayAppearance
@@ -32,6 +35,8 @@ final class SystemAppearanceMonitor: ObservableObject {
     }
 }
 
+#endif
+
 enum ReadPaperTheme {
     static func surfaceColor(_ role: ReadPaperSurfaceRole, scheme _: ColorScheme) -> Color {
         switch role {
@@ -45,7 +50,11 @@ enum ReadPaperTheme {
     }
 
     static var accentColor: Color {
+        #if os(macOS)
         Color(nsColor: .controlAccentColor)
+        #else
+        Color.accentColor
+        #endif
     }
 
     static func cardColor(scheme _: ColorScheme) -> Color {
@@ -212,6 +221,7 @@ private struct ReadPaperGrain: View {
 
 /// Gives the reader column its own native panel material, parallel to the
 /// system-owned sidebar and inspector materials on macOS 26.
+#if os(macOS)
 struct ReadPaperReaderMaterialSurface: NSViewRepresentable {
     func makeNSView(context: Context) -> NSView {
         if #available(macOS 26.0, *) {
@@ -476,3 +486,5 @@ final class PaperWindowChromeView: NSView {
         self.originalWindowChrome = nil
     }
 }
+
+#endif

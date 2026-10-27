@@ -1,7 +1,10 @@
+#if os(macOS)
 import AppKit
+#endif
 import Foundation
 import SwiftUI
 
+#if os(macOS)
 enum NoteMarkdownRenderer {
     fileprivate enum Block {
         case heading(level: Int, text: String)
@@ -364,6 +367,8 @@ enum NoteMarkdownRenderer {
         }
     }
 }
+
+#endif
 
 struct NoteMarkdownPreviewView: View {
     let markdown: String

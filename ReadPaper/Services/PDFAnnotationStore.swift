@@ -29,6 +29,24 @@ struct PDFAnnotationPoint: Codable, Equatable, Sendable {
     }
 }
 
+/// A variable-width ink sample in PDF page coordinates. `width` is stored in
+/// page points so the stroke keeps the same physical weight at every zoom.
+struct PDFAnnotationInkSample: Codable, Equatable, Sendable {
+    var x: Double
+    var y: Double
+    var width: Double
+
+    init(point: CGPoint, width: CGFloat) {
+        x = point.x
+        y = point.y
+        self.width = Double(max(0.1, width))
+    }
+
+    var cgPoint: CGPoint {
+        CGPoint(x: x, y: y)
+    }
+}
+
 struct PDFAnnotationRect: Codable, Equatable, Sendable {
     var x: Double
     var y: Double
@@ -97,7 +115,11 @@ enum PDFAnnotationColorPreset: String, Codable, CaseIterable, Identifiable, Send
     var id: String { rawValue }
 
     func color(for kind: PDFAnnotationKind) -> PDFAnnotationColorValue {
-        let alpha = kind == .highlight ? 0.36 : 0.92
+        let alpha: Double = switch kind {
+        case .highlight: 0.36
+        case .ink: 1.0
+        default: 0.92
+        }
         switch self {
         case .yellow:
             return PDFAnnotationColorValue(red: 1.0, green: 0.78, blue: 0.08, alpha: alpha)
@@ -124,6 +146,9 @@ struct PDFAnnotationRecord: Codable, Equatable, Identifiable, Sendable {
     var quote: String?
     var quadrilateralPoints: [PDFAnnotationPoint]
     var inkPaths: [[PDFAnnotationPoint]]
+    /// Version-2 pressure-aware paths. Version-1 records decode this as nil and
+    /// continue to use `inkPaths` with the record's fixed `lineWidth`.
+    var inkSamplePaths: [[PDFAnnotationInkSample]]?
     var createdAt: Date
     var modifiedAt: Date
 
@@ -138,6 +163,7 @@ struct PDFAnnotationRecord: Codable, Equatable, Identifiable, Sendable {
         quote: String? = nil,
         quadrilateralPoints: [CGPoint] = [],
         inkPaths: [[CGPoint]] = [],
+        inkSamplePaths: [[PDFAnnotationInkSample]]? = nil,
         createdAt: Date = Date(),
         modifiedAt: Date = Date()
     ) {
@@ -151,13 +177,19 @@ struct PDFAnnotationRecord: Codable, Equatable, Identifiable, Sendable {
         self.quote = quote
         self.quadrilateralPoints = quadrilateralPoints.map(PDFAnnotationPoint.init)
         self.inkPaths = inkPaths.map { $0.map(PDFAnnotationPoint.init) }
+        self.inkSamplePaths = inkSamplePaths
         self.createdAt = createdAt
         self.modifiedAt = modifiedAt
     }
 }
 
 struct PDFAnnotationSidecar: Codable, Equatable, Sendable {
-    static let currentVersion = 1
+    static let currentVersion = 2
+    /// Files without pressure ink keep version 1. Version 1 readers ignore the
+    /// absent `inkSamplePaths`, but reject any newer version; an older Freddie
+    /// would then show no annotations and overwrite them on its next save.
+    static let pressureInkVersion = 2
+    static let baseVersion = 1
 
     var version: Int
     var paperID: UUID
@@ -171,7 +203,9 @@ struct PDFAnnotationSidecar: Codable, Equatable, Sendable {
         annotations: [PDFAnnotationRecord],
         modifiedAt: Date = Date()
     ) {
-        version = Self.currentVersion
+        version = annotations.contains { $0.inkSamplePaths?.isEmpty == false }
+            ? Self.pressureInkVersion
+            : Self.baseVersion
         self.paperID = paperID
         self.attachmentID = attachmentID
         self.annotations = annotations

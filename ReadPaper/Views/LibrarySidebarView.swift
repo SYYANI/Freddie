@@ -36,7 +36,7 @@ struct LibrarySidebarView: View {
                 .ignoresSafeArea()
 
             VStack(spacing: 0) {
-                if papers.isEmpty {
+                if papers.isEmpty && !grouping.hasFolders {
                     emptyLibraryState
                 } else {
                     if filter.isActive, visiblePaperCount == 0 {
@@ -63,7 +63,9 @@ struct LibrarySidebarView: View {
                         .modifier(SidebarListBackgroundModifier())
                     }
 
+                    #if os(macOS)
                     filterBar
+                    #endif
                 }
             }
         }
@@ -146,8 +148,33 @@ struct LibrarySidebarView: View {
         } message: {
             Text(folderErrorMessage ?? "")
         }
+        #if os(macOS)
         .navigationTitle(String(localized: "Freddie", bundle: bundle))
+        #else
+        .navigationTitle("")
+        #endif
         .toolbar {
+            #if os(iOS)
+            ToolbarItemGroup(placement: .bottomBar) {
+                filterMenu
+
+                // The bottom bar has room the macOS sidebar toolbar lacks, so the
+                // folder action gets its own button instead of hiding in the filter menu.
+                Button {
+                    promptForNewFolder(containing: nil)
+                } label: {
+                    Label(String(localized: "New Folder…", bundle: bundle), systemImage: "folder.badge.plus")
+                        .labelStyle(.iconOnly)
+                }
+
+                Spacer()
+
+                if filter.isActive {
+                    filterResultCount
+                }
+            }
+            #endif
+
             ToolbarItem {
                 Button {
                     isAddingPaper = true
@@ -156,7 +183,7 @@ struct LibrarySidebarView: View {
                 }
             }
 
-            if #available(macOS 26.0, *) {
+            if #available(macOS 26.0, iOS 26.0, *) {
                 ToolbarSpacer(.fixed)
             }
 
@@ -189,6 +216,12 @@ struct LibrarySidebarView: View {
             )
             .equatable()
             .tag(paper.id)
+            #if os(iOS)
+            .listRowBackground(SidebarRowSelectionBackground(isSelected: paper.id == selectedPaperID))
+            .listRowSeparator(.hidden)
+            // The list turns selected text white only while it has focus, so pin the text color.
+            .foregroundStyle(Color(uiColor: .label))
+            #endif
         }
         .onDelete { offsets in
             guard let offset = offsets.first, rowPapers.indices.contains(offset) else { return }
@@ -261,62 +294,79 @@ struct LibrarySidebarView: View {
         grouping.orderedPaperIDs.count
     }
 
-    private var filterBar: some View {
-        HStack(spacing: 6) {
-            Menu {
-                ForEach(PaperLibraryFilter.Criterion.allCases) { criterion in
-                    Toggle(isOn: criterionBinding(criterion)) {
-                        Label(criterion.title(bundle: bundle), systemImage: criterion.systemImage)
-                    }
+    private var filterMenu: some View {
+        Menu {
+            ForEach(PaperLibraryFilter.Criterion.allCases) { criterion in
+                Toggle(isOn: criterionBinding(criterion)) {
+                    Label(criterion.title(bundle: bundle), systemImage: criterion.systemImage)
                 }
-
-                Section(String(localized: "Item Type", bundle: bundle)) {
-                    ForEach(filterableItemTypes, id: \.itemType) { entry in
-                        Toggle(isOn: itemTypeFilterBinding(entry.itemType)) {
-                            Text(AppLocalization.format(
-                                "%1$@ (%2$lld)",
-                                bundle: bundle,
-                                entry.title,
-                                entry.count
-                            ))
-                        }
-                    }
-                }
-
-                if filter.isActive {
-                    Divider()
-
-                    Button(String(localized: "Clear Filter", bundle: bundle)) {
-                        filter = PaperLibraryFilter()
-                    }
-                }
-            } label: {
-                Image(systemName: filter.isActive
-                    ? "line.3.horizontal.decrease.circle.fill"
-                    : "line.3.horizontal.decrease.circle")
-                    .font(.system(size: 15))
-                    .foregroundStyle(filter.isActive ? Color.accentColor : Color.secondary)
-                    .frame(width: 24, height: 22)
-                    .contentShape(Rectangle())
             }
-            .menuStyle(.button)
-            .buttonStyle(.plain)
-            .menuIndicator(.hidden)
-            .fixedSize()
-            .help(String(localized: "Filter Library", bundle: bundle))
-            .accessibilityLabel(String(localized: "Filter Library", bundle: bundle))
+
+            Section(String(localized: "Item Type", bundle: bundle)) {
+                ForEach(filterableItemTypes, id: \.itemType) { entry in
+                    Toggle(isOn: itemTypeFilterBinding(entry.itemType)) {
+                        Text(AppLocalization.format(
+                            "%1$@ (%2$lld)",
+                            bundle: bundle,
+                            entry.title,
+                            entry.count
+                        ))
+                    }
+                }
+            }
 
             if filter.isActive {
-                Text(AppLocalization.format(
-                    "%1$lld of %2$lld",
-                    bundle: bundle,
-                    visiblePaperCount,
-                    papers.count
-                ))
-                .font(.caption)
-                .monospacedDigit()
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
+                Divider()
+
+                Button(String(localized: "Clear Filter", bundle: bundle)) {
+                    filter = PaperLibraryFilter()
+                }
+            }
+        } label: {
+            #if os(iOS)
+            Label(String(localized: "Filter Library", bundle: bundle), systemImage: "line.3.horizontal.decrease")
+                .labelStyle(.iconOnly)
+            #else
+            Image(systemName: filter.isActive
+                ? "line.3.horizontal.decrease.circle.fill"
+                : "line.3.horizontal.decrease.circle")
+                .font(.system(size: 15))
+                .foregroundStyle(filter.isActive ? Color.accentColor : Color.secondary)
+                .frame(width: 24, height: 22)
+                .contentShape(Rectangle())
+            #endif
+        }
+        #if os(macOS)
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        #else
+        .tint(filter.isActive ? Color.accentColor : Color.primary)
+        #endif
+        .help(String(localized: "Filter Library", bundle: bundle))
+        .accessibilityLabel(String(localized: "Filter Library", bundle: bundle))
+    }
+
+    private var filterResultCount: some View {
+        Text(AppLocalization.format(
+            "%1$lld of %2$lld",
+            bundle: bundle,
+            visiblePaperCount,
+            papers.count
+        ))
+        .font(.caption)
+        .monospacedDigit()
+        .foregroundStyle(.secondary)
+        .lineLimit(1)
+    }
+
+    #if os(macOS)
+    private var filterBar: some View {
+        HStack(spacing: 6) {
+            filterMenu
+            if filter.isActive {
+                filterResultCount
 
                 Spacer(minLength: 0)
 
@@ -341,6 +391,7 @@ struct LibrarySidebarView: View {
             Divider()
         }
     }
+    #endif
 
     private var noMatchingPapersState: some View {
         VStack(spacing: 12) {
@@ -637,6 +688,22 @@ private extension View {
             .padding(.vertical, -2)
     }
 }
+
+#if os(iOS)
+/// The iPad library is laid out by `IPadSidebarContainer` rather than `NavigationSplitView`,
+/// and outside a split view's sidebar column `.sidebar` lists fall back to inset-grouped
+/// cards. Rows draw the sidebar's clear background and a light rounded selection instead.
+private struct SidebarRowSelectionBackground: View {
+    let isSelected: Bool
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 12, style: .continuous)
+            .fill(isSelected ? Color.accentColor.opacity(0.16) : .clear)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 2)
+    }
+}
+#endif
 
 private struct SidebarListBackgroundModifier: ViewModifier {
     func body(content: Content) -> some View {

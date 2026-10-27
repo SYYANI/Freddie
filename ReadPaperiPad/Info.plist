@@ -23,7 +23,7 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSHumanReadableCopyright</key>
-	<string>Personal build.</string>
+	<string>Copyright © 2026 SYYANI.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Freddie uses Face ID to protect access to saved API keys.</string>
 	<key>UIApplicationSceneManifest</key>
@@ -40,5 +40,18 @@
 	</array>
 	<key>UILaunchScreen</key>
 	<dict/>
+	<key>UTExportedTypeDeclarations</key>
+	<array>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>Freddie Library Paper</string>
+			<key>UTTypeIdentifier</key>
+			<string>com.yiyan.ReadPaper.paper-reference</string>
+		</dict>
+	</array>
 </dict>
 </plist>

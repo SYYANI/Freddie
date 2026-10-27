@@ -33,12 +33,14 @@ struct KeychainStore {
     }
 
     func save(_ value: String, account: String) throws {
+#if os(macOS)
         defer {
             APIKeyAuthenticationSession.shared.invalidate(
                 service: service,
                 account: account
             )
         }
+#endif
         let data = Data(value.utf8)
 
         switch accessPolicy {
@@ -50,6 +52,11 @@ struct KeychainStore {
                 try secureVault.save(value, account: account)
                 deleteLegacyItemsBestEffort(account: account)
             }
+#if os(iOS)
+            // The caller supplied this secret; keep it usable without another
+            // Face ID prompt and preserve the shared session for other providers.
+            try saveInstallGrant(value, account: account)
+#endif
         case .unprotected:
             try saveUnprotected(data, account: account, usesDataProtectionKeychain: false)
         }
@@ -70,6 +77,11 @@ struct KeychainStore {
             }
             if let value {
                 try? saveInstallGrant(value, account: account)
+#if os(iOS)
+                // Reuse the successful authentication for every existing provider
+                // now, so a later app launch does not unlock them one at a time.
+                cacheInstallGrantsForProtectedAccounts(authenticationAccount: account)
+#endif
             }
             return value
         case .unprotected:
@@ -139,12 +151,14 @@ struct KeychainStore {
     }
 
     func delete(account: String) throws {
+#if os(macOS)
         defer {
             APIKeyAuthenticationSession.shared.invalidate(
                 service: service,
                 account: account
             )
         }
+#endif
         switch accessPolicy {
         case .userPresence:
             rotateInstallGrant(account: account)
@@ -212,16 +226,68 @@ struct KeychainStore {
     }
 
     func saveInstallGrant(_ value: String, account: String) throws {
+#if os(iOS)
+        // The protected item never leaves this device; its unprotected grant
+        // copy must not travel through backups or device migration either.
+        let accessibility: CFString? = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+#else
+        let accessibility: CFString? = nil
+#endif
         try saveUnprotected(
             Data(value.utf8),
             account: installGrantAccount(account),
-            usesDataProtectionKeychain: false
+            usesDataProtectionKeychain: false,
+            accessibility: accessibility
         )
     }
 
     func installGrantExists(account: String) throws -> Bool {
         try legacyItemExists(account: installGrantAccount(account))
     }
+
+#if os(iOS)
+    private func cacheInstallGrantsForProtectedAccounts(authenticationAccount: String) {
+        let context = makeAuthenticationContext(account: authenticationAccount)
+        let previouslyDisallowedInteraction = context.interactionNotAllowed
+        context.interactionNotAllowed = true
+        defer { context.interactionNotAllowed = previouslyDisallowedInteraction }
+
+        var query = itemQuery(account: authenticationAccount, usesDataProtectionKeychain: true)
+        query.removeValue(forKey: kSecAttrAccount as String)
+        query[kSecReturnAttributes as String] = true
+        query[kSecMatchLimit as String] = kSecMatchLimitAll
+        query[kSecUseAuthenticationContext as String] = context
+
+        var result: CFTypeRef?
+        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
+              let items = result as? [[String: Any]] else {
+            return
+        }
+
+        for item in items {
+            guard item[kSecAttrComment as String] as? String == Self.userPresenceProtectionMarker,
+                  let account = item[kSecAttrAccount as String] as? String,
+                  account != authenticationAccount else {
+                continue
+            }
+            // Never show a second prompt while preparing the other providers.
+            // An inaccessible item must not stop the requested provider's work.
+            do {
+                guard try !installGrantExists(account: account),
+                      let value = try loadData(
+                        account: account,
+                        usesDataProtectionKeychain: true,
+                        authenticationContext: context
+                      ) else {
+                    continue
+                }
+                try saveInstallGrant(value, account: account)
+            } catch {
+                continue
+            }
+        }
+    }
+#endif
 
     private func rotateInstallGrant(account: String) {
         let previousGrantAccount = installGrantAccount(account)
@@ -365,13 +431,18 @@ struct KeychainStore {
     private func saveUnprotected(
         _ data: Data,
         account: String,
-        usesDataProtectionKeychain: Bool
+        usesDataProtectionKeychain: Bool,
+        accessibility: CFString? = nil
     ) throws {
         let query = itemQuery(
             account: account,
             usesDataProtectionKeychain: usesDataProtectionKeychain
         )
-        let attributes = [kSecValueData as String: data]
+        var attributes: [String: Any] = [kSecValueData as String: data]
+        if let accessibility {
+            // Also tightens items written before the accessibility was set.
+            attributes[kSecAttrAccessible as String] = accessibility
+        }
 
         let status = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
         if status == errSecSuccess {
@@ -383,6 +454,9 @@ struct KeychainStore {
 
         var addQuery = query
         addQuery[kSecValueData as String] = data
+        if let accessibility {
+            addQuery[kSecAttrAccessible as String] = accessibility
+        }
         let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
         guard addStatus == errSecSuccess else {
             throw KeychainError(status: addStatus)

@@ -1,46 +1,10 @@
 import SwiftUI
 
-/// Keeps custom control chrome native on macOS 26 while preserving the app's
-/// existing material treatment on older releases.
-struct ReadPaperGlassEffectContainer<Content: View>: View {
-    private let spacing: CGFloat
-    private let content: Content
-
-    init(spacing: CGFloat = 8, @ViewBuilder content: () -> Content) {
-        self.spacing = spacing
-        self.content = content()
-    }
-
-    @ViewBuilder
-    var body: some View {
-        if #available(macOS 26.0, *) {
-            GlassEffectContainer(spacing: spacing) {
-                content
-            }
-        } else {
-            content
-        }
-    }
-}
-
 extension View {
-    /// Use for compact UI that floats over document content, such as PDF labels.
-    @ViewBuilder
-    func readPaperGlassEffect<S: Shape>(
-        in shape: S,
-        interactive: Bool = false
-    ) -> some View {
-        if #available(macOS 26.0, *) {
-            glassEffect(.regular.interactive(interactive), in: shape)
-        } else {
-            background(.regularMaterial, in: shape)
-        }
-    }
-
     /// Uses the native Liquid Glass button artwork when it is available.
     @ViewBuilder
     func readPaperGlassButtonStyle(prominent: Bool = false) -> some View {
-        if #available(macOS 26.0, *) {
+        if #available(macOS 26.0, iOS 26.0, *) {
             if prominent {
                 buttonStyle(.glassProminent)
             } else {
@@ -68,17 +32,33 @@ extension View {
 private struct ReadPaperFieldWell: ViewModifier {
     let isFocused: Bool
 
+    private var fieldBackground: Color {
+        #if os(macOS)
+        Color(nsColor: .textBackgroundColor)
+        #else
+        Color(uiColor: .secondarySystemBackground)
+        #endif
+    }
+
+    private var borderColor: Color {
+        #if os(macOS)
+        isFocused ? Color(nsColor: .keyboardFocusIndicatorColor) : Color(nsColor: .separatorColor)
+        #else
+        isFocused ? Color.accentColor : Color(uiColor: .separator)
+        #endif
+    }
+
     func body(content: Content) -> some View {
         content
             .background(
                 RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(Color(nsColor: .textBackgroundColor).opacity(0.55))
+                    .fill(fieldBackground.opacity(0.55))
             )
             .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 7, style: .continuous)
                     .strokeBorder(
-                        isFocused ? Color(nsColor: .keyboardFocusIndicatorColor) : Color(nsColor: .separatorColor),
+                        borderColor,
                         lineWidth: isFocused ? 2 : 0.5
                     )
             )
@@ -100,10 +80,14 @@ private struct ReadPaperInspectorBackgroundModifier: ViewModifier {
                 ReadPaperSurface(role: .inspector, textureOpacity: 0.62)
                     .ignoresSafeArea()
             }
-        } else if #available(macOS 26.0, *) {
+        } else if #available(macOS 26.0, iOS 26.0, *) {
             content
         } else {
+            #if os(macOS)
             content.background(Color(nsColor: .windowBackgroundColor))
+            #else
+            content.background(.regularMaterial)
+            #endif
         }
     }
 }

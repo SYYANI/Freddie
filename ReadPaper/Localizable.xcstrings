@@ -34,6 +34,23 @@
         }
       }
     },
+    "“%@” will move to Recently Deleted. You can restore it later." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“%@” will move to Recently Deleted. You can restore it later."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“%@”将移到最近删除，你可以稍后恢复。"
+          }
+        }
+      }
+    },
     "%@" : {
 
     },
@@ -301,6 +318,7 @@
       }
     },
     "Add an arXiv ID, arXiv URL, web page URL, or a local PDF." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -1863,6 +1881,7 @@
       }
     },
     "Create a note from the current PDF or HTML selection, or start a blank note." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -2106,6 +2125,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "删除写作稿…"
+          }
+        }
+      }
+    },
+    "Deleted writings and their images stay on this iPad until you restore them or remove the app." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deleted writings and their images stay on this iPad until you restore them or remove the app."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已删除的写作稿及其图片会保留在这台 iPad 上，直到你恢复稿件或移除应用。"
           }
         }
       }
@@ -2489,6 +2524,9 @@
           }
         }
       }
+    },
+    "Enter one preferred term mapping per line, for example “large language model = 大语言模型”. The glossary is optional and is used as reference context by both HTML and PDF translation." : {
+
     },
     "Enter the note to attach at this PDF position." : {
       "localizations" : {
@@ -2921,6 +2959,7 @@
       }
     },
     "First Paper" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -4058,6 +4097,16 @@
         }
       }
     },
+    "Library" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "论文库"
+          }
+        }
+      }
+    },
     "Link" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -4329,6 +4378,7 @@
       }
     },
     "Metadata" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -4513,6 +4563,23 @@
         }
       }
     },
+    "Move to Recently Deleted" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Move to Recently Deleted"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "移到最近删除"
+          }
+        }
+      }
+    },
     "Move to Trash" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -4649,6 +4716,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Provider “%1$@” 没有保存 API key。"
+          }
+        }
+      }
+    },
+    "No Deleted Writings" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No Deleted Writings"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "没有已删除的写作稿"
           }
         }
       }
@@ -5265,7 +5349,6 @@
       }
     },
     "PDF Annotations" : {
-      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -5612,6 +5695,23 @@
         }
       }
     },
+    "Preview Writing" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preview Writing"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "预览写作稿"
+          }
+        }
+      }
+    },
     "Previous Match" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -5907,7 +6007,6 @@
       }
     },
     "Reader" : {
-      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -5988,6 +6087,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "思考强度"
+          }
+        }
+      }
+    },
+    "Recently Deleted" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recently Deleted"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "最近删除"
           }
         }
       }
@@ -6617,6 +6733,17 @@
         }
       }
     },
+    "Select Text" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选择文字"
+          }
+        }
+      }
+    },
     "Select text in PDF or HTML to attach a note." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -6766,6 +6893,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "分享论文"
+          }
+        }
+      }
+    },
+    "Share Writing" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Share Writing"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "分享写作稿"
           }
         }
       }

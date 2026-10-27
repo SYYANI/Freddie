@@ -1,4 +1,8 @@
+#if os(macOS)
 import AppKit
+#else
+import UIKit
+#endif
 import SwiftUI
 import SwiftStreamingMarkdown
 
@@ -80,13 +84,23 @@ enum ReadPaperMarkdownStyle {
         guard weight != .regular else {
             return paperFont
         }
+        #if os(macOS)
         let descriptor = paperFont.fontDescriptor.withSymbolicTraits(.bold)
         return MDFont(descriptor: descriptor, size: size) ?? paperFont
+        #else
+        let descriptor = paperFont.fontDescriptor.withSymbolicTraits(.traitBold) ?? paperFont.fontDescriptor
+        return MDFont(descriptor: descriptor, size: size)
+        #endif
     }
 
     private static func italicFont(from font: MDFont) -> MDFont? {
+        #if os(macOS)
         let descriptor = font.fontDescriptor.withSymbolicTraits(.italic)
         return MDFont(descriptor: descriptor, size: font.pointSize)
+        #else
+        guard let descriptor = font.fontDescriptor.withSymbolicTraits(.traitItalic) else { return font }
+        return MDFont(descriptor: descriptor, size: font.pointSize)
+        #endif
     }
 }
 

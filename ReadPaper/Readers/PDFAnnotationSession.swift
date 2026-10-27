@@ -10,6 +10,16 @@ enum PDFInteractionMode: String, CaseIterable, Identifiable, Sendable {
     case debugRegion
 
     var id: String { rawValue }
+
+    /// The two tools the Pencil squeeze palette offers: always the ones that
+    /// are not current, in browse → ink → erase order, so no tool appears twice.
+    var pencilPaletteToolTargets: [PDFInteractionMode] {
+        switch self {
+        case .ink: [.browse, .erase]
+        case .erase: [.browse, .ink]
+        case .browse, .textNote, .debugRegion: [.ink, .erase]
+        }
+    }
 }
 
 enum PDFTextMarkupKind: String, CaseIterable, Identifiable, Sendable {
@@ -26,6 +36,13 @@ enum PDFTextMarkupKind: String, CaseIterable, Identifiable, Sendable {
         case .strikeOut: return .strikeOut
         }
     }
+}
+
+enum PDFAnnotationLineWidthPreset {
+    static let thin = 0.5
+    static let medium = 1.0
+    static let thick = 2.0
+    static let defaultValue = medium
 }
 
 struct PDFTextNotePlacement: Identifiable, Equatable {
@@ -55,7 +72,7 @@ protocol PDFAnnotationSessionHandler: AnyObject {
 final class PDFAnnotationSession: ObservableObject {
     @Published private(set) var interactionMode: PDFInteractionMode = .browse
     @Published var colorPreset: PDFAnnotationColorPreset = .yellow
-    @Published var lineWidth: Double = 2
+    @Published var lineWidth: Double = PDFAnnotationLineWidthPreset.defaultValue
     @Published private(set) var activeAttachmentID: UUID?
     @Published private(set) var hasTextSelection = false
     @Published private(set) var canUndo = false
@@ -98,6 +115,20 @@ final class PDFAnnotationSession: ObservableObject {
         guard mode != .debugRegion, isDebugInteractionActive == false else { return }
         interactionMode = mode
         pendingTextNote = nil
+    }
+
+    func toggleInkAndEraser() {
+        guard isDebugInteractionActive == false else { return }
+        interactionMode = interactionMode == .erase ? .ink : .erase
+        pendingTextNote = nil
+    }
+
+    func selectInkColor(_ preset: PDFAnnotationColorPreset) {
+        colorPreset = preset
+        if interactionMode == .erase {
+            interactionMode = .ink
+            pendingTextNote = nil
+        }
     }
 
     func beginDebugInteraction() {

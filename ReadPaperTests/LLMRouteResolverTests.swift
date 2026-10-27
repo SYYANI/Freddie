@@ -50,6 +50,29 @@ final class LLMRouteResolverTests: XCTestCase {
         XCTAssertEqual(pdfRoute.apiKey, "sk-test")
         XCTAssertEqual(htmlRoute.snapshot.apiStyle, .responses)
         XCTAssertEqual(pdfRoute.snapshot.apiStyle, .responses)
+
+        XCTAssertEqual(
+            try resolver.resolveSummaryRoute(settings: settings, modelContext: modelContext).modelProfileID,
+            htmlModel.id
+        )
+        settings.selectedHTMLModelProfileID = nil
+        XCTAssertEqual(
+            try resolver.resolveSummaryRoute(settings: settings, modelContext: modelContext).modelProfileID,
+            pdfModel.id
+        )
+        settings.selectedHTMLModelProfileID = htmlModel.id
+        htmlModel.isEnabled = false
+        let summaryRoute = try resolver.resolveSummaryRoute(settings: settings, modelContext: modelContext)
+        XCTAssertEqual(summaryRoute.modelProfileID, pdfModel.id)
+        XCTAssertEqual(try resolver.apiKey(for: summaryRoute), "sk-test")
+
+        // The summary route checks for a saved key without reading it.
+        try keychainStore.delete(account: provider.apiKeyRef)
+        XCTAssertThrowsError(
+            try resolver.resolveSummaryRoute(settings: settings, modelContext: modelContext)
+        ) { error in
+            XCTAssertEqual(error as? LLMRouteError, .missingAPIKey("Provider"))
+        }
     }
 
     @MainActor
