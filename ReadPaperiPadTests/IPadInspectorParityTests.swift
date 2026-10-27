@@ -227,6 +227,6 @@ private struct ReaderHarness: View {
         IPadReaderPaneView(paper: model.paper,
                            attachments: model.attachments.filter { $0.paperID == model.paper.id },
                            settings: nil, noteSelectionContext: $model.selection,
-                           noteNavigationRequest: $model.request, onToggleInspector: {})
+                           noteNavigationRequest: $model.request, onToggleSidebar: {}, onToggleInspector: {})
     }
 }

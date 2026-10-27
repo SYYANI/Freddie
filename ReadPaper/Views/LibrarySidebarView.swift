@@ -207,6 +207,12 @@ struct LibrarySidebarView: View {
             )
             .equatable()
             .tag(paper.id)
+            #if os(iOS)
+            .listRowBackground(SidebarRowSelectionBackground(isSelected: paper.id == selectedPaperID))
+            .listRowSeparator(.hidden)
+            // The list turns selected text white only while it has focus, so pin the text color.
+            .foregroundStyle(Color(uiColor: .label))
+            #endif
         }
         .onDelete { offsets in
             guard let offset = offsets.first, rowPapers.indices.contains(offset) else { return }
@@ -679,6 +685,22 @@ private extension View {
             .padding(.vertical, -2)
     }
 }
+
+#if os(iOS)
+/// The iPad library is laid out by `IPadSidebarContainer` rather than `NavigationSplitView`,
+/// and outside a split view's sidebar column `.sidebar` lists fall back to inset-grouped
+/// cards. Rows draw the sidebar's clear background and a light rounded selection instead.
+private struct SidebarRowSelectionBackground: View {
+    let isSelected: Bool
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 12, style: .continuous)
+            .fill(isSelected ? Color.accentColor.opacity(0.16) : .clear)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 2)
+    }
+}
+#endif
 
 private struct SidebarListBackgroundModifier: ViewModifier {
     func body(content: Content) -> some View {

@@ -4097,6 +4097,16 @@
         }
       }
     },
+    "Library" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "论文库"
+          }
+        }
+      }
+    },
     "Link" : {
       "extractionState" : "stale",
       "localizations" : {

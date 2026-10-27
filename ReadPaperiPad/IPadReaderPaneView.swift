@@ -41,6 +41,7 @@ struct IPadReaderPaneView: View {
     let settings: AppSettings?
     @Binding var noteSelectionContext: NoteSelectionContext?
     @Binding var noteNavigationRequest: NoteNavigationRequest?
+    let onToggleSidebar: () -> Void
     let onToggleInspector: () -> Void
 
     @State private var readerMode: ReaderMode = .pdf
@@ -303,6 +304,12 @@ struct IPadReaderPaneView: View {
 
     @ToolbarContentBuilder
     private var readerToolbar: some ToolbarContent {
+        ToolbarItem(placement: .topBarLeading) {
+            Button(action: onToggleSidebar) {
+                Label(String(localized: "Library", bundle: bundle), systemImage: "sidebar.left")
+            }
+        }
+
         if #available(iOS 26.0, *) {
             ToolbarItem(placement: .primaryAction) {
                 primaryReaderModePicker

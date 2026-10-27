@@ -22,12 +22,12 @@ struct IPadContentView: View {
     @State private var selectedPaperID: UUID?
     @State private var isAddingPaper = false
     @State private var isShowingSettings = false
+    @AppStorage("ReadPaper.iPad.Sidebar.IsPresented") private var isShowingSidebar = true
     @AppStorage("ReadPaper.iPad.Inspector.IsPresented") private var isShowingInspector = true
     @State private var paperPendingDeletion: Paper?
     @State private var errorMessage: String?
     @State private var noteSelectionContext: NoteSelectionContext?
     @State private var noteNavigationRequest: NoteNavigationRequest?
-    @State private var preferredCompactColumn: NavigationSplitViewColumn = .sidebar
 
     private var selectedPaper: Paper? {
         if let selectedPaperID,
@@ -48,22 +48,19 @@ struct IPadContentView: View {
     private var settings: AppSettings? { settingsRows.first }
 
     var body: some View {
-        NavigationSplitView(preferredCompactColumn: $preferredCompactColumn) {
-            libraryColumn
-                .navigationSplitViewColumnWidth(min: 240, ideal: 260, max: 340)
+        IPadSidebarContainer(
+            isSidebarPresented: $isShowingSidebar,
+            isInspectorPresented: $isShowingInspector,
+            selection: selectedPaperID
+        ) {
+            NavigationStack { libraryColumn }
         } detail: {
-            if #available(iOS 26.0, *) {
-                // Give the system's translucent sidebar content to sample instead
-                // of leaving an empty split-view backdrop beneath its material.
-                reader.backgroundExtensionEffect(isEnabled: displayAppearance != .paper)
-            } else {
-                reader
-            }
-        }
-        .navigationSplitViewStyle(.balanced)
-        .inspector(isPresented: $isShowingInspector) {
+            NavigationStack { reader }
+        } inspector: {
             inspector
-                .inspectorColumnWidth(min: 280, ideal: 340, max: 640)
+                .background(displayAppearance == .paper
+                    ? ReadPaperTheme.surfaceColor(.inspector, scheme: .light)
+                    : Color(uiColor: .secondarySystemBackground))
         }
         .sheet(isPresented: $isAddingPaper) {
             IPadAddPaperView(
@@ -125,9 +122,6 @@ struct IPadContentView: View {
                 noteNavigationRequest = nil
             }
             PaperSelectionStore.saveSelection(newValue)
-            if newValue != nil {
-                preferredCompactColumn = .detail
-            }
         }
         .onChange(of: scenePhase) { _, phase in
             if phase != .active {
@@ -209,6 +203,7 @@ struct IPadContentView: View {
             settings: settings,
             noteSelectionContext: $noteSelectionContext,
             noteNavigationRequest: $noteNavigationRequest,
+            onToggleSidebar: { isShowingSidebar.toggle() },
             onToggleInspector: { isShowingInspector.toggle() }
         )
     }
