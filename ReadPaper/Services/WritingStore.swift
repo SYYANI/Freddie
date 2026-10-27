@@ -80,7 +80,8 @@ struct WritingStore {
     static let metadataStalenessTolerance: TimeInterval = 2
 
     var fileStore: PaperFileStore
-    /// Deleted writings go to the Trash so they can be recovered; tests delete them outright.
+    /// Uses the system Trash on macOS and app-local Recently Deleted on iPadOS.
+    /// Tests can opt into immediate removal.
     var movesDeletedWritingsToTrash: Bool
 
     init(fileStore: PaperFileStore = PaperFileStore(), movesDeletedWritingsToTrash: Bool = true) {
@@ -112,7 +113,10 @@ struct WritingStore {
 
     /// All writings, most recently modified first. Folders without a `writing.md` are skipped.
     func loadAll() throws -> [WritingMetadata] {
-        let root = try writingsDirectory
+        try loadAll(in: writingsDirectory)
+    }
+
+    private func loadAll(in root: URL) throws -> [WritingMetadata] {
         guard fileManager.fileExists(atPath: root.path) else { return [] }
 
         let entries = try fileManager.contentsOfDirectory(
@@ -199,11 +203,39 @@ struct WritingStore {
         let directory = try directory(for: id)
         guard fileManager.fileExists(atPath: directory.path) else { return }
         if movesDeletedWritingsToTrash {
+            #if os(iOS)
+            let trash = try deletedWritingsDirectory
+            try fileStore.ensureDirectory(trash)
+            // moveItem refuses to overwrite a previous copy. A failed move leaves the
+            // active writing intact, so the library can safely keep showing it.
+            try fileManager.moveItem(at: directory, to: trash.appendingPathComponent(id.uuidString, isDirectory: true))
+            #else
             try fileManager.trashItem(at: directory, resultingItemURL: nil)
+            #endif
         } else {
             try fileManager.removeItem(at: directory)
         }
     }
+
+    #if os(iOS)
+    /// Kept outside Writings so normal library scans never rediscover deleted drafts.
+    var deletedWritingsDirectory: URL {
+        get throws {
+            try fileStore.applicationSupportDirectory.appendingPathComponent("DeletedWritings", isDirectory: true)
+        }
+    }
+
+    func loadDeletedWritings() throws -> [WritingMetadata] {
+        try loadAll(in: deletedWritingsDirectory)
+    }
+
+    func restoreWriting(_ id: UUID) throws {
+        let source = try deletedWritingsDirectory.appendingPathComponent(id.uuidString, isDirectory: true)
+        try fileStore.ensureDirectory(writingsDirectory)
+        // Never replace an active draft with an archived copy.
+        try fileManager.moveItem(at: source, to: directory(for: id))
+    }
+    #endif
 
     private func loadMetadata(id: UUID, directory: URL, markdownURL: URL) -> WritingMetadata? {
         let values = try? markdownURL.resourceValues(forKeys: [.contentModificationDateKey, .creationDateKey])

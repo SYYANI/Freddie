@@ -74,6 +74,19 @@ struct LLMRouteResolver {
         )
     }
 
+    /// Summaries use the same text model as abstract translation, with the PDF
+    /// model as a fallback for users who only configured PDF translation.
+    func resolveSummaryRoute(
+        settings: AppSettings,
+        modelContext: ModelContext
+    ) throws -> ResolvedLLMModelRoute {
+        do {
+            return try resolveHTMLRoute(settings: settings, modelContext: modelContext)
+        } catch is LLMRouteError {
+            return try resolvePDFRoute(settings: settings, modelContext: modelContext)
+        }
+    }
+
     /// The model that reads scanned pages, which must accept images; the PDF model unless
     /// another one is chosen.
     func resolveScannedPageRoute(

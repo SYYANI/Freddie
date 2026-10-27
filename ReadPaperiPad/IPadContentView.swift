@@ -6,6 +6,7 @@ struct IPadContentView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.localizationBundle) private var bundle
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.pdfDisplayAppearance) private var displayAppearance
     @Query(sort: \Paper.modifiedAt, order: .reverse) private var papers: [Paper]
     @Query(sort: \PaperAttachment.createdAt) private var attachments: [PaperAttachment]
     @Query(sort: \Note.modifiedAt, order: .reverse) private var notes: [Note]
@@ -48,10 +49,16 @@ struct IPadContentView: View {
 
     var body: some View {
         NavigationSplitView(preferredCompactColumn: $preferredCompactColumn) {
-            sidebar
+            libraryColumn
                 .navigationSplitViewColumnWidth(min: 240, ideal: 260, max: 340)
         } detail: {
-            reader
+            if #available(iOS 26.0, *) {
+                // Give the system's translucent sidebar content to sample instead
+                // of leaving an empty split-view backdrop beneath its material.
+                reader.backgroundExtensionEffect(isEnabled: displayAppearance != .paper)
+            } else {
+                reader
+            }
         }
         .navigationSplitViewStyle(.balanced)
         .inspector(isPresented: $isShowingInspector) {
@@ -152,6 +159,15 @@ struct IPadContentView: View {
             get: { InspectorMode(rawValue: inspectorModeRawValue) ?? .paper },
             set: { inspectorModeRawValue = $0.rawValue }
         )
+    }
+
+    @ViewBuilder
+    private var libraryColumn: some View {
+        if #available(iOS 18.0, *), displayAppearance != .paper {
+            sidebar.containerBackground(.ultraThinMaterial, for: .navigation)
+        } else {
+            sidebar
+        }
     }
 
     private var sidebar: some View {

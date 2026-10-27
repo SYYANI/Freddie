@@ -304,6 +304,23 @@ struct LibrarySidebarView: View {
                     }
                 }
             } label: {
+                #if os(iOS)
+                Label(String(localized: "Filter", bundle: bundle), systemImage: filter.isActive
+                    ? "line.3.horizontal.decrease.circle.fill"
+                    : "line.3.horizontal.decrease.circle")
+                    .labelStyle(.titleAndIcon)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(filter.isActive ? Color.accentColor : Color.primary)
+                    .padding(.horizontal, 12)
+                    .frame(minHeight: 44)
+                    .background {
+                        Capsule()
+                            .fill(filter.isActive
+                                ? Color.accentColor.opacity(0.12)
+                                : Color.secondary.opacity(0.1))
+                    }
+                    .contentShape(Capsule())
+                #else
                 Image(systemName: filter.isActive
                     ? "line.3.horizontal.decrease.circle.fill"
                     : "line.3.horizontal.decrease.circle")
@@ -311,6 +328,7 @@ struct LibrarySidebarView: View {
                     .foregroundStyle(filter.isActive ? Color.accentColor : Color.secondary)
                     .frame(width: 24, height: 22)
                     .contentShape(Rectangle())
+                #endif
             }
             .menuStyle(.button)
             .buttonStyle(.plain)
@@ -318,6 +336,10 @@ struct LibrarySidebarView: View {
             .fixedSize()
             .help(String(localized: "Filter Library", bundle: bundle))
             .accessibilityLabel(String(localized: "Filter Library", bundle: bundle))
+
+            #if os(iOS)
+            Spacer(minLength: 0)
+            #endif
 
             if filter.isActive {
                 Text(AppLocalization.format(
@@ -331,25 +353,38 @@ struct LibrarySidebarView: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
 
+                #if os(macOS)
                 Spacer(minLength: 0)
+                #endif
 
                 Button {
                     filter = PaperLibraryFilter()
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .foregroundStyle(.secondary)
+                        #if os(iOS)
+                        .frame(width: 44, height: 44)
+                        #else
                         .frame(width: 22, height: 22)
+                        #endif
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .help(String(localized: "Clear Filter", bundle: bundle))
                 .accessibilityLabel(String(localized: "Clear Filter", bundle: bundle))
             } else {
+                #if os(macOS)
                 Spacer(minLength: 0)
+                #endif
             }
         }
+        #if os(iOS)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        #else
         .padding(.horizontal, 10)
         .padding(.vertical, 5)
+        #endif
         .overlay(alignment: .top) {
             Divider()
         }

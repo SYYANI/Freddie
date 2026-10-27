@@ -4,6 +4,23 @@ import AppKit
 import SwiftData
 import SwiftUI
 
+/// Keep metadata compact in the iPad's narrow inspector while retaining Dynamic Type.
+private enum InspectorTypography {
+    #if os(iOS)
+    static let title: Font = .headline
+    static let authors: Font = .subheadline
+    static let abstract: Font = .footnote
+    static let section: Font = .footnote.weight(.semibold)
+    static let abstractPreviewLines = 5
+    #else
+    static let title: Font = .title3.weight(.semibold)
+    static let authors: Font = .body
+    static let abstract: Font = .callout
+    static let section: Font = .subheadline.weight(.semibold)
+    static let abstractPreviewLines = 8
+    #endif
+}
+
 struct InspectorPaneView: View {
     private enum MetadataField: Hashable {
         case authors
@@ -12,6 +29,9 @@ struct InspectorPaneView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.localizationBundle) private var bundle
     @Environment(\.pdfDisplayAppearance) private var displayAppearance
+    @Query private var summarySettings: [AppSettings]
+    @State private var abstractContent: PaperAbstractContent = .hidden
+    @State private var abstractContentRequest: SummaryRequest?
     @State private var notePendingDeletion: Note?
     @State private var authorsSaveErrorMessage: String?
     @State private var itemTypeSaveErrorMessage: String?
@@ -51,6 +71,9 @@ struct InspectorPaneView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .readPaperInspectorBackground()
+        .task(id: summaryRequest) {
+            await prepareAbstract()
+        }
         .onAppear {
             syncMetadataEditorState(with: paper)
             synchronizeAbstractPresentation(with: paper?.id)
@@ -134,7 +157,7 @@ struct InspectorPaneView: View {
                 }
             }
             Text(paper.title)
-                .font(.title3.weight(.semibold))
+                .font(InspectorTypography.title)
                 .textSelection(.enabled)
             authorsView(for: paper)
             if let identifierText = paper.metadataIdentifierText {
@@ -153,8 +176,15 @@ struct InspectorPaneView: View {
                     .font(.caption)
                     .foregroundStyle(.red)
             }
-            if !paper.abstractText.isEmpty {
-                abstractView(paper.abstractText)
+            if abstractContentRequest == summaryRequest {
+                switch abstractContent {
+                case .hidden:
+                    EmptyView()
+                case .original(let text):
+                    abstractView(text)
+                case .summary(let text):
+                    abstractView(text, isSummary: true)
+                }
             }
         }
     }
@@ -164,7 +194,7 @@ struct InspectorPaneView: View {
         if isEditingAuthors {
             TextField("", text: $authorsDraft, axis: .vertical)
                 .textFieldStyle(.plain)
-                .font(.body)
+                .font(InspectorTypography.authors)
                 .foregroundStyle(.secondary)
                 .lineLimit(1...3)
                 .padding(.horizontal, 8)
@@ -190,6 +220,7 @@ struct InspectorPaneView: View {
                 beginAuthorsEditing(for: paper)
             } label: {
                 Text(paper.displayAuthors)
+                    .font(InspectorTypography.authors)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .contentShape(Rectangle())
@@ -198,17 +229,17 @@ struct InspectorPaneView: View {
         }
     }
     
-    private func abstractView(_ abstractText: String) -> some View {
+    private func abstractView(_ abstractText: String, isSummary: Bool = false) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             InspectorSectionHeader(title: String(localized: "Abstract", bundle: bundle)) {
-                if abstractTranslationState.translatedText != nil {
+                if !isSummary && abstractTranslationState.translatedText != nil {
                     InspectorIconButton(
                         title: String(localized: "Original", bundle: bundle),
                         systemImage: "arrow.uturn.backward"
                     ) {
                         abstractTranslationState.showOriginal()
                     }
-                } else if !abstractTranslationState.isTranslating {
+                } else if !isSummary && !abstractTranslationState.isTranslating {
                     InspectorIconButton(
                         title: String(localized: "Translate", bundle: bundle),
                         systemImage: "character.book.closed"
@@ -229,13 +260,13 @@ struct InspectorPaneView: View {
                 }
             }
 
-            if let error = abstractTranslationState.errorMessage {
+            if !isSummary, let error = abstractTranslationState.errorMessage {
                 Text(error)
                     .font(.caption)
                     .foregroundStyle(.red)
             }
 
-            if abstractTranslationState.isTranslating {
+            if !isSummary && abstractTranslationState.isTranslating {
                 HStack(spacing: 8) {
                     ProgressView()
                         .controlSize(.small)
@@ -246,14 +277,14 @@ struct InspectorPaneView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.vertical, 4)
             } else {
-                Text(abstractTranslationState.translatedText ?? abstractText)
-                    .font(.callout)
+                Text(isSummary ? abstractText : (abstractTranslationState.translatedText ?? abstractText))
+                    .font(InspectorTypography.abstract)
                     .textSelection(.enabled)
-                    .lineLimit(isAbstractExpanded ? nil : 8)
+                    .lineLimit(isAbstractExpanded ? nil : InspectorTypography.abstractPreviewLines)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     // macOS can draw the full selectable text on double-click,
-                    // even while lineLimit keeps the collapsed layout at eight lines.
+                    // even while lineLimit reserves only the collapsed preview's height.
                     .clipped()
             }
         }
@@ -376,6 +407,52 @@ struct InspectorPaneView: View {
         }
     }
     
+    private struct SummaryRequest: Equatable {
+        var paperID: UUID?
+        var title: String?
+        var abstractText: String?
+        var targetLanguage: String?
+        var htmlModelID: UUID?
+        var pdfModelID: UUID?
+        var settingsModifiedAt: Date?
+        var isVisible: Bool
+    }
+
+    private var summaryRequest: SummaryRequest {
+        let settings = summarySettings.first
+        return SummaryRequest(
+            paperID: paper?.id,
+            title: paper?.title,
+            abstractText: paper?.abstractText,
+            targetLanguage: settings?.targetLanguage,
+            htmlModelID: settings?.selectedHTMLModelProfileID,
+            pdfModelID: settings?.selectedPDFModelProfileID,
+            settingsModifiedAt: settings?.modifiedAt,
+            isVisible: !isCollapsed && mode == .paper
+        )
+    }
+
+    private func prepareAbstract() async {
+        guard !Task.isCancelled else { return }
+        abstractContent = .hidden
+        abstractContentRequest = nil
+        cancelAbstractTranslation()
+        guard summaryRequest.isVisible, let paper else { return }
+        let request = summaryRequest
+        do {
+            let content = try await PaperSummaryService().content(
+                for: paper,
+                settings: summarySettings.first ?? AppSettings(),
+                modelContext: modelContext
+            )
+            guard !Task.isCancelled, summaryRequest == request else { return }
+            abstractContent = content
+            abstractContentRequest = request
+        } catch {
+            // Summaries are optional; unavailable models do not block reading.
+        }
+    }
+
     private func translateAbstract() {
         guard let paper = paper else { return }
 
@@ -457,7 +534,7 @@ struct InspectorSectionHeader<Actions: View>: View {
     var body: some View {
         HStack(spacing: 8) {
             Text(title)
-                .font(.subheadline.weight(.semibold))
+                .font(InspectorTypography.section)
                 .foregroundStyle(.secondary)
             Spacer(minLength: 8)
             actions

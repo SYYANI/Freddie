@@ -89,6 +89,18 @@ final class WritingLibrary {
         refreshCitationMarks()
     }
 
+    #if os(iOS)
+    func deletedWritings() throws -> [WritingMetadata] {
+        try store.loadDeletedWritings()
+    }
+
+    func restoreWriting(_ id: UUID) throws {
+        try store.restoreWriting(id)
+        reload()
+        selectWriting(id)
+    }
+    #endif
+
     func markdown(for id: UUID) throws -> String {
         try store.loadMarkdown(for: id)
     }

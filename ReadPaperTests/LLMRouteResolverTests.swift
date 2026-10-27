@@ -50,6 +50,22 @@ final class LLMRouteResolverTests: XCTestCase {
         XCTAssertEqual(pdfRoute.apiKey, "sk-test")
         XCTAssertEqual(htmlRoute.snapshot.apiStyle, .responses)
         XCTAssertEqual(pdfRoute.snapshot.apiStyle, .responses)
+
+        XCTAssertEqual(
+            try resolver.resolveSummaryRoute(settings: settings, modelContext: modelContext).snapshot.modelProfileID,
+            htmlModel.id
+        )
+        settings.selectedHTMLModelProfileID = nil
+        XCTAssertEqual(
+            try resolver.resolveSummaryRoute(settings: settings, modelContext: modelContext).snapshot.modelProfileID,
+            pdfModel.id
+        )
+        settings.selectedHTMLModelProfileID = htmlModel.id
+        htmlModel.isEnabled = false
+        XCTAssertEqual(
+            try resolver.resolveSummaryRoute(settings: settings, modelContext: modelContext).snapshot.modelProfileID,
+            pdfModel.id
+        )
     }
 
     @MainActor

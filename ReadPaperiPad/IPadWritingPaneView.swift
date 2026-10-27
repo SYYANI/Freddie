@@ -103,6 +103,7 @@ struct IPadWritingPaneView: View {
     @State private var errorMessage: String?
     @State private var isChoosingImages = false
     @State private var isPreviewing = false
+    @State private var isShowingRecentlyDeleted = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -141,6 +142,10 @@ struct IPadWritingPaneView: View {
                         .font(.system(size: 32)).foregroundStyle(.tertiary)
                     Text("No Writings Yet", bundle: bundle).foregroundStyle(.secondary)
                     Button(String(localized: "New Writing", bundle: bundle), action: createWriting)
+                    Button(String(localized: "Recently Deleted", bundle: bundle)) {
+                        isShowingRecentlyDeleted = true
+                    }
+                    .foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
@@ -155,7 +160,7 @@ struct IPadWritingPaneView: View {
             isPresented: Binding(get: { writingPendingDeletion != nil }, set: { if !$0 { writingPendingDeletion = nil } }),
             presenting: writingPendingDeletion
         ) { writing in
-            Button(String(localized: "Move to Trash", bundle: bundle), role: .destructive) {
+            Button(String(localized: "Move to Recently Deleted", bundle: bundle), role: .destructive) {
                 do {
                     try library.deleteWriting(writing.id)
                     center.close(writing.id)
@@ -164,7 +169,9 @@ struct IPadWritingPaneView: View {
             }
             Button(String(localized: "Cancel", bundle: bundle), role: .cancel) {}
         } message: { writing in
-            Text(AppLocalization.format("“%@” will be moved to the Trash.", bundle: bundle, title(writing)))
+            Text(AppLocalization.format(
+                "“%@” will move to Recently Deleted. You can restore it later.", bundle: bundle, title(writing)
+            ))
         }
         .alert(
             String(localized: "Rename Writing", bundle: bundle),
@@ -182,6 +189,9 @@ struct IPadWritingPaneView: View {
         )) {
             Button(String(localized: "OK", bundle: bundle), role: .cancel) {}
         } message: { Text(errorMessage ?? "") }
+        .sheet(isPresented: $isShowingRecentlyDeleted) {
+            IPadDeletedWritingsView(library: library)
+        }
         .fileImporter(isPresented: $isChoosingImages, allowedContentTypes: [.image], allowsMultipleSelection: true) { result in
             do {
                 let urls = try result.get()
@@ -236,6 +246,10 @@ struct IPadWritingPaneView: View {
                     }
                 }
                 Divider()
+                Button(String(localized: "Recently Deleted", bundle: bundle)) {
+                    center.saveAll()
+                    isShowingRecentlyDeleted = true
+                }
                 Button(String(localized: "Delete Writing…", bundle: bundle), role: .destructive) {
                     center.saveAll()
                     writingPendingDeletion = writing
@@ -288,6 +302,63 @@ struct IPadWritingPaneView: View {
                 document.save()
             }
         } catch { errorMessage = error.localizedDescription }
+    }
+}
+
+private struct IPadDeletedWritingsView: View {
+    @Environment(\.localizationBundle) private var bundle
+    @Environment(\.dismiss) private var dismiss
+    let library: WritingLibrary
+    @State private var writings: [WritingMetadata] = []
+    @State private var errorMessage: String?
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if writings.isEmpty {
+                    ContentUnavailableView {
+                        Label(String(localized: "No Deleted Writings", bundle: bundle), systemImage: "trash")
+                    }
+                } else {
+                    List {
+                        Section {
+                            ForEach(writings) { writing in
+                                HStack {
+                                    Text(writing.title.isEmpty
+                                         ? String(localized: "Untitled Writing", bundle: bundle) : writing.title)
+                                    Spacer()
+                                    Button(String(localized: "Restore", bundle: bundle)) {
+                                        do {
+                                            try library.restoreWriting(writing.id)
+                                            dismiss()
+                                        } catch { errorMessage = error.localizedDescription }
+                                    }
+                                    .buttonStyle(.bordered)
+                                }
+                            }
+                        } footer: {
+                            Text("Deleted writings and their images stay on this iPad until you restore them or remove the app.", bundle: bundle)
+                        }
+                    }
+                }
+            }
+            .navigationTitle(String(localized: "Recently Deleted", bundle: bundle))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(String(localized: "Done", bundle: bundle)) { dismiss() }
+                }
+            }
+            .onAppear {
+                do { writings = try library.deletedWritings() }
+                catch { errorMessage = error.localizedDescription }
+            }
+            .alert(String(localized: "Unable to Update Writing", bundle: bundle), isPresented: Binding(
+                get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } }
+            )) {
+                Button(String(localized: "OK", bundle: bundle), role: .cancel) {}
+            } message: { Text(errorMessage ?? "") }
+        }
     }
 }
 

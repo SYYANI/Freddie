@@ -14,7 +14,75 @@ final class IPadInspectorParityTests: XCTestCase {
             AppLocalization.setLanguageOverride(language)
             XCTAssertEqual(AppLocalization.localized("Preview Writing"), preview)
             XCTAssertEqual(AppLocalization.localized("Share Writing"), share)
+            XCTAssertEqual(AppLocalization.localized("Recently Deleted"), language == "en" ? "Recently Deleted" : "最近删除")
+            XCTAssertEqual(AppLocalization.localized("Move to Recently Deleted"), language == "en" ? "Move to Recently Deleted" : "移到最近删除")
+            XCTAssertEqual(AppLocalization.localized("No Deleted Writings"), language == "en" ? "No Deleted Writings" : "没有已删除的写作稿")
         }
+    }
+
+    @MainActor
+    func testDefaultDeletionPreservesMarkdownImagesAndCitationsForRestore() throws {
+        let fixture = try writingFixture()
+        defer { fixture.remove() }
+        let citation = PaperCitation(paperID: UUID(), pageIndex: 2, quotePrefix: "引文")
+        let writing = try fixture.library.createWriting(markdown: "# 可恢复的写作稿\n\n"
+            + PaperCitation.quoteMarkdown(quote: "引文", label: "Author, p. 3", citation: citation))
+        let image = Data("image data".utf8)
+        let imagePath = try fixture.library.importImage(.data(image, fileExtension: "png"), into: writing.id)
+        let markdown = try fixture.library.markdown(for: writing.id) + "\n\n![](\(imagePath))\n"
+        XCTAssertTrue(fixture.library.save(markdown: markdown, for: writing.id))
+        let activeURL = try XCTUnwrap(fixture.library.directoryURL(for: writing.id))
+
+        try fixture.library.deleteWriting(writing.id)
+        fixture.library.reload()
+        XCTAssertFalse(FileManager.default.fileExists(atPath: activeURL.path))
+        XCTAssertTrue(fixture.library.writings.isEmpty)
+        XCTAssertTrue(fixture.library.citationMarks(for: citation.paperID).isEmpty)
+        let deleted = try fixture.library.deletedWritings()
+        XCTAssertEqual(deleted.map(\.id), [writing.id])
+        XCTAssertEqual(deleted.first?.citedPaperIDs, [citation.paperID])
+        XCTAssertFalse(fixture.library.save(markdown: "late save", for: writing.id))
+
+        try fixture.library.restoreWriting(writing.id)
+        XCTAssertEqual(fixture.library.currentWritingID, writing.id)
+        XCTAssertEqual(try fixture.library.markdown(for: writing.id), markdown)
+        XCTAssertEqual(try Data(contentsOf: activeURL.appendingPathComponent(imagePath)), image)
+        XCTAssertEqual(fixture.library.citationMarks(for: citation.paperID).count, 1)
+        XCTAssertTrue(try fixture.library.deletedWritings().isEmpty)
+    }
+
+    @MainActor
+    func testArchiveAndRestoreRefuseToOverwriteEitherCopy() throws {
+        let fixture = try writingFixture()
+        defer { fixture.remove() }
+        let store = WritingStore(fileStore: PaperFileStore(applicationSupportDirectory: fixture.directory))
+        let writing = try fixture.library.createWriting(markdown: "Archived copy")
+        try fixture.library.deleteWriting(writing.id)
+        try store.create(id: writing.id, markdown: "Active copy")
+        fixture.library.reload()
+
+        XCTAssertThrowsError(try fixture.library.deleteWriting(writing.id))
+        XCTAssertThrowsError(try fixture.library.restoreWriting(writing.id))
+        XCTAssertEqual(fixture.library.currentWritingID, writing.id)
+        XCTAssertEqual(try fixture.library.markdown(for: writing.id), "Active copy")
+        XCTAssertEqual(try fixture.library.deletedWritings().count, 1)
+        let archived = try store.deletedWritingsDirectory.appendingPathComponent(writing.id.uuidString)
+            .appendingPathComponent(WritingStore.markdownFilename)
+        XCTAssertEqual(try String(contentsOf: archived, encoding: .utf8), "Archived copy")
+    }
+
+    @MainActor
+    func testFailedDeleteKeepsTheWritingAndSelection() throws {
+        let fixture = try writingFixture()
+        defer { fixture.remove() }
+        let writing = try fixture.library.createWriting(markdown: "Keep me")
+        let store = WritingStore(fileStore: PaperFileStore(applicationSupportDirectory: fixture.directory))
+        try Data("blocked directory".utf8).write(to: store.deletedWritingsDirectory)
+
+        XCTAssertThrowsError(try fixture.library.deleteWriting(writing.id))
+        XCTAssertEqual(fixture.library.currentWritingID, writing.id)
+        XCTAssertEqual(fixture.library.writings.map(\.id), [writing.id])
+        XCTAssertEqual(try fixture.library.markdown(for: writing.id), "Keep me")
     }
 
     @MainActor
@@ -122,7 +190,7 @@ final class IPadInspectorParityTests: XCTestCase {
         let suite = "IPadInspectorParityTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
         let library = WritingLibrary(store: WritingStore(
-            fileStore: PaperFileStore(applicationSupportDirectory: directory), movesDeletedWritingsToTrash: false
+            fileStore: PaperFileStore(applicationSupportDirectory: directory)
         ), userDefaults: defaults)
         library.loadIfNeeded()
         return WritingFixture(directory: directory, defaults: defaults, suite: suite,
