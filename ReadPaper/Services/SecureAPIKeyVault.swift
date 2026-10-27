@@ -192,7 +192,25 @@ struct SecureAPIKeyVault {
 final class APIKeyAuthenticationSession {
     static let shared = APIKeyAuthenticationSession()
 
+    enum Scope {
+        case account
+        case service
+
+        static var platformDefault: Self {
+#if os(iOS)
+            .service
+#else
+            .account
+#endif
+        }
+    }
+
+    private let scope: Scope
     private var contexts: [String: LAContext] = [:]
+
+    init(scope: Scope = .platformDefault) {
+        self.scope = scope
+    }
 
     func context(
         service: String,
@@ -217,7 +235,12 @@ final class APIKeyAuthenticationSession {
     }
 
     private func cacheKey(service: String, account: String) -> String {
-        "\(service)\0\(account)"
+        switch scope {
+        case .account:
+            "\(service)\0\(account)"
+        case .service:
+            service
+        }
     }
 }
 
