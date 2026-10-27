@@ -2881,17 +2881,6 @@
         }
       }
     },
-    "Filter" : {
-      "comment" : "Button that opens the iPad library filter menu",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "筛选"
-          }
-        }
-      }
-    },
     "Filter Library" : {
       "extractionState" : "stale",
       "localizations" : {
