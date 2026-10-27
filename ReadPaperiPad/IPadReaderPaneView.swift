@@ -194,11 +194,15 @@ struct IPadReaderPaneView: View {
         .toolbar {
             readerToolbar
         }
-        .onAppear { restoreReadingState() }
+        .onAppear {
+            restoreReadingState()
+            revealNoteAnchor()
+        }
         .onChange(of: paper?.id) { _, _ in
             noteSelectionContext = nil
             pdfAnnotationSession.resetForDocumentChange()
             restoreReadingState()
+            revealNoteAnchor()
         }
         .onChange(of: attachments.map {
             "\($0.id)-\($0.kindRawValue)-\($0.filePath)-\($0.translatedLastPage ?? -1)"
@@ -1239,9 +1243,10 @@ struct IPadReaderPaneView: View {
 
     private func revealNoteAnchor() {
         guard let request = noteNavigationRequest else { return }
-        if request.attachmentID == htmlAttachment?.id || request.htmlSelector != nil {
+        guard request.paperID == nil || request.paperID == paper?.id else { return }
+        if (request.attachmentID != nil && request.attachmentID == htmlAttachment?.id) || request.htmlSelector != nil {
             readerMode = .html
-        } else if request.attachmentID == translatedPDFAttachment?.id {
+        } else if request.attachmentID != nil && request.attachmentID == translatedPDFAttachment?.id {
             readerMode = .translatedPDF
             if let pageIndex = request.pageIndex {
                 pdfPageIndex = max(0, pageIndex)

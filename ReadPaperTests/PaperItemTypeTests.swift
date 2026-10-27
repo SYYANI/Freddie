@@ -1,6 +1,10 @@
 import SwiftData
 import XCTest
+#if os(iOS)
+@testable import ReadPaperiPad
+#else
 @testable import ReadPaper
+#endif
 
 final class PaperItemTypeTests: XCTestCase {
     func testDetectionFollowsImportSource() {

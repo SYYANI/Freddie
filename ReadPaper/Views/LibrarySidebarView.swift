@@ -36,8 +36,11 @@ struct LibrarySidebarView: View {
                 .ignoresSafeArea()
 
             VStack(spacing: 0) {
-                if papers.isEmpty {
+                if papers.isEmpty && !grouping.hasFolders {
                     emptyLibraryState
+                    #if os(iOS)
+                    filterBar
+                    #endif
                 } else {
                     if filter.isActive, visiblePaperCount == 0 {
                         noMatchingPapersState
@@ -146,7 +149,11 @@ struct LibrarySidebarView: View {
         } message: {
             Text(folderErrorMessage ?? "")
         }
+        #if os(macOS)
         .navigationTitle(String(localized: "Freddie", bundle: bundle))
+        #else
+        .navigationTitle("")
+        #endif
         .toolbar {
             ToolbarItem {
                 Button {
@@ -156,7 +163,7 @@ struct LibrarySidebarView: View {
                 }
             }
 
-            if #available(macOS 26.0, *) {
+            if #available(macOS 26.0, iOS 26.0, *) {
                 ToolbarSpacer(.fixed)
             }
 
@@ -264,6 +271,12 @@ struct LibrarySidebarView: View {
     private var filterBar: some View {
         HStack(spacing: 6) {
             Menu {
+                #if os(iOS)
+                Button(String(localized: "New Folder…", bundle: bundle)) {
+                    promptForNewFolder(containing: nil)
+                }
+                Divider()
+                #endif
                 ForEach(PaperLibraryFilter.Criterion.allCases) { criterion in
                     Toggle(isOn: criterionBinding(criterion)) {
                         Label(criterion.title(bundle: bundle), systemImage: criterion.systemImage)

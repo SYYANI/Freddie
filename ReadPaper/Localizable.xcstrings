@@ -301,6 +301,7 @@
       }
     },
     "Add an arXiv ID, arXiv URL, web page URL, or a local PDF." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -1863,6 +1864,7 @@
       }
     },
     "Create a note from the current PDF or HTML selection, or start a blank note." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -4333,6 +4335,7 @@
       }
     },
     "Metadata" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -5615,6 +5618,23 @@
         }
       }
     },
+    "Preview Writing" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preview Writing"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "预览写作稿"
+          }
+        }
+      }
+    },
     "Previous Match" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -6769,6 +6789,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "分享论文"
+          }
+        }
+      }
+    },
+    "Share Writing" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Share Writing"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "分享写作稿"
           }
         }
       }

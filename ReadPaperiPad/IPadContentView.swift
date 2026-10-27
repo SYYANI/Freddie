@@ -1,18 +1,27 @@
 import SwiftData
 import SwiftUI
+import UIKit
 
 struct IPadContentView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.localizationBundle) private var bundle
+    @Environment(\.scenePhase) private var scenePhase
     @Query(sort: \Paper.modifiedAt, order: .reverse) private var papers: [Paper]
     @Query(sort: \PaperAttachment.createdAt) private var attachments: [PaperAttachment]
     @Query(sort: \Note.modifiedAt, order: .reverse) private var notes: [Note]
+    @Query private var folders: [PaperFolder]
+    @Query private var folderMemberships: [PaperFolderMembership]
+    @Query private var itemTypeAssignments: [PaperItemTypeAssignment]
+    @AppStorage(InspectorMode.userDefaultsKey) private var inspectorModeRawValue = InspectorMode.paper.rawValue
     @Query private var settingsRows: [AppSettings]
 
+    @State private var libraryFilter = PaperLibraryFilter()
+    @State private var htmlTranslatedPaperIDs: Set<UUID> = []
+    @State private var focusedNoteID: UUID?
     @State private var selectedPaperID: UUID?
     @State private var isAddingPaper = false
     @State private var isShowingSettings = false
-    @State private var isShowingInspector = false
+    @AppStorage("ReadPaper.iPad.Inspector.IsPresented") private var isShowingInspector = true
     @State private var paperPendingDeletion: Paper?
     @State private var errorMessage: String?
     @State private var noteSelectionContext: NoteSelectionContext?
@@ -40,14 +49,14 @@ struct IPadContentView: View {
     var body: some View {
         NavigationSplitView(preferredCompactColumn: $preferredCompactColumn) {
             sidebar
-                .navigationSplitViewColumnWidth(min: 220, ideal: 270, max: 340)
+                .navigationSplitViewColumnWidth(min: 240, ideal: 260, max: 340)
         } detail: {
             reader
         }
         .navigationSplitViewStyle(.balanced)
         .inspector(isPresented: $isShowingInspector) {
             inspector
-                .inspectorColumnWidth(min: 280, ideal: 340, max: 440)
+                .inspectorColumnWidth(min: 280, ideal: 340, max: 640)
         }
         .sheet(isPresented: $isAddingPaper) {
             IPadAddPaperView(
@@ -72,6 +81,16 @@ struct IPadContentView: View {
                 deletePaper(paper)
             }
             Button(String(localized: "Cancel", bundle: bundle), role: .cancel) {}
+        } message: { paper in
+            let message = AppLocalization.format(
+                "“%@” and all of its local files, notes, reading state, and translation cache will be removed.",
+                bundle: bundle, paper.title
+            )
+            let count = WritingLibrary.shared.writings(citing: paper.id).count
+            Text(count == 0 ? message : message + "\n\n" + AppLocalization.format(
+                "Writings citing this paper: %lld. Their text stays, but its citations will no longer open the paper.",
+                bundle: bundle, count
+            ))
         }
         .alert(
             String(localized: "Error", bundle: bundle),
@@ -87,27 +106,84 @@ struct IPadContentView: View {
         .onAppear {
             _ = try? LLMConfigurationBootstrapper().ensureBootstrap(modelContext: modelContext)
             try? LLMDefaultProfileSeeder().ensureDefaults(modelContext: modelContext)
+            WritingLibrary.shared.loadIfNeeded()
             restoreSelection()
+            PaperSelectionStore.saveSelection(selectedPaperID)
         }
         .onChange(of: papers.map(\.id)) { _, _ in restoreSelection() }
         .onChange(of: selectedPaperID) { _, newValue in
             noteSelectionContext = nil
-            noteNavigationRequest = nil
-            persistSelection(newValue)
+            focusedNoteID = nil
+            if noteNavigationRequest?.paperID != newValue {
+                noteNavigationRequest = nil
+            }
+            PaperSelectionStore.saveSelection(newValue)
             if newValue != nil {
                 preferredCompactColumn = .detail
             }
         }
+        .onChange(of: scenePhase) { _, phase in
+            if phase != .active {
+                persistSelection(selectedPaperID)
+                IPadWritingDocumentCenter.shared.saveAll()
+            }
+        }
+    }
+
+    private var itemTypes: PaperItemTypeResolution {
+        PaperItemTypeResolution(papers: papers, attachments: attachments, assignments: itemTypeAssignments)
+    }
+
+    private var visibleGrouping: PaperLibraryGrouping {
+        let grouping = PaperLibraryGrouping(papers: papers, folders: folders, memberships: folderMemberships)
+        guard libraryFilter.isActive else { return grouping }
+        let facts = PaperLibraryFilter.Facts(
+            translatedPaperIDs: PaperLibraryFilter.translatedPaperIDs(
+                attachments: attachments, htmlTranslatedPaperIDs: htmlTranslatedPaperIDs
+            ),
+            notedPaperIDs: Set(notes.map(\.paperID)),
+            itemTypes: itemTypes
+        )
+        return grouping.filtered { $0.id == selectedPaper?.id || libraryFilter.matches($0, facts: facts) }
+    }
+
+    private var inspectorMode: Binding<InspectorMode> {
+        Binding(
+            get: { InspectorMode(rawValue: inspectorModeRawValue) ?? .paper },
+            set: { inspectorModeRawValue = $0.rawValue }
+        )
     }
 
     private var sidebar: some View {
-        IPadLibrarySidebar(
+        LibrarySidebarView(
             papers: papers,
+            grouping: visibleGrouping,
+            itemTypes: itemTypes,
+            filter: $libraryFilter,
+            selectedPaper: selectedPaper,
             selectedPaperID: $selectedPaperID,
-            onAdd: { isAddingPaper = true },
-            onSettings: { isShowingSettings = true },
-            onDelete: { paperPendingDeletion = $0 }
+            isAddingPaper: $isAddingPaper,
+            onDeletePaper: { paperPendingDeletion = $0 }
         )
+        .equatable()
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button { isShowingSettings = true } label: {
+                    Label(String(localized: "Settings", bundle: bundle), systemImage: "gearshape")
+                        .labelStyle(.iconOnly)
+                }
+            }
+        }
+        .task(id: HTMLTranslationLookupKey(
+            isNeeded: libraryFilter.criteria.contains(.translated),
+            selectedPaperID: selectedPaperID,
+            paperCount: papers.count
+        )) {
+            guard libraryFilter.criteria.contains(.translated) else { return }
+            do {
+                htmlTranslatedPaperIDs = try PaperLibraryFilter.htmlTranslatedPaperIDs(modelContext: modelContext)
+            } catch { errorMessage = error.localizedDescription }
+        }
     }
 
     private var reader: some View {
@@ -122,22 +198,108 @@ struct IPadContentView: View {
     }
 
     private var inspector: some View {
-        IPadInspectorPaneView(
+        InspectorPaneView(
             paper: selectedPaper,
+            itemType: selectedPaper.map { itemTypes.selection(for: $0.id) },
             notes: selectedNotes,
+            isCollapsed: false,
             currentSelectionContext: noteSelectionContext,
+            focusedNoteID: $focusedNoteID,
+            mode: inspectorMode,
+            onCreateNote: createNote,
             onOpenNoteAnchor: { note in
                 noteNavigationRequest = note.navigationRequest
                 isShowingInspector = false
-            }
+            },
+            onOpenCitation: openCitation,
+            onOpenWriting: { id in
+                IPadWritingDocumentCenter.shared.saveAll()
+                WritingLibrary.shared.selectWriting(id)
+                inspectorMode.wrappedValue = .writing
+            },
+            onCreateWritingAboutPaper: createWriting,
+            onQuoteInWriting: quoteInWriting
         )
+    }
+
+    private func createNote() {
+        guard let paper = selectedPaper else { return }
+        let note = Note(
+            paperID: paper.id,
+            attachmentID: noteSelectionContext?.attachmentID,
+            quote: noteSelectionContext?.trimmedQuote ?? "",
+            body: "",
+            pageIndex: noteSelectionContext?.pageIndex,
+            htmlSelector: noteSelectionContext?.htmlSelector
+        )
+        modelContext.insert(note)
+        do {
+            try modelContext.save()
+            focusedNoteID = note.id
+        } catch {
+            modelContext.rollback()
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func createWriting(about paper: Paper) {
+        let label = PaperCitation.label(
+            authors: paper.authors, title: paper.title,
+            year: paper.publishedAt.map { Calendar(identifier: .gregorian).component(.year, from: $0) },
+            pageIndex: nil
+        )
+        let heading = paper.title.components(separatedBy: .whitespacesAndNewlines)
+            .filter { !$0.isEmpty }.joined(separator: " ")
+        do {
+            IPadWritingDocumentCenter.shared.saveAll()
+            try WritingLibrary.shared.createWriting(
+                markdown: "# \(MarkdownEscaping.escapedInlineText(heading))\n\n"
+                    + PaperCitation.inlineMarkdown(label: label, citation: PaperCitation(paperID: paper.id)) + "\n\n"
+            )
+            inspectorMode.wrappedValue = .writing
+        } catch { errorMessage = error.localizedDescription }
+    }
+
+    private func openCitation(_ citation: PaperCitation, quote: String?) {
+        guard papers.contains(where: { $0.id == citation.paperID }) else {
+            errorMessage = String(localized: "The cited paper is no longer in your library.", bundle: bundle)
+            return
+        }
+        selectedPaperID = citation.paperID
+        noteNavigationRequest = citation.navigationRequest(quote: quote)
+        isShowingInspector = false
+    }
+
+    private func quoteInWriting() {
+        guard let paper = selectedPaper, let selection = noteSelectionContext,
+              let quote = selection.trimmedQuote else { return }
+        do {
+            let center = IPadWritingDocumentCenter.shared
+            center.saveAll()
+            let library = center.library
+            if library.currentWritingID == nil { try library.createWriting() }
+            guard let id = library.currentWritingID else { return }
+            let document = try center.document(for: id)
+            let label = PaperCitation.label(
+                authors: paper.authors, title: paper.title,
+                year: paper.publishedAt.map { Calendar(identifier: .gregorian).component(.year, from: $0) },
+                pageIndex: selection.pageIndex
+            )
+            let block = PaperCitation.quoteMarkdown(
+                quote: quote, label: label, citation: PaperCitation(paperID: paper.id, selection: selection)
+            )
+            document.apply(WritingInsertion.block(block, in: document.markdown, at: document.selection.location))
+            document.save()
+            document.focusRequest += 1
+            inspectorMode.wrappedValue = .writing
+        } catch { errorMessage = error.localizedDescription }
     }
 
     private func restoreSelection() {
         let available = papers.map(\.id)
         let resolved = PaperSelectionStore.resolvedSelection(
             currentPaperID: selectedPaperID,
-            savedPaperID: settings?.lastOpenedPaperID,
+            savedPaperID: PaperSelectionStore.savedPaperID(settingsPaperID: settings?.lastOpenedPaperID),
             availablePaperIDs: available
         )
         if resolved != selectedPaperID { selectedPaperID = resolved }
@@ -151,10 +313,14 @@ struct IPadContentView: View {
     }
 
     private func deletePaper(_ paper: Paper) {
+        let orderedIDs = visibleGrouping.orderedPaperIDs
+        let remainingIDs = orderedIDs.filter { $0 != paper.id }
+        let index = min(orderedIDs.firstIndex(of: paper.id) ?? 0, max(0, remainingIDs.count - 1))
+        let nextSelection = remainingIDs.isEmpty ? nil : remainingIDs[index]
         do {
             try PaperDeletionService().delete(paper, modelContext: modelContext)
             paperPendingDeletion = nil
-            selectedPaperID = papers.first(where: { $0.id != paper.id })?.id
+            selectedPaperID = nextSelection
         } catch {
             paperPendingDeletion = nil
             errorMessage = error.localizedDescription
@@ -162,68 +328,8 @@ struct IPadContentView: View {
     }
 }
 
-private struct IPadLibrarySidebar: View {
-    @Environment(\.localizationBundle) private var bundle
-    let papers: [Paper]
-    @Binding var selectedPaperID: UUID?
-    let onAdd: () -> Void
-    let onSettings: () -> Void
-    let onDelete: (Paper) -> Void
-
-    var body: some View {
-        Group {
-            if papers.isEmpty {
-                ContentUnavailableView {
-                    Label {
-                        Text("No papers yet", bundle: bundle)
-                    } icon: {
-                        Image(systemName: "doc.text.magnifyingglass")
-                    }
-                } description: {
-                    Text("Add an arXiv ID, arXiv URL, web page URL, or a local PDF.", bundle: bundle)
-                } actions: {
-                    Button(action: onAdd) {
-                        Label(String(localized: "First Paper", bundle: bundle), systemImage: "plus")
-                    }
-                    .buttonStyle(.borderedProminent)
-                }
-            } else {
-                List(papers, selection: $selectedPaperID) { paper in
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(paper.title)
-                            .font(.headline)
-                            .lineLimit(2)
-                        Text(paper.displayAuthors)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                        if let identifier = paper.sidebarIdentifierText {
-                            Text(identifier)
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 6)
-                    .tag(paper.id)
-                    .contextMenu {
-                        Button(role: .destructive) { onDelete(paper) } label: {
-                            Label(String(localized: "Delete Paper", bundle: bundle), systemImage: "trash")
-                        }
-                    }
-                }
-                .listStyle(.sidebar)
-            }
-        }
-        .toolbar {
-            ToolbarItemGroup(placement: .primaryAction) {
-                Button(action: onSettings) {
-                    Label(String(localized: "Settings", bundle: bundle), systemImage: "gearshape")
-                }
-                Button(action: onAdd) {
-                    Label(String(localized: "Add Paper", bundle: bundle), systemImage: "plus")
-                }
-            }
-        }
-    }
+private struct HTMLTranslationLookupKey: Equatable {
+    let isNeeded: Bool
+    let selectedPaperID: UUID?
+    let paperCount: Int
 }

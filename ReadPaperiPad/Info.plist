@@ -40,5 +40,18 @@
 	</array>
 	<key>UILaunchScreen</key>
 	<dict/>
+	<key>UTExportedTypeDeclarations</key>
+	<array>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>Freddie Library Paper</string>
+			<key>UTTypeIdentifier</key>
+			<string>com.yiyan.ReadPaper.paper-reference</string>
+		</dict>
+	</array>
 </dict>
 </plist>

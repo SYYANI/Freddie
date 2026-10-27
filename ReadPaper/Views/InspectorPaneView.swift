@@ -1,4 +1,6 @@
+#if os(macOS)
 import AppKit
+#endif
 import SwiftData
 import SwiftUI
 
@@ -26,12 +28,18 @@ struct InspectorPaneView: View {
     var currentSelectionContext: NoteSelectionContext?
     @Binding var focusedNoteID: UUID?
     @Binding var mode: InspectorMode
+    #if os(macOS)
     var writingCenter: WritingDocumentCenter = .shared
+    private var writingLibrary: WritingLibrary { writingCenter.library }
+    #else
+    var writingLibrary: WritingLibrary = .shared
+    #endif
     var onCreateNote: () -> Void
     var onOpenNoteAnchor: (Note) -> Void
     var onOpenCitation: (PaperCitation, String?) -> Void
     var onOpenWriting: (UUID) -> Void
     var onCreateWritingAboutPaper: (Paper) -> Void
+    var onQuoteInWriting: (() -> Void)? = nil
 
     var body: some View {
         Group {
@@ -77,7 +85,7 @@ struct InspectorPaneView: View {
                                 .padding(16)
                             Divider()
                             PaperWritingsSection(
-                                library: writingCenter.library,
+                                library: writingLibrary,
                                 paperID: paper.id,
                                 onOpenWriting: onOpenWriting,
                                 onCreateWriting: { onCreateWritingAboutPaper(paper) }
@@ -90,11 +98,15 @@ struct InspectorPaneView: View {
                     emptyInspectorState
                 }
             case .writing:
+                #if os(macOS)
                 WritingPaneView(
                     center: writingCenter,
                     focusRequest: 0,
                     onOpenCitation: onOpenCitation
                 )
+                #else
+                IPadWritingPaneView(library: writingLibrary, onOpenCitation: onOpenCitation)
+                #endif
             }
         }
         .fontDesign(displayAppearance == .paper ? .serif : .default)
@@ -168,9 +180,11 @@ struct InspectorPaneView: View {
                         commitAuthorsEdits(for: paper)
                     }
                 }
+                #if os(macOS)
                 .onExitCommand {
                     cancelAuthorsEditing(for: paper)
                 }
+                #endif
         } else {
             Button {
                 beginAuthorsEditing(for: paper)
@@ -249,6 +263,14 @@ struct InspectorPaneView: View {
     private func notesSection() -> some View {
         VStack(alignment: .leading, spacing: 10) {
             InspectorSectionHeader(title: String(localized: "Notes", bundle: bundle)) {
+                if currentSelectionContext != nil, let onQuoteInWriting {
+                    InspectorIconButton(
+                        title: String(localized: "Quote in Writing", bundle: bundle),
+                        systemImage: "text.quote"
+                    ) {
+                        onQuoteInWriting()
+                    }
+                }
                 InspectorIconButton(
                     title: currentSelectionContext != nil
                         ? String(localized: "Add Note to Current Selection", bundle: bundle)
@@ -717,6 +739,14 @@ private struct NoteEditor: View {
         return nil
     }
 
+    private var noteBackground: Color {
+        #if os(macOS)
+        Color(nsColor: .controlBackgroundColor)
+        #else
+        Color(uiColor: .secondarySystemBackground)
+        #endif
+    }
+
     private var notePreview: some View {
         notePreviewCard(isInteractive: true)
     }
@@ -727,7 +757,7 @@ private struct NoteEditor: View {
         }
         .background(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(Color(nsColor: .controlBackgroundColor))
+                .fill(noteBackground)
         )
         .overlay {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
@@ -781,6 +811,7 @@ private struct NotePreviewInteractionModifier: ViewModifier {
     }
 }
 
+#if os(macOS)
 private struct InsetTextView: NSViewRepresentable {
     @Binding var text: String
     var shouldFocus: Bool
@@ -995,6 +1026,8 @@ private struct InsetTextView: NSViewRepresentable {
         }
     }
 }
+
+#endif
 
 /// The paper's item type above its title; choosing another type is the only
 /// place to change it. Kept out of the library rows' context menus on purpose:

@@ -1,5 +1,9 @@
 import XCTest
+#if os(iOS)
+@testable import ReadPaperiPad
+#else
 @testable import ReadPaper
+#endif
 
 final class PaperSelectionStoreTests: XCTestCase {
     func testResolvedSelectionPrefersCurrentSelectionWhenStillAvailable() {

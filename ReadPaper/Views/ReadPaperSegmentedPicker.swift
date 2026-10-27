@@ -26,7 +26,9 @@ struct ReadPaperSegmentedPicker<Value: Hashable>: View {
     let options: [Option]
     var placement: Placement = .content
 
+    #if os(macOS)
     @Environment(\.controlActiveState) private var controlActiveState
+    #endif
 
     var body: some View {
         segments
@@ -45,7 +47,11 @@ struct ReadPaperSegmentedPicker<Value: Hashable>: View {
     }
 
     private var isWindowActive: Bool {
+        #if os(macOS)
         controlActiveState != .inactive
+        #else
+        true
+        #endif
     }
 
     private func segment(_ option: Option) -> some View {
@@ -81,7 +87,7 @@ struct ReadPaperSegmentedPicker<Value: Hashable>: View {
 /// A primary-action toolbar item for `ReadPaperSegmentedPicker` that keeps its own capsule.
 @ToolbarContentBuilder
 func segmentedPickerToolbarItem<Content: View>(@ViewBuilder content: () -> Content) -> some ToolbarContent {
-    if #available(macOS 26.0, *) {
+    if #available(macOS 26.0, iOS 26.0, *) {
         ToolbarItem(placement: .primaryAction, content: content)
             .sharedBackgroundVisibility(.hidden)
     } else {
