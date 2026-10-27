@@ -180,6 +180,7 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
     var regionEditLabels = HTMLRegionEditLabels()
     var regionEditCommand: HTMLRegionEditCommand? = nil
     var onRegionEditEvent: ((HTMLRegionEditEvent) -> Void)? = nil
+    var onOutlineChanged: (([DocumentOutlineEntry], String?) -> Void)? = nil
 
     #if os(macOS)
     func makeNSView(context: Context) -> WKWebView {
@@ -220,6 +221,7 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
         configuration.userContentController.add(coordinator, name: Coordinator.sidenoteMessageHandlerName)
         configuration.userContentController.add(coordinator, name: Coordinator.citationMarkMessageHandlerName)
         configuration.userContentController.add(coordinator, name: HTMLRegionEditing.messageHandlerName)
+        configuration.userContentController.add(coordinator, name: HTMLDocumentOutline.messageHandlerName)
         configuration.userContentController.addUserScript(
             WKUserScript(
                 source: Coordinator.mediaPreparationScript,
@@ -239,6 +241,13 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
         configuration.userContentController.addUserScript(
             WKUserScript(
                 source: Coordinator.instrumentationScript,
+                injectionTime: .atDocumentEnd,
+                forMainFrameOnly: true
+            )
+        )
+        configuration.userContentController.addUserScript(
+            WKUserScript(
+                source: HTMLDocumentOutline.script,
                 injectionTime: .atDocumentEnd,
                 forMainFrameOnly: true
             )
@@ -290,6 +299,7 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
         context.coordinator.regionEditLabels = regionEditLabels
         context.coordinator.regionEditCommand = regionEditCommand
         context.coordinator.onRegionEditEvent = onRegionEditEvent
+        context.coordinator.onOutlineChanged = onOutlineChanged
         applyHostDisplayAppearance(displayAppearance, to: view)
         context.coordinator.clearSelectionHighlightIfNeeded(
             resetToken: selectionHighlightResetToken,
@@ -1044,8 +1054,15 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
             }, true);
 
             window.__rpScrollToNoteAnchor = anchor => {
-                const target = window.__rpResolveNoteAnchor(anchor);
+                let target = window.__rpResolveNoteAnchor(anchor);
                 if (!target) { return false; }
+                if (!target.getClientRects().length) {
+                    const sourceID = target.getAttribute('data-rp-segment-id');
+                    const translated = sourceID
+                        ? document.querySelector('.rp-translation-block[data-rp-source-segment-id="' + CSS.escape(sourceID) + '"]')
+                        : target.nextElementSibling;
+                    if (translated?.classList.contains('rp-translation-block')) target = translated;
+                }
                 target.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
                 target.classList.add('rp-note-anchor-target');
                 window.setTimeout(() => target.classList.remove('rp-note-anchor-target'), 1400);
@@ -2083,6 +2100,8 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
         var isRegionEditing = false
         var regionEditLabels = HTMLRegionEditLabels()
         var regionEditCommand: HTMLRegionEditCommand?
+        var onOutlineChanged: (([DocumentOutlineEntry], String?) -> Void)?
+        private var outlineEntries: [DocumentOutlineEntry] = []
         var onRegionEditEvent: ((HTMLRegionEditEvent) -> Void)?
         private var appliedRegionEditing: Bool?
         private var appliedRegionEditLabels: HTMLRegionEditLabels?
@@ -2173,6 +2192,13 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
                 return
             }
 
+            if loadedURL != request.fileURL, !outlineEntries.isEmpty {
+                // Another document: drop the old outline now rather than when the new page
+                // reports, which never happens if it fails to load.
+                outlineEntries = []
+                let onOutlineChanged = onOutlineChanged
+                Task { @MainActor in onOutlineChanged?([], nil) }
+            }
             isLoading = true
             isDocumentReady = false
             lastSelectionAssistantHistorySignature = nil
@@ -2342,6 +2368,20 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
                     return
                 }
                 onCitationMarksActivated?(ids)
+            case HTMLDocumentOutline.messageHandlerName:
+                // Compare paths: following an in-page link such as `#S3` adds a fragment to
+                // `location.href` while the document stays the same.
+                guard message.frameInfo.isMainFrame,
+                      let body = message.body as? [String: Any],
+                      let address = body["documentURL"] as? String,
+                      let documentURL = URL(string: address), documentURL.isFileURL,
+                      let loadedURL, documentURL.standardizedFileURL.path == loadedURL.standardizedFileURL.path else { return }
+                if let entries = body["entries"] as? [[String: Any]],
+                   let data = try? JSONSerialization.data(withJSONObject: entries),
+                   let decoded = try? JSONDecoder().decode([DocumentOutlineEntry].self, from: data) {
+                    outlineEntries = decoded
+                }
+                onOutlineChanged?(outlineEntries, body["currentID"] as? String)
             case HTMLRegionEditing.messageHandlerName:
                 handleRegionEditMessage(message)
             default:

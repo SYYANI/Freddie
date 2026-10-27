@@ -29,6 +29,32 @@ final class BabelDocSemanticHintServiceTests: XCTestCase {
         XCTAssertEqual(acquisitionCount, 0)
     }
 
+    func testOutlineCacheLookupNeverAcquiresSourceAndValidatesExactVersion() async throws {
+        let temporary = try SemanticTemporaryDirectory()
+        defer { temporary.remove() }
+        let source = try makeProject(in: temporary.url)
+        let acquirer = CountingSemanticAcquirer(source: .localDirectory(source))
+        let service = BabelDocSemanticHintService(
+            fileStore: PaperFileStore(applicationSupportDirectory: temporary.url.appendingPathComponent("support")),
+            acquirer: acquirer
+        )
+        let paperID = UUID()
+        let missing = try await service.cachedOnly(paperID: paperID, arxivIdentifier: "2401.00001v2")
+        XCTAssertNil(missing)
+        let before = await acquirer.acquisitionCount()
+        XCTAssertEqual(before, 0)
+        let artifact = try await service.prepare(paperID: paperID, arxivIdentifier: "2401.00001v2")
+        let cached = try await service.cachedOnly(paperID: paperID, arxivIdentifier: "2401.00001v2")
+        XCTAssertEqual(cached?.document, artifact.document)
+        let otherVersion = try await service.cachedOnly(paperID: paperID, arxivIdentifier: "2401.00001v3")
+        XCTAssertNil(otherVersion)
+        try Data("invalid".utf8).write(to: artifact.fileURL)
+        let corrupt = try await service.cachedOnly(paperID: paperID, arxivIdentifier: "2401.00001v2")
+        XCTAssertNil(corrupt)
+        let after = await acquirer.acquisitionCount()
+        XCTAssertEqual(after, 1, "Read-only outline lookups never redownload missing or damaged sidecars")
+    }
+
     func testBuildsCompilerFreeSidecarAndReusesExactVersionCache() async throws {
         let temporary = try SemanticTemporaryDirectory()
         defer { temporary.remove() }

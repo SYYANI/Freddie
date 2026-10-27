@@ -96,6 +96,30 @@ actor BabelDocSemanticHintService {
         }
     }
 
+    /// Shared by `prepare` and `cachedOnly`, so the outline reads exactly the sidecar translation wrote.
+    private static func cacheKey(for identifier: String) -> String {
+        String(Hashing.sha256Hex(
+            "schema=\(cacheSchemaVersion)|extractor=\(extractorAlgorithmVersion)|source=\(identifier)"
+        ).prefix(24))
+    }
+
+    /// Read the exact, validated sidecar without acquiring or parsing any source.
+    func cachedOnly(paperID: UUID, arxivIdentifier: String?) throws -> BabelDocSemanticHintArtifact? {
+        guard let arxivIdentifier,
+              let normalized = try? ArxivClient.normalizeIdentifier(arxivIdentifier) else { return nil }
+        let identifier = normalized.queryID
+        let root = try fileStore.libraryDirectory.appendingPathComponent(paperID.uuidString)
+            .appendingPathComponent("Resources/LaTeXSemantic")
+        let key = Self.cacheKey(for: identifier)
+        let url = root.appendingPathComponent("semantic-\(key).json")
+        guard let document = try? loadValidatedCache(
+            semanticURL: url,
+            metadataURL: root.appendingPathComponent("semantic-\(key).metadata.json"),
+            expectedIdentifier: identifier
+        ) else { return nil }
+        return .init(document: document, fileURL: url, wasCached: true)
+    }
+
     func prepare(
         paperID: UUID,
         arxivIdentifier: String,
@@ -136,9 +160,7 @@ actor BabelDocSemanticHintService {
         onStatus: @escaping StatusHandler
     ) async throws -> BabelDocSemanticHintArtifact {
         let root = try fileStore.latexSemanticDirectory(for: paperID)
-        let cacheKey = String(Hashing.sha256Hex(
-            "schema=\(Self.cacheSchemaVersion)|extractor=\(Self.extractorAlgorithmVersion)|source=\(exactIdentifier)"
-        ).prefix(24))
+        let cacheKey = Self.cacheKey(for: exactIdentifier)
         let semanticURL = root.appendingPathComponent("semantic-\(cacheKey).json")
         let metadataURL = root.appendingPathComponent("semantic-\(cacheKey).metadata.json")
 

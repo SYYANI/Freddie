@@ -61,6 +61,8 @@ struct NoteNavigationRequest: Equatable, Identifiable {
     var pageIndex: Int?
     var htmlSelector: String?
     var quote: String?
+    /// Reader-only destination for a section on the original page.
+    var outlineFraction: Double?
 
     init(
         id: UUID = UUID(),
@@ -68,9 +70,11 @@ struct NoteNavigationRequest: Equatable, Identifiable {
         attachmentID: UUID? = nil,
         pageIndex: Int? = nil,
         htmlSelector: String? = nil,
-        quote: String? = nil
+        quote: String? = nil,
+        outlineFraction: Double? = nil
     ) {
         self.id = id
+        self.outlineFraction = outlineFraction
         self.paperID = paperID
         self.attachmentID = attachmentID
         self.pageIndex = pageIndex.map { max(0, $0) }

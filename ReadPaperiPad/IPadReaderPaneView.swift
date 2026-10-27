@@ -44,6 +44,8 @@ struct IPadReaderPaneView: View {
     let onToggleSidebar: () -> Void
     let onToggleInspector: () -> Void
 
+    @State private var outlineModel = DocumentOutlineModel()
+    @State private var outlineNavigationRequest: NoteNavigationRequest?
     @State private var readerMode: ReaderMode = .pdf
     @State private var lastPDFReaderMode: ReaderMode = .pdf
     @State private var displayMode: TranslationDisplayMode = .bilingual
@@ -122,6 +124,7 @@ struct IPadReaderPaneView: View {
         Binding(
             get: { readerMode == .html ? .html : .pdf },
             set: { newValue in
+                outlineNavigationRequest = nil
                 switch newValue {
                 case .html:
                     if readerMode != .html {
@@ -139,6 +142,7 @@ struct IPadReaderPaneView: View {
         Binding(
             get: { normalizedPDFReaderMode(readerMode == .html ? lastPDFReaderMode : readerMode) },
             set: { newValue in
+                outlineNavigationRequest = nil
                 let normalizedMode = normalizedPDFReaderMode(newValue)
                 lastPDFReaderMode = normalizedMode
                 readerMode = normalizedMode
@@ -202,11 +206,15 @@ struct IPadReaderPaneView: View {
 
     var body: some View {
         readerContent
+        .task(id: outlineLoadIdentity) {
+            await outlineModel.load(outlineRequest, paperID: paper?.id, fetch: outlineModel.isPresented)
+        }
         .onAppear {
             restoreReadingState()
             revealNoteAnchor()
         }
         .onChange(of: paper?.id) { _, _ in
+            outlineNavigationRequest = nil
             noteSelectionContext = nil
             pdfAnnotationSession.resetForDocumentChange()
             isAnnotating = false
@@ -232,7 +240,7 @@ struct IPadReaderPaneView: View {
             persistReadingState()
         }
         .onChange(of: htmlScrollRatio) { _, _ in persistReadingState() }
-        .onChange(of: noteNavigationRequest?.id) { _, _ in revealNoteAnchor() }
+        .onChange(of: noteNavigationRequest?.id) { _, _ in outlineNavigationRequest = nil; revealNoteAnchor() }
         .onChange(of: pdfAnnotationSession.interactionMode) { _, newValue in
             // A Pencil double tap or squeeze can pick a tool without the toolbar.
             if newValue != .browse, readerMode != .html {
@@ -245,6 +253,7 @@ struct IPadReaderPaneView: View {
             }
         }
         .onDisappear {
+            outlineModel.cancel()
             persistReadingState()
             translationTask?.cancel()
             dismissTranslationActivityOutcome()
@@ -359,6 +368,19 @@ struct IPadReaderPaneView: View {
                     }
                     .tint(.accentColor)
                 } else {
+                    Button { outlineModel.isPresented.toggle() } label: {
+                        Label(String(localized: "Contents", bundle: bundle), systemImage: "list.bullet.indent")
+                    }
+                    .popover(isPresented: $outlineModel.isPresented, arrowEdge: .top) {
+                        DocumentOutlinePanel(
+                            model: outlineModel, isHTML: readerMode == .html,
+                            translatedLastPage: translatedPDFAttachment?.translatedLastPage,
+                            isTranslatedOnly: readerMode == .translatedPDF, allowsPinning: false,
+                            onNavigate: navigateOutline, onOrganize: organizeOutline
+                        )
+                        .frame(width: 320, height: 500)
+                        .presentationCompactAdaptation(.popover)
+                    }
                     if readerMode != .html {
                         Button(action: beginAnnotating) {
                             Label(String(localized: "PDF Annotations", bundle: bundle), systemImage: "pencil.tip.crop.circle")
@@ -519,8 +541,9 @@ struct IPadReaderPaneView: View {
                     initialScrollRatio: htmlScrollRatio,
                     scrollRatio: $htmlScrollRatio,
                     segmentUpdate: htmlSegmentUpdate,
-                    noteNavigationRequest: noteNavigationRequest,
-                    onNoteSelectionChanged: { noteSelectionContext = $0 }
+                    noteNavigationRequest: outlineNavigationRequest ?? noteNavigationRequest,
+                    onNoteSelectionChanged: { noteSelectionContext = $0 },
+                    onOutlineChanged: { entries, current in outlineModel.updateHTML(entries, currentID: current) }
                 )
             } else {
                 unavailable(
@@ -542,8 +565,10 @@ struct IPadReaderPaneView: View {
                         displayAppearance: appearance,
                         pageIndex: $pdfPageIndex,
                         reloadToken: pdfReloadToken,
+                        noteNavigationRequest: outlineNavigationRequest ?? noteNavigationRequest,
                         annotationSession: pdfAnnotationSession,
-                        onNoteSelectionChanged: { noteSelectionContext = $0 }
+                        onNoteSelectionChanged: { noteSelectionContext = $0 },
+                        onOutlineLocationChanged: { page, fraction in outlineModel.updatePDFLocation(page: page, fraction: fraction) }
                     )
                 }
             } else {
@@ -564,8 +589,10 @@ struct IPadReaderPaneView: View {
                             automaticScalingRestoreToken: automaticScalingRestoreToken,
                             pageIndex: $pdfPageIndex,
                             reloadToken: pdfReloadToken,
+                            noteNavigationRequest: outlineNavigationRequest ?? noteNavigationRequest,
                             annotationSession: pdfAnnotationSession,
-                            onNoteSelectionChanged: { noteSelectionContext = $0 }
+                            onNoteSelectionChanged: { noteSelectionContext = $0 },
+                            onOutlineLocationChanged: { page, fraction in outlineModel.updatePDFLocation(page: page, fraction: fraction) }
                         )
                     }
                 } trailing: {
@@ -579,6 +606,7 @@ struct IPadReaderPaneView: View {
                             automaticScalingRestoreToken: automaticScalingRestoreToken,
                             pageIndex: translatedPageBinding,
                             reloadToken: pdfReloadToken,
+                            noteNavigationRequest: outlineNavigationRequest ?? noteNavigationRequest,
                             annotationSession: pdfAnnotationSession,
                             onNoteSelectionChanged: { noteSelectionContext = $0 }
                         )
@@ -604,8 +632,10 @@ struct IPadReaderPaneView: View {
                         displayAppearance: appearance,
                         pageIndex: translatedPageBinding,
                         reloadToken: pdfReloadToken,
+                        noteNavigationRequest: outlineNavigationRequest ?? noteNavigationRequest,
                         annotationSession: pdfAnnotationSession,
-                        onNoteSelectionChanged: { noteSelectionContext = $0 }
+                        onNoteSelectionChanged: { noteSelectionContext = $0 },
+                        onOutlineLocationChanged: { page, fraction in outlineModel.updatePDFLocation(page: page, fraction: fraction) }
                     )
                 }
             } else {
@@ -619,6 +649,35 @@ struct IPadReaderPaneView: View {
                 )
             }
         }
+    }
+
+    private var outlineRequest: DocumentOutlineRequest? {
+        guard let paper, let pdfAttachment else { return nil }
+        return .init(paperID: paper.id, pdfURL: pdfAttachment.fileURL, arxivID: paper.arxivID, revision: pdfReloadToken)
+    }
+    private var outlineLoadIdentity: String {
+        "\(paper?.id.uuidString ?? "")|\(pdfAttachment?.filePath ?? "")|\(paper?.arxivID ?? "")|\(pdfReloadToken)|\(isTranslating)|\(outlineModel.isPresented)"
+    }
+    private func navigateOutline(_ entry: DocumentOutlineEntry) {
+        if readerMode == .html {
+            outlineNavigationRequest = .init(attachmentID: htmlAttachment?.id, htmlSelector: entry.anchor)
+            return
+        }
+        guard let page = entry.pageIndex else { return }
+        let target = DocumentOutlineNavigation.pdfDestination(entry: entry, translatedOnly: readerMode == .translatedPDF,
+                                                              translatedLastPage: translatedPDFAttachment?.translatedLastPage)
+        if target.opensOriginal { readerMode = .pdf }
+        let attachment = readerMode == .translatedPDF ? translatedPDFAttachment : pdfAttachment
+        pdfPageIndex = page
+        syncTranslatedPageFromOriginal(page)
+        // No quote: the title text may also appear in the body; the page top is the fallback.
+        outlineNavigationRequest = .init(attachmentID: attachment?.id, pageIndex: page, outlineFraction: entry.fraction ?? 0)
+    }
+    private func organizeOutline() {
+        do {
+            guard let settings else { throw LLMRouteError.pdfModelNotSelected }
+            outlineModel.organize(route: try LLMRouteResolver().resolvePDFRoute(settings: settings, modelContext: modelContext))
+        } catch { outlineModel.errorMessage = error.localizedDescription }
     }
 
     private var translatedPageBinding: Binding<Int> {

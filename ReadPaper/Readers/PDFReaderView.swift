@@ -5,10 +5,14 @@ import SwiftUI
 #if os(macOS)
 import AppKit
 import CoreImage
+private typealias PlatformOutlineScrollView = NSScrollView
+private typealias PlatformOutlineView = NSView
 private typealias PlatformPDFColor = NSColor
 private typealias PlatformPDFViewRepresentable = NSViewRepresentable
 #else
 import UIKit
+private typealias PlatformOutlineScrollView = UIScrollView
+private typealias PlatformOutlineView = UIView
 private typealias PlatformPDFColor = UIColor
 private typealias PlatformPDFViewRepresentable = UIViewRepresentable
 #endif
@@ -310,6 +314,7 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
     var citationMarks: [WritingCitationMark] = []
     /// A single click on cited passages, with the marks under the pointer.
     var onCitationMarksActivated: (([String]) -> Void)? = nil
+    var onOutlineLocationChanged: ((Int, Double) -> Void)? = nil
     #if os(macOS)
     /// Scrolls the other pane of a side-by-side reader along with this one.
     var scrollSync: DualPDFScrollSync? = nil
@@ -379,6 +384,7 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
         context.coordinator.onDocumentPageCountChanged = onDocumentPageCountChanged
         context.coordinator.onFindStatusChanged = onFindStatusChanged
         context.coordinator.onCitationMarksActivated = onCitationMarksActivated
+        context.coordinator.onOutlineLocationChanged = onOutlineLocationChanged
         if context.coordinator.lastSelectionResetToken != selectionResetToken {
             context.coordinator.lastSelectionResetToken = selectionResetToken
             view.clearSelection()
@@ -485,6 +491,7 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
         )
         context.coordinator.applyCitationMarks(citationMarks, in: view, force: shouldReloadDocument)
         context.coordinator.applyNoteNavigationIfNeeded(noteNavigationRequest, in: view)
+        context.coordinator.observeOutlineGeometry(in: view)
         context.coordinator.applyFindRequest(findRequest, in: view)
         context.coordinator.applySidenoteAnchors(
             sidenoteAnchors,
@@ -545,6 +552,12 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
         var pageIndex: Binding<Int>
         var onNoteSelectionChanged: ((NoteSelectionContext?) -> Void)?
         var onArxivLinkActivated: ((URL) -> Void)?
+        var onOutlineLocationChanged: ((Int, Double) -> Void)?
+        private var outlineGeometryObservation: NSKeyValueObservation?
+        #if os(macOS)
+        private var outlineGeometryNotification: NSObjectProtocol?
+        #endif
+        private weak var outlineScrollView: PlatformOutlineScrollView?
         var onDocumentPageCountChanged: ((Int) -> Void)?
         private weak var annotationSession: PDFAnnotationSession?
         private weak var registeredAnnotationSession: PDFAnnotationSession?
@@ -1000,6 +1013,12 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
         }
 
         func detach() {
+            #if os(macOS)
+            if let outlineGeometryNotification { NotificationCenter.default.removeObserver(outlineGeometryNotification) }
+            outlineGeometryNotification = nil
+            #endif
+            outlineGeometryObservation = nil
+            outlineScrollView = nil
             findTextLoadTask?.cancel()
             findTextLoadTask = nil
             #if os(macOS)
@@ -1246,6 +1265,11 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
             guard let page = document.page(at: targetPageIndex) else { return }
             defer { leadScrollSync() }
 
+            if let fraction = request.outlineFraction {
+                let bounds = page.bounds(for: .cropBox)
+                pdfView.go(to: PDFDestination(page: page, at: CGPoint(x: bounds.minX, y: bounds.maxY - bounds.height * min(max(fraction, 0), 1))))
+                return
+            }
             guard let quote = request.quote,
                   let pageText = page.string,
                   let range = PDFNoteNavigationTextMatcher.range(of: quote, in: pageText),
@@ -2130,6 +2154,50 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
             publishAnnotationCapabilities()
         }
 
+        func observeOutlineGeometry(in view: PDFView) {
+            guard onOutlineLocationChanged != nil else { return }
+            func findScroll(_ view: PlatformOutlineView) -> PlatformOutlineScrollView? {
+                if let scroll = view as? PlatformOutlineScrollView { return scroll }
+                return view.subviews.lazy.compactMap { findScroll($0) }.first
+            }
+            guard let scroll = findScroll(view), outlineScrollView !== scroll else { return }
+            outlineScrollView = scroll
+            #if os(macOS)
+            if let outlineGeometryNotification { NotificationCenter.default.removeObserver(outlineGeometryNotification) }
+            // NSClipView scrolling posts bounds notifications but does not publish KVO
+            // changes for `bounds`. Observe the same reliable signal as dual-PDF sync.
+            scroll.contentView.postsBoundsChangedNotifications = true
+            outlineGeometryNotification = NotificationCenter.default.addObserver(
+                forName: NSView.boundsDidChangeNotification, object: scroll.contentView, queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor [weak self] in self?.scheduleCurrentPageIndexUpdate() }
+            }
+            #else
+            outlineGeometryObservation = scroll.observe(\.contentOffset, options: [.new]) { [weak self] _, _ in
+                Task { @MainActor [weak self] in self?.scheduleCurrentPageIndexUpdate() }
+            }
+            #endif
+            scheduleCurrentPageIndexUpdate()
+        }
+
+        private func publishOutlineLocation() {
+            guard let callback = onOutlineLocationChanged, let view = pdfView, let document = view.document else { return }
+            #if os(macOS)
+            // The original pane also reports while following a translated-side scroll;
+            // this updates the outline without writing the shared page binding.
+            let y = view.isFlipped ? view.bounds.minY + 100 : view.bounds.maxY - 100
+            #else
+            let y = view.bounds.minY + 100
+            #endif
+            let point = CGPoint(x: view.bounds.midX, y: y)
+            guard let page = view.page(for: point, nearest: true) else { return }
+            let index = document.index(for: page)
+            guard index != NSNotFound else { return }
+            let bounds = page.bounds(for: .cropBox)
+            let pagePoint = view.convert(point, to: page)
+            callback(index, Double(min(max((bounds.maxY - pagePoint.y) / max(1, bounds.height), 0), 1)))
+        }
+
         func scheduleCurrentPageIndexUpdate() {
             guard !isPageIndexUpdateScheduled else { return }
             isPageIndexUpdateScheduled = true
@@ -2138,6 +2206,7 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
                 guard let self else { return }
                 self.isPageIndexUpdateScheduled = false
                 self.updateCurrentPageIndexIfNeeded()
+                self.publishOutlineLocation()
             }
         }
 
