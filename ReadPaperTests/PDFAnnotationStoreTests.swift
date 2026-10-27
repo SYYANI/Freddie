@@ -58,6 +58,32 @@ final class PDFAnnotationStoreTests: XCTestCase {
         )
     }
 
+    func testSidecarWithoutPressureInkStaysReadableByVersionOneBuilds() throws {
+        let inkRecord = PDFAnnotationRecord(
+            pageIndex: 0,
+            kind: .ink,
+            bounds: CGRect(x: 10, y: 10, width: 40, height: 20),
+            color: PDFAnnotationColorPreset.red.color(for: .ink),
+            lineWidth: 2,
+            inkPaths: [[CGPoint(x: 12, y: 12), CGPoint(x: 48, y: 28)]]
+        )
+
+        try annotationStore.save(
+            [makeHighlightRecord(pageIndex: 0), inkRecord],
+            paperID: paperID,
+            attachmentID: attachmentID
+        )
+
+        let sidecarData = try Data(contentsOf: annotationStore.sidecarURL(
+            paperID: paperID,
+            attachmentID: attachmentID
+        ))
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: sidecarData) as? [String: Any])
+        XCTAssertEqual(object["version"] as? Int, 1)
+        let annotations = try XCTUnwrap(object["annotations"] as? [[String: Any]])
+        XCTAssertTrue(annotations.allSatisfy { $0["inkSamplePaths"] == nil })
+    }
+
     func testPressureInkRoundTripUsesVersionTwoAndKeepsSampleWidths() throws {
         let samples = [
             PDFAnnotationInkSample(point: CGPoint(x: 10, y: 12), width: 0.45),
@@ -71,7 +97,10 @@ final class PDFAnnotationStoreTests: XCTestCase {
             color: PDFAnnotationColorPreset.blue.color(for: .ink),
             lineWidth: 1,
             inkPaths: [samples.map(\.cgPoint)],
-            inkSamplePaths: [samples]
+            inkSamplePaths: [samples],
+            // The sidecar stores ISO 8601 dates without fractional seconds.
+            createdAt: Date(timeIntervalSince1970: 1_700_000_000),
+            modifiedAt: Date(timeIntervalSince1970: 1_700_000_000)
         )
 
         try annotationStore.save([record], paperID: paperID, attachmentID: attachmentID)

@@ -436,7 +436,8 @@ struct InspectorPaneView: View {
         guard !Task.isCancelled else { return }
         abstractContent = .hidden
         abstractContentRequest = nil
-        cancelAbstractTranslation()
+        // An abstract translation is only cancelled when the paper changes or the
+        // inspector disappears, not when the tab or unrelated settings change.
         guard summaryRequest.isVisible, let paper else { return }
         let request = summaryRequest
         do {

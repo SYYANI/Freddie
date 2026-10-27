@@ -223,6 +223,8 @@ final class PDFPencilPageOverlayView: UIView {
     private var persistedInkLayers: [CAShapeLayer] = []
     private var inkSamples: [PDFPencilStrokeSample] = []
     private var persistedInkRecords: [PDFAnnotationRecord] = []
+    /// The page-to-overlay mapping the saved ink layers were built for.
+    private var persistedInkGeometry: PersistedInkGeometry?
     private var lastHandledPointCount = 0
     private var interactionStartPoint: CGPoint?
 
@@ -262,22 +264,23 @@ final class PDFPencilPageOverlayView: UIView {
         self.pdfPage = page
         self.pdfView = pdfView
         refreshRenderingScale()
-        refreshPersistedInkLayers()
+        refreshPersistedInkLayers(force: true)
         refreshActiveInkLayer()
     }
 
     func displayPersistedInk(_ records: [PDFAnnotationRecord]) {
         guard persistedInkRecords != records else { return }
         persistedInkRecords = records
-        refreshPersistedInkLayers()
+        refreshPersistedInkLayers(force: true)
     }
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        // PDFKit can resize or transform page overlays while zooming. Redrawing
-        // keeps saved paths at the screen's native resolution.
+        // PDFKit can resize or transform page overlays while zooming. A higher
+        // contents scale re-renders the vector layers sharply; their paths are
+        // rebuilt only when the page maps to different overlay coordinates.
         refreshRenderingScale()
-        refreshPersistedInkLayers()
+        refreshPersistedInkLayers(force: false)
         refreshActiveInkLayer()
     }
 
@@ -305,7 +308,7 @@ final class PDFPencilPageOverlayView: UIView {
 
     func refreshVectorInk() {
         refreshRenderingScale()
-        refreshPersistedInkLayers()
+        refreshPersistedInkLayers(force: false)
         refreshActiveInkLayer()
     }
 
@@ -374,7 +377,25 @@ final class PDFPencilPageOverlayView: UIView {
         activeInkLayer.path = nil
     }
 
-    private func refreshPersistedInkLayers() {
+    private struct PersistedInkGeometry: Equatable {
+        var bounds: CGRect
+        var pageOrigin: CGPoint?
+        var pageCorner: CGPoint?
+    }
+
+    private var currentPersistedInkGeometry: PersistedInkGeometry {
+        let pageBounds = pdfPage?.bounds(for: .cropBox) ?? .zero
+        return PersistedInkGeometry(
+            bounds: bounds,
+            pageOrigin: overlayPoint(for: pageBounds.origin),
+            pageCorner: overlayPoint(for: CGPoint(x: pageBounds.maxX, y: pageBounds.maxY))
+        )
+    }
+
+    private func refreshPersistedInkLayers(force: Bool) {
+        let geometry = currentPersistedInkGeometry
+        guard force || geometry != persistedInkGeometry else { return }
+        persistedInkGeometry = geometry
         for inkLayer in persistedInkLayers {
             inkLayer.removeFromSuperlayer()
         }
@@ -669,7 +690,10 @@ private final class PDFPencilRadialToolPaletteView: UIView {
     func cancel() {
         UIView.animate(withDuration: 0.1, animations: {
             self.alpha = 0
-        }) { _ in
+        }) { finished in
+            // A squeeze that starts during the fade removes this animation; its
+            // completion must not hide or reset the palette that just appeared.
+            guard finished else { return }
             self.isHidden = true
             self.stage = .root
             self.rootSelection = nil

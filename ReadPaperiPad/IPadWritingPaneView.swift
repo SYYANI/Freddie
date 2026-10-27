@@ -372,8 +372,17 @@ private struct IPadWritingPreview: View {
         case image(UIImage)
     }
 
+    private struct PartsSource: Equatable {
+        var markdown: String
+        var baseURL: URL?
+    }
+
+    /// Parsed once per Markdown change: the body is re-evaluated on unrelated
+    /// observation changes, and each image would otherwise be read from disk again.
+    @State private var parts: [Part] = []
+    @State private var partsSource: PartsSource?
+
     var body: some View {
-        let parts = parts()
         VStack(alignment: .leading, spacing: 12) {
             ForEach(parts.indices, id: \.self) { index in
                 switch parts[index] {
@@ -388,9 +397,18 @@ private struct IPadWritingPreview: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .onAppear(perform: refreshParts)
+        .onChange(of: PartsSource(markdown: markdown, baseURL: baseURL)) { _, _ in refreshParts() }
     }
 
-    private func parts() -> [Part] {
+    private func refreshParts() {
+        let source = PartsSource(markdown: markdown, baseURL: baseURL)
+        guard partsSource != source else { return }
+        partsSource = source
+        parts = makeParts()
+    }
+
+    private func makeParts() -> [Part] {
         let source = markdown as NSString
         var parts: [Part] = []
         var fence: MarkdownLiveSyntax.FenceState?

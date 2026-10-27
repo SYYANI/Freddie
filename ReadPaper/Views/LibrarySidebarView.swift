@@ -158,6 +158,15 @@ struct LibrarySidebarView: View {
             ToolbarItemGroup(placement: .bottomBar) {
                 filterMenu
 
+                // The bottom bar has room the macOS sidebar toolbar lacks, so the
+                // folder action gets its own button instead of hiding in the filter menu.
+                Button {
+                    promptForNewFolder(containing: nil)
+                } label: {
+                    Label(String(localized: "New Folder…", bundle: bundle), systemImage: "folder.badge.plus")
+                        .labelStyle(.iconOnly)
+                }
+
                 Spacer()
 
                 if filter.isActive {
@@ -287,12 +296,6 @@ struct LibrarySidebarView: View {
 
     private var filterMenu: some View {
         Menu {
-            #if os(iOS)
-            Button(String(localized: "New Folder…", bundle: bundle)) {
-                promptForNewFolder(containing: nil)
-            }
-            Divider()
-            #endif
             ForEach(PaperLibraryFilter.Criterion.allCases) { criterion in
                 Toggle(isOn: criterionBinding(criterion)) {
                     Label(criterion.title(bundle: bundle), systemImage: criterion.systemImage)

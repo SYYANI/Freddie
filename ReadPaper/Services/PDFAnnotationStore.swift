@@ -185,6 +185,11 @@ struct PDFAnnotationRecord: Codable, Equatable, Identifiable, Sendable {
 
 struct PDFAnnotationSidecar: Codable, Equatable, Sendable {
     static let currentVersion = 2
+    /// Files without pressure ink keep version 1. Version 1 readers ignore the
+    /// absent `inkSamplePaths`, but reject any newer version; an older Freddie
+    /// would then show no annotations and overwrite them on its next save.
+    static let pressureInkVersion = 2
+    static let baseVersion = 1
 
     var version: Int
     var paperID: UUID
@@ -198,7 +203,9 @@ struct PDFAnnotationSidecar: Codable, Equatable, Sendable {
         annotations: [PDFAnnotationRecord],
         modifiedAt: Date = Date()
     ) {
-        version = Self.currentVersion
+        version = annotations.contains { $0.inkSamplePaths?.isEmpty == false }
+            ? Self.pressureInkVersion
+            : Self.baseVersion
         self.paperID = paperID
         self.attachmentID = attachmentID
         self.annotations = annotations

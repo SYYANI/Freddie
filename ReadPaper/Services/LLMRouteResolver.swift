@@ -76,15 +76,34 @@ struct LLMRouteResolver {
 
     /// Summaries use the same text model as abstract translation, with the PDF
     /// model as a fallback for users who only configured PDF translation.
+    /// Only checks that a key is saved: the inspector resolves this whenever a
+    /// paper is shown, and reading the key could ask for Touch ID or Face ID
+    /// even when a cached summary needs no request. Read it with `apiKey(for:)`.
     func resolveSummaryRoute(
         settings: AppSettings,
         modelContext: ModelContext
-    ) throws -> ResolvedLLMModelRoute {
+    ) throws -> LLMModelRouteSnapshot {
         do {
-            return try resolveHTMLRoute(settings: settings, modelContext: modelContext)
+            return try resolveSnapshotWithSavedAPIKey(
+                selectedModelID: settings.selectedHTMLModelProfileID,
+                missingSelectionError: .htmlModelNotSelected,
+                modelContext: modelContext
+            )
         } catch is LLMRouteError {
-            return try resolvePDFRoute(settings: settings, modelContext: modelContext)
+            return try resolveSnapshotWithSavedAPIKey(
+                selectedModelID: settings.selectedPDFModelProfileID,
+                missingSelectionError: .pdfModelNotSelected,
+                modelContext: modelContext
+            )
         }
+    }
+
+    func apiKey(for snapshot: LLMModelRouteSnapshot) throws -> String {
+        let apiKey = try keychainStore.load(account: snapshot.apiKeyRef)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard apiKey.isEmpty == false else {
+            throw LLMRouteError.missingAPIKey(snapshot.providerName)
+        }
+        return apiKey
     }
 
     /// The model that reads scanned pages, which must accept images; the PDF model unless
@@ -126,6 +145,35 @@ struct LLMRouteResolver {
         missingSelectionError: LLMRouteError,
         modelContext: ModelContext
     ) throws -> ResolvedLLMModelRoute {
+        let snapshot = try resolveSnapshot(
+            selectedModelID: selectedModelID,
+            missingSelectionError: missingSelectionError,
+            modelContext: modelContext
+        )
+        return ResolvedLLMModelRoute(snapshot: snapshot, apiKey: try apiKey(for: snapshot))
+    }
+
+    private func resolveSnapshotWithSavedAPIKey(
+        selectedModelID: UUID?,
+        missingSelectionError: LLMRouteError,
+        modelContext: ModelContext
+    ) throws -> LLMModelRouteSnapshot {
+        let snapshot = try resolveSnapshot(
+            selectedModelID: selectedModelID,
+            missingSelectionError: missingSelectionError,
+            modelContext: modelContext
+        )
+        guard try keychainStore.contains(account: snapshot.apiKeyRef) else {
+            throw LLMRouteError.missingAPIKey(snapshot.providerName)
+        }
+        return snapshot
+    }
+
+    private func resolveSnapshot(
+        selectedModelID: UUID?,
+        missingSelectionError: LLMRouteError,
+        modelContext: ModelContext
+    ) throws -> LLMModelRouteSnapshot {
         guard let selectedModelID else {
             throw missingSelectionError
         }
@@ -149,28 +197,20 @@ struct LLMRouteResolver {
             throw LLMRouteError.invalidBaseURL(provider.baseURL)
         }
 
-        let apiKey = try keychainStore.load(account: provider.apiKeyRef)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        guard apiKey.isEmpty == false else {
-            throw LLMRouteError.missingAPIKey(provider.name)
-        }
-
-        return ResolvedLLMModelRoute(
-            snapshot: LLMModelRouteSnapshot(
-                providerProfileID: provider.id,
-                providerName: provider.name,
-                modelProfileID: model.id,
-                modelProfileName: model.name,
-                baseURL: provider.baseURL,
-                apiStyle: apiStyleStore.apiStyle(for: provider.id),
-                apiKeyRef: provider.apiKeyRef,
-                modelName: model.modelName,
-                temperature: model.temperature,
-                topP: model.topP,
-                maxTokens: model.maxTokens,
-                thinkingMode: model.thinkingModeValue,
-                reasoningEffort: model.reasoningEffortValue
-            ),
-            apiKey: apiKey
+        return LLMModelRouteSnapshot(
+            providerProfileID: provider.id,
+            providerName: provider.name,
+            modelProfileID: model.id,
+            modelProfileName: model.name,
+            baseURL: provider.baseURL,
+            apiStyle: apiStyleStore.apiStyle(for: provider.id),
+            apiKeyRef: provider.apiKeyRef,
+            modelName: model.modelName,
+            temperature: model.temperature,
+            topP: model.topP,
+            maxTokens: model.maxTokens,
+            thinkingMode: model.thinkingModeValue,
+            reasoningEffort: model.reasoningEffortValue
         )
     }
 }

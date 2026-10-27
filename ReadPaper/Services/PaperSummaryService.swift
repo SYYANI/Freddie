@@ -12,18 +12,25 @@ enum PaperAbstractContent: Equatable {
 @MainActor
 struct PaperSummaryService {
     static let characterLimit = 140
-    private let resolveRoute: (AppSettings, ModelContext) throws -> ResolvedLLMModelRoute
+    private let resolveRoute: (AppSettings, ModelContext) throws -> LLMModelRouteSnapshot
+    private let loadAPIKey: (LLMModelRouteSnapshot) throws -> String
     private let complete: (LLMCompletionRequest) async throws -> LLMCompletionResponse
 
+    /// The route is resolved without its key so a cached summary never asks for
+    /// Touch ID or Face ID; the key is read only before a request.
     init(
-        resolveRoute: @escaping (AppSettings, ModelContext) throws -> ResolvedLLMModelRoute = {
+        resolveRoute: @escaping (AppSettings, ModelContext) throws -> LLMModelRouteSnapshot = {
             try LLMRouteResolver().resolveSummaryRoute(settings: $0, modelContext: $1)
+        },
+        loadAPIKey: @escaping (LLMModelRouteSnapshot) throws -> String = {
+            try LLMRouteResolver().apiKey(for: $0)
         },
         complete: @escaping (LLMCompletionRequest) async throws -> LLMCompletionResponse = {
             try await OpenAICompatibleLLMProvider().complete(request: $0)
         }
     ) {
         self.resolveRoute = resolveRoute
+        self.loadAPIKey = loadAPIKey
         self.complete = complete
     }
 
@@ -61,26 +68,27 @@ struct PaperSummaryService {
         guard !source.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return .hidden }
 
         let sourceHash = Hashing.sha256Hex(title + "\n" + source)
-        let identity = route.snapshot.translationCacheIdentity + "|summary=1|limit=140"
+        let identity = route.translationCacheIdentity + "|summary=1|limit=140"
         let segments = try modelContext.fetch(FetchDescriptor<TranslationSegment>(
             predicate: #Predicate { $0.paperID == paperID && $0.sourceType == "pdf-summary" }
         ))
         if let cached = segments.first(where: {
             $0.sourceHash == sourceHash && $0.targetLanguage == language &&
-            $0.providerProfileID == route.snapshot.providerProfileID &&
-            $0.modelProfileID == route.snapshot.modelProfileID && $0.modelName == identity &&
+            $0.providerProfileID == route.providerProfileID &&
+            $0.modelProfileID == route.modelProfileID && $0.modelName == identity &&
             !$0.translatedText.isEmpty && $0.translatedText.count <= Self.characterLimit
         }) {
             return .summary(cached.translatedText)
         }
 
-        guard let baseURL = URL(string: route.snapshot.baseURL) else { return .hidden }
+        guard let baseURL = URL(string: route.baseURL) else { return .hidden }
+        guard let apiKey = try? loadAPIKey(route) else { return .hidden }
         let languageName = TranslationTargetLanguage.supported.first { $0.code == language }?.nativeName ?? language
         let response = try await complete(LLMCompletionRequest(
             baseURL: baseURL,
-            apiStyle: route.snapshot.apiStyle,
-            apiKey: route.apiKey,
-            model: route.snapshot.modelName,
+            apiStyle: route.apiStyle,
+            apiKey: apiKey,
+            model: route.modelName,
             messages: [
                 LLMCompletionMessage(role: "system", content: """
                 Summarize the supplied paper abstract or PDF excerpt in \(languageName).
@@ -91,11 +99,11 @@ struct PaperSummaryService {
                 """),
                 LLMCompletionMessage(role: "user", content: "Title: \(title)\n\nSource text:\n\(source)")
             ],
-            temperature: route.snapshot.temperature ?? route.snapshot.apiStyle.samplingDefault(0.2),
-            topP: route.snapshot.topP,
-            maxTokens: route.snapshot.maxTokens,
-            thinkingMode: route.snapshot.thinkingMode,
-            reasoningEffort: route.snapshot.reasoningEffort,
+            temperature: route.temperature ?? route.apiStyle.samplingDefault(0.2),
+            topP: route.topP,
+            maxTokens: route.maxTokens,
+            thinkingMode: route.thinkingMode,
+            reasoningEffort: route.reasoningEffort,
             timeoutProfile: .translationDefault
         ))
         try Task.checkCancellation()
@@ -117,8 +125,8 @@ struct PaperSummaryService {
             sourceHash: sourceHash,
             sourceText: source,
             translatedText: summary,
-            providerProfileID: route.snapshot.providerProfileID,
-            modelProfileID: route.snapshot.modelProfileID,
+            providerProfileID: route.providerProfileID,
+            modelProfileID: route.modelProfileID,
             modelName: identity
         ))
         try modelContext.save()

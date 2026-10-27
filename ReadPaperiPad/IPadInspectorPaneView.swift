@@ -4,6 +4,7 @@ import SwiftUI
 /// Touch text input used by the shared inspector's note rows.
 struct InsetTextView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.scenePhase) private var scenePhase
     @Binding var text: String
     var shouldFocus: Bool
     var onFocusApplied: () -> Void
@@ -32,11 +33,10 @@ struct InsetTextView: View {
                 onEditingEnded()
             }
         }
-        .task(id: text) {
-            do {
-                try await Task.sleep(for: .milliseconds(800))
-                save()
-            } catch {}
+        // Saved when editing ends, not while typing: each save refetches every
+        // @Query and redraws the whole window.
+        .onChange(of: scenePhase) { _, phase in
+            if phase != .active { save() }
         }
         .onDisappear { save() }
     }

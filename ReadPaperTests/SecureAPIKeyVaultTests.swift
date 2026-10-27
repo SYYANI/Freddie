@@ -111,6 +111,25 @@ final class SecureAPIKeyVaultTests: XCTestCase {
         ))
         XCTAssertEqual(try store.loadInstallGrant(account: "provider-b"), "temporary-secret")
         XCTAssertEqual(try KeychainStore(service: service).load(account: "provider-b"), "temporary-secret")
+        // The unprotected grant copy must not leave the device through backups.
+        let grantQuery: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecReturnAttributes as String: true,
+            kSecMatchLimit as String: kSecMatchLimitAll
+        ]
+        var grantItems: CFTypeRef?
+        XCTAssertEqual(SecItemCopyMatching(grantQuery as CFDictionary, &grantItems), errSecSuccess)
+        let grants = (grantItems as? [[String: Any]] ?? []).filter {
+            ($0[kSecAttrAccount as String] as? String)?.hasPrefix("freddie-install-grant:") == true
+        }
+        XCTAssertFalse(grants.isEmpty)
+        for grant in grants {
+            XCTAssertEqual(
+                grant[kSecAttrAccessible as String] as? String,
+                kSecAttrAccessibleWhenUnlockedThisDeviceOnly as String
+            )
+        }
 
         try store.delete(account: "provider-b")
         XCTAssertFalse(try store.contains(account: "provider-b"))

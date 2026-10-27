@@ -226,10 +226,18 @@ struct KeychainStore {
     }
 
     func saveInstallGrant(_ value: String, account: String) throws {
+#if os(iOS)
+        // The protected item never leaves this device; its unprotected grant
+        // copy must not travel through backups or device migration either.
+        let accessibility: CFString? = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+#else
+        let accessibility: CFString? = nil
+#endif
         try saveUnprotected(
             Data(value.utf8),
             account: installGrantAccount(account),
-            usesDataProtectionKeychain: false
+            usesDataProtectionKeychain: false,
+            accessibility: accessibility
         )
     }
 
@@ -423,13 +431,18 @@ struct KeychainStore {
     private func saveUnprotected(
         _ data: Data,
         account: String,
-        usesDataProtectionKeychain: Bool
+        usesDataProtectionKeychain: Bool,
+        accessibility: CFString? = nil
     ) throws {
         let query = itemQuery(
             account: account,
             usesDataProtectionKeychain: usesDataProtectionKeychain
         )
-        let attributes = [kSecValueData as String: data]
+        var attributes: [String: Any] = [kSecValueData as String: data]
+        if let accessibility {
+            // Also tightens items written before the accessibility was set.
+            attributes[kSecAttrAccessible as String] = accessibility
+        }
 
         let status = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
         if status == errSecSuccess {
@@ -441,6 +454,9 @@ struct KeychainStore {
 
         var addQuery = query
         addQuery[kSecValueData as String] = data
+        if let accessibility {
+            addQuery[kSecAttrAccessible as String] = accessibility
+        }
         let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
         guard addStatus == errSecSuccess else {
             throw KeychainError(status: addStatus)

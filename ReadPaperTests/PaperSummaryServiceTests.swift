@@ -24,7 +24,7 @@ final class PaperSummaryServiceTests: XCTestCase {
         let fixture = try makeFixture(source: .arxivPDF)
         let route = makeRoute()
         var requests: [LLMCompletionRequest] = []
-        let service = PaperSummaryService(resolveRoute: { _, _ in route }, complete: { request in
+        let service = PaperSummaryService(resolveRoute: { _, _ in route }, loadAPIKey: { _ in "test-key" }, complete: { request in
             requests.append(request)
             return LLMCompletionResponse(text: String(repeating: "摘", count: 180), resolvedEndpoint: nil)
         })
@@ -42,25 +42,44 @@ final class PaperSummaryServiceTests: XCTestCase {
         XCTAssertEqual(fixture.paper.abstractText, "The original official abstract.")
         let cached = try XCTUnwrap(fixture.context.fetch(FetchDescriptor<TranslationSegment>()).first)
         XCTAssertEqual(cached.sourceType, "pdf-summary")
-        XCTAssertEqual(cached.providerProfileID, route.snapshot.providerProfileID)
-        XCTAssertEqual(cached.modelProfileID, route.snapshot.modelProfileID)
+        XCTAssertEqual(cached.providerProfileID, route.providerProfileID)
+        XCTAssertEqual(cached.modelProfileID, route.modelProfileID)
+    }
+
+    func testCachedSummaryDoesNotReadAPIKey() async throws {
+        let fixture = try makeFixture()
+        let route = makeRoute()
+        var keyReads = 0
+        let service = PaperSummaryService(resolveRoute: { _, _ in route }, loadAPIKey: { _ in
+            keyReads += 1
+            return "test-key"
+        }, complete: { _ in
+            LLMCompletionResponse(text: "A short summary.", resolvedEndpoint: nil)
+        })
+
+        _ = try await service.content(for: fixture.paper, settings: fixture.settings, modelContext: fixture.context)
+        let cached = try await service.content(for: fixture.paper, settings: fixture.settings, modelContext: fixture.context)
+
+        XCTAssertEqual(cached, .summary("A short summary."))
+        // Reading the key may show Touch ID or Face ID; a cache hit must not.
+        XCTAssertEqual(keyReads, 1)
     }
 
     func testCacheSeparatesProviderModelParametersLanguageAndSource() async throws {
         let fixture = try makeFixture()
         var route = makeRoute()
         var requests = 0
-        let service = PaperSummaryService(resolveRoute: { _, _ in route }, complete: { _ in
+        let service = PaperSummaryService(resolveRoute: { _, _ in route }, loadAPIKey: { _ in "test-key" }, complete: { _ in
             requests += 1
             return LLMCompletionResponse(text: "Summary \(requests).", resolvedEndpoint: nil)
         })
 
         _ = try await service.content(for: fixture.paper, settings: fixture.settings, modelContext: fixture.context)
-        route.snapshot.providerProfileID = UUID()
+        route.providerProfileID = UUID()
         _ = try await service.content(for: fixture.paper, settings: fixture.settings, modelContext: fixture.context)
-        route.snapshot.modelProfileID = UUID()
+        route.modelProfileID = UUID()
         _ = try await service.content(for: fixture.paper, settings: fixture.settings, modelContext: fixture.context)
-        route.snapshot.temperature = 0.8
+        route.temperature = 0.8
         _ = try await service.content(for: fixture.paper, settings: fixture.settings, modelContext: fixture.context)
         fixture.settings.targetLanguage = "EN"
         _ = try await service.content(for: fixture.paper, settings: fixture.settings, modelContext: fixture.context)
@@ -79,7 +98,7 @@ final class PaperSummaryServiceTests: XCTestCase {
         let service = PaperSummaryService(resolveRoute: { _, _ in
             guard configured else { throw LLMRouteError.htmlModelNotSelected }
             return route
-        }, complete: { _ in
+        }, loadAPIKey: { _ in "test-key" }, complete: { _ in
             requests += 1
             return LLMCompletionResponse(text: "A short summary.", resolvedEndpoint: nil)
         })
@@ -102,7 +121,7 @@ final class PaperSummaryServiceTests: XCTestCase {
         let route = makeRoute()
         for source: AttachmentSource in [.localImport, .webPage] {
             let fixture = try makeFixture(source: source, abstract: "", pdfURL: pdfURL)
-            let service = PaperSummaryService(resolveRoute: { _, _ in route }, complete: { request in
+            let service = PaperSummaryService(resolveRoute: { _, _ in route }, loadAPIKey: { _ in "test-key" }, complete: { request in
                 let content = request.messages[1].content
                 XCTAssertTrue(content.contains("Research question."))
                 XCTAssertTrue(content.contains("Main finding."))
@@ -120,7 +139,7 @@ final class PaperSummaryServiceTests: XCTestCase {
     func testMissingTextDoesNotGenerateInventedSummary() async throws {
         let fixture = try makeFixture(abstract: "")
         let route = makeRoute()
-        let service = PaperSummaryService(resolveRoute: { _, _ in route }, complete: { _ in
+        let service = PaperSummaryService(resolveRoute: { _, _ in route }, loadAPIKey: { _ in "test-key" }, complete: { _ in
             XCTFail("There is no text to summarize")
             throw LLMProviderError.emptyResponse
         })
@@ -133,7 +152,7 @@ final class PaperSummaryServiceTests: XCTestCase {
     func testFailureLeavesOriginalMetadataAndCacheUntouched() async throws {
         let fixture = try makeFixture()
         let route = makeRoute()
-        let service = PaperSummaryService(resolveRoute: { _, _ in route }, complete: { _ in
+        let service = PaperSummaryService(resolveRoute: { _, _ in route }, loadAPIKey: { _ in "test-key" }, complete: { _ in
             throw URLError(.timedOut)
         })
 
@@ -150,7 +169,7 @@ final class PaperSummaryServiceTests: XCTestCase {
     func testLateResponseAfterDeletionDoesNotSaveOrphanedSummary() async throws {
         let fixture = try makeFixture()
         let route = makeRoute()
-        let service = PaperSummaryService(resolveRoute: { _, _ in route }, complete: { _ in
+        let service = PaperSummaryService(resolveRoute: { _, _ in route }, loadAPIKey: { _ in "test-key" }, complete: { _ in
             fixture.context.delete(fixture.paper)
             try fixture.context.save()
             return LLMCompletionResponse(text: "Late response.", resolvedEndpoint: nil)
@@ -165,7 +184,7 @@ final class PaperSummaryServiceTests: XCTestCase {
     func testCancelledSummaryDoesNotPopulateCache() async throws {
         let fixture = try makeFixture()
         let route = makeRoute()
-        let service = PaperSummaryService(resolveRoute: { _, _ in route }, complete: { _ in
+        let service = PaperSummaryService(resolveRoute: { _, _ in route }, loadAPIKey: { _ in "test-key" }, complete: { _ in
             withUnsafeCurrentTask { $0?.cancel() }
             return LLMCompletionResponse(text: "Cancelled response.", resolvedEndpoint: nil)
         })
@@ -184,7 +203,7 @@ final class PaperSummaryServiceTests: XCTestCase {
     func testEmptyResponseKeepsSummaryHidden() async throws {
         let fixture = try makeFixture()
         let route = makeRoute()
-        let service = PaperSummaryService(resolveRoute: { _, _ in route }, complete: { _ in
+        let service = PaperSummaryService(resolveRoute: { _, _ in route }, loadAPIKey: { _ in "test-key" }, complete: { _ in
             LLMCompletionResponse(text: " \n  ", resolvedEndpoint: nil)
         })
 
@@ -222,11 +241,11 @@ final class PaperSummaryServiceTests: XCTestCase {
         return (container, context, paper, settings)
     }
 
-    private func makeRoute() -> ResolvedLLMModelRoute {
-        ResolvedLLMModelRoute(snapshot: LLMModelRouteSnapshot(
+    private func makeRoute() -> LLMModelRouteSnapshot {
+        LLMModelRouteSnapshot(
             providerProfileID: UUID(), providerName: "Test provider", modelProfileID: UUID(),
             modelProfileName: "Test model", baseURL: "https://example.com/v1", apiKeyRef: "test-ref", modelName: "test-model"
-        ), apiKey: "test-key")
+        )
     }
 
     private func makePDF(pages: [String]) throws -> Data {
