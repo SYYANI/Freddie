@@ -84,7 +84,6 @@ struct SettingsView: View {
     @Query private var settingsRows: [AppSettings]
     @Query(sort: [SortDescriptor(\LLMProviderProfile.modifiedAt, order: .reverse)]) private var providers: [LLMProviderProfile]
     @Query(sort: [SortDescriptor(\LLMModelProfile.modifiedAt, order: .reverse)]) private var models: [LLMModelProfile]
-    @State private var paperCount = 0
 
     var body: some View {
         Group {
@@ -92,8 +91,7 @@ struct SettingsView: View {
                 SettingsForm(
                     settings: settings,
                     providers: providers,
-                    models: models,
-                    paperCount: paperCount
+                    models: models
                 )
             } else {
                 ProgressView()
@@ -109,9 +107,6 @@ struct SettingsView: View {
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
         }
-        .task {
-            paperCount = (try? modelContext.fetchCount(FetchDescriptor<Paper>())) ?? 0
-        }
     }
 }
 
@@ -122,7 +117,6 @@ private struct SettingsForm: View {
     @Bindable var settings: AppSettings
     let providers: [LLMProviderProfile]
     let models: [LLMModelProfile]
-    let paperCount: Int
 
     @AppStorage(TranslationSetupNavigation.selectedTabKey) private var selectedTabRawValue = SettingsTab.general.rawValue
     @AppStorage(TranslationSetupNavigation.didDismissGettingStartedKey) private var didDismissGettingStarted = false
@@ -194,6 +188,9 @@ private struct SettingsForm: View {
     @State private var showsQuickSetupForm = false
     @State private var showsTranslationPerformanceOptions = false
     @State private var showsDiagnostics = false
+    @State private var showsProviderDeleteConfirmation = false
+    @State private var showsModelDeleteConfirmation = false
+    @State private var showsGlossaryClearConfirmation = false
 
     @State private var generalStatus = SettingsGeneralStatus()
     @State private var isInstallingBabelDOC = false
@@ -452,6 +449,49 @@ private struct SettingsForm: View {
                 await refreshLaTeXInstallations()
             }
         }
+        .confirmationDialog(
+            String(localized: "Delete Provider?", bundle: bundle),
+            isPresented: $showsProviderDeleteConfirmation,
+            presenting: selectedProvider
+        ) { _ in
+            Button(String(localized: "Delete", bundle: bundle), role: .destructive) {
+                deleteSelectedProvider()
+            }
+            Button(String(localized: "Cancel", bundle: bundle), role: .cancel) {}
+        } message: { provider in
+            Text(AppLocalization.format(
+                "The models that use “%@” and its saved API key will also be deleted. Translation routes that use them will be cleared.",
+                bundle: bundle,
+                provider.name
+            ))
+        }
+        .confirmationDialog(
+            String(localized: "Delete Model?", bundle: bundle),
+            isPresented: $showsModelDeleteConfirmation,
+            presenting: selectedModel
+        ) { _ in
+            Button(String(localized: "Delete", bundle: bundle), role: .destructive) {
+                deleteSelectedModel()
+            }
+            Button(String(localized: "Cancel", bundle: bundle), role: .cancel) {}
+        } message: { model in
+            Text(AppLocalization.format(
+                "Translation routes that use “%@” will be cleared.",
+                bundle: bundle,
+                model.name
+            ))
+        }
+        .confirmationDialog(
+            String(localized: "Clear Glossary?", bundle: bundle),
+            isPresented: $showsGlossaryClearConfirmation
+        ) {
+            Button(String(localized: "Clear glossary", bundle: bundle), role: .destructive) {
+                translationGlossary = ""
+            }
+            Button(String(localized: "Cancel", bundle: bundle), role: .cancel) {}
+        } message: {
+            Text("All terms will be removed. This can’t be undone.", bundle: bundle)
+        }
     }
 
     @ViewBuilder
@@ -530,22 +570,22 @@ private struct SettingsForm: View {
                     .help(String(localized: "When enabled, ReadPaper uses available arXiv source to improve BabelDOC structure and translation context. No TeX installation is required, and failures fall back to PDF-only analysis.", bundle: bundle))
 
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Optional glossary", bundle: bundle)
+                        ReadPaperInfoLabel(
+                            String(localized: "Optional glossary", bundle: bundle),
+                            message: String(localized: "One term per line, for example “large language model = 大语言模型”.", bundle: bundle)
+                        )
                         SettingsTemplateTextEditor(
                             text: $translationGlossary,
                             pendingInsertion: $glossaryInsertion
                         )
                         .frame(minHeight: 110)
+                        .accessibilityLabel(String(localized: "Optional glossary", bundle: bundle))
                     }
 
                     Button(String(localized: "Clear glossary", bundle: bundle), role: .destructive) {
-                        translationGlossary = ""
+                        showsGlossaryClearConfirmation = true
                     }
                     .disabled(translationGlossary.isEmpty)
-
-                    Text("One term per line, for example “large language model = 大语言模型”.", bundle: bundle)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
                 }
 
                 Section(String(localized: "Advanced", bundle: bundle)) {
@@ -576,10 +616,6 @@ private struct SettingsForm: View {
                                 in: PDFTranslationBatchPreference.allowedRange
                             )
 
-                            Text("Lower concurrency or QPS if your provider reports rate limits.", bundle: bundle)
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
                         }
                         .padding(.top, 8)
                     } label: {
@@ -679,16 +715,20 @@ private struct SettingsForm: View {
                         }
                     }
 
-                    Picker(
+                    infoRow(
                         String(localized: "Scanned Page Model", bundle: bundle),
-                        selection: selectedScannedPageModelProfileIDBinding
+                        message: String(localized: "Translating a scanned PDF sends each page image to the scanned page model, which must accept image input; the PDF/BabelDOC model then translates the transcribed text.", bundle: bundle)
                     ) {
-                        Text("Use PDF/BabelDOC Model", bundle: bundle).tag(Optional<UUID>.none)
-                        ForEach(sortedModels, id: \.id) { model in
-                            Text(modelDisplayName(model)).tag(Optional(model.id))
+                        Picker(
+                            String(localized: "Scanned Page Model", bundle: bundle),
+                            selection: selectedScannedPageModelProfileIDBinding
+                        ) {
+                            Text("Use PDF/BabelDOC Model", bundle: bundle).tag(Optional<UUID>.none)
+                            ForEach(sortedModels, id: \.id) { model in
+                                Text(modelDisplayName(model)).tag(Optional(model.id))
+                            }
                         }
                     }
-                    .help(String(localized: "Translating a scanned PDF sends each page image to the scanned page model, which must accept image input; the PDF/BabelDOC model then translates the transcribed text.", bundle: bundle))
 
                     Picker(
                         String(localized: "Reading Assistant Model", bundle: bundle),
@@ -726,11 +766,6 @@ private struct SettingsForm: View {
                     )
                     .help(String(localized: "When enabled, Translate arXiv LaTeX appears in the reader's Translate menu. It downloads the paper source, translates its semantic units, and uses the selected external TeX distribution to compile the translated PDF.", bundle: bundle))
 
-                    Text("Translate Scanned PDF always uses this distribution's XeLaTeX.", bundle: bundle)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-
                     if latexTranslationEnabled, activeLaTeXInstallation?.isHealthy != true {
                         Label {
                             Text(
@@ -746,12 +781,6 @@ private struct SettingsForm: View {
                 }
 
                 Section(String(localized: "MacTeX", bundle: bundle)) {
-                    Text(
-                        "If you do not have a TeX distribution installed, MacTeX is recommended. The distribution is installed and maintained separately from Freddie.",
-                        bundle: bundle
-                    )
-                    .fixedSize(horizontal: false, vertical: true)
-
                     Link(
                         String(localized: "Download MacTeX", bundle: bundle),
                         destination: URL(string: "https://tug.org/mactex/mactex-download.html")!
@@ -863,7 +892,7 @@ private struct SettingsForm: View {
         VStack(alignment: .leading, spacing: 12) {
             Form {
                 Section(String(localized: "Digest Export", bundle: bundle)) {
-                    LabeledContent(String(localized: "Export directory", bundle: bundle)) {
+                    LabeledContent {
                         Text(
                             digestExportDirectoryPath.isEmpty
                                 ? String(localized: "Not configured", bundle: bundle)
@@ -873,6 +902,8 @@ private struct SettingsForm: View {
                         .lineLimit(1)
                         .truncationMode(.middle)
                         .textSelection(.enabled)
+                    } label: {
+                        Text("Export directory", bundle: bundle)
                     }
 
                     HStack(spacing: 10) {
@@ -887,9 +918,6 @@ private struct SettingsForm: View {
                         .disabled(digestExportDirectoryPath.isEmpty)
                     }
 
-                    Text("Markdown export requires a configured folder. Copy Digest can still use the template without an export folder.", bundle: bundle)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
                 }
 
                 Section(String(localized: "Markdown Template", bundle: bundle)) {
@@ -898,6 +926,7 @@ private struct SettingsForm: View {
                         pendingInsertion: $digestTemplateInsertion
                     )
                     .frame(minHeight: 280)
+                    .accessibilityLabel(String(localized: "Markdown Template", bundle: bundle))
 
                     HStack(spacing: 10) {
                         Menu {
@@ -915,10 +944,6 @@ private struct SettingsForm: View {
                             digestStatusMessage = String(localized: "Default digest template restored.", bundle: bundle)
                         }
                     }
-
-                    Text("Available placeholders: {{dateISO}}, {{title}}, {{slug}}, {{authors}}, {{identifier}}, {{sourceTitle}}, {{sourceURL}}, {{metadataBlock}}, {{abstractBlock}}, {{notesBlock}}, {{generatedBy}}.", bundle: bundle)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
 
                     if let digestStatusMessage {
                         statusLabel(digestStatusMessage)
@@ -986,7 +1011,7 @@ private struct SettingsForm: View {
             .help(String(localized: "New Provider", bundle: bundle))
 
             Button(role: .destructive) {
-                deleteSelectedProvider()
+                showsProviderDeleteConfirmation = true
             } label: {
                 Image(systemName: "trash")
             }
@@ -996,18 +1021,8 @@ private struct SettingsForm: View {
     }
 
     private var providerDetailPanel: some View {
-        Form {
-            Section(String(localized: "Providers", bundle: bundle)) {
-                Text("OpenAI, DeepSeek and Anthropic are ready to use after you save an API key. You can also add custom providers and choose the Responses API, Chat Completions or the Anthropic Messages API.", bundle: bundle)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                Text("API keys are protected with Touch ID or your device password. After the first approval, this Freddie installation stays authorized until the app is updated or the key changes. Leaving the API key field blank while editing keeps the saved key.", bundle: bundle)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            Section(String(localized: "Configuration", bundle: bundle)) {
+        llmDetailPanel {
+            llmDetailSection {
                 SettingsFieldRow(String(localized: "Display name", bundle: bundle)) {
                     SettingsPlainTextField(text: $providerName)
                 }
@@ -1022,7 +1037,10 @@ private struct SettingsForm: View {
                     }
                     .labelsHidden()
                 }
-                SettingsFieldRow(String(localized: "API key", bundle: bundle)) {
+                SettingsFieldRow(
+                    String(localized: "API key", bundle: bundle),
+                    help: String(localized: "API keys are protected with Touch ID or your device password. After the first approval, this Freddie installation stays authorized until the app is updated or the key changes. Leaving the API key field blank while editing keeps the saved key.", bundle: bundle)
+                ) {
                     SettingsSecureTextField(text: $providerAPIKey, placeholder: providerAPIKeyPrompt)
                 }
                 SettingsFieldRow(String(localized: "Test model", bundle: bundle)) {
@@ -1035,7 +1053,7 @@ private struct SettingsForm: View {
                 }
             }
 
-            Section(String(localized: "Actions", bundle: bundle)) {
+            llmDetailSection {
                 HStack(spacing: 10) {
                     Button(String(localized: "Save", bundle: bundle)) {
                         saveProvider()
@@ -1134,8 +1152,6 @@ private struct SettingsForm: View {
                 )
             }
         }
-        .formStyle(.grouped)
-        .scrollContentBackground(.hidden)
     }
 
     private var modelListPanel: some View {
@@ -1172,7 +1188,7 @@ private struct SettingsForm: View {
             .help(String(localized: "New Model", bundle: bundle))
 
             Button(role: .destructive) {
-                deleteSelectedModel()
+                showsModelDeleteConfirmation = true
             } label: {
                 Image(systemName: "trash")
             }
@@ -1182,18 +1198,8 @@ private struct SettingsForm: View {
     }
 
     private var modelDetailPanel: some View {
-        Form {
-            Section(String(localized: "Models", bundle: bundle)) {
-                Text("A model profile points to one provider and stores the exact model name plus optional sampling parameters. You can create separate profiles for fast HTML translation and heavier PDF work.", bundle: bundle)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                Text("Profile name is only for display inside ReadPaper. Model name must match the real model identifier accepted by your provider.", bundle: bundle)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            Section(String(localized: "Configuration", bundle: bundle)) {
+        llmDetailPanel {
+            llmDetailSection {
                 SettingsFieldRow(String(localized: "Provider", bundle: bundle)) {
                     Picker(String(localized: "Provider", bundle: bundle), selection: $modelProviderID) {
                         Text("Select Provider", bundle: bundle).tag(Optional<UUID>.none)
@@ -1206,7 +1212,10 @@ private struct SettingsForm: View {
                 SettingsFieldRow(String(localized: "Profile name", bundle: bundle)) {
                     SettingsPlainTextField(text: $modelName)
                 }
-                SettingsFieldRow(String(localized: "Model name", bundle: bundle)) {
+                SettingsFieldRow(
+                    String(localized: "Model name", bundle: bundle),
+                    help: String(localized: "Profile name is only for display inside ReadPaper. Model name must match the real model identifier accepted by your provider.", bundle: bundle)
+                ) {
                     SettingsPlainTextField(text: $modelIdentifier)
                 }
                 SettingsFieldRow(String(localized: "Enabled", bundle: bundle)) {
@@ -1258,7 +1267,7 @@ private struct SettingsForm: View {
                 }
             }
 
-            Section(String(localized: "Actions", bundle: bundle)) {
+            llmDetailSection {
                 HStack(spacing: 10) {
                     Button(String(localized: "Save", bundle: bundle)) {
                         saveModel()
@@ -1307,8 +1316,6 @@ private struct SettingsForm: View {
                 }
             }
         }
-        .formStyle(.grouped)
-        .scrollContentBackground(.hidden)
     }
 
     @ViewBuilder
@@ -1332,6 +1339,38 @@ private struct SettingsForm: View {
                 .frame(minWidth: 420, maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func infoRow<Control: View>(
+        _ title: String,
+        message: String,
+        @ViewBuilder control: () -> Control
+    ) -> some View {
+        LabeledContent {
+            control()
+                .labelsHidden()
+        } label: {
+            ReadPaperInfoLabel(title, message: message)
+        }
+    }
+
+    // Both columns use explicit card insets, so the detail pane has no additional Form margins.
+    private func llmDetailPanel<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16, content: content)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private func llmDetailSection<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 16, content: content)
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(panelBackground)
+            .overlay {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(Color(nsColor: .separatorColor), lineWidth: 0.5)
+            }
     }
 
     private func entityListPanel<ListContent: View, ToolbarContent: View>(
@@ -1523,24 +1562,9 @@ private struct SettingsForm: View {
         )
     }
 
-    /// One form row per step, so the section draws them like every other settings
-    /// group instead of opaque cards inside its translucent container.
     @ViewBuilder
     private var gettingStartedPanel: some View {
         quickSetupCard
-
-        onboardingStepHeader(
-                title: String(localized: "2. Import and translate papers", bundle: bundle),
-                detail: paperCount > 0
-                    ? String(
-                        format: String(localized: "%d paper%@ already in your library. Use Translate in the reader toolbar.", bundle: bundle),
-                        paperCount,
-                        paperCount == 1 ? "" : "s"
-                    )
-                    : String(localized: "Return to the main window, add an arXiv paper or local PDF, then use Translate in the reader toolbar.", bundle: bundle),
-                isComplete: paperCount > 0
-            )
-            .padding(.vertical, 6)
 
         Button(String(localized: "Skip", bundle: bundle)) {
             didDismissGettingStarted = true
@@ -1550,15 +1574,11 @@ private struct SettingsForm: View {
 
     private var quickSetupCard: some View {
         VStack(alignment: .leading, spacing: 12) {
-            onboardingStepHeader(
-                title: String(localized: "1. Connect a translation service", bundle: bundle),
-                detail: isTranslationRouteReady
-                    ? translationRouteSummary
-                    : String(localized: "Paste an API key to use it for HTML and PDF translation.", bundle: bundle),
-                isComplete: isTranslationRouteReady
-            )
-
             if isTranslationRouteReady, !showsQuickSetupForm {
+                Label(translationRouteSummary, systemImage: "checkmark.circle.fill")
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
                 if let quickSetupStatusMessage {
                     statusLabel(quickSetupStatusMessage)
                 }
@@ -1571,36 +1591,12 @@ private struct SettingsForm: View {
             } else {
                 quickSetupForm
             }
-
-            Divider()
-
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text("More options:", bundle: bundle)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                Spacer(minLength: 0)
-
-                ForEach([SettingsTab.providers, .models, .reader], id: \.self) { tab in
-                    Button(settingsTabTitle(tab)) {
-                        selectedTabRawValue = tab.rawValue
-                    }
-                    .buttonStyle(.link)
-                    .font(.footnote)
-                }
-            }
         }
         .padding(.vertical, 6)
     }
 
     private var quickSetupForm: some View {
         let descriptor = quickSetupDescriptor
-        let target = LLMQuickSetup(apiStyleStore: apiStyleStore).target(
-            for: descriptor,
-            providers: providers,
-            models: models
-        )
 
         return VStack(alignment: .leading, spacing: 10) {
             Picker(String(localized: "Provider", bundle: bundle), selection: quickSetupProviderBinding) {
@@ -1621,25 +1617,7 @@ private struct SettingsForm: View {
                 )
             }
 
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(
-                    AppLocalization.format(
-                        "Uses %1$@ at %2$@.",
-                        bundle: bundle,
-                        target.modelDisplayName,
-                        target.baseURL
-                    )
-                )
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-                .lineLimit(2)
-                .textSelection(.enabled)
-
-                Spacer(minLength: 0)
-
-                Link(String(localized: "Get an API Key", bundle: bundle), destination: descriptor.apiKeyPageURL)
-                    .font(.footnote)
-            }
+            Link(String(localized: "Get an API Key", bundle: bundle), destination: descriptor.apiKeyPageURL)
 
             HStack(spacing: 10) {
                 Button(
@@ -1678,40 +1656,10 @@ private struct SettingsForm: View {
     }
 
     private var dismissedGettingStartedPanel: some View {
-        HStack(alignment: .center, spacing: 12) {
-            Image(systemName: "checkmark.circle")
-                .foregroundStyle(.secondary)
-
-            Text("Getting started guide is hidden.", bundle: bundle)
-                .foregroundStyle(.secondary)
-
-            Spacer(minLength: 0)
-
-            Button(String(localized: "Show Guide Again", bundle: bundle)) {
-                didDismissGettingStarted = false
-            }
-            .buttonStyle(.bordered)
+        Button(String(localized: "Show Guide Again", bundle: bundle)) {
+            didDismissGettingStarted = false
         }
-        .padding(.vertical, 6)
-    }
-
-    private func onboardingStepHeader(title: String, detail: String, isComplete: Bool) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: isComplete ? "checkmark.circle.fill" : "circle.dashed")
-                .foregroundStyle(isComplete ? .green : .secondary)
-                .font(.title3)
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .font(.headline)
-                Text(detail)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            Spacer(minLength: 0)
-        }
+        .buttonStyle(.bordered)
     }
 
     private func loadInitialSelectionIfNeeded() {
@@ -2518,21 +2466,29 @@ private enum SettingsValidationError: LocalizedError {
 
 private struct SettingsFieldRow<Content: View>: View {
     let title: String
+    let help: String?
     let content: Content
 
-    init(_ title: String, @ViewBuilder content: () -> Content) {
+    init(_ title: String, help: String? = nil, @ViewBuilder content: () -> Content) {
         self.title = title
+        self.help = help
         self.content = content()
     }
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 18) {
-            Text(title)
-                .foregroundStyle(.secondary)
-                .frame(width: 140, alignment: .leading)
+            HStack(spacing: 4) {
+                Text(title)
+                    .foregroundStyle(.secondary)
+                if let help {
+                    ReadPaperInfoButton(title, message: help)
+                }
+            }
+            .frame(width: 140, alignment: .leading)
 
             content
                 .frame(minWidth: 260, idealWidth: 320, maxWidth: .infinity, alignment: .leading)
+                .accessibilityLabel(title)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }

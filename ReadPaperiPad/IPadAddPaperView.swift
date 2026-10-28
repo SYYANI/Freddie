@@ -22,8 +22,9 @@ struct IPadAddPaperView: View {
             Form {
                 Section(String(localized: "arXiv ID or URL", bundle: bundle)) {
                     TextField(
-                        String(localized: "2303.08774 or https://arxiv.org/abs/2303.08774", bundle: bundle),
-                        text: $arxivInput
+                        String(localized: "arXiv ID or URL", bundle: bundle),
+                        text: $arxivInput,
+                        prompt: Text("2303.08774 or https://arxiv.org/abs/2303.08774", bundle: bundle)
                     )
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
@@ -35,8 +36,9 @@ struct IPadAddPaperView: View {
 
                 Section(String(localized: "Web page URL", bundle: bundle)) {
                     TextField(
-                        String(localized: "https://example.com/paper.html", bundle: bundle),
-                        text: $webPageInput
+                        String(localized: "Web page URL", bundle: bundle),
+                        text: $webPageInput,
+                        prompt: Text("https://example.com/paper.html", bundle: bundle)
                     )
                     .keyboardType(.URL)
                     .textInputAutocapitalization(.never)
@@ -47,7 +49,7 @@ struct IPadAddPaperView: View {
                     .disabled(webPageInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isImporting)
                 }
 
-                Section(String(localized: "Local PDF", bundle: bundle)) {
+                Section {
                     Button(String(localized: "Choose PDF...", bundle: bundle)) {
                         isPickingPDF = true
                     }

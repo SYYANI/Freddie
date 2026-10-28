@@ -1,5 +1,65 @@
 import SwiftUI
 
+/// Hover for a tooltip, or activate to keep the explanation open, including on touch devices.
+struct ReadPaperInfoButton: View {
+    @Environment(\.localizationBundle) private var bundle
+    @State private var isPresented = false
+
+    let title: String
+    let message: String
+
+    init(_ title: String, message: String) {
+        self.title = title
+        self.message = message
+    }
+
+    var body: some View {
+        Button {
+            isPresented.toggle()
+        } label: {
+            Image(systemName: "info.circle")
+                #if os(macOS)
+                .frame(width: 20, height: 20)
+                #else
+                .frame(width: 44, height: 44)
+                #endif
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.borderless)
+        .foregroundStyle(.secondary)
+        .help(message)
+        .accessibilityLabel(AppLocalization.format("About %@", bundle: bundle, title))
+        .popover(isPresented: $isPresented) {
+            Text(message)
+                .font(.callout)
+                .textSelection(.enabled)
+                .padding(16)
+                .frame(idealWidth: 300, maxWidth: 340, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
+                .presentationCompactAdaptation(.popover)
+        }
+    }
+}
+
+/// A row label with its info button, for `LabeledContent` and section headers. Keeping the
+/// button out of the control's own label leaves it reachable by VoiceOver and next to the text.
+struct ReadPaperInfoLabel: View {
+    let title: String
+    let message: String
+
+    init(_ title: String, message: String) {
+        self.title = title
+        self.message = message
+    }
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Text(title)
+            ReadPaperInfoButton(title, message: message)
+        }
+    }
+}
+
 extension View {
     /// Uses the native Liquid Glass button artwork when it is available.
     @ViewBuilder
