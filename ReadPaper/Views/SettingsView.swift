@@ -188,7 +188,6 @@ private struct SettingsForm: View {
     @State private var showsQuickSetupForm = false
     @State private var showsTranslationPerformanceOptions = false
     @State private var showsDiagnostics = false
-    @State private var browserExtensionExportError: String?
     @State private var showsProviderDeleteConfirmation = false
     @State private var showsModelDeleteConfirmation = false
     @State private var showsGlossaryClearConfirmation = false
@@ -589,8 +588,6 @@ private struct SettingsForm: View {
                     .disabled(translationGlossary.isEmpty)
                 }
 
-                browserClipperSection
-
                 Section(String(localized: "Advanced", bundle: bundle)) {
                     DisclosureGroup(isExpanded: $showsTranslationPerformanceOptions) {
                         VStack(alignment: .leading, spacing: 10) {
@@ -655,47 +652,6 @@ private struct SettingsForm: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .padding(20)
-    }
-
-    private var browserClipperSection: some View {
-        Section(String(localized: "Browser Clipper", bundle: bundle)) {
-            LabeledContent(String(localized: "Status", bundle: bundle)) {
-                switch BrowserClipperServer.shared.state {
-                case .listening(let port):
-                    Text(String(format: String(localized: "Ready on port %d", bundle: bundle), Int(port)))
-                case .stopped:
-                    Text("Not running", bundle: bundle)
-                        .foregroundStyle(.secondary)
-                case .failed(let message):
-                    Text(message)
-                        .foregroundStyle(.red)
-                        .textSelection(.enabled)
-                }
-            }
-
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Save web pages, selections and PDFs from Chrome or Edge into your library, with your browser’s sign-ins. To install, open the browser’s extensions page, turn on Developer mode, choose “Load unpacked” and select the folder shown in Finder.", bundle: bundle)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                HStack {
-                    Button(String(localized: "Show Extension in Finder", bundle: bundle)) {
-                        do {
-                            let folder = try BrowserExtensionFolder.export()
-                            NSWorkspace.shared.activateFileViewerSelecting([folder])
-                            browserExtensionExportError = nil
-                        } catch {
-                            browserExtensionExportError = error.localizedDescription
-                        }
-                    }
-                    if let browserExtensionExportError {
-                        Text(browserExtensionExportError)
-                            .font(.footnote)
-                            .foregroundStyle(.red)
-                    }
-                }
-            }
-        }
     }
 
     private var readerTab: some View {

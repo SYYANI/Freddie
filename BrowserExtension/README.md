@@ -6,14 +6,12 @@ in, after scripts have run — so it works on pages that Freddie's "Add by URL" 
 
 ## Install (Chrome, Edge, Arc, Brave)
 
-1. In Freddie, open **Settings › General › Browser Clipper** and click **Show Extension in Finder**.
-   This copies the extension to `~/Library/Application Support/ReadPaper/BrowserExtension`.
-2. Open `chrome://extensions` (or `edge://extensions`), turn on **Developer mode**,
-   click **Load unpacked** and choose that folder.
+1. Open `chrome://extensions` (or `edge://extensions`) and turn on **Developer mode**.
+2. Click **Load unpacked** and choose this `BrowserExtension` folder in the repository.
 3. Optionally pin the extension. The default shortcut is ⌥⇧F.
 
-After updating Freddie, click **Show Extension in Finder** again and then the reload button on
-the extensions page.
+After changing the extension's files, click the reload button on the extensions page and reload
+the pages you clip from.
 
 ## Use
 

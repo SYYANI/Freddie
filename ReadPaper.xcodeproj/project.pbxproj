@@ -138,7 +138,6 @@
 		63070324D95200FF9C8C0951 /* PaperCitationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8BEE8DCD06477BBA83A0632 /* PaperCitationTests.swift */; };
 		6316A2A477A15A19E2CDE704 /* IPadDigestExportConfigurationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A381E5ED86BBA07CA7AA5144 /* IPadDigestExportConfigurationTests.swift */; };
 		632C3E7456A9006BEAF14F99 /* PaperFolderServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF0BD93D8048897A69AC431C /* PaperFolderServiceTests.swift */; };
-		6331C3468CE419755D102204 /* BrowserExtension in Resources */ = {isa = PBXBuildFile; fileRef = 73D7DFBB52ED42F580B3F0D3 /* BrowserExtension */; };
 		6374E9F2B42068C642FF9B7E /* PDFTranslationDebugExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9572A1EC97FD75A3BA216BB0 /* PDFTranslationDebugExporter.swift */; };
 		63B66291FC21F07AAEDD7B8C /* ArxivClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5AE04037B749D64F46B8231B /* ArxivClient.swift */; };
 		648D02FA898ADFDC1B03F09C /* ReadPaperGlassEffect.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5ED8B27C8AA13F4C3442707C /* ReadPaperGlassEffect.swift */; };
@@ -439,7 +438,6 @@
 		70B7ECD2878925F7F85A89EA /* temml.min.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = temml.min.js; sourceTree = "<group>"; };
 		72E527A1CB9BF6F7422C42BA /* NoteMarkdownPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteMarkdownPreview.swift; sourceTree = "<group>"; };
 		738973A1A6296FAAB69D2405 /* SecureAPIKeyVaultTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecureAPIKeyVaultTests.swift; sourceTree = "<group>"; };
-		73D7DFBB52ED42F580B3F0D3 /* BrowserExtension */ = {isa = PBXFileReference; lastKnownFileType = folder; path = BrowserExtension; sourceTree = SOURCE_ROOT; };
 		756B3F8A255940BE24DE7FD6 /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
 		75E0E94D4471276EDCB5EC00 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		785C6D14338CA3CC18D0C62D /* SwiftStreamingMarkdown */ = {isa = PBXFileReference; lastKnownFileType = folder; name = SwiftStreamingMarkdown; path = ../SwiftStreamingMarkdown; sourceTree = SOURCE_ROOT; };
@@ -938,7 +936,6 @@
 		FFD37AF8B380F0E09C17D8CA = {
 			isa = PBXGroup;
 			children = (
-				73D7DFBB52ED42F580B3F0D3 /* BrowserExtension */,
 				150F567549117DD069EF5912 /* Packages */,
 				D13B300E54DA3FEBC95FFDF1 /* ReadPaper */,
 				80868B8CFFD4E8FD37054D61 /* ReadPaperBabelDocHelper */,
@@ -1125,7 +1122,6 @@
 			files = (
 				B5E9AC4BB627D23C838230B3 /* AppIcon.icon in Resources */,
 				547E6722EA7EECEAEB1FD1C1 /* Assets.xcassets in Resources */,
-				6331C3468CE419755D102204 /* BrowserExtension in Resources */,
 				5FE67D2EE54084754C8AE230 /* InfoPlist.xcstrings in Resources */,
 				7EE547A3192DEB8B68DF7E4A /* Localizable.xcstrings in Resources */,
 				C2EA6F6D9A084ABDA168F00E /* Temml-LICENSE.txt in Resources */,
@@ -1621,7 +1617,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 164;
+				CURRENT_PROJECT_VERSION = 165;
 				DEVELOPMENT_LANGUAGE = en;
 				ENABLE_TESTABILITY = NO;
 				INFOPLIST_FILE = ReadPaper/Info.plist;
@@ -1632,7 +1628,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 0.9.18;
+				MARKETING_VERSION = 0.9.19;
 				PRODUCT_BUNDLE_IDENTIFIER = com.yiyan.ReadPaper;
 				PRODUCT_MODULE_NAME = ReadPaper;
 				PRODUCT_NAME = Freddie;
@@ -1788,7 +1784,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 164;
+				CURRENT_PROJECT_VERSION = 165;
 				DEVELOPMENT_LANGUAGE = en;
 				DEVELOPMENT_TEAM = 3VM5RUH8V5;
 				ENABLE_TESTABILITY = YES;
@@ -1798,7 +1794,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.9.18;
+				MARKETING_VERSION = 0.9.19;
 				PRODUCT_BUNDLE_IDENTIFIER = com.yiyan.ReadPaper.iPad;
 				PRODUCT_MODULE_NAME = ReadPaperiPad;
 				PRODUCT_NAME = Freddie;
@@ -1841,7 +1837,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 164;
+				CURRENT_PROJECT_VERSION = 165;
 				DEVELOPMENT_LANGUAGE = en;
 				DEVELOPMENT_TEAM = 3VM5RUH8V5;
 				ENABLE_TESTABILITY = YES;
@@ -1851,7 +1847,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.9.18;
+				MARKETING_VERSION = 0.9.19;
 				PRODUCT_BUNDLE_IDENTIFIER = com.yiyan.ReadPaper.iPad;
 				PRODUCT_MODULE_NAME = ReadPaperiPad;
 				PRODUCT_NAME = Freddie;
@@ -1872,7 +1868,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 164;
+				CURRENT_PROJECT_VERSION = 165;
 				DEVELOPMENT_LANGUAGE = en;
 				ENABLE_TESTABILITY = YES;
 				INFOPLIST_FILE = ReadPaper/Info.plist;
@@ -1883,7 +1879,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 0.9.18;
+				MARKETING_VERSION = 0.9.19;
 				PRODUCT_BUNDLE_IDENTIFIER = com.yiyan.ReadPaper;
 				PRODUCT_MODULE_NAME = ReadPaper;
 				PRODUCT_NAME = Freddie;

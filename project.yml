@@ -49,9 +49,6 @@ targets:
     deploymentTarget: "14.0"
     sources:
       - path: ReadPaper
-      - path: BrowserExtension
-        type: folder
-        buildPhase: resources
     dependencies:
       - package: SwiftSoup
       - package: SwiftOpenAI
@@ -116,8 +113,8 @@ targets:
         ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS: NO
         SWIFT_VERSION: 6.0
         CODE_SIGN_STYLE: Automatic
-        CURRENT_PROJECT_VERSION: 164
-        MARKETING_VERSION: 0.9.18
+        CURRENT_PROJECT_VERSION: 165
+        MARKETING_VERSION: 0.9.19
       configs:
         Debug:
           ENABLE_TESTABILITY: YES
@@ -183,8 +180,8 @@ targets:
         ENABLE_TESTABILITY: YES
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: 3VM5RUH8V5
-        CURRENT_PROJECT_VERSION: 164
-        MARKETING_VERSION: 0.9.18
+        CURRENT_PROJECT_VERSION: 165
+        MARKETING_VERSION: 0.9.19
         SUPPORTED_PLATFORMS: iphoneos iphonesimulator
         SUPPORTS_MACCATALYST: NO
         SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD: NO

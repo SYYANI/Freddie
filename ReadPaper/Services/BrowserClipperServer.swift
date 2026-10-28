@@ -334,23 +334,3 @@ private final class BrowserClipperConnection: @unchecked Sendable {
         )
     }
 }
-
-/// The extension ships inside the app. Chrome's "Load unpacked" keeps reading from the folder
-/// it was given, so it gets a copy at a stable path outside the bundle, refreshed on each
-/// export so it matches the running app.
-enum BrowserExtensionFolder {
-    static func export(fileStore: PaperFileStore = PaperFileStore(), bundle: Bundle = .main) throws -> URL {
-        guard let source = bundle.url(forResource: "BrowserExtension", withExtension: nil) else {
-            throw CocoaError(.fileNoSuchFile)
-        }
-        let fileManager = fileStore.fileManager
-        let destination = try fileStore.applicationSupportDirectory
-            .appendingPathComponent("BrowserExtension", isDirectory: true)
-        try fileStore.ensureDirectory(destination.deletingLastPathComponent())
-        if fileManager.fileExists(atPath: destination.path) {
-            try fileManager.removeItem(at: destination)
-        }
-        try fileManager.copyItem(at: source, to: destination)
-        return destination
-    }
-}

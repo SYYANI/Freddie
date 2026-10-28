@@ -1230,17 +1230,6 @@
         }
       }
     },
-    "Browser Clipper" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "浏览器剪藏"
-          }
-        }
-      }
-    },
     "by %@" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -5260,16 +5249,6 @@
         }
       }
     },
-    "Not running" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "未运行"
-          }
-        }
-      }
-    },
     "Not Selected" : {
       "localizations" : {
         "zh-Hans" : {
@@ -6465,17 +6444,6 @@
         }
       }
     },
-    "Ready on port %d" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "已在端口 %d 就绪"
-          }
-        }
-      }
-    },
     "READY TO READ" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -6912,16 +6880,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "保存服务商"
-          }
-        }
-      }
-    },
-    "Save web pages, selections and PDFs from Chrome or Edge into your library, with your browser’s sign-ins. To install, open the browser’s extensions page, turn on Developer mode, choose “Load unpacked” and select the folder shown in Finder." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在 Chrome 或 Edge 中把网页、选中内容和 PDF 保存到论文库，沿用浏览器的登录状态。安装方法：打开浏览器的扩展程序页面，开启“开发者模式”，选择“加载已解压的扩展程序”，然后选中在访达中显示的文件夹。"
           }
         }
       }
@@ -7381,17 +7339,6 @@
         }
       }
     },
-    "Show Extension in Finder" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在访达中显示扩展"
-          }
-        }
-      }
-    },
     "Show Guide Again" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -7520,17 +7467,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "从左侧边栏开始"
-          }
-        }
-      }
-    },
-    "Status" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "状态"
           }
         }
       }
