@@ -6,11 +6,12 @@
 
 ReadPaper 是一个 macOS SwiftUI 论文阅读应用，使用 SwiftData 做本地数据模型，PDFKit 处理本地 PDF 轻量文本抽取，`swift-readability` 处理 arXiv/ar5iv HTML 正文抽取，SwiftSoup 处理 HTML 本地化和 HTML 段落翻译。项目最低 macOS 版本为 14.0，Swift 版本为 6.0，Xcode 项目由 `project.yml` 描述，依赖 SwiftSoup、`swift-readability`、`SwiftOpenAI`，以及写作编辑器排版公式用的 `iosMath`（与 `SwiftStreamingMarkdown` 固定同一 revision）；扫描版 PDF 翻译用本地路径包 `../rebuild-pdf` 的 `RebuildPDFKit`（只链接 macOS target）。
 
-核心能力分成五条路径：
+核心能力分成六条路径：
 
 - 本地 PDF：导入 PDF，抽取 Info dictionary 和前几页文本，只用于标题、作者和 arXiv ID 等轻量识别；不要把 PDF 纯文本当成稳定全文结构。本地 PDF 里的 `arxivID` 只应在出现明确 arXiv 上下文时写入，例如 `arXiv:2303.08774` 或 `arxiv.org` / `ar5iv.labs.arxiv.org` 链接；不要把 DOI、Crossref 链接或其他编号片段误识别成 arXiv ID。若能从 PDF 正文或元信息中可靠提取 DOI，可把 DOI 作为无 arXiv 时的降级展示标识。
 - arXiv 论文：通过 arXiv API 获取元数据和 PDF，优先保存 `https://arxiv.org/html/{id}`，失败后回退到 `https://ar5iv.labs.arxiv.org/html/{id}`；获取 HTML 后优先用 `swift-readability` 提炼正文，再把 HTML、CSS、图片等资源本地化，若正文抽取失败再回退到原始 HTML。通过 arXiv ID/URL 导入时，不要只给一个不透明的 loading spinner；应尽量向用户暴露当前所处阶段，例如 ID 规范化、元数据获取、PDF 下载、HTML 获取/回退、最终入库保存。
 - 网页导入：输入任意 HTTP/HTTPS 网页 URL，通过 `normalizeWebPageURL` 规范化 URL（自动补齐 https、去除 fragment）。下载响应后先检查 HTTP `Content-Type`；若为 `application/pdf`，则自动路由到 PDF 导入路径：写入 `paper.pdf`、从 PDF 元数据和前几页文本提取标题/作者/arXiv ID/DOI 等轻量信息，并以 PDF 附件形式入库。其余 HTML 网页走原有流程：用 `HTMLLocalizer` 的 `swift-readability` 路径下载并提炼正文，同时本地化页面中的 CSS、图片等链接资源；若 title 元素可解析则使用提取的标题，否则依次回退到 URL path 组件和 host，最终回退到"Untitled Web Page"。通过 `WebPageImportProgress` 反馈分步骤进度（URL 校验 → 网页抓取 → 创建库条目 → 最终保存），与 arXiv 导入一样使用确定型进度条。HTML 网页内容以本地化 HTML 形式保存为 `paper.html`，与 arXiv HTML 共用同一套展示和翻译管线。导入时以 URL 去重（`htmlURLString`），不依赖 arXiv ID。
+- 浏览器剪藏：仿 Zotero Connector / 印象笔记剪藏的浏览器扩展（`BrowserExtension/`，Manifest V3，Chrome/Edge 等 Chromium 浏览器），把浏览器里已登录、脚本已运行的页面存进论文库。App 在运行期间由 `BrowserClipperServer` 监听 `127.0.0.1:23240`（`/ping`、`/folders`、`/save`），每个请求必须带 `X-Freddie-Clipper` 头、`Host` 为 `127.0.0.1`/`localhost` 加端口、`Origin`（若有）为扩展来源；服务器永不返回 CORS 头。不要放宽这三条检查：自定义头让网页无法不经预检直接调用，Host 检查防 DNS rebinding。所有请求由扩展的 service worker 发出（内容脚本受页面 CORS 限制），保存期间用定时调用扩展 API 防止 worker 空闲退出。剪藏模式：arXiv 页走 `importArxiv`；PDF 用页面 `citation_pdf_url` 或 PDF 标签页，由内容脚本带 cookie 抓取后 base64 发送（超过约 45 MB 改由 App 按 URL 下载）；文章 = 用户确认（↑/↓ 调整、2px 内的包装层算同一级）的区域经 Readability 简化；选区 = 原样放进阅读排版；整页 = 保留原站排版（`HTMLLocalizer.ContentExtraction` 的 `.clipped(simplifies:)` / `.original`，剪藏不会因内容短回退到原页面）。内容脚本快照时解析懒加载图片、补上 CSS-in-JS 用 `insertRule` 写入的规则、把 URL 绝对化，并跳过带 `data-freddie-clipper` 的自身界面。同一页面（`htmlURLString`）或同一 PDF 地址 / DOI 已在库中且已有同类文件时返回 `exists`，扩展提供“打开 / 仍然保存”；只缺这类文件时把剪藏作为第二个附件加到原论文上（只补空缺的元数据，不改标题）。附件来源沿用 `webPage`，不新增 `AttachmentSource`，也不改 SwiftData schema。服务器只在 macOS target 编译，单元测试宿主里不启动（`isRunningTests`），以免占用正在运行的 Freddie 的端口。扩展随 App 打包进 `Contents/Resources/BrowserExtension`，设置页“浏览器剪藏”把它复制到 `Application Support/ReadPaper/BrowserExtension` 供“加载已解压的扩展程序”使用；改扩展文件后不需要改 `project.yml`。“在 Freddie 中打开”由页面打开 `readpaper://paper/{id}`，不要改回请求服务器后在 App 里 `NSApp.activate()`：macOS 14 起后台 App 不能自己切到前台，只能由当前活跃的浏览器通过链接交出焦点。扩展文案在 `_locales/en`、`_locales/zh_CN`。
 - 翻译阅读：HTML 走 SwiftSoup DOM 分段翻译并插入 `.rp-translation-block`；完整 PDF 翻译交给 App 内嵌并签名的原生 BabelDOC helper，helper 直接使用 App Resources 中按 manifest 校验的 MuPDF、zstd、原生 Core ML layout model 与字体，输出翻译 PDF 后用双栏 PDF 阅读器展示。PDF 翻译支持按页增量生成与续翻，过程中译文 PDF 可能只是覆盖前 N 页的 partial 文档；进度与阅读器状态都要显式体现这一点。
 - 扫描版 PDF 翻译：没有文字层（或文字层不可靠）的 PDF 走 `RebuildPDFKit`：视觉模型把每页转写成受限 LaTeX、对照原稿校对，文本模型翻译，XeLaTeX 按原页面尺寸、版心和分栏排版，输出与原稿逐页对应的 `translatedPDF`，同样用双栏阅读器展示。它是第三条 PDF 翻译路线，与 BabelDOC、arXiv LaTeX 翻译并列，不经过 BabelDOC。
 
@@ -68,6 +69,7 @@ GitHub Actions 构建 DMG：
 - `ReadPaper/Views/`：SwiftUI 界面，包含主布局、导入面板、阅读工具栏、设置页和检查器。
 - `ReadPaper/Readers/`：PDF、HTML、双语 PDF 阅读器。
 - `ReadPaper/Services/`：导入、arXiv API、HTML 本地化、翻译、BabelDOC、Keychain、文件存储、子进程运行等业务服务。
+- `BrowserExtension/`：浏览器剪藏扩展（见上文“浏览器剪藏”和其中的 `README.md`），整个目录作为资源打包进 App。
 - `ReadPaperTests/`：XCTest 单元测试，重点覆盖 arXiv ID/Atom 解析、文件存储、HTML 翻译管线、BabelDOC 参数、进程运行和网页导入。
 - `ReadPaper/Localizable.xcstrings`：应用自有 UI、状态文案和错误文案的字符串目录，当前以英文 source string 为 key，并提供 `en` / `zh-Hans`。
 - `ReadPaper/InfoPlist.xcstrings`：Info.plist 对用户可见文案的字符串目录，例如 `NSDocumentsFolderUsageDescription`。
@@ -221,6 +223,7 @@ xcodebuild -project ReadPaper.xcodeproj -scheme ReadPaper -destination 'platform
 - 文献类型（导入来源推断、手动指定与重置、类型筛选、新旧 schema 双向打开 store）：`PaperItemTypeTests`
 - 本地 PDF 导入、arXiv ID 误判回归、arXiv 导入进度阶段、网页导入与 Readability 正文抽取：`PaperImporterTests`
 - HTML 导入、本地化与 Readability 回退、导入时清除页面代码：`HTMLLocalizerTests`
+- 浏览器剪藏（HTTP 解析、来源/Host/请求头检查、各剪藏模式入库、重复与补附件、PDF 失败回滚、真实回环端口）：`BrowserClipperTests`；扩展脚本没有单元测试，改动后用无头 Chrome + DevTools 协议注入脚本、桩掉 `chrome.*` 检查快照和面板截图
 - 阅读器关闭页面 JavaScript 但注入脚本（选区、查找、旁注、区域调整、TeX）照常工作，划选只由高亮绘制、不用网站 `::selection`：`HTMLReaderPageScriptTests`
 - HTML 候选抽取、占位符保护、译文插入：`HTMLTranslationPipelineTests`
 - HTML 区域调整（JS 与 Swift 路径一致性、隐藏/恢复落盘、签名校验、层级与徽标、⇧ 连选、写回顺序与退出前落盘）：`HTMLRegionVisibilityTests`

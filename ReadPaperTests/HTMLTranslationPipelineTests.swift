@@ -977,7 +977,7 @@ private struct HTMLPipelineTestEnvironment {
 }
 
 @MainActor
-private final class HTMLLayoutNavigationObserver: NSObject, WKNavigationDelegate {
+final class HTMLLayoutNavigationObserver: NSObject, WKNavigationDelegate {
     let loaded: XCTestExpectation
 
     init(loaded: XCTestExpectation) {

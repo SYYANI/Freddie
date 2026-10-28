@@ -1,5 +1,6 @@
 import Foundation
 import SwiftSoup
+import WebKit
 import XCTest
 @testable import ReadPaper
 
@@ -278,6 +279,39 @@ final class HTMLLocalizerTests: XCTestCase {
             options: .regularExpression
         ))
         XCTAssertTrue(HTMLLocalizer.readableProseLayoutCSS.contains("html:has(> body.rp-readability-body)"))
+    }
+
+    @MainActor
+    func testReadingLayoutKeepsParagraphSpacingUnderSourceReset() async throws {
+        // 36Kr resets every paragraph margin and adds spacing back only below an
+        // ancestor that a clip or Readability leaves out.
+        let html = """
+        <html><head><title>Clip</title><style>
+        html, body, div, p { margin: 0; padding: 0; }
+        .article-wrapper .content p { margin-bottom: 26px; }
+        .lead { margin-bottom: 40px; }
+        </style></head>
+        <body><p>First paragraph.</p><p class="lead">Lead paragraph.</p><p>Last paragraph.</p></body></html>
+        """
+        let document = try HTMLLocalizer().makeDocumentForLocalization(
+            html: html,
+            sourceURL: URL(string: "https://example.com/clip")!,
+            extraction: .clipped(simplifies: false)
+        )
+
+        let configuration = WKWebViewConfiguration()
+        configuration.websiteDataStore = .nonPersistent()
+        let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 900, height: 700), configuration: configuration)
+        let loaded = expectation(description: "Clip loaded")
+        let observer = HTMLLayoutNavigationObserver(loaded: loaded)
+        webView.navigationDelegate = observer
+        webView.loadHTMLString(try document.outerHtml(), baseURL: nil)
+        await fulfillment(of: [loaded], timeout: 15)
+
+        let margins = try await webView.evaluateJavaScript("""
+        [...document.querySelectorAll('.rp-readability-content p')].map(p => getComputedStyle(p).marginBottom).join(' ')
+        """) as? String
+        XCTAssertEqual(margins, "16px 40px 16px")
     }
 
     func testReadabilityStylesRestoreNormalFlowForAnimatedArticleContent() throws {
