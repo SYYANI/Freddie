@@ -36,6 +36,9 @@ JSON-LD metadata.
 ## How it talks to Freddie
 
 Freddie listens on `http://127.0.0.1:23240` while it runs (`BrowserClipperServer.swift`).
+The cross-platform Freddie (`FreddieGeneral`, Electron) serves the same API on the same port
+(`electron/main/clipperServer.ts`), so this extension works with either app; if both run,
+whichever started first receives the clips.
 The background service worker makes every request, since a page's own scripts may not reach
 the loopback address:
 
