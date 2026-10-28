@@ -27,27 +27,18 @@ struct AddPaperSheet: View {
                 Text("arXiv ID or URL", bundle: bundle)
                     .font(.headline)
                 TextField(
-                    String(localized: "2303.08774 or https://arxiv.org/abs/2303.08774", bundle: bundle),
-                    text: $arxivInput
+                    String(localized: "arXiv ID or URL", bundle: bundle),
+                    text: $arxivInput,
+                    prompt: Text("2303.08774 or https://arxiv.org/abs/2303.08774", bundle: bundle)
                 )
                     .textFieldStyle(.roundedBorder)
                     .onSubmit(importArxiv)
-                HStack(alignment: .center, spacing: 12) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Download HTML version", bundle: bundle)
-                        Text("Adds a localized HTML copy for HTML reading and translation. Import may take longer.", bundle: bundle)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    Spacer(minLength: 12)
-
-                    Toggle("", isOn: $includeArxivHTML)
-                        .labelsHidden()
-                        .toggleStyle(.switch)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 4)
-                .disabled(isImporting)
+                Toggle(String(localized: "Download HTML version", bundle: bundle), isOn: $includeArxivHTML)
+                    .toggleStyle(.checkbox)
+                    .help(String(localized: "Adds a localized HTML copy for HTML reading and translation. Import may take longer.", bundle: bundle))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 4)
+                    .disabled(isImporting)
                 Button(String(localized: "Import from arXiv", bundle: bundle)) {
                     importArxiv()
                 }
@@ -60,8 +51,9 @@ struct AddPaperSheet: View {
                 Text("Web page URL", bundle: bundle)
                     .font(.headline)
                 TextField(
-                    String(localized: "https://example.com/paper.html", bundle: bundle),
-                    text: $webPageInput
+                    String(localized: "Web page URL", bundle: bundle),
+                    text: $webPageInput,
+                    prompt: Text("https://example.com/paper.html", bundle: bundle)
                 )
                     .textFieldStyle(.roundedBorder)
                     .onSubmit(importWebPage)
@@ -73,14 +65,12 @@ struct AddPaperSheet: View {
 
             Divider()
 
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Local PDF", bundle: bundle)
-                    .font(.headline)
-                Button(String(localized: "Choose PDF...", bundle: bundle)) {
-                    importLocalPDF()
-                }
-                .disabled(isImporting)
+            Button {
+                importLocalPDF()
+            } label: {
+                Label(String(localized: "Choose PDF...", bundle: bundle), systemImage: "doc.badge.plus")
             }
+            .disabled(isImporting)
 
             if isImporting {
                 if let arxivImportProgress {

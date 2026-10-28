@@ -244,11 +244,28 @@
       }
     },
     "A model profile points to one provider and stores the exact model name plus optional sampling parameters. You can create separate profiles for fast HTML translation and heavier PDF work." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "模型配置指向一个 Provider，并保存准确的模型名称和可选采样参数。你可以分别为快速 HTML 翻译和较重的 PDF 任务创建配置。"
+          }
+        }
+      }
+    },
+    "About %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "About %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "关于%@"
           }
         }
       }
@@ -406,6 +423,7 @@
       }
     },
     "Adds a localized HTML copy for HTML reading and translation. Import may take longer." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -465,6 +483,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "所有页面"
+          }
+        }
+      }
+    },
+    "All terms will be removed. This can’t be undone." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "将删除全部术语，且无法撤销。"
           }
         }
       }
@@ -557,6 +585,7 @@
       }
     },
     "API keys are protected with Touch ID or your device password. After the first approval, this Freddie installation stays authorized until the app is updated or the key changes. Leaving the API key field blank while editing keeps the saved key." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -863,6 +892,7 @@
       }
     },
     "Available placeholders: {{dateISO}}, {{title}}, {{slug}}, {{authors}}, {{identifier}}, {{sourceTitle}}, {{sourceURL}}, {{metadataBlock}}, {{abstractBlock}}, {{notesBlock}}, {{generatedBy}}." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -1526,6 +1556,7 @@
       }
     },
     "Choose which saved model profile powers HTML translation and the BabelDOC PDF route inside the reader." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -1596,6 +1627,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "清空术语表"
+          }
+        }
+      }
+    },
+    "Clear Glossary?" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "清空术语表？"
           }
         }
       }
@@ -1785,6 +1826,7 @@
       }
     },
     "Controls the default translation target, HTML concurrency, BabelDOC request rate, and incremental PDF page batch size. Supported languages: English and Simplified Chinese." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -2103,6 +2145,16 @@
         }
       }
     },
+    "Delete Model?" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "删除模型？"
+          }
+        }
+      }
+    },
     "Delete note" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2154,6 +2206,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "删除论文？"
+          }
+        }
+      }
+    },
+    "Delete Provider?" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "删除 Provider？"
           }
         }
       }
@@ -2383,6 +2445,7 @@
       }
     },
     "Download HTML version" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -2712,7 +2775,6 @@
       }
     },
     "Export directory" : {
-      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -3303,6 +3365,7 @@
       }
     },
     "Getting started guide is hidden." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -3666,7 +3729,6 @@
       }
     },
     "https://example.com/paper.html" : {
-      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -3688,6 +3750,7 @@
       }
     },
     "If you do not have a TeX distribution installed, MacTeX is recommended. The distribution is installed and maintained separately from Freddie." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -4364,6 +4427,7 @@
       }
     },
     "Local PDF" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -4407,6 +4471,7 @@
       }
     },
     "Lower concurrency or QPS if your provider reports rate limits." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -4461,6 +4526,7 @@
       }
     },
     "Markdown export requires a configured folder. Copy Digest can still use the template without an export folder." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -4691,6 +4757,7 @@
       }
     },
     "More options:" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -5253,6 +5320,7 @@
       }
     },
     "One term per line, for example “large language model = 大语言模型”." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -5362,6 +5430,7 @@
       }
     },
     "OpenAI, DeepSeek and Anthropic are ready to use after you save an API key. You can also add custom providers and choose the Responses API, Chat Completions or the Anthropic Messages API." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -7896,6 +7965,16 @@
         }
       }
     },
+    "The models that use “%@” and its saved API key will also be deleted. Translation routes that use them will be cleared." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "使用“%@”的模型和它保存的 API key 也会一并删除，用到它们的翻译路由会被清空。"
+          }
+        }
+      }
+    },
     "the output was far longer than the source" : {
       "localizations" : {
         "zh-Hans" : {
@@ -8222,6 +8301,7 @@
       }
     },
     "Thinking mode controls whether the model outputs a chain of thought before answering (for example DeepSeek V4). Reasoning effort is omitted while thinking is disabled." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -8520,6 +8600,7 @@
       }
     },
     "Translate Scanned PDF always uses this distribution's XeLaTeX." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -8754,6 +8835,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "翻译路由"
+          }
+        }
+      }
+    },
+    "Translation routes that use “%@” will be cleared." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "用到“%@”的翻译路由会被清空。"
           }
         }
       }
@@ -9351,6 +9442,7 @@
       }
     },
     "When enabled, ReadPaper uses available arXiv source to improve BabelDOC structure and translation context. No TeX installation is required, and failures fall back to PDF-only analysis." : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {

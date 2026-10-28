@@ -81,6 +81,7 @@ struct IPadSettingsView: View {
     @State private var isTestingModel = false
     @State private var showsModelAdvancedOptions = false
     @State private var showsModelDeleteConfirmation = false
+    @State private var showsGlossaryClearConfirmation = false
 
     @State private var showsDigestDirectoryImporter = false
     @State private var digestStatusMessage: String?
@@ -127,6 +128,10 @@ struct IPadSettingsView: View {
     }
 
     var body: some View {
+        confirmationDialogs(on: settingsContent)
+    }
+
+    private var settingsContent: some View {
         Group {
             if let settings {
                 TabView(selection: selectedTab) {
@@ -189,32 +194,62 @@ struct IPadSettingsView: View {
         .onChange(of: selectedModelID) { _, _ in applySelectedModel() }
         .onChange(of: providers.map(\.id)) { _, _ in loadInitialSelectionIfNeeded() }
         .onChange(of: models.map(\.id)) { _, _ in loadInitialSelectionIfNeeded() }
-        .confirmationDialog(
-            String(localized: "Delete", bundle: bundle),
-            isPresented: $showsProviderDeleteConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button(String(localized: "Delete", bundle: bundle), role: .destructive) {
-                deleteSelectedProvider()
-            }
-            Button(String(localized: "Cancel", bundle: bundle), role: .cancel) {}
-        }
-        .confirmationDialog(
-            String(localized: "Delete", bundle: bundle),
-            isPresented: $showsModelDeleteConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button(String(localized: "Delete", bundle: bundle), role: .destructive) {
-                deleteSelectedModel()
-            }
-            Button(String(localized: "Cancel", bundle: bundle), role: .cancel) {}
-        }
         .fileImporter(
             isPresented: $showsDigestDirectoryImporter,
             allowedContentTypes: [.folder],
             allowsMultipleSelection: false,
             onCompletion: handleDigestDirectorySelection
         )
+    }
+
+    private func confirmationDialogs<Content: View>(on content: Content) -> some View {
+        content
+            .confirmationDialog(
+                String(localized: "Delete Provider?", bundle: bundle),
+                isPresented: $showsProviderDeleteConfirmation,
+                titleVisibility: .visible,
+                presenting: selectedProvider
+            ) { _ in
+                Button(String(localized: "Delete", bundle: bundle), role: .destructive) {
+                    deleteSelectedProvider()
+                }
+                Button(String(localized: "Cancel", bundle: bundle), role: .cancel) {}
+            } message: { provider in
+                Text(AppLocalization.format(
+                    "The models that use “%@” and its saved API key will also be deleted. Translation routes that use them will be cleared.",
+                    bundle: bundle,
+                    provider.name
+                ))
+            }
+            .confirmationDialog(
+                String(localized: "Delete Model?", bundle: bundle),
+                isPresented: $showsModelDeleteConfirmation,
+                titleVisibility: .visible,
+                presenting: selectedModel
+            ) { _ in
+                Button(String(localized: "Delete", bundle: bundle), role: .destructive) {
+                    deleteSelectedModel()
+                }
+                Button(String(localized: "Cancel", bundle: bundle), role: .cancel) {}
+            } message: { model in
+                Text(AppLocalization.format(
+                    "Translation routes that use “%@” will be cleared.",
+                    bundle: bundle,
+                    model.name
+                ))
+            }
+            .confirmationDialog(
+                String(localized: "Clear Glossary?", bundle: bundle),
+                isPresented: $showsGlossaryClearConfirmation,
+                titleVisibility: .visible
+            ) {
+                Button(String(localized: "Clear glossary", bundle: bundle), role: .destructive) {
+                    translationGlossary = ""
+                }
+                Button(String(localized: "Cancel", bundle: bundle), role: .cancel) {}
+            } message: {
+                Text("All terms will be removed. This can’t be undone.", bundle: bundle)
+            }
     }
 
     private func generalTab(_ settings: AppSettings) -> some View {
@@ -238,19 +273,10 @@ struct IPadSettingsView: View {
                 Divider()
                     .opacity(0.35)
 
-                VStack(alignment: .leading, spacing: 8) {
-                    Toggle(
-                        String(localized: "Use arXiv LaTeX structure for PDF translation", bundle: bundle),
-                        isOn: $babelDocSemanticHintsEnabled
-                    )
-
-                    Text(
-                        "When enabled, ReadPaper uses available arXiv source to improve BabelDOC structure and translation context. No TeX installation is required, and failures fall back to PDF-only analysis.",
-                        bundle: bundle
-                    )
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                }
+                Toggle(
+                    String(localized: "Use arXiv LaTeX structure for PDF translation", bundle: bundle),
+                    isOn: $babelDocSemanticHintsEnabled
+                )
 
                 Divider()
                     .opacity(0.35)
@@ -285,19 +311,16 @@ struct IPadSettingsView: View {
                     ))
                 }
 
-                Text(
-                    "Controls the default translation target, HTML concurrency, BabelDOC request rate, and incremental PDF page batch size. Supported languages: English and Simplified Chinese.",
-                    bundle: bundle
-                )
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-
                 Divider()
                     .opacity(0.35)
 
-                Text("Optional glossary", bundle: bundle)
+                ReadPaperInfoLabel(
+                    String(localized: "Optional glossary", bundle: bundle),
+                    message: String(localized: "Enter one preferred term mapping per line, for example “large language model = 大语言模型”. The glossary is optional and is used as reference context by both HTML and PDF translation.", bundle: bundle)
+                )
 
                 TextEditor(text: $translationGlossary)
+                    .accessibilityLabel(String(localized: "Optional glossary", bundle: bundle))
                     .frame(minHeight: 110)
                     .padding(8)
                     .overlay {
@@ -306,16 +329,9 @@ struct IPadSettingsView: View {
                     }
 
                 Button(String(localized: "Clear glossary", bundle: bundle), role: .destructive) {
-                    translationGlossary = ""
+                    showsGlossaryClearConfirmation = true
                 }
                 .disabled(translationGlossary.isEmpty)
-
-                Text(
-                    "Enter one preferred term mapping per line, for example “large language model = 大语言模型”. The glossary is optional and is used as reference context by both HTML and PDF translation.",
-                    bundle: bundle
-                )
-                .font(.footnote)
-                .foregroundStyle(.secondary)
             }
 
             settingsFormSection(String(localized: "BabelDOC", bundle: bundle)) {
@@ -400,12 +416,6 @@ struct IPadSettingsView: View {
                     }
                 }
 
-                Text(
-                    "Choose which saved model profile powers HTML translation and the BabelDOC PDF route inside the reader.",
-                    bundle: bundle
-                )
-                .font(.footnote)
-                .foregroundStyle(.secondary)
             }
         }
     }
@@ -435,7 +445,7 @@ struct IPadSettingsView: View {
     private var digestTab: some View {
         settingsForm {
             settingsFormSection(String(localized: "Digest Export", bundle: bundle)) {
-                LabeledContent(String(localized: "Export directory", bundle: bundle)) {
+                LabeledContent {
                     Text(
                         digestExportDirectoryPath.isEmpty
                             ? String(localized: "Not configured", bundle: bundle)
@@ -444,6 +454,8 @@ struct IPadSettingsView: View {
                     .foregroundStyle(digestExportDirectoryPath.isEmpty ? .secondary : .primary)
                     .lineLimit(1)
                     .truncationMode(.middle)
+                } label: {
+                    Text("Export directory", bundle: bundle)
                 }
 
                 Divider()
@@ -463,16 +475,11 @@ struct IPadSettingsView: View {
                 }
                 .disabled(digestExportDirectoryPath.isEmpty)
 
-                Text(
-                    "Markdown export requires a configured folder. Copy Digest can still use the template without an export folder.",
-                    bundle: bundle
-                )
-                .font(.footnote)
-                .foregroundStyle(.secondary)
             }
 
             settingsFormSection(String(localized: "Markdown Template", bundle: bundle)) {
                 TextEditor(text: $digestExportTemplate)
+                    .accessibilityLabel(String(localized: "Markdown Template", bundle: bundle))
                     .font(.system(.body, design: .monospaced))
                     .frame(minHeight: 260)
                     .textInputAutocapitalization(.never)
@@ -496,13 +503,6 @@ struct IPadSettingsView: View {
                     digestExportTemplate = PaperDigestExportPolicy.defaultMarkdownTemplate
                     digestStatusMessage = String(localized: "Default digest template restored.", bundle: bundle)
                 }
-
-                Text(
-                    "Available placeholders: {{dateISO}}, {{title}}, {{slug}}, {{authors}}, {{identifier}}, {{sourceTitle}}, {{sourceURL}}, {{metadataBlock}}, {{abstractBlock}}, {{notesBlock}}, {{generatedBy}}.",
-                    bundle: bundle
-                )
-                .font(.footnote)
-                .foregroundStyle(.secondary)
 
                 if let digestStatusMessage {
                     Divider()
@@ -532,8 +532,8 @@ struct IPadSettingsView: View {
         showsSelectionPicker: Bool
     ) -> some View {
         Form {
-            Section(String(localized: "Providers", bundle: bundle)) {
-                if showsSelectionPicker {
+            if showsSelectionPicker {
+                Section {
                     Picker(String(localized: "Provider", bundle: bundle), selection: $selectedProviderID) {
                         Text("New Provider", bundle: bundle).tag(Optional<UUID>.none)
                         ForEach(sortedProviders) { provider in
@@ -541,48 +541,43 @@ struct IPadSettingsView: View {
                         }
                     }
                 }
-
-                Text(
-                    "OpenAI, DeepSeek and Anthropic are ready to use after you save an API key. You can also add custom providers and choose the Responses API, Chat Completions or the Anthropic Messages API.",
-                    bundle: bundle
-                )
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-
-                Text(
-                    "API keys are stored in Keychain. Leaving the API key field blank while editing keeps the saved key.",
-                    bundle: bundle
-                )
-                .font(.footnote)
-                .foregroundStyle(.secondary)
             }
 
-            Section(String(localized: "Configuration", bundle: bundle)) {
-                TextField(String(localized: "Display name", bundle: bundle), text: $providerName)
-                TextField(String(localized: "Base URL", bundle: bundle), text: $providerBaseURL)
-                    .keyboardType(.URL)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
+            Section {
+                settingsDetailField(String(localized: "Display name", bundle: bundle)) {
+                    TextField("", text: $providerName)
+                }
+                settingsDetailField(String(localized: "Base URL", bundle: bundle)) {
+                    TextField("", text: $providerBaseURL)
+                        .keyboardType(.URL)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                }
                 Picker(String(localized: "API protocol", bundle: bundle), selection: $providerAPIStyle) {
                     ForEach(LLMAPIStyle.allCases, id: \.self) { style in
                         Text(apiStyleLabel(style)).tag(style)
                     }
                 }
-                SecureField(
-                    providerHasStoredAPIKey
-                        ? String(repeating: "•", count: 12)
-                        : String(localized: "API key", bundle: bundle),
-                    text: $providerAPIKey
-                )
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                TextField(String(localized: "Test model", bundle: bundle), text: $providerTestModel)
+                settingsDetailField(
+                    String(localized: "API key", bundle: bundle),
+                    help: String(localized: "API keys are stored in Keychain. Leaving the API key field blank while editing keeps the saved key.", bundle: bundle)
+                ) {
+                    SecureField(
+                        providerHasStoredAPIKey ? String(repeating: "•", count: 12) : "",
+                        text: $providerAPIKey
+                    )
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
+                }
+                settingsDetailField(String(localized: "Test model", bundle: bundle)) {
+                    TextField("", text: $providerTestModel)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                }
                 Toggle(String(localized: "Enabled", bundle: bundle), isOn: $providerEnabled)
             }
 
-            Section(String(localized: "Actions", bundle: bundle)) {
+            Section {
                 settingsActions(
                     primaryTitle: String(localized: "Save", bundle: bundle),
                     primaryAction: { saveProvider(settings) },
@@ -629,8 +624,8 @@ struct IPadSettingsView: View {
         showsSelectionPicker: Bool
     ) -> some View {
         Form {
-            Section(String(localized: "Models", bundle: bundle)) {
-                if showsSelectionPicker {
+            if showsSelectionPicker {
+                Section {
                     Picker(String(localized: "Model Profile", bundle: bundle), selection: $selectedModelID) {
                         Text("New Model", bundle: bundle).tag(Optional<UUID>.none)
                         ForEach(sortedModels) { model in
@@ -638,23 +633,9 @@ struct IPadSettingsView: View {
                         }
                     }
                 }
-
-                Text(
-                    "A model profile points to one provider and stores the exact model name plus optional sampling parameters. You can create separate profiles for fast HTML translation and heavier PDF work.",
-                    bundle: bundle
-                )
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-
-                Text(
-                    "Profile name is only for display inside ReadPaper. Model name must match the real model identifier accepted by your provider.",
-                    bundle: bundle
-                )
-                .font(.footnote)
-                .foregroundStyle(.secondary)
             }
 
-            Section(String(localized: "Configuration", bundle: bundle)) {
+            Section {
                 Picker(String(localized: "Provider", bundle: bundle), selection: $modelProviderID) {
                     Text("Select Provider", bundle: bundle).tag(Optional<UUID>.none)
                     ForEach(sortedProviders) { provider in
@@ -662,10 +643,19 @@ struct IPadSettingsView: View {
                     }
                 }
 
-                TextField(String(localized: "Profile name", bundle: bundle), text: $modelName)
-                TextField(String(localized: "Model name", bundle: bundle), text: $modelIdentifier)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
+                settingsDetailField(
+                    String(localized: "Profile name", bundle: bundle)
+                ) {
+                    TextField("", text: $modelName)
+                }
+                settingsDetailField(
+                    String(localized: "Model name", bundle: bundle),
+                    help: String(localized: "Profile name is only for display inside ReadPaper. Model name must match the real model identifier accepted by your provider.", bundle: bundle)
+                ) {
+                    TextField("", text: $modelIdentifier)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                }
                 Toggle(String(localized: "Enabled", bundle: bundle), isOn: $modelEnabled)
 
                 DisclosureGroup(isExpanded: $showsModelAdvancedOptions) {
@@ -682,21 +672,31 @@ struct IPadSettingsView: View {
                         }
                     }
                     .disabled(modelThinkingMode == .disabled)
-                    Text("Thinking mode controls whether the model outputs a chain of thought before answering (for example DeepSeek V4). Reasoning effort is omitted while thinking is disabled.", bundle: bundle)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                    TextField(String(localized: "Temperature", bundle: bundle), text: $modelTemperature)
-                        .keyboardType(.decimalPad)
-                    TextField(String(localized: "Top-P", bundle: bundle), text: $modelTopP)
-                        .keyboardType(.decimalPad)
-                    TextField(String(localized: "Max tokens", bundle: bundle), text: $modelMaxTokens)
-                        .keyboardType(.numberPad)
+
+                    settingsDetailField(
+                        String(localized: "Temperature", bundle: bundle)
+                    ) {
+                        TextField("", text: $modelTemperature)
+                            .keyboardType(.decimalPad)
+                    }
+                    settingsDetailField(
+                        String(localized: "Top-P", bundle: bundle)
+                    ) {
+                        TextField("", text: $modelTopP)
+                            .keyboardType(.decimalPad)
+                    }
+                    settingsDetailField(
+                        String(localized: "Max tokens", bundle: bundle)
+                    ) {
+                        TextField("", text: $modelMaxTokens)
+                            .keyboardType(.numberPad)
+                    }
                 } label: {
                     Text("Advanced Parameters", bundle: bundle)
                 }
             }
 
-            Section(String(localized: "Actions", bundle: bundle)) {
+            Section {
                 settingsActions(
                     primaryTitle: String(localized: "Save", bundle: bundle),
                     primaryAction: { saveModel(settings) },
@@ -824,23 +824,7 @@ struct IPadSettingsView: View {
     private func providerWideDetailPanel(_ settings: AppSettings) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                settingsDetailSection(title: String(localized: "Providers", bundle: bundle)) {
-                    Text(
-                        "OpenAI, DeepSeek and Anthropic are ready to use after you save an API key. You can also add custom providers and choose the Responses API, Chat Completions or the Anthropic Messages API.",
-                        bundle: bundle
-                    )
-                    .fixedSize(horizontal: false, vertical: true)
-
-                    Text(
-                        "API keys are stored in Keychain. Leaving the API key field blank while editing keeps the saved key.",
-                        bundle: bundle
-                    )
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                }
-
-                settingsDetailSection(title: String(localized: "Configuration", bundle: bundle)) {
+                settingsDetailSection {
                     settingsDetailField(String(localized: "Display name", bundle: bundle)) {
                         TextField("", text: $providerName)
                             .textFieldStyle(.roundedBorder)
@@ -864,7 +848,10 @@ struct IPadSettingsView: View {
                         .pickerStyle(.menu)
                     }
 
-                    settingsDetailField(String(localized: "API key", bundle: bundle)) {
+                    settingsDetailField(
+                        String(localized: "API key", bundle: bundle),
+                        help: String(localized: "API keys are stored in Keychain. Leaving the API key field blank while editing keeps the saved key.", bundle: bundle)
+                    ) {
                         SecureField(
                             providerHasStoredAPIKey ? String(repeating: "•", count: 12) : "",
                             text: $providerAPIKey
@@ -887,7 +874,7 @@ struct IPadSettingsView: View {
                     }
                 }
 
-                settingsDetailSection(title: String(localized: "Actions", bundle: bundle)) {
+                settingsDetailSection {
                     settingsActions(
                         primaryTitle: String(localized: "Save", bundle: bundle),
                         primaryAction: { saveProvider(settings) },
@@ -919,23 +906,7 @@ struct IPadSettingsView: View {
     private func modelWideDetailPanel(_ settings: AppSettings) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                settingsDetailSection(title: String(localized: "Models", bundle: bundle)) {
-                    Text(
-                        "A model profile points to one provider and stores the exact model name plus optional sampling parameters. You can create separate profiles for fast HTML translation and heavier PDF work.",
-                        bundle: bundle
-                    )
-                    .fixedSize(horizontal: false, vertical: true)
-
-                    Text(
-                        "Profile name is only for display inside ReadPaper. Model name must match the real model identifier accepted by your provider.",
-                        bundle: bundle
-                    )
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                }
-
-                settingsDetailSection(title: String(localized: "Configuration", bundle: bundle)) {
+                settingsDetailSection {
                     settingsDetailField(String(localized: "Provider", bundle: bundle)) {
                         Picker(String(localized: "Provider", bundle: bundle), selection: $modelProviderID) {
                             Text("Select Provider", bundle: bundle).tag(Optional<UUID>.none)
@@ -952,7 +923,10 @@ struct IPadSettingsView: View {
                             .textFieldStyle(.roundedBorder)
                     }
 
-                    settingsDetailField(String(localized: "Model name", bundle: bundle)) {
+                    settingsDetailField(
+                        String(localized: "Model name", bundle: bundle),
+                        help: String(localized: "Profile name is only for display inside ReadPaper. Model name must match the real model identifier accepted by your provider.", bundle: bundle)
+                    ) {
                         TextField("", text: $modelIdentifier)
                             .textFieldStyle(.roundedBorder)
                             .textInputAutocapitalization(.never)
@@ -989,10 +963,6 @@ struct IPadSettingsView: View {
                                 .disabled(modelThinkingMode == .disabled)
                             }
 
-                            Text("Thinking mode controls whether the model outputs a chain of thought before answering (for example DeepSeek V4). Reasoning effort is omitted while thinking is disabled.", bundle: bundle)
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
-
                             settingsDetailField(String(localized: "Temperature", bundle: bundle)) {
                                 TextField("", text: $modelTemperature)
                                     .textFieldStyle(.roundedBorder)
@@ -1018,7 +988,7 @@ struct IPadSettingsView: View {
                     }
                 }
 
-                settingsDetailSection(title: String(localized: "Actions", bundle: bundle)) {
+                settingsDetailSection {
                     settingsActions(
                         primaryTitle: String(localized: "Save", bundle: bundle),
                         primaryAction: { saveModel(settings) },
@@ -1095,12 +1065,14 @@ struct IPadSettingsView: View {
     }
 
     private func settingsDetailSection<Content: View>(
-        title: String,
+        title: String? = nil,
         @ViewBuilder content: () -> Content
     ) -> some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text(title)
-                .font(.headline)
+            if let title {
+                Text(title)
+                    .font(.headline)
+            }
 
             content()
         }
@@ -1109,25 +1081,36 @@ struct IPadSettingsView: View {
 
     private func settingsDetailField<Content: View>(
         _ title: String,
+        help: String? = nil,
         @ViewBuilder content: () -> Content
     ) -> some View {
         ViewThatFits(in: .horizontal) {
             HStack(alignment: .firstTextBaseline, spacing: 18) {
-                Text(title)
-                    .foregroundStyle(.secondary)
-                    .frame(width: 128, alignment: .leading)
+                settingsFieldLabel(title, help: help)
+                    .frame(width: 144, alignment: .leading)
 
                 content()
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityLabel(title)
             }
 
             VStack(alignment: .leading, spacing: 8) {
-                Text(title)
+                settingsFieldLabel(title, help: help)
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
 
                 content()
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityLabel(title)
+            }
+        }
+    }
+
+    private func settingsFieldLabel(_ title: String, help: String?) -> some View {
+        HStack(spacing: 4) {
+            Text(title)
+                .foregroundStyle(.secondary)
+            if let help {
+                ReadPaperInfoButton(title, message: help)
             }
         }
     }
