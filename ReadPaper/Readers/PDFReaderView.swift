@@ -761,8 +761,11 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
                 pdfView.autoScales = true
                 return
             }
-            // A zoom wider than the pane was already clipped on purpose; leave it alone.
-            scalingView?.preferredManualScale = preferredScale < fittedScale ? preferredScale : nil
+            // Once capped, the zoom stays capped (the pane may now be narrower than it); a zoom
+            // wider than the pane was already clipped on purpose, so leave that one alone.
+            if scalingView?.preferredManualScale == nil, preferredScale < fittedScale {
+                scalingView?.preferredManualScale = preferredScale
+            }
         }
 
         func applyDisplayAppearance(_ appearance: PDFDisplayAppearance, to pdfView: PDFView) {
