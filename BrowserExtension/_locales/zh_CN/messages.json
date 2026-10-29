@@ -1,0 +1,125 @@
+{
+  "extensionName": {
+    "message": "Freddie 剪藏"
+  },
+  "extensionDescription": {
+    "message": "像网页剪藏一样，把文章、选区和 PDF 保存到 Freddie 论文库。"
+  },
+  "actionTitle": {
+    "message": "剪藏到 Freddie"
+  },
+  "menuClipPage": {
+    "message": "剪藏此页到 Freddie"
+  },
+  "menuClipSelection": {
+    "message": "剪藏选中内容到 Freddie"
+  },
+  "cannotClip": {
+    "message": "无法剪藏此页面。"
+  },
+  "panelTitle": {
+    "message": "剪藏"
+  },
+  "close": {
+    "message": "关闭"
+  },
+  "modeArticle": {
+    "message": "文章"
+  },
+  "modeSelection": {
+    "message": "选区"
+  },
+  "modePage": {
+    "message": "整页"
+  },
+  "modePDF": {
+    "message": "PDF"
+  },
+  "modeArxiv": {
+    "message": "arXiv"
+  },
+  "hintArticle": {
+    "message": "按 ↑ / ↓ 扩大或缩小高亮区域。"
+  },
+  "hintArticleMissing": {
+    "message": "没有找到正文，可改用整页或先选中内容。"
+  },
+  "hintSelection": {
+    "message": "保存选中的文字和图片。"
+  },
+  "hintSelectionEmpty": {
+    "message": "请先在页面上选中内容，再选择“选区”。"
+  },
+  "hintPage": {
+    "message": "按网页原排版保存整页。"
+  },
+  "hintPDF": {
+    "message": "使用浏览器的登录状态保存 PDF：$1"
+  },
+  "hintArxiv": {
+    "message": "导入 arXiv $1，包括 PDF、HTML 和元数据。"
+  },
+  "labelTitle": {
+    "message": "标题"
+  },
+  "titlePlaceholder": {
+    "message": "标题"
+  },
+  "titlePlaceholderPDF": {
+    "message": "使用 PDF 中的标题"
+  },
+  "labelFolder": {
+    "message": "文件夹"
+  },
+  "folderUnfiled": {
+    "message": "未归档"
+  },
+  "save": {
+    "message": "保存"
+  },
+  "cancel": {
+    "message": "取消"
+  },
+  "saving": {
+    "message": "正在保存…"
+  },
+  "fetchingPDF": {
+    "message": "正在下载 PDF…"
+  },
+  "saved": {
+    "message": "已保存到 Freddie"
+  },
+  "openInFreddie": {
+    "message": "在 Freddie 中打开"
+  },
+  "done": {
+    "message": "完成"
+  },
+  "exists": {
+    "message": "论文库中已有这篇"
+  },
+  "saveAnyway": {
+    "message": "仍然保存"
+  },
+  "offline": {
+    "message": "Freddie 未运行，请打开 Freddie 后重试。"
+  },
+  "launch": {
+    "message": "打开 Freddie"
+  },
+  "retry": {
+    "message": "重试"
+  },
+  "connecting": {
+    "message": "正在等待 Freddie…"
+  },
+  "saveFailed": {
+    "message": "保存失败：$1"
+  },
+  "nothingToClip": {
+    "message": "当前模式下没有可保存的内容。"
+  },
+  "shortcutsHint": {
+    "message": "回车保存 · Esc 关闭"
+  }
+}

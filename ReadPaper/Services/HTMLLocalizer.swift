@@ -51,9 +51,17 @@ struct HTMLLocalizer: @unchecked Sendable {
     // A source cap on the root (mandoc.css: `html { max-width: 65em; }`) pins the
     // whole page to the left and confines the sidenote reserve, so lift it; the
     // shell already caps and centers the column.
+    // Source resets (36Kr: `div, p, … { margin: 0 }`) often leave paragraph spacing
+    // to an ancestor rule (`.article-wrapper .content p`) that the extracted or
+    // clipped body no longer has, so paragraphs run together. Default spacing with a
+    // bare type selector's specificity beats such resets (it comes later) but loses to
+    // any source rule with a class that still applies.
     static let readableProseLayoutCSS = """
     html:has(> body.rp-readability-body) {
         max-width: none !important;
+    }
+    :where(body.rp-readability-body :is(.rp-readability-header, .rp-readability-content)) :is(p, ul, ol, blockquote, pre, figure, dl) {
+        margin-block-end: 1em;
     }
     body.rp-readability-body :is(.rp-readability-header, .rp-readability-content) :is(p, h1, h2, h3, h4, h5, h6):not(svg *, math *) {
         width: 100% !important;
@@ -90,13 +98,30 @@ struct HTMLLocalizer: @unchecked Sendable {
         return try await localize(htmlData: data, sourceURL: sourceURL, outputURL: outputURL, resourcesDirectory: resourcesDirectory)
     }
 
-    func localize(htmlData: Data, sourceURL: URL, outputURL: URL, resourcesDirectory: URL) async throws -> URL {
+    /// How much of a page becomes the saved document.
+    enum ContentExtraction: Sendable, Equatable {
+        /// Readability picks the article; when it finds too little the page is kept as is.
+        case readable
+        /// The body is what the reader picked in the browser and goes into the reading layout
+        /// whatever its length. `simplifies` first lets Readability drop page chrome inside it.
+        case clipped(simplifies: Bool)
+        /// The page in its own layout, e.g. a full-page browser clip.
+        case original
+    }
+
+    func localize(
+        htmlData: Data,
+        sourceURL: URL,
+        outputURL: URL,
+        resourcesDirectory: URL,
+        extraction: ContentExtraction = .readable
+    ) async throws -> URL {
         if !fileManager.fileExists(atPath: resourcesDirectory.path) {
             try fileManager.createDirectory(at: resourcesDirectory, withIntermediateDirectories: true)
         }
 
         let html = String(data: htmlData, encoding: .utf8) ?? String(decoding: htmlData, as: UTF8.self)
-        let document = try makeDocumentForLocalization(html: html, sourceURL: sourceURL)
+        let document = try makeDocumentForLocalization(html: html, sourceURL: sourceURL, extraction: extraction)
         try removeActiveContent(from: document)
         try removeArchiveReplayChromeResources(from: document, sourceURL: sourceURL)
 
@@ -202,18 +227,42 @@ struct HTMLLocalizer: @unchecked Sendable {
         return outputURL
     }
 
-    func makeDocumentForLocalization(html: String, sourceURL: URL) throws -> Document {
+    func makeDocumentForLocalization(
+        html: String,
+        sourceURL: URL,
+        extraction: ContentExtraction = .readable
+    ) throws -> Document {
         let document = try SwiftSoup.parse(html, sourceURL.absoluteString)
         try reconcileCharsetDeclaration(in: document)
         try absolutizeHyperlinks(in: document, baseURL: sourceURL)
         try document.select("base[href]").remove()
         let repairedPreformattedProse = try splitPreformattedProseBlocks(in: document)
 
-        let readabilityInput = repairedPreformattedProse ? try document.outerHtml() : html
-        guard let readableDocument = try makeReadableDocument(from: readabilityInput, sourceURL: sourceURL, fallback: document) else {
+        switch extraction {
+        case .original:
             return document
+        case .clipped(simplifies: false):
+            break
+        case .readable, .clipped(simplifies: true):
+            let readabilityInput = repairedPreformattedProse ? try document.outerHtml() : html
+            if let readableDocument = try makeReadableDocument(from: readabilityInput, sourceURL: sourceURL, fallback: document) {
+                return readableDocument
+            }
+            guard extraction != .readable else { return document }
         }
-        return readableDocument
+        try applyReadabilityResult(clippedReadabilityResult(from: document), to: document)
+        return document
+    }
+
+    /// A clip's body unchanged, for the reading layout.
+    private func clippedReadabilityResult(from document: Document) throws -> ReadabilityResult {
+        let body = document.body()
+        return ReadabilityResult(
+            title: try document.title(),
+            lang: try document.select("html").first()?.attr("lang"),
+            content: try body?.html() ?? "",
+            textContent: try body?.text() ?? ""
+        )
     }
 
     func requiresBrowserRendering(_ html: String) -> Bool {

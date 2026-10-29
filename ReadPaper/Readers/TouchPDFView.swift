@@ -30,7 +30,8 @@ enum PDFPencilShortcutAction: Equatable {
 }
 
 /// The touch counterpart of InteractivePDFView's live-magnify handling.
-final class TouchPDFView: PDFView, UIPencilInteractionDelegate {
+final class TouchPDFView: PDFView, UIPencilInteractionDelegate, PDFPreferredManualScaling {
+    var preferredManualScale: CGFloat?
     var onInitialLayoutReady: (() -> Void)?
     var onPencilDoubleTap: (() -> Void)?
     var onPencilShortcutAction: ((PDFPencilShortcutAction) -> Void)?
@@ -71,6 +72,7 @@ final class TouchPDFView: PDFView, UIPencilInteractionDelegate {
         radialToolPalette.frame = bounds
         bringSubviewToFront(radialToolPalette)
         observePinches(in: self)
+        applyPreferredManualScale()
         if window != nil, !bounds.isEmpty, let action = onInitialLayoutReady {
             onInitialLayoutReady = nil
             // Let PDFKit's child scroll view finish its first layout as well.
@@ -97,6 +99,7 @@ final class TouchPDFView: PDFView, UIPencilInteractionDelegate {
             // PDFKit can leave autoScales enabled after replacing the document. A later
             // layout would then discard the user's zoom, just as on macOS.
             autoScales = false
+            preferredManualScale = nil
         }
     }
 

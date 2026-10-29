@@ -18,6 +18,9 @@ struct ReadPaperApp: App {
         } catch {
             fatalError("Failed to initialize model container: \(error)")
         }
+        if !BrowserClipperServer.isRunningTests {
+            BrowserClipperServer.shared.start(modelContainer: sharedModelContainer)
+        }
     }
 
     var body: some Scene {

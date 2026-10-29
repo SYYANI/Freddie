@@ -7768,6 +7768,16 @@
         }
       }
     },
+    "The browser sent nothing to save." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "浏览器没有发送可保存的内容。"
+          }
+        }
+      }
+    },
     "The cited paper is no longer in your library." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -7814,6 +7824,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "文档已更改，请重试。"
+          }
+        }
+      }
+    },
+    "The downloaded file is not a PDF." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "下载的文件不是 PDF。"
           }
         }
       }

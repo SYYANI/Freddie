@@ -1359,6 +1359,8 @@ private struct SettingsForm: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16, content: content)
                 .frame(maxWidth: .infinity, alignment: .leading)
+                // Keep the sections' outer stroke inside the scroll view's clip bounds.
+                .padding(1)
         }
     }
 

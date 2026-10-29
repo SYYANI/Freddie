@@ -1,0 +1,125 @@
+{
+  "extensionName": {
+    "message": "Freddie Clipper"
+  },
+  "extensionDescription": {
+    "message": "Save articles, selections and PDFs to your Freddie library, like a web clipper."
+  },
+  "actionTitle": {
+    "message": "Clip to Freddie"
+  },
+  "menuClipPage": {
+    "message": "Clip Page to Freddie"
+  },
+  "menuClipSelection": {
+    "message": "Clip Selection to Freddie"
+  },
+  "cannotClip": {
+    "message": "This page can't be clipped."
+  },
+  "panelTitle": {
+    "message": "Clip"
+  },
+  "close": {
+    "message": "Close"
+  },
+  "modeArticle": {
+    "message": "Article"
+  },
+  "modeSelection": {
+    "message": "Selection"
+  },
+  "modePage": {
+    "message": "Full Page"
+  },
+  "modePDF": {
+    "message": "PDF"
+  },
+  "modeArxiv": {
+    "message": "arXiv"
+  },
+  "hintArticle": {
+    "message": "Press ↑ or ↓ to widen or narrow the highlighted region."
+  },
+  "hintArticleMissing": {
+    "message": "No article found. Try Full Page or select text."
+  },
+  "hintSelection": {
+    "message": "Saves the selected text and images."
+  },
+  "hintSelectionEmpty": {
+    "message": "Select text on the page, then choose Selection."
+  },
+  "hintPage": {
+    "message": "Saves the whole page in its own layout."
+  },
+  "hintPDF": {
+    "message": "Saves the PDF using your browser's sign-in: $1"
+  },
+  "hintArxiv": {
+    "message": "Imports arXiv $1 with its PDF, HTML and metadata."
+  },
+  "labelTitle": {
+    "message": "Title"
+  },
+  "titlePlaceholder": {
+    "message": "Title"
+  },
+  "titlePlaceholderPDF": {
+    "message": "Use the title in the PDF"
+  },
+  "labelFolder": {
+    "message": "Folder"
+  },
+  "folderUnfiled": {
+    "message": "Unfiled"
+  },
+  "save": {
+    "message": "Save"
+  },
+  "cancel": {
+    "message": "Cancel"
+  },
+  "saving": {
+    "message": "Saving…"
+  },
+  "fetchingPDF": {
+    "message": "Downloading PDF…"
+  },
+  "saved": {
+    "message": "Saved to Freddie"
+  },
+  "openInFreddie": {
+    "message": "Open in Freddie"
+  },
+  "done": {
+    "message": "Done"
+  },
+  "exists": {
+    "message": "Already in your library"
+  },
+  "saveAnyway": {
+    "message": "Save Again"
+  },
+  "offline": {
+    "message": "Freddie isn't running. Open Freddie, then try again."
+  },
+  "launch": {
+    "message": "Open Freddie"
+  },
+  "retry": {
+    "message": "Try Again"
+  },
+  "connecting": {
+    "message": "Waiting for Freddie…"
+  },
+  "saveFailed": {
+    "message": "Couldn't save: $1"
+  },
+  "nothingToClip": {
+    "message": "Nothing to save in this mode."
+  },
+  "shortcutsHint": {
+    "message": "Return to save · Esc to close"
+  }
+}

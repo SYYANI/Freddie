@@ -762,6 +762,68 @@ final class PDFMergerTests: XCTestCase {
         XCTAssertEqual(pdfView.scaleFactor, zoomedScale, accuracy: 0.001)
     }
 
+    func testManualZoomIsCappedAtFitOnlyWhenThePaneIsNarrower() {
+        XCTAssertEqual(PDFAutomaticScalingPolicy.displayedScale(preferredScale: 0.4, fittedScale: 0.6), 0.4)
+        XCTAssertEqual(PDFAutomaticScalingPolicy.displayedScale(preferredScale: 0.4, fittedScale: 0.3), 0.3)
+        XCTAssertEqual(PDFAutomaticScalingPolicy.displayedScale(preferredScale: 0.4, fittedScale: 0), 0.4)
+    }
+
+    /// Zoomed out well below fit, then the divider narrows the pane past the page width: the
+    /// page shrinks with the pane instead of being clipped, and widening returns to the zoom.
+    @MainActor
+    func testDividerDragShrinksZoomedOutPageInsteadOfClippingIt() async throws {
+        let fileURL = tempDirectory.appendingPathComponent("zoomed-out.pdf")
+        try savePDFDocument(createPDFDocument(withPageCount: 3), to: fileURL)
+        let model = AutomaticScalingHarnessModel(fileURL: fileURL)
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 500, height: 600),
+            styleMask: [.titled],
+            backing: .buffered,
+            defer: false
+        )
+        window.isReleasedWhenClosed = false
+        window.contentView = NSHostingView(rootView: AutomaticScalingHarness(model: model))
+        window.makeKeyAndOrderFront(nil)
+        defer { window.close() }
+        window.contentView?.layoutSubtreeIfNeeded()
+        let pdfView = try XCTUnwrap(firstDescendant(PDFView.self, in: try XCTUnwrap(window.contentView)))
+        try await waitUntil { pdfView.document?.documentURL == fileURL }
+        pdfView.layoutDocumentView()
+
+        let scrollView = try XCTUnwrap(firstDescendant(NSScrollView.self, in: pdfView))
+        let wideFit = pdfView.scaleFactorForSizeToFit
+        let zoomedOutScale = wideFit * 0.6
+        NotificationCenter.default.post(name: NSScrollView.willStartLiveMagnifyNotification, object: scrollView)
+        scrollView.magnification = zoomedOutScale
+        NotificationCenter.default.post(name: NSScrollView.didEndLiveMagnifyNotification, object: scrollView)
+        pdfView.layoutDocumentView()
+        XCTAssertEqual(pdfView.scaleFactor, zoomedOutScale, accuracy: 0.001)
+
+        model.automaticScalingRestoreToken += 1
+        try await waitUntil { model.automaticScalingRestoreToken > 0 }
+        window.contentView?.layoutSubtreeIfNeeded()
+        XCTAssertFalse(pdfView.autoScales, "A zoom far from fit is not reset when the drag begins")
+
+        model.width = 200
+        try await waitUntil {
+            window.contentView?.layoutSubtreeIfNeeded()
+            return pdfView.frame.width <= 200
+        }
+        window.contentView?.layoutSubtreeIfNeeded()
+        let narrowFit = pdfView.scaleFactorForSizeToFit
+        XCTAssertLessThan(narrowFit, zoomedOutScale)
+        XCTAssertEqual(pdfView.scaleFactor, narrowFit, accuracy: 0.001)
+
+        model.width = 500
+        try await waitUntil {
+            window.contentView?.layoutSubtreeIfNeeded()
+            return pdfView.frame.width >= 500
+        }
+        window.contentView?.layoutSubtreeIfNeeded()
+        XCTAssertEqual(pdfView.scaleFactor, zoomedOutScale, accuracy: 0.001)
+        XCTAssertFalse(pdfView.autoScales)
+    }
+
     @MainActor
     func testToolbarZoomUsesTwentyPercentStepsAndLeavesAutomaticScaling() {
         let pdfView = PDFView()
@@ -955,6 +1017,8 @@ private struct HandToolHarness {
 private final class AutomaticScalingHarnessModel: ObservableObject {
     @Published var fileURL: URL
     @Published var pageIndex = 0
+    @Published var width: CGFloat = 500
+    @Published var automaticScalingRestoreToken = 0
     let handToolEnabled: Bool
 
     init(fileURL: URL, handToolEnabled: Bool = false) {
@@ -970,9 +1034,10 @@ private struct AutomaticScalingHarness: View {
         PDFReaderView(
             fileURL: model.fileURL,
             usesAutomaticScaling: true,
+            automaticScalingRestoreToken: model.automaticScalingRestoreToken,
             pageIndex: $model.pageIndex,
             handToolEnabled: model.handToolEnabled
         )
-        .frame(width: 500, height: 600)
+        .frame(width: model.width, height: 600)
     }
 }

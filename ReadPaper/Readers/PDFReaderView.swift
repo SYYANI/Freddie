@@ -219,6 +219,32 @@ enum PDFAutomaticScalingPolicy {
         }
         return abs(currentScale - fittedScale) / fittedScale <= tolerance
     }
+
+    /// A manual zoom that fit the pane when the divider was grabbed shrinks with a narrowing
+    /// pane instead of clipping the page, and returns to the reader's zoom as the pane widens.
+    static func displayedScale(preferredScale: CGFloat, fittedScale: CGFloat) -> CGFloat {
+        guard fittedScale.isFinite, fittedScale > 0 else { return preferredScale }
+        return min(preferredScale, fittedScale)
+    }
+}
+
+/// PDF views that keep a manual zoom within the pane width (see `PDFAutomaticScalingPolicy`).
+@MainActor
+protocol PDFPreferredManualScaling: PDFView {
+    /// The reader's own zoom while it is capped at fit; nil once the reader zooms again.
+    var preferredManualScale: CGFloat? { get set }
+}
+
+extension PDFPreferredManualScaling {
+    func applyPreferredManualScale() {
+        guard let preferredManualScale, autoScales == false, document != nil else { return }
+        let scale = PDFAutomaticScalingPolicy.displayedScale(
+            preferredScale: preferredManualScale,
+            fittedScale: scaleFactorForSizeToFit
+        )
+        guard abs(scale - scaleFactor) > 0.0001 else { return }
+        scaleFactor = scale
+    }
 }
 
 enum PDFNoteNavigationTextMatcher {
@@ -714,20 +740,29 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
             guard appliedAutomaticScaling != usesAutomaticScaling else { return }
             appliedAutomaticScaling = usesAutomaticScaling
             pdfView.autoScales = usesAutomaticScaling
+            (pdfView as? PDFPreferredManualScaling)?.preferredManualScale = nil
             if usesAutomaticScaling == false {
                 pdfView.scaleFactor = 1
             }
         }
 
+        /// Called when the split divider is grabbed: a zoom near fit goes back to fitting the
+        /// pane, and a smaller one is kept but shrinks if the pane becomes narrower than it.
         func restoreAutomaticScalingIfNearFit(in pdfView: PDFView) {
-            guard pdfView.autoScales == false,
-                  PDFAutomaticScalingPolicy.shouldRestore(
-                    currentScale: pdfView.scaleFactor,
-                    fittedScale: pdfView.scaleFactorForSizeToFit
-                  ) else {
+            guard pdfView.autoScales == false else { return }
+            let scalingView = pdfView as? PDFPreferredManualScaling
+            let preferredScale = scalingView?.preferredManualScale ?? pdfView.scaleFactor
+            let fittedScale = pdfView.scaleFactorForSizeToFit
+            if PDFAutomaticScalingPolicy.shouldRestore(
+                currentScale: preferredScale,
+                fittedScale: fittedScale
+            ) {
+                scalingView?.preferredManualScale = nil
+                pdfView.autoScales = true
                 return
             }
-            pdfView.autoScales = true
+            // A zoom wider than the pane was already clipped on purpose; leave it alone.
+            scalingView?.preferredManualScale = preferredScale < fittedScale ? preferredScale : nil
         }
 
         func applyDisplayAppearance(_ appearance: PDFDisplayAppearance, to pdfView: PDFView) {
@@ -1884,6 +1919,7 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
             let maximumScale = max(pdfView.maxScaleFactor, minimumScale)
             let nextScale = min(max(pdfView.scaleFactor * factor, minimumScale), maximumScale)
             guard abs(nextScale - pdfView.scaleFactor) > 0.0001 else { return }
+            (pdfView as? PDFPreferredManualScaling)?.preferredManualScale = nil
             pdfView.autoScales = false
             pdfView.scaleFactor = nextScale
         }
@@ -2574,7 +2610,8 @@ extension PDFReaderView.Coordinator: @preconcurrency PDFPageOverlayViewProvider 
 
 #if os(macOS)
 @MainActor
-private final class InteractivePDFView: PDFView {
+private final class InteractivePDFView: PDFView, PDFPreferredManualScaling {
+    var preferredManualScale: CGFloat?
     var interactionMode: PDFInteractionMode = .browse {
         didSet {
             guard oldValue != interactionMode else { return }
@@ -2707,6 +2744,7 @@ private final class InteractivePDFView: PDFView {
         // Automatic scaling is useful when a narrower dual-pane reader first
         // opens, but it otherwise snaps a manual pinch zoom back to fit.
         autoScales = false
+        preferredManualScale = nil
         super.magnify(with: event)
     }
 
@@ -2729,6 +2767,12 @@ private final class InteractivePDFView: PDFView {
             return
         }
         autoScales = false
+        preferredManualScale = nil
+    }
+
+    override func layout() {
+        super.layout()
+        applyPreferredManualScale()
     }
 
     override func mouseDown(with event: NSEvent) {

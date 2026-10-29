@@ -752,8 +752,8 @@ final class WebKitWebPageHTMLRenderer: NSObject, WebPageHTMLRendering, WKNavigat
                 ? (document.documentElement?.outerHTML || '') : null;
         })();
         """
-        webView.evaluateJavaScript(script) { [weak self] value, _ in
-            Task { @MainActor in
+        webView.evaluateJavaScript(script) { [weak self, weak webView] value, _ in
+            Task { @MainActor [weak self, weak webView] in
                 guard let self else { return }
                 if let html = value as? String, !html.isEmpty {
                     self.finish(with: .success(html))
