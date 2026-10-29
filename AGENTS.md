@@ -54,7 +54,7 @@ xcodebuild -project ReadPaper.xcodeproj -scheme ReadPaper -destination 'platform
 GitHub Actions 构建 DMG：
 
 - 仓库已包含 [`.github/workflows/release.yml`](/Users/yiyan/Desktop/read-paper/.github/workflows/release.yml)，支持在 GitHub Actions 上构建 DMG；触发方式为手动 `workflow_dispatch` 或推送 `v*` tag。
-- 当前 workflow 运行在 `macos-26`，会恢复固定 commit 的本地 `swift-readability`，并从手动输入 `babeldoc_ref` 或仓库变量 `BABELDOC_REF` 恢复完整 40 位 commit 的 `../reWriteBabelDoc`。随后下载并验证模型/字体/许可证、从固定源码构建 zstd、校验 MuPDF 与 trusted runtime manifest，再安装 `xcodegen` 和 `create-dmg` 执行无签名 Release 构建。
+- 当前 workflow 运行在 `xcode-27`（macOS 27 + Xcode 27）并检查 SDK 不低于 27：用 macOS 26 SDK 链接的 App 在 macOS 27 上，工具栏里 `Menu` 的图标会比按钮小约两成（标注、翻译、分享三个菜单明显偏小），所以不要退回 `macos-26`。workflow 会恢复固定 commit 的本地 `swift-readability`，并从手动输入 `babeldoc_ref` 或仓库变量 `BABELDOC_REF` 恢复完整 40 位 commit 的 `../reWriteBabelDoc`。随后下载并验证模型/字体/许可证、从固定源码构建 zstd、校验 MuPDF 与 trusted runtime manifest，再安装 `xcodegen` 和 `create-dmg` 执行无签名 Release 构建。
 - CI 产物当前是 unsigned 的 `Freddie.app` 和 `Freddie-<version>-unsigned.dmg`；helper 在关闭 Xcode signing 时仍做 ad-hoc 签名以满足 App 内信任契约。artifact 同时包含记录三份源码 commit、runtime manifest hash 和版本号的 `build-provenance.txt`。tag 与手动触发都只上传 Actions artifact；在 Developer ID 签名、notarization、Corresponding Source 和完整第三方 notices 闭环前，不自动创建公开 GitHub Release。
 - 后续若调整 app 名称、scheme、产物路径、签名或打包方式，要同步更新 workflow 中的 `APP_NAME`、`APP_PATH`、`DMG_PATH` 和 release 上传逻辑，避免本地可构建但 CI 打包失效。
 - `project.yml` 依赖本地路径包 `../rebuild-pdf`（`RebuildPDFKit`），但该仓库还没有远端，workflow 也还没有像 `../reWriteBabelDoc` 那样检出它；在 CI 上构建前要先推送仓库，并在 workflow 里按固定 commit 检出、写入 `build-provenance.txt`。
