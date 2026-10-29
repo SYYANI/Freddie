@@ -814,6 +814,11 @@ final class PDFMergerTests: XCTestCase {
         XCTAssertLessThan(narrowFit, zoomedOutScale)
         XCTAssertEqual(pdfView.scaleFactor, narrowFit, accuracy: 0.001)
 
+        // Grabbing the divider again while the page is shrunk keeps the reader's zoom.
+        model.automaticScalingRestoreToken += 1
+        try await waitUntil { model.automaticScalingRestoreToken > 1 }
+        window.contentView?.layoutSubtreeIfNeeded()
+
         model.width = 500
         try await waitUntil {
             window.contentView?.layoutSubtreeIfNeeded()
