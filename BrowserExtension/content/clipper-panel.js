@@ -37,6 +37,8 @@
       mode: null,
       article: metadata.isPDF ? null : core.findArticle(),
       articleTrail: [],
+      hover: null,
+      pointerDown: null,
       ranges: selectionRanges(),
       title: metadata.isPDF ? "" : metadata.title,
       folders: [],
@@ -55,6 +57,9 @@
 
     document.addEventListener("selectionchange", onSelectionChange);
     window.addEventListener("keydown", onKeyDown, true);
+    window.addEventListener("pointermove", onPointerMove, { capture: true, passive: true });
+    window.addEventListener("pointerdown", onPointerDown, { capture: true, passive: true });
+    window.addEventListener("click", onClick, true);
     window.addEventListener("scroll", scheduleOverlay, { capture: true, passive: true });
     window.addEventListener("resize", scheduleOverlay, { passive: true });
   }
@@ -64,10 +69,15 @@
     cancelAnimationFrame(state.frame);
     state.host.remove();
     state.overlay.remove();
+    state.controls.remove();
+    state.hoverOverlay.remove();
     state.highlightStyle?.remove();
     globalThis.CSS?.highlights?.delete(HIGHLIGHT_NAME);
     document.removeEventListener("selectionchange", onSelectionChange);
     window.removeEventListener("keydown", onKeyDown, true);
+    window.removeEventListener("pointermove", onPointerMove, true);
+    window.removeEventListener("pointerdown", onPointerDown, true);
+    window.removeEventListener("click", onClick, true);
     window.removeEventListener("scroll", scheduleOverlay, true);
     window.removeEventListener("resize", scheduleOverlay);
     state = null;
@@ -121,38 +131,141 @@
     return ["top", "left", "bottom", "right"].every((edge) => Math.abs(first[edge] - second[edge]) <= 2);
   }
 
+  function isRegionCandidate(element) {
+    if (element.hasAttribute(UI) || !element.getClientRects().length) return false;
+    const rect = element.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0 && (core.textLength(element) > 0 || Boolean(element.querySelector("img")));
+  }
+
+  function widerArticle(start) {
+    let next = start;
+    do {
+      const parent = next.parentElement;
+      if (!parent || parent === document.body || parent === document.documentElement) break;
+      next = parent;
+    } while (sameBox(next, start));
+    return next === start || sameBox(next, start) ? null : next;
+  }
+
+  function narrowerArticle(start) {
+    if (state.articleTrail.length) return state.articleTrail.at(-1);
+    let next = start;
+    do {
+      const child = [...next.children]
+        .filter((element) => element.getClientRects().length && core.textLength(element))
+        .sort((a, b) => core.regionWeight(b) - core.regionWeight(a))[0];
+      if (!child) break;
+      next = child;
+    } while (sameBox(next, start));
+    return next === start || sameBox(next, start) ? null : next;
+  }
+
+  // The previous or next block on the region's level. The outermost wrapper the region
+  // fills is that level, so its siblings are the neighbors, as in the Evernote clipper.
+  function neighborArticle(start, step) {
+    const level = outermostWrapper(start);
+    const sibling = (element) => step < 0 ? element.previousElementSibling : element.nextElementSibling;
+    for (let next = sibling(level); next; next = sibling(next)) {
+      if (isRegionCandidate(next)) return next;
+    }
+    return null;
+  }
+
+  function outermostWrapper(element) {
+    let level = element;
+    for (let parent = level.parentElement; parent && parent !== document.body && parent !== document.documentElement && sameBox(parent, element); parent = parent.parentElement) {
+      level = parent;
+    }
+    return level;
+  }
+
+  // Picking: the block under the pointer, as the outermost wrapper that fills it.
+  function blockAt(target) {
+    for (let element = target; element && element !== document.body && element !== document.documentElement; element = element.parentElement) {
+      if (element.closest(`[${UI}]`)) return null;
+      if (/^(inline|contents|none)/.test(getComputedStyle(element).display)) continue;
+      if (isRegionCandidate(element)) return outermostWrapper(element);
+    }
+    return null;
+  }
+
+  // The panel and the + / − pair live in shadow roots, so the event's target alone does not
+  // show that it came from them.
+  function pageTarget(event) {
+    const path = event.composedPath();
+    if (path.some((node) => node instanceof Element && node.hasAttribute(UI))) return null;
+    return path[0] instanceof Element ? path[0] : null;
+  }
+
+  function isPicking() {
+    return state?.mode === "article" && (state.phase === "edit" || state.phase === "error");
+  }
+
+  function onPointerMove(event) {
+    if (!isPicking()) return;
+    const target = pageTarget(event);
+    const block = target ? blockAt(target) : null;
+    const hover = block === state.article ? null : block;
+    if (hover === state.hover) return;
+    state.hover = hover;
+    scheduleOverlay();
+  }
+
+  function onPointerDown(event) {
+    state.pointerDown = isPicking() && event.button === 0 && pageTarget(event) ? { x: event.clientX, y: event.clientY } : null;
+  }
+
+  // A plain click picks the block, a drag still selects text, and links do not open while
+  // the reader is choosing. Clicks in the panel and on the + / − pair never get here.
+  function onClick(event) {
+    const start = state.pointerDown;
+    state.pointerDown = null;
+    if (!isPicking() || !start || event.button !== 0) return;
+    if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
+    if (Math.hypot(event.clientX - start.x, event.clientY - start.y) > 4) return;
+    if (document.getSelection()?.isCollapsed === false) return;
+    const target = pageTarget(event);
+    const block = target ? blockAt(target) : null;
+    if (!block) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    state.article = block;
+    state.articleTrail = [];
+    state.hover = null;
+    if (state.phase === "error") setPhase("edit");
+    updateModeDetails();
+  }
+
   function adjustArticle(direction) {
     if (!state.article) return;
     const start = state.article;
-    if (direction === "up") {
-      let next = start;
-      do {
-        const parent = next.parentElement;
-        if (!parent || parent === document.body || parent === document.documentElement) break;
-        next = parent;
-      } while (sameBox(next, start));
-      if (next === start || sameBox(next, start)) return;
-      state.articleTrail.push(start);
-      state.article = next;
-    } else if (state.articleTrail.length) {
-      state.article = state.articleTrail.pop();
+    let next;
+    if (direction === "wider") {
+      next = widerArticle(start);
+      if (next) state.articleTrail.push(start);
+    } else if (direction === "narrower") {
+      next = narrowerArticle(start);
+      if (next && next === state.articleTrail.at(-1)) state.articleTrail.pop();
     } else {
-      let next = start;
-      do {
-        const child = [...next.children]
-          .filter((element) => element.getClientRects().length && core.textLength(element))
-          .sort((a, b) => core.textLength(b) - core.textLength(a))[0];
-        if (!child) break;
-        next = child;
-      } while (sameBox(next, start));
-      if (next === start || sameBox(next, start)) return;
-      state.article = next;
+      next = neighborArticle(start, direction === "previous" ? -1 : 1);
+      // The trail leads back into the old block.
+      if (next) state.articleTrail = [];
     }
+    if (!next) return;
+    state.article = next;
+    state.hover = null;
     const rect = state.article.getBoundingClientRect();
     if (rect.bottom < 0 || rect.top > innerHeight) {
       state.article.scrollIntoView({ block: "start", behavior: "smooth" });
     }
+    renderArticleControls();
     scheduleOverlay();
+  }
+
+  function renderArticleControls() {
+    if (!state.article) return;
+    state.controlsRoot.querySelector(".wider").disabled = !widerArticle(state.article);
+    state.controlsRoot.querySelector(".narrower").disabled = !narrowerArticle(state.article);
   }
 
   function scheduleOverlay() {
@@ -163,10 +276,23 @@
 
   function updateOverlay() {
     if (!state) return;
+    const hover = isPicking() && state.hover?.isConnected ? state.hover.getBoundingClientRect() : null;
+    if (hover) {
+      Object.assign(state.hoverOverlay.style, {
+        display: "block",
+        top: `${hover.top - 3}px`,
+        left: `${hover.left - 3}px`,
+        width: `${hover.width + 6}px`,
+        height: `${hover.height + 6}px`
+      });
+    } else {
+      state.hoverOverlay.style.display = "none";
+    }
     const finished = state.phase === "saved" || state.phase === "exists";
     const target = state.mode === "article" && !finished ? state.article : null;
     if (!target || !target.isConnected) {
       state.overlay.style.display = "none";
+      state.controls.style.display = "none";
       return;
     }
     const rect = target.getBoundingClientRect();
@@ -176,6 +302,24 @@
       left: `${rect.left - 6}px`,
       width: `${rect.width + 12}px`,
       height: `${rect.height + 12}px`
+    });
+
+    // The + / − pair straddles the region's top edge and stays on screen while any of the
+    // region does, so a region taller than the window can still be changed mid-scroll.
+    const margin = 8;
+    const frameTop = rect.top - 6;
+    const frameBottom = rect.bottom + 6;
+    if (frameBottom < 0 || frameTop > innerHeight) {
+      state.controls.style.display = "none";
+      return;
+    }
+    const top = Math.min(Math.max(frameTop - CONTROLS_HEIGHT / 2, margin), frameBottom - CONTROLS_HEIGHT / 2);
+    const visibleCenter = (Math.max(rect.left, 0) + Math.min(rect.right, innerWidth)) / 2;
+    const center = Math.min(Math.max(visibleCenter, margin + CONTROLS_WIDTH / 2), innerWidth - margin - CONTROLS_WIDTH / 2);
+    Object.assign(state.controls.style, {
+      display: "block",
+      top: `${top}px`,
+      left: `${center - CONTROLS_WIDTH / 2}px`
     });
   }
 
@@ -191,6 +335,43 @@
       "transition: top .16s ease, left .16s ease, width .16s ease, height .16s ease"
     ].join(";");
     document.documentElement.append(overlay);
+
+    const hoverOverlay = document.createElement("div");
+    hoverOverlay.setAttribute(UI, "");
+    hoverOverlay.style.cssText = [
+      "position: fixed", "display: none", "pointer-events: none", "z-index: 2147483646",
+      "border-radius: 6px", "border: 1.5px dashed #d7373f", "background: rgba(215, 55, 63, 0.06)",
+      "box-sizing: border-box"
+    ].join(";");
+    document.documentElement.append(hoverOverlay);
+
+    const controls = document.createElement("div");
+    controls.setAttribute(UI, "");
+    controls.style.cssText = [
+      "position: fixed", "display: none", "z-index: 2147483646",
+      "transition: top .16s ease, left .16s ease"
+    ].join(";");
+    const controlsRoot = controls.attachShadow({ mode: "open" });
+    controlsRoot.innerHTML = `
+      <style>${CONTROLS_CSS}</style>
+      <div class="controls">
+        <button class="wider" type="button" title="${escapeHTML(t("regionWider"))}" aria-label="${escapeHTML(t("regionWider"))}">${PLUS_ICON}</button>
+        <button class="narrower" type="button" title="${escapeHTML(t("regionNarrower"))}" aria-label="${escapeHTML(t("regionNarrower"))}">${MINUS_ICON}</button>
+      </div>`;
+    for (const button of controlsRoot.querySelectorAll("button")) {
+      // Keep the click from the page, and focus and the page selection where they are.
+      for (const type of ["pointerdown", "mousedown"]) {
+        button.addEventListener(type, (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+        });
+      }
+      button.addEventListener("click", (event) => {
+        event.stopPropagation();
+        adjustArticle(button.className);
+      });
+    }
+    document.documentElement.append(controls);
 
     const host = document.createElement("div");
     host.setAttribute(UI, "");
@@ -219,6 +400,9 @@
 
     state.host = host;
     state.overlay = overlay;
+    state.controls = controls;
+    state.hoverOverlay = hoverOverlay;
+    state.controlsRoot = controlsRoot;
     state.root = root;
     state.panel = root.querySelector(".panel");
 
@@ -287,6 +471,7 @@
         hint.textContent = t("hintPage");
     }
     showSelectionHighlight(state.mode === "selection");
+    renderArticleControls();
     renderFooter();
     scheduleOverlay();
   }
@@ -466,8 +651,17 @@
   function openInFreddie() {
     // A link the browser opens lets macOS bring Freddie forward; Freddie cannot come
     // forward on its own while the browser is the active app.
-    if (state?.result) location.href = `readpaper://paper/${state.result.paperID}`;
+    if (state?.result) location.href = paperLink(state.result);
     close();
+  }
+
+  // The app that saved the clip names its link: with both Freddie apps on one Mac, only one
+  // of them handles readpaper://. Older versions send no link.
+  function paperLink(result) {
+    const link = typeof result.openURL === "string" ? result.openURL : "";
+    return /^(readpaper|freddie-general):\/\/paper\/[0-9a-f-]+$/i.test(link)
+      ? link
+      : `readpaper://paper/${result.paperID}`;
   }
 
   async function retryConnection() {
@@ -493,6 +687,9 @@
 
   // Keyboard
 
+  // The Evernote clipper's keys: ↑ / ↓ as its + / −, ← / → for the neighboring block.
+  const ARTICLE_KEYS = { ArrowUp: "wider", ArrowDown: "narrower", ArrowLeft: "previous", ArrowRight: "next" };
+
   function onKeyDown(event) {
     const target = event.composedPath()[0];
     const inPanel = target instanceof Node && (state.host.contains(target) || state.root.contains(target));
@@ -507,10 +704,10 @@
       event.preventDefault();
       event.stopPropagation();
       save(false);
-    } else if ((event.key === "ArrowUp" || event.key === "ArrowDown") && state.mode === "article" && !editing) {
+    } else if (ARTICLE_KEYS[event.key] && state.mode === "article" && !editing && !event.metaKey && !event.ctrlKey && !event.altKey) {
       event.preventDefault();
       event.stopPropagation();
-      adjustArticle(event.key === "ArrowUp" ? "up" : "down");
+      adjustArticle(ARTICLE_KEYS[event.key]);
     }
   }
 
@@ -537,6 +734,28 @@
   }
 
   const BRAND_ICON = `<svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="2" width="14" height="16" rx="3" fill="#fff" stroke="currentColor" stroke-opacity=".25"/><path d="M6 7h7M6 10h5" stroke="currentColor" stroke-opacity=".35" stroke-width="1.4" stroke-linecap="round"/><path d="M5 15.5c3-2.6 6.2-1 8.6-4.6l1.6 1.2c-2.4 3.8-6.4 2.8-9.2 5z" fill="#d7373f"/></svg>`;
+  const PLUS_ICON = `<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M6 1.5v9M1.5 6h9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`;
+  const MINUS_ICON = `<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M1.5 6h9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`;
+  const CONTROLS_WIDTH = 56;
+  const CONTROLS_HEIGHT = 24;
+  const CONTROLS_CSS = `
+    :host { all: initial; }
+    .controls {
+      display: flex; width: ${CONTROLS_WIDTH}px; height: ${CONTROLS_HEIGHT}px; overflow: hidden;
+      border-radius: ${CONTROLS_HEIGHT / 2}px; background: #d7373f;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.28), 0 0 0 0.5px rgba(0, 0, 0, 0.12);
+    }
+    button {
+      all: unset; flex: 1 1 0; display: grid; place-items: center;
+      color: #fff; cursor: pointer;
+    }
+    button + button { box-shadow: inset 1px 0 rgba(255, 255, 255, 0.32); }
+    button:hover:not(:disabled) { background: rgba(255, 255, 255, 0.16); }
+    button:active:not(:disabled) { background: rgba(0, 0, 0, 0.12); }
+    button:disabled { color: rgba(255, 255, 255, 0.42); cursor: default; }
+    button:focus-visible { outline: 2px solid #fff; outline-offset: -3px; border-radius: ${CONTROLS_HEIGHT / 2}px; }
+    svg { display: block; width: 12px; height: 12px; }
+  `;
   const CLOSE_ICON = `<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`;
   const CHECK_ICON = `<svg class="check" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="9" fill="#2f9e5b"/><path d="M6 10.4l2.6 2.6L14.2 7.4" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 

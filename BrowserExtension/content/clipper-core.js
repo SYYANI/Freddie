@@ -110,6 +110,20 @@
     return (element.innerText || "").replace(/\s+/g, " ").trim().length;
   }
 
+  // Comment threads, like Readability's "unlikely candidates". A comment section can hold
+  // more prose than the post above it; its blocks count for a fifth, so a long thread
+  // no longer wins and a page whose whole wrapper says "comments" keeps its ranking.
+  const COMMENT_PATTERN = /(^|[\s_-])(comments?|comment-list|replies|reply|respond|discussion|disqus(_thread)?)($|[\s_-])/i;
+  const COMMENT_WEIGHT = 0.2;
+
+  function isCommentLike(element) {
+    for (let node = element; node && node !== document.body; node = node.parentElement) {
+      const className = typeof node.className === "string" ? node.className : node.getAttribute("class") || "";
+      if (COMMENT_PATTERN.test(`${node.id} ${className}`)) return true;
+    }
+    return false;
+  }
+
   function linkDensity(element) {
     const total = textLength(element);
     if (!total) return 1;
@@ -118,13 +132,18 @@
     return links / total;
   }
 
+  // How much a block reads like the article, for picking among a region's children.
+  function regionWeight(element) {
+    return textLength(element) * (1 - linkDensity(element)) * (isCommentLike(element) ? COMMENT_WEIGHT : 1);
+  }
+
   function findArticle() {
     const scores = new Map();
     for (const block of document.body.querySelectorAll(BLOCKS)) {
       if (block.closest(`[${UI_ATTRIBUTE}], nav, header, footer, aside, form`)) continue;
       const length = (block.textContent || "").replace(/\s+/g, " ").trim().length;
       if (length < 25) continue;
-      const score = 1 + Math.min(length, 1000) / 100;
+      const score = (1 + Math.min(length, 1000) / 100) * (isCommentLike(block) ? COMMENT_WEIGHT : 1);
       const parent = block.parentElement;
       if (parent) scores.set(parent, (scores.get(parent) || 0) + score);
       const grandparent = parent?.parentElement;
@@ -335,6 +354,7 @@
     readMetadata,
     findArticle,
     textLength,
+    regionWeight,
     snapshotPage,
     snapshotElement,
     snapshotSelection,

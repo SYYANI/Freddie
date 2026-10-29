@@ -149,6 +149,7 @@ final class BrowserClipperTests: XCTestCase {
         XCTAssertEqual(response.status, 200)
         XCTAssertEqual(try json(response)["status"] as? String, "saved")
         let paper = try XCTUnwrap(context.fetch(FetchDescriptor<Paper>()).first)
+        XCTAssertEqual(try json(response)["openURL"] as? String, "readpaper://paper/\(paper.id.uuidString)")
         XCTAssertEqual(paper.title, "A Short Quote")
         XCTAssertEqual(paper.htmlURLString, "https://example.com/post")
         XCTAssertEqual(paper.authors, ["Ashish Vaswani"])

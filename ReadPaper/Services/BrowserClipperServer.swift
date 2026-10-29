@@ -125,6 +125,10 @@ final class BrowserClipperRequestHandler {
         var status: String
         var paperID: UUID
         var title: String
+        /// The link the extension opens to show the paper. The cross-platform Freddie returns
+        /// its own scheme on macOS, so the paper opens in the app that saved it even when both
+        /// are installed and the other one handles `readpaper://`.
+        var openURL: String
     }
 
     private let modelContainer: ModelContainer
@@ -171,7 +175,8 @@ final class BrowserClipperRequestHandler {
                 return .json(200, SaveResult(
                     status: result.isExisting ? "exists" : "saved",
                     paperID: result.paper.id,
-                    title: result.paper.title
+                    title: result.paper.title,
+                    openURL: "readpaper://paper/\(result.paper.id.uuidString)"
                 ))
             } catch {
                 return .error(500, error.localizedDescription)

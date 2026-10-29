@@ -39,10 +39,16 @@
     "message": "arXiv"
   },
   "hintArticle": {
-    "message": "按 ↑ / ↓ 扩大或缩小高亮区域。"
+    "message": "点页面上的区块即可选中，再用框上的 + / − 或 ↑ / ↓ 扩大、缩小，← / → 换到相邻区块。"
   },
   "hintArticleMissing": {
     "message": "没有找到正文，可改用整页或先选中内容。"
+  },
+  "regionWider": {
+    "message": "扩大区域（↑）"
+  },
+  "regionNarrower": {
+    "message": "缩小区域（↓）"
   },
   "hintSelection": {
     "message": "保存选中的文字和图片。"

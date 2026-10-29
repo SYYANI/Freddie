@@ -22,7 +22,7 @@ top-right corner:
 |-----------|-----------------------------------------------------------------------------------------|
 | arXiv     | On arxiv.org: imports the paper by ID (PDF, HTML and metadata), like Add by arXiv ID.   |
 | PDF       | The PDF the tab shows, or the one the page declares in `citation_pdf_url`, fetched with your sign-in. |
-| Article   | The highlighted region, simplified with Readability. ↑ / ↓ widen or narrow it.          |
+| Article   | The highlighted region, simplified with Readability. Click any block to choose it (comment threads count for little when Freddie guesses); + / − on the region or ↑ / ↓ widen or narrow it; ← / → move to the previous or next block. |
 | Selection | Exactly the selected text and images.                                                   |
 | Full Page | The whole page in its own layout.                                                       |
 
@@ -46,14 +46,17 @@ the loopback address:
 |------------------|----------------------------------------------------------------------------|
 | `GET /ping`      | `{ "app": "Freddie", "version", "api": 1 }`                                 |
 | `GET /folders`   | `{ "folders": [{ "id", "name" }] }`                                         |
-| `POST /save`     | A clip (see `BrowserClip` in `BrowserClipImporter.swift`) → `{ "status": "saved" \| "exists", "paperID", "title" }` |
+| `POST /save`     | A clip (see `BrowserClip` in `BrowserClipImporter.swift`) → `{ "status": "saved" \| "exists", "paperID", "title", "openURL" }` |
 
 Every request must carry `X-Freddie-Clipper: 1`, a `Host` of `127.0.0.1:23240` or
 `localhost:23240`, and, if it has an `Origin`, an extension origin. Web pages cannot send the
 custom header without a CORS preflight the server never approves, and the host check stops DNS
 rebinding.
 
-**Open in Freddie** opens `readpaper://paper/{paperID}`. It has to be a link the browser opens:
+**Open in Freddie** opens the save's `openURL`: `readpaper://paper/{paperID}` from native Freddie,
+`freddie-general://paper/{paperID}` from the cross-platform Freddie on macOS, where both apps
+may be installed but only one handles `readpaper://`. Older versions send no `openURL`, and the
+extension falls back to `readpaper://`. It has to be a link the browser opens:
 since macOS 14 an app in the background cannot bring itself forward, so a request to the server
 could select the paper but not show it. The browser asks once per site before opening the link.
 Likewise, if Freddie is not running, **Open Freddie** opens `readpaper://clipper` to launch it
