@@ -123,9 +123,28 @@ struct ReadPaperSegmentedPicker<Value: Hashable>: View {
 @ToolbarContentBuilder
 func segmentedPickerToolbarItem<Content: View>(@ViewBuilder content: () -> Content) -> some ToolbarContent {
     if #available(macOS 26.0, iOS 26.0, *) {
-        ToolbarItem(placement: .primaryAction, content: content)
-            .sharedBackgroundVisibility(.hidden)
+        let content = content()
+        ToolbarItem(placement: .primaryAction) {
+            content.modifier(SegmentedPickerToolbarItemSpacing())
+        }
+        .sharedBackgroundVisibility(.hidden)
     } else {
         ToolbarItem(placement: .primaryAction, content: content)
+    }
+}
+
+/// macOS 27 no longer leaves a gap around toolbar items whose shared glass is hidden, so
+/// adjacent pickers' capsules touch. Pad them back to the spacing macOS 26 gives.
+private struct SegmentedPickerToolbarItemSpacing: ViewModifier {
+    func body(content: Content) -> some View {
+        #if os(macOS)
+        if #available(macOS 27.0, *) {
+            content.padding(.horizontal, 4)
+        } else {
+            content
+        }
+        #else
+        content
+        #endif
     }
 }

@@ -21,11 +21,11 @@ struct HTMLLocalizer: @unchecked Sendable {
         background: transparent !important;
     }
     body.rp-readability-body .rp-readability-shell,
-    body.rp-readability-body .rp-readability-shell :where(article, section, main, header, footer, aside, div, p, h1, h2, h3, h4, h5, h6, ul, ol, li, dl, dt, dd, blockquote, figure, figcaption, table, thead, tbody, tfoot, tr, th, td, span, strong, b, em, i, small, sup, sub):not(:where(pre *, code *, svg *, math *)) {
+    body.rp-readability-body .rp-readability-shell :where(article, section, main, header, footer, aside, div, p, h1, h2, h3, h4, h5, h6, ul, ol, li, dl, dt, dd, blockquote, figure, figcaption, table, thead, tbody, tfoot, tr, th, td, span, strong, b, em, i, small, sup, sub):not(:where(pre *, code *, svg *, math *, [data-rp-preserve-layout], [data-rp-preserve-layout] *)) {
         color: inherit !important;
         text-shadow: none !important;
     }
-    body.rp-readability-body .rp-readability-shell :where(article, section, main, header, footer, aside, div, p, h1, h2, h3, h4, h5, h6, ul, ol, li, dl, dt, dd, figure, figcaption, table, thead, tbody, tfoot, tr, th, td):not(:where(pre *, code *, svg *, math *, .rp-note-anchor-target, .rp-assistant-history-fallback)) {
+    body.rp-readability-body .rp-readability-shell :where(article, section, main, header, footer, aside, div, p, h1, h2, h3, h4, h5, h6, ul, ol, li, dl, dt, dd, figure, figcaption, table, thead, tbody, tfoot, tr, th, td):not(:where(pre *, code *, svg *, math *, [data-rp-preserve-layout], [data-rp-preserve-layout] *, .rp-note-anchor-target, .rp-assistant-history-fallback)) {
         background-color: transparent !important;
     }
     body.rp-readability-body .rp-readability-header,
@@ -36,7 +36,7 @@ struct HTMLLocalizer: @unchecked Sendable {
     body.rp-readability-body .rp-readability-excerpt {
         color: var(--rp-reader-muted, #5f6368) !important;
     }
-    body.rp-readability-body .rp-readability-shell a:not(:where(pre *, code *, svg *, math *)) {
+    body.rp-readability-body .rp-readability-shell a:not(:where(pre *, code *, svg *, math *, [data-rp-preserve-layout], [data-rp-preserve-layout] *)) {
         color: var(--rp-reader-link, #335c85) !important;
     }
     body.rp-readability-body .rp-readability-shell .rp-translation-block {
@@ -57,13 +57,19 @@ struct HTMLLocalizer: @unchecked Sendable {
     // bare type selector's specificity beats such resets (it comes later) but loses to
     // any source rule with a class that still applies.
     static let readableProseLayoutCSS = """
+    body.rp-readability-body [data-rp-preserve-layout] {
+        display: block;
+        max-width: 100%;
+        overflow-x: auto;
+        margin-block: 1.5em;
+    }
     html:has(> body.rp-readability-body) {
         max-width: none !important;
     }
-    :where(body.rp-readability-body :is(.rp-readability-header, .rp-readability-content)) :is(p, ul, ol, blockquote, pre, figure, dl) {
+    :where(body.rp-readability-body :is(.rp-readability-header, .rp-readability-content)) :is(p, ul, ol, blockquote, pre, figure, dl):not(:where([data-rp-preserve-layout] *)) {
         margin-block-end: 1em;
     }
-    body.rp-readability-body :is(.rp-readability-header, .rp-readability-content) :is(p, h1, h2, h3, h4, h5, h6):not(svg *, math *) {
+    body.rp-readability-body :is(.rp-readability-header, .rp-readability-content) :is(p, h1, h2, h3, h4, h5, h6):not(svg *, math *, [data-rp-preserve-layout] *) {
         width: 100% !important;
         min-width: 0 !important;
         max-width: 100% !important;
@@ -518,7 +524,7 @@ struct HTMLLocalizer: @unchecked Sendable {
     private func makeReadableDocument(from html: String, sourceURL: URL, fallback document: Document) throws -> Document? {
         do {
             let readability = try Readability(
-                html: html,
+                html: readabilityInputPreservingCompositeGraphics(html, document: document),
                 baseURL: sourceURL,
                 options: ReadabilityOptions(keepClasses: true)
             )
@@ -595,8 +601,59 @@ struct HTMLLocalizer: @unchecked Sendable {
         try updateMetadata(from: result, in: document)
         try injectReadabilityStyles(into: document)
         try document.body()?.addClass("rp-readability-body")
+        // ai2html charts combine a background image with positioned HTML labels.
+        // Readability strips their styles and can flatten the artboard wrappers;
+        // keep the source subtree only when the chart survived article selection.
+        let graphics = try compositeGraphics(in: document)
         try document.body()?.html(renderReadableBody(for: result))
+        for graphic in graphics {
+            guard let extracted = try document.getElementById(graphic.id()),
+                  let copy = graphic.copy() as? Element else { continue }
+            let wrapper = try document.createElement("div")
+            try wrapper.attr("data-rp-preserve-layout", "true")
+            try wrapper.appendChild(copy)
+            try extracted.replaceWith(wrapper)
+        }
         try splitPreformattedProseBlocks(in: document)
+    }
+
+    private func compositeGraphics(in document: Document) throws -> [Element] {
+        let candidates = try document.select(".ai2html[id], [id^=g-][id$=-box]").array()
+        return try candidates.filter { candidate in
+            let parents = candidate.parents().array()
+            guard !parents.contains(where: {
+                $0.tagName().lowercased() == "nav" || (try? $0.attr("role")) == "navigation"
+            }) else { return false }
+            // Explicit graphic structure, rather than a generic positioned div,
+            // keeps scroll-animation wrappers on the normal prose repair path.
+            let hasLabels = try !candidate.select("[id^=g-ai], .g-artboard, .g-aiAbs").isEmpty()
+            let hasImage = try !candidate.select("img").isEmpty()
+            return hasLabels && hasImage && !candidates.contains { other in
+                other !== candidate && parents.contains { $0 === other }
+            }
+        }
+    }
+
+    private func readabilityInputPreservingCompositeGraphics(_ html: String, document: Document) throws -> String {
+        guard try !compositeGraphics(in: document).isEmpty,
+              let input = document.copy() as? Document else { return html }
+        for graphic in try compositeGraphics(in: input) {
+            guard let image = try graphic.select("img").first()?.copy() as? Element else { continue }
+            // Present the composite as one semantic figure during article selection.
+            // Otherwise short chart labels can cause conditional div cleanup to drop
+            // the whole artboard. The original subtree is restored by its ID later.
+            let figure = try input.createElement("figure")
+            try figure.attr("id", graphic.id())
+            for attribute in ["hidden", "aria-hidden", "style"] where graphic.hasAttr(attribute) {
+                try figure.attr(attribute, graphic.attr(attribute))
+            }
+            try figure.appendChild(image)
+            let caption = try input.createElement("figcaption")
+            try caption.text(meaningfulText(in: graphic))
+            try figure.appendChild(caption)
+            try graphic.replaceWith(figure)
+        }
+        return try input.outerHtml()
     }
 
     @discardableResult
@@ -796,7 +853,7 @@ struct HTMLLocalizer: @unchecked Sendable {
          * position. Restore normal document flow while leaving SVG/MathML internals
          * untouched.
          */
-        body.rp-readability-body .rp-readability-content #readability-page-1 :not(svg, svg *, math, math *) {
+        body.rp-readability-body .rp-readability-content #readability-page-1 :not(svg, svg *, math, math *):not([data-rp-preserve-layout], [data-rp-preserve-layout] *) {
             position: static !important;
             inset: auto !important;
             transform: none !important;
@@ -805,10 +862,10 @@ struct HTMLLocalizer: @unchecked Sendable {
             scale: none !important;
         }
         /* Keep list-generated markers anchored to their own list container. */
-        body.rp-readability-body .rp-readability-content #readability-page-1 :is(ul, ol) {
+        body.rp-readability-body .rp-readability-content #readability-page-1 :is(ul, ol):not([data-rp-preserve-layout] *) {
             position: relative !important;
         }
-        body.rp-readability-body .rp-readability-content #readability-page-1 :is(article, section, main, header, footer, aside, div) {
+        body.rp-readability-body .rp-readability-content #readability-page-1 :is(article, section, main, header, footer, aside, div):not([data-rp-preserve-layout], [data-rp-preserve-layout] *) {
             height: auto !important;
             min-height: 0 !important;
             max-height: none !important;

@@ -314,6 +314,115 @@ final class HTMLLocalizerTests: XCTestCase {
         XCTAssertEqual(margins, "16px 40px 16px")
     }
 
+    @MainActor
+    func testCompositeChartKeepsItsArtboardThroughExtractionTranslationAndReaderRepair() async throws {
+        let paragraph = String(repeating: "The article explains the costs shown in the accompanying chart. ", count: 12)
+        // ai2html's image omits text: labels must stay on top of the artboard.
+        // Archive snapshots may retain only IDs and inline styles, without classes.
+        let html = """
+        <html><head><title>Article with a composite chart</title><style>
+        .animated { position: absolute; transform: translateY(50px); height: 100vh; overflow: hidden; }
+        </style></head><body><article>
+        <p>\(paragraph)</p>
+        <div id="g-costs-box" style="width:355px;color:rgb(10,20,30)">
+          <div class="g-artboard" style="position:relative;width:355px;height:220px">
+            <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='355' height='220'/%3E" style="display:block;width:355px;height:220px">
+            <div id="g-ai0-1" style="position:absolute;left:25%;top:50%;width:120px;transform:translateY(-50%)">
+              <p style="margin:0;width:120px;font-size:12px;line-height:14px">Computing costs</p>
+            </div>
+          </div>
+        </div>
+        <section class="animated"><h2>Normal article section</h2><p>\(paragraph)</p></section>
+        <nav><div class="ai2html" id="g-navigation-box"><div class="g-artboard">
+        <img src="data:,">Navigation graphic</div></div></nav>
+        </article></body></html>
+        """
+        let localizer = HTMLLocalizer()
+        let document = try localizer.makeDocumentForLocalization(
+            html: html, sourceURL: URL(string: "https://example.com/article")!
+        )
+        XCTAssertTrue(document.body()?.hasClass("rp-readability-body") == true)
+        XCTAssertEqual(try document.select("[data-rp-preserve-layout]").count, 1)
+        XCTAssertNil(try document.getElementById("g-navigation-box"), "Do not restore graphics discarded with page navigation")
+        let prepared = try HTMLTranslationPipeline.prepareDocument(document.outerHtml())
+        XCTAssertFalse(prepared.candidates.contains { $0.sourceText.contains("Computing costs") })
+        let translated = try HTMLTranslationPipeline.applyTranslations(
+            toPreparedHTML: prepared.preparedHTML, candidates: prepared.candidates,
+            translations: Dictionary(uniqueKeysWithValues: prepared.candidates.map { ($0.segmentID, "这段正文的译文应在图表之外正常排版。") })
+        )
+
+        let configuration = WKWebViewConfiguration()
+        configuration.websiteDataStore = .nonPersistent()
+        let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 320, height: 700), configuration: configuration)
+        let loaded = expectation(description: "Composite chart loaded")
+        let observer = HTMLLayoutNavigationObserver(loaded: loaded)
+        webView.navigationDelegate = observer
+        webView.loadHTMLString(translated, baseURL: nil)
+        await fulfillment(of: [loaded], timeout: 15)
+
+        for injectReaderRepair in [false, true] {
+            if injectReaderRepair {
+                _ = try await webView.evaluateJavaScript(HTMLReaderView.Coordinator.instrumentationScript)
+            }
+            let metrics = try await webView.evaluateJavaScript("""
+            (() => {
+                const board = document.querySelector('.g-artboard');
+                const label = document.getElementById('g-ai0-1');
+                const text = label.querySelector('p');
+                const wrapper = document.querySelector('[data-rp-preserve-layout]');
+                return {
+                    position: getComputedStyle(label).position,
+                    transform: getComputedStyle(label).transform,
+                    height: board.getBoundingClientRect().height,
+                    labelX: label.getBoundingClientRect().left - board.getBoundingClientRect().left,
+                    labelY: label.getBoundingClientRect().top - board.getBoundingClientRect().top,
+                    textWidth: text.getBoundingClientRect().width,
+                    textColor: getComputedStyle(text).color,
+                    textMargin: getComputedStyle(text).marginBottom,
+                    scrollable: wrapper.scrollWidth > wrapper.clientWidth && getComputedStyle(wrapper).overflowX === 'auto',
+                    bodyFits: document.documentElement.scrollWidth <= window.innerWidth,
+                    prosePosition: getComputedStyle(document.querySelector('.animated')).position
+                };
+            })()
+            """)
+            let state = try XCTUnwrap(metrics as? [String: Any])
+            XCTAssertEqual(state["position"] as? String, "absolute")
+            XCTAssertNotEqual(state["transform"] as? String, "none")
+            XCTAssertEqual(state["height"] as? Double, 220)
+            XCTAssertEqual(try XCTUnwrap(state["labelX"] as? Double), 88.75, accuracy: 0.1)
+            XCTAssertEqual(try XCTUnwrap(state["labelY"] as? Double), 103, accuracy: 0.1)
+            XCTAssertEqual(state["textWidth"] as? Double, 120)
+            XCTAssertEqual(state["textColor"] as? String, "rgb(10, 20, 30)")
+            XCTAssertEqual(state["textMargin"] as? String, "0px")
+            XCTAssertEqual(state["scrollable"] as? Bool, true)
+            XCTAssertEqual(state["bodyFits"] as? Bool, true)
+            XCTAssertEqual(state["prosePosition"] as? String, "static")
+        }
+    }
+
+    func testCompositeChartRestorationStillRemovesActiveContent() throws {
+        let paragraph = String(repeating: "This article has enough prose to be extracted. ", count: 15)
+        let html = """
+        <html><body><article><p>\(paragraph)</p>
+        <div class="ai2html" id="g-chart-box"><div class="g-artboard" style="position:relative;height:200px">
+          <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='355' height='200'/%3E" onerror="track()">
+          <div class="g-aiAbs" id="g-ai0-1" style="position:absolute;top:50%"><p>Chart label</p></div>
+          <script>track()</script>
+        </div></div><p>\(paragraph)</p></article></body></html>
+        """
+        for extraction in [HTMLLocalizer.ContentExtraction.readable, .clipped(simplifies: true), .clipped(simplifies: false)] {
+            let localizer = HTMLLocalizer()
+            let document = try localizer.makeDocumentForLocalization(
+                html: html, sourceURL: URL(string: "https://example.com/article")!, extraction: extraction
+            )
+            try localizer.removeActiveContent(from: document)
+            let output = try document.outerHtml()
+            XCTAssertEqual(try document.select("[data-rp-preserve-layout]").count, 1, output)
+            XCTAssertEqual(try document.select("script, [onerror]").count, 0)
+            XCTAssertTrue(try XCTUnwrap(try document.getElementById("g-ai0-1")).attr("style").contains("position:absolute"))
+        }
+    }
+
     func testReadabilityStylesRestoreNormalFlowForAnimatedArticleContent() throws {
         let paragraph = String(repeating: "This article copy must remain in normal document flow. ", count: 8)
         let html = """

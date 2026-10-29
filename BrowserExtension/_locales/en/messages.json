@@ -39,10 +39,16 @@
     "message": "arXiv"
   },
   "hintArticle": {
-    "message": "Press ↑ or ↓ to widen or narrow the highlighted region."
+    "message": "Click a block to choose it, then use + / − on the box or ↑ / ↓ to widen or narrow it; ← / → move to the neighboring block."
   },
   "hintArticleMissing": {
     "message": "No article found. Try Full Page or select text."
+  },
+  "regionWider": {
+    "message": "Widen region (↑)"
+  },
+  "regionNarrower": {
+    "message": "Narrow region (↓)"
   },
   "hintSelection": {
     "message": "Saves the selected text and images."

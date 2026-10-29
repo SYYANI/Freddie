@@ -370,6 +370,12 @@ final class HTMLTranslationPipeline {
     }
 
     nonisolated private static func shouldSkip(_ element: Element) throws -> Bool {
+        // Positioned chart labels share a fixed artboard with the image. Inserting
+        // prose translations beside them would overlap the chart or hide its labels.
+        if element.hasAttr("data-rp-preserve-layout") ||
+            element.parents().array().contains(where: { $0.hasAttr("data-rp-preserve-layout") }) {
+            return true
+        }
         if element.hasAttr("data-rp-translation") || element.hasClass("rp-translation-block") {
             return true
         }

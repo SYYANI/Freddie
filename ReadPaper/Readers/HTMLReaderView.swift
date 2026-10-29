@@ -563,7 +563,7 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
             const readabilityLayoutRepairCSS = `
                 \(HTMLLocalizer.readableProseLayoutCSS)
                 \(HTMLLocalizer.readableProseColorCSS)
-                body.rp-readability-body .rp-readability-content #readability-page-1 :not(svg, svg *, math, math *) {
+                body.rp-readability-body .rp-readability-content #readability-page-1 :not(svg, svg *, math, math *):not([data-rp-preserve-layout], [data-rp-preserve-layout] *) {
                     position: static !important;
                     inset: auto !important;
                     transform: none !important;
@@ -571,10 +571,10 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
                     rotate: none !important;
                     scale: none !important;
                 }
-                body.rp-readability-body .rp-readability-content #readability-page-1 :is(ul, ol) {
+                body.rp-readability-body .rp-readability-content #readability-page-1 :is(ul, ol):not([data-rp-preserve-layout] *) {
                     position: relative !important;
                 }
-                body.rp-readability-body .rp-readability-content #readability-page-1 :is(article, section, main, header, footer, aside, div) {
+                body.rp-readability-body .rp-readability-content #readability-page-1 :is(article, section, main, header, footer, aside, div):not([data-rp-preserve-layout], [data-rp-preserve-layout] *) {
                     height: auto !important;
                     min-height: 0 !important;
                     max-height: none !important;
