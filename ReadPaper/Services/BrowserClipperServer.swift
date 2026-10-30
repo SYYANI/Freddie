@@ -3,8 +3,9 @@ import Network
 import Observation
 import SwiftData
 
-/// The local API the browser extension in `BrowserExtension/` saves pages through, after
-/// Zotero's connector server: plain HTTP bound to 127.0.0.1, running while Freddie runs.
+/// The local API the browser extension (its own repository, `../freddie-clipper`) saves pages
+/// through, after Zotero's connector server: plain HTTP bound to 127.0.0.1, running while
+/// Freddie runs.
 enum BrowserClipperAPI {
     static let port: UInt16 = 23240
     static let version = 1
