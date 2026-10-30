@@ -52,7 +52,7 @@ private extension PDFDisplayAppearance {
         switch self {
         case .defaultMode:
             return """
-            :root { color-scheme: light; }
+            :root { color-scheme: light !important; }
             html,
             body,
             body.rp-readability-body,
@@ -66,7 +66,7 @@ private extension PDFDisplayAppearance {
             """
         case .paper:
             return """
-            :root { color-scheme: light; }
+            :root { color-scheme: light !important; }
             body.rp-readability-body {
                 --rp-reader-text: #2b261f;
                 --rp-reader-muted: #726752;
