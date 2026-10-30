@@ -21,6 +21,16 @@ It focuses on three practical reading workflows:
 - Full PDF translation via BabelDOC with structured progress reporting
 - PDF, HTML, and dual-PDF reading modes in one app
 
+## Library sync
+
+Mac, iPad and the cross-platform Freddie for Windows, Linux and macOS can sync
+the same paper library through a self-hosted
+[Freddie Sync Server](https://github.com/SYYANI/freddie-sync-server). Freddie ships
+without a default server: whoever deploys the server issues a credential file for
+each device, and you import it in **Settings → Sync**. Freddie shows the server
+address and asks before uploading anything. See the [sync guide](docs/sync.md)
+for setup, conflict handling, and what is synced.
+
 ## Screenshots
 
 <img width="1624" height="977" alt="Image" src="https://github.com/user-attachments/assets/7accab12-26e2-4916-a317-23b205a1d4f1" />

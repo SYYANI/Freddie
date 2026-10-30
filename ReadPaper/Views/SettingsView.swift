@@ -5,6 +5,7 @@ import SwiftUI
 private enum SettingsTab: String, Hashable {
     case general
     case reader
+    case sync
     case latex
     case digest
     case providers
@@ -388,6 +389,14 @@ private struct SettingsForm: View {
                     Label(settingsTabTitle(.reader), systemImage: "book.closed")
                 }
 
+            tabContent(for: .sync) {
+                LibrarySyncSettingsView()
+            }
+                .tag(SettingsTab.sync)
+                .tabItem {
+                    Label(settingsTabTitle(.sync), systemImage: "arrow.triangle.2.circlepath")
+                }
+
             tabContent(for: .latex) {
                 latexTab
             }
@@ -512,6 +521,8 @@ private struct SettingsForm: View {
             return String(localized: "General", bundle: bundle)
         case .reader:
             return String(localized: "Reader", bundle: bundle)
+        case .sync:
+            return String(localized: "Sync", bundle: bundle)
         case .latex:
             return String(localized: "LaTeX", bundle: bundle)
         case .digest:

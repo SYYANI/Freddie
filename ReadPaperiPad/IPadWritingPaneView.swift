@@ -10,6 +10,7 @@ final class IPadWritingDocument {
     let id: UUID
     var markdown: String {
         didSet {
+            guard !isApplyingSync else { return }
             guard markdown != oldValue else { return }
             hasUnsavedChanges = true
             saveTask?.cancel()
@@ -27,6 +28,7 @@ final class IPadWritingDocument {
     @ObservationIgnored weak var textView: UITextView?
     @ObservationIgnored private let library: WritingLibrary
     @ObservationIgnored private var saveTask: Task<Void, Never>?
+    @ObservationIgnored private var isApplyingSync = false
 
     init(id: UUID, markdown: String, library: WritingLibrary) {
         self.id = id
@@ -46,6 +48,17 @@ final class IPadWritingDocument {
         saveTask?.cancel()
         saveTask = nil
         hasUnsavedChanges = false
+    }
+
+    func reloadAfterSync(_ text: String) {
+        guard !hasUnsavedChanges, textView?.markedTextRange == nil, text != markdown else { return }
+        isApplyingSync = true
+        markdown = text
+        isApplyingSync = false
+        selection = NSRange(location: min(selection.location, (text as NSString).length), length: 0)
+        textView?.text = text
+        textView?.selectedRange = selection
+        textView?.undoManager?.removeAllActions()
     }
 
     func apply(_ edit: WritingEdit) {
@@ -84,6 +97,18 @@ final class IPadWritingDocumentCenter {
     }
 
     func saveAll() { documents.values.forEach { $0.save() } }
+
+    var syncBlockedWritingIDs: Set<UUID> {
+        Set(documents.values.filter { $0.hasUnsavedChanges || $0.textView?.markedTextRange != nil }.map(\.id))
+    }
+
+    func reloadAfterSync(_ ids: Set<UUID>) {
+        for id in ids {
+            guard let document = documents[id], !document.hasUnsavedChanges else { continue }
+            if let markdown = try? library.markdown(for: id) { document.reloadAfterSync(markdown) }
+            else { close(id) }
+        }
+    }
 
     func close(_ id: UUID) {
         documents.removeValue(forKey: id)?.discardPendingSave()

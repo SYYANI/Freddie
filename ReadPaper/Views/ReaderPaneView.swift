@@ -468,6 +468,11 @@ struct ReaderPaneView: View {
                 restorePDFTranslationDiagnostics()
                 refreshSelectionAssistantHistoryAnchors()
             }
+            .modifier(LibrarySyncReaderObserver(activity: LibrarySyncReaderActivity(paperID: paper?.id, isBusy: isWorking || isEditingHTMLRegions || pdfAnnotationSession.interactionMode != .browse)) {
+                htmlReloadToken += 1
+                pdfReloadToken += 1
+                restorePDFTranslationDiagnostics()
+            })
             .task(id: outlineLoadIdentity) {
                 await outlineModel.load(outlineRequest, paperID: paper?.id, fetch: outlineModel.isPresented)
             }
@@ -2347,7 +2352,9 @@ struct ReaderPaneView: View {
         isWorking = true
         isCancelling = false
         statusMessage = String(localized: "Translating HTML...", bundle: bundle)
+        let syncWork = LibrarySyncActivity.shared.beginWork(paperID: paper.id)
         translationTask = Task {
+            defer { LibrarySyncActivity.shared.endWork(syncWork) }
             var runOutcome: TranslationActivityCapsule.Phase?
             // Translation rewrites paper.html, so region edits must be on disk first.
             await HTMLRegionWriter.shared.waitForQueuedWrites()
@@ -2447,7 +2454,9 @@ struct ReaderPaneView: View {
         isWorking = true
         isCancelling = false
         statusMessage = String(localized: "Preparing arXiv LaTeX source...", bundle: bundle)
+        let syncWork = LibrarySyncActivity.shared.beginWork(paperID: paper.id)
         translationTask = Task {
+            defer { LibrarySyncActivity.shared.endWork(syncWork) }
             var runOutcome: TranslationActivityCapsule.Phase?
             do {
                 try Task.checkCancellation()
@@ -2677,7 +2686,9 @@ struct ReaderPaneView: View {
         isWorking = true
         isCancelling = false
         statusMessage = String(localized: "Preparing scanned PDF translation...", bundle: bundle)
+        let syncWork = LibrarySyncActivity.shared.beginWork(paperID: paper.id)
         translationTask = Task {
+            defer { LibrarySyncActivity.shared.endWork(syncWork) }
             var runOutcome: TranslationActivityCapsule.Phase?
             do {
                 try Task.checkCancellation()
@@ -2842,7 +2853,9 @@ struct ReaderPaneView: View {
         isWorking = true
         isCancelling = false
         statusMessage = String(localized: "Running BabelDOC...", bundle: bundle)
+        let syncWork = LibrarySyncActivity.shared.beginWork(paperID: paper.id)
         translationTask = Task {
+            defer { LibrarySyncActivity.shared.endWork(syncWork) }
             var runOutcome: TranslationActivityCapsule.Phase?
             do {
                 try Task.checkCancellation()
@@ -2989,7 +3002,9 @@ struct ReaderPaneView: View {
         isWorking = true
         isCancelling = false
         statusMessage = String(localized: "Running BabelDOC...", bundle: bundle)
+        let syncWork = LibrarySyncActivity.shared.beginWork(paperID: paper.id)
         translationTask = Task {
+            defer { LibrarySyncActivity.shared.endWork(syncWork) }
             var runOutcome: TranslationActivityCapsule.Phase?
             do {
                 try Task.checkCancellation()

@@ -62,6 +62,18 @@ struct KeychainStore {
         }
     }
 
+    /// Saves an `.unprotected` item with an explicit accessibility class, for
+    /// secrets that must not travel through backups or device migration.
+    func save(_ value: String, account: String, accessibility: CFString) throws {
+        precondition(accessPolicy == .unprotected, "Protected items use their own access control")
+        try saveUnprotected(
+            Data(value.utf8),
+            account: account,
+            usesDataProtectionKeychain: false,
+            accessibility: accessibility
+        )
+    }
+
     func load(account: String) throws -> String? {
         switch accessPolicy {
         case .userPresence:

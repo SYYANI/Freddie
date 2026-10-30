@@ -32,6 +32,7 @@ packages:
 targets:
   BabelDocHelper:
     type: tool
+    productName: babeldoc-readpaper-helper
     platform: macOS
     deploymentTarget: "14.0"
     sources:
@@ -50,6 +51,7 @@ targets:
         SKIP_INSTALL: YES
   ReadPaper:
     type: application
+    productName: Freddie
     platform: macOS
     deploymentTarget: "14.0"
     sources:
@@ -119,8 +121,8 @@ targets:
         ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS: NO
         SWIFT_VERSION: 6.0
         CODE_SIGN_STYLE: Automatic
-        CURRENT_PROJECT_VERSION: 172
-        MARKETING_VERSION: 1.0.5
+        CURRENT_PROJECT_VERSION: 175
+        MARKETING_VERSION: 1.0.8
       configs:
         Debug:
           ENABLE_TESTABILITY: YES
@@ -128,6 +130,7 @@ targets:
           ENABLE_TESTABILITY: NO
   ReadPaperiPad:
     type: application
+    productName: Freddie
     platform: iOS
     deploymentTarget: "17.0"
     sources:
@@ -151,6 +154,7 @@ targets:
       - path: ReadPaper/Views/ReadPaperSegmentedPicker.swift
       - path: ReadPaper/Views/NoteMarkdownPreview.swift
       - path: ReadPaper/Views/ReadPaperMarkdownView.swift
+      - path: ReadPaper/Views/LibrarySyncSettingsView.swift
       - path: ReadPaperiPad
     dependencies:
       - package: SwiftSoup
@@ -187,8 +191,8 @@ targets:
         ENABLE_TESTABILITY: YES
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: 3VM5RUH8V5
-        CURRENT_PROJECT_VERSION: 172
-        MARKETING_VERSION: 1.0.5
+        CURRENT_PROJECT_VERSION: 175
+        MARKETING_VERSION: 1.0.8
         SUPPORTED_PLATFORMS: iphoneos iphonesimulator
         SUPPORTS_MACCATALYST: NO
         SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD: NO
@@ -224,6 +228,7 @@ targets:
       - path: ReadPaperTests/PaperLibraryFilterTests.swift
       - path: ReadPaperTests/PaperItemTypeTests.swift
       - path: ReadPaperTests/PaperSelectionStoreTests.swift
+      - path: ReadPaperTests/LibrarySyncTests.swift
     dependencies:
       - target: ReadPaperiPad
     settings:
