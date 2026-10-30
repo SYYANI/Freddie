@@ -12,6 +12,91 @@
         }
       }
     },
+    "Link or unreadable" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Link or unreadable"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "是链接或无法读取"
+          }
+        }
+      }
+    },
+    "Missing on this device" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Missing on this device"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此设备上缺失"
+          }
+        }
+      }
+    },
+    "Outside the Freddie library" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Outside the Freddie library"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "位于 Freddie 论文库之外"
+          }
+        }
+      }
+    },
+    "Pending changes" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pending changes"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "待同步更改"
+          }
+        }
+      }
+    },
+    "Syncs papers, files, annotations, reading positions, and writings across your own devices. Use a separate device credential on each device; your library stays available offline. Credentials stay in Keychain, and LLM API keys and device preferences are not synced. The sync server can read uploaded content." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Syncs papers, files, annotations, reading positions, and writings across your own devices. Use a separate device credential on each device; your library stays available offline. Credentials stay in Keychain, and LLM API keys and device preferences are not synced. The sync server can read uploaded content."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在自己的设备间同步论文、文件、批注、阅读位置和写作稿。每台设备使用独立的设备凭证，离线时仍可使用论文库。凭证保存在钥匙串中，LLM API 密钥和设备偏好不会同步。同步服务器可以读取上传的内容。"
+          }
+        }
+      }
+    },
     "“%@” and all of its local files, notes, reading state, and translation cache will be removed." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -53,6 +138,23 @@
     },
     "%@" : {
 
+    },
+    "%@ (conflict copy)" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ (conflict copy)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@（冲突副本）"
+          }
+        }
+      }
     },
     "%@ must be a number." : {
       "extractionState" : "stale",
@@ -232,6 +334,23 @@
         }
       }
     },
+    "A file is still changing. Sync will retry shortly." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A file is still changing. Sync will retry shortly."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "文件仍在变化，稍后会重试同步。"
+          }
+        }
+      }
+    },
     "A model profile points to one provider and stores the exact chat model name plus optional sampling parameters. You can create separate profiles for fast HTML translation and heavier PDF work." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -287,6 +406,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "摘要"
+          }
+        }
+      }
+    },
+    "Accept Deletion" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Accept Deletion"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "接受删除"
           }
         }
       }
@@ -465,6 +601,40 @@
         }
       }
     },
+    "A sync document exceeds the supported size." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A sync document exceeds the supported size."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "某个同步文档超过了支持的大小。"
+          }
+        }
+      }
+    },
+    "A synced file exceeds the supported size." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A synced file exceeds the supported size."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "某个同步文件超过了支持的大小。"
+          }
+        }
+      }
+    },
     "AI Explanation" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -508,6 +678,23 @@
         }
       }
     },
+    "An attachment is outside the managed paper library." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "An attachment is outside the managed paper library."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "某个附件位于应用管理的论文库之外。"
+          }
+        }
+      }
+    },
     "Analyzing layout" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -526,6 +713,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "标注颜色"
+          }
+        }
+      }
+    },
+    "Another Freddie process is already syncing this library." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Another Freddie process is already syncing this library."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "另一个 Freddie 进程正在同步此论文库。"
           }
         }
       }
@@ -654,6 +858,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在应用 LaTeX 结构"
+          }
+        }
+      }
+    },
+    "Applying changes…" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Applying changes…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在应用更改…"
           }
         }
       }
@@ -799,6 +1020,23 @@
         }
       }
     },
+    "Attachments Not Synced" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Attachments Not Synced"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未同步的附件"
+          }
+        }
+      }
+    },
     "Audio Recording" : {
       "comment" : "Bibliographic item type (Zotero item type name)",
       "localizations" : {
@@ -887,6 +1125,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "自动生成"
+          }
+        }
+      }
+    },
+    "Automatically sync" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Automatically sync"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自动同步"
           }
         }
       }
@@ -1219,6 +1474,23 @@
         }
       }
     },
+    "Both versions are preserved until you choose. Replacing local changes also keeps a recovery copy on this device." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Both versions are preserved until you choose. Replacing local changes also keeps a recovery copy on this device."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在你作出选择前会保留两个版本。替换本地更改时，也会在此设备保留恢复副本。"
+          }
+        }
+      }
+    },
     "Browse" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1340,6 +1612,40 @@
         }
       }
     },
+    "Change Device Credential…" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Change Device Credential…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "更换设备凭证…"
+          }
+        }
+      }
+    },
+    "Changes to Review" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Changes to Review"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "待处理的更改"
+          }
+        }
+      }
+    },
     "Chat Completions" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1378,6 +1684,40 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在检查 PDF 内容"
+          }
+        }
+      }
+    },
+    "Checking connection…" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Checking connection…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在检查连接…"
+          }
+        }
+      }
+    },
+    "Checking local changes…" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Checking local changes…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在检查本地更改…"
           }
         }
       }
@@ -1711,6 +2051,23 @@
         }
       }
     },
+    "Close this paper before accepting this deletion." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Close this paper before accepting this deletion."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请先关闭这篇论文，再接受删除。"
+          }
+        }
+      }
+    },
     "Code" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1782,6 +2139,57 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "连接翻译服务后即可翻译论文。"
+          }
+        }
+      }
+    },
+    "Connect and Sync" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connect and Sync"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "连接并同步"
+          }
+        }
+      }
+    },
+    "Connect to a Different Server?" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connect to a Different Server?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "连接到另一台服务器？"
+          }
+        }
+      }
+    },
+    "Connect to This Server?" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connect to This Server?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "连接到这台服务器？"
           }
         }
       }
@@ -2498,6 +2906,23 @@
         }
       }
     },
+    "Downloading changes…" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Downloading changes…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在下载更改…"
+          }
+        }
+      }
+    },
     "Drag to pan over images and blank areas; selectable text keeps the text-selection cursor. When disabled, non-text areas use the standard arrow cursor." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2669,6 +3094,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "请输入针对所选文字的问题。"
+          }
+        }
+      }
+    },
+    "Enter an HTTPS server URL without credentials, query, or fragment." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter an HTTPS server URL without credentials, query, or fragment."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请输入 HTTPS 服务器地址，且不要包含凭证、查询参数或片段。"
           }
         }
       }
@@ -2984,6 +3426,23 @@
         }
       }
     },
+    "Fetching library changes…" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fetching library changes…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在获取论文库更改…"
+          }
+        }
+      }
+    },
     "Fetching metadata" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -3096,6 +3555,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "完成区域调整"
+          }
+        }
+      }
+    },
+    "Finish editing this document before resolving its sync conflict." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Finish editing this document before resolving its sync conflict."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请先结束此文档的编辑，再处理同步冲突。"
           }
         }
       }
@@ -3782,6 +4258,23 @@
         }
       }
     },
+    "Import Device Credential and Connect…" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Import Device Credential and Connect…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "导入设备凭证并连接…"
+          }
+        }
+      }
+    },
     "Import a PDF or fetch one from arXiv to read it here." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -3789,6 +4282,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "导入一个 PDF，或从 arXiv 获取一个 PDF 后在这里阅读。"
+          }
+        }
+      }
+    },
+    "Import a device credential to connect sync." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Import a device credential to connect sync."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请导入设备凭证以连接同步服务。"
           }
         }
       }
@@ -4140,6 +4650,40 @@
         }
       }
     },
+    "Keep Both Writings" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keep Both Writings"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "保留两篇写作稿"
+          }
+        }
+      }
+    },
+    "Keep This Device" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keep This Device"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "保留此设备的版本"
+          }
+        }
+      }
+    },
     "Keychain operation failed with status %d." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -4158,6 +4702,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "语言"
+          }
+        }
+      }
+    },
+    "Last successful sync" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last successful sync"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "最近成功同步"
           }
         }
       }
@@ -4336,6 +4897,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "论文库"
+          }
+        }
+      }
+    },
+    "Library Sync" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Library Sync"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "论文库同步"
           }
         }
       }
@@ -6455,6 +7033,23 @@
         }
       }
     },
+    "Ready to sync." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ready to sync."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已准备好同步。"
+          }
+        }
+      }
+    },
     "Reasoning Effort" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -6816,6 +7411,57 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "在访达中显示 LaTeX 译稿源码"
+          }
+        }
+      }
+    },
+    "Review Changed Server History…" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Review Changed Server History…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "核对已变化的服务器历史…"
+          }
+        }
+      }
+    },
+    "Review Changes" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Review Changes"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "核对更改"
+          }
+        }
+      }
+    },
+    "Review Server History?" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Review Server History?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "核对服务器历史？"
           }
         }
       }
@@ -7234,6 +7880,23 @@
         }
       }
     },
+    "Server" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Server"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "服务器"
+          }
+        }
+      }
+    },
     "Set Up Translation…" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -7427,6 +8090,57 @@
         }
       }
     },
+    "Some changes need conflict resolution." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Some changes need conflict resolution."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "部分更改存在冲突，需要处理。"
+          }
+        }
+      }
+    },
+    "Some changes need review." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Some changes need review."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "部分更改需要核对。"
+          }
+        }
+      }
+    },
+    "Some changes will upload on the next sync." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Some changes will upload on the next sync."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "部分更改将在下次同步时上传。"
+          }
+        }
+      }
+    },
     "Source" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -7536,6 +8250,108 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "切换写作稿"
+          }
+        }
+      }
+    },
+    "Sync" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sync"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "同步"
+          }
+        }
+      }
+    },
+    "Sync Now" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sync Now"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "立即同步"
+          }
+        }
+      }
+    },
+    "Sync cannot read a symbolic link or special file." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sync cannot read a symbolic link or special file."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "同步无法读取符号链接或特殊文件。"
+          }
+        }
+      }
+    },
+    "Sync is not connected." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sync is not connected."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "尚未连接同步服务。"
+          }
+        }
+      }
+    },
+    "Sync needs attention." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sync needs attention."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "同步需要处理。"
+          }
+        }
+      }
+    },
+    "Sync server returned HTTP %d." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sync server returned HTTP %d."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "同步服务器返回 HTTP %d。"
           }
         }
       }
@@ -7811,6 +8627,40 @@
         }
       }
     },
+    "The credential does not match this server or library." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The credential does not match this server or library."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "设备凭证与此服务器或论文库不匹配。"
+          }
+        }
+      }
+    },
+    "The device credential is not valid." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The device credential is not valid."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "设备凭证无效。"
+          }
+        }
+      }
+    },
     "The document changed. Please try again." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -7824,6 +8674,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "文档已更改，请重试。"
+          }
+        }
+      }
+    },
+    "The downloaded file failed its size or SHA-256 check." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The downloaded file failed its size or SHA-256 check."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "下载文件的大小或 SHA-256 校验失败。"
           }
         }
       }
@@ -8197,6 +9064,23 @@
         }
       }
     },
+    "The server history has changed. Review it before continuing sync." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The server history has changed. Review it before continuing sync."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "服务器历史已变化。请先核对，再继续同步。"
+          }
+        }
+      }
+    },
     "The server returned HTTP 403. Retrying %@ with the built-in browser." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -8210,6 +9094,193 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "服务器返回了 HTTP 403。正在使用内置浏览器重试 %@。"
+          }
+        }
+      }
+    },
+    "The sync server URL is not valid." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The sync server URL is not valid."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "同步服务器地址无效。"
+          }
+        }
+      }
+    },
+    "The sync server has reached its storage limit." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The sync server has reached its storage limit."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "同步服务器已达到存储上限。"
+          }
+        }
+      }
+    },
+    "The sync server is busy. Freddie will retry shortly." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The sync server is busy. Freddie will retry shortly."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "同步服务器繁忙，Freddie 稍后会重试。"
+          }
+        }
+      }
+    },
+    "The sync server response is not valid." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The sync server response is not valid."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "同步服务器返回的数据无效。"
+          }
+        }
+      }
+    },
+    "The sync server response is too large." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The sync server response is too large."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "同步服务器返回的数据过大。"
+          }
+        }
+      }
+    },
+    "The synced attachment metadata is not valid." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The synced attachment metadata is not valid."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "同步附件的元数据无效。"
+          }
+        }
+      }
+    },
+    "The synced document does not match its record." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The synced document does not match its record."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "同步文档与其记录不匹配。"
+          }
+        }
+      }
+    },
+    "The synced document scope is not valid." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The synced document scope is not valid."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "同步文档的归属范围无效。"
+          }
+        }
+      }
+    },
+    "The synced file hash is not valid." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The synced file hash is not valid."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "同步文件的哈希值无效。"
+          }
+        }
+      }
+    },
+    "The synced file path is not safe." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The synced file path is not safe."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "同步文件路径不安全。"
+          }
+        }
+      }
+    },
+    "The synced translation cache is not valid." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The synced translation cache is not valid."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "同步译文缓存无效。"
           }
         }
       }
@@ -8276,6 +9347,23 @@
         }
       }
     },
+    "These attachments are skipped while their files are unavailable. Copies on other devices are kept, and a newer version from another device restores the file here." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "These attachments are skipped while their files are unavailable. Copies on other devices are kept, and a newer version from another device restores the file here."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这些附件的文件当前不可用，同步时会跳过。其他设备上的副本会保留；其他设备同步了新版本时，文件会恢复到这台设备上。"
+          }
+        }
+      }
+    },
     "Thesis" : {
       "comment" : "Bibliographic item type (Zotero item type name)",
       "localizations" : {
@@ -8331,6 +9419,57 @@
         }
       }
     },
+    "This change belongs to a paper or writing deleted on this device. Keep this device's version to discard it." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This change belongs to a paper or writing deleted on this device. Keep this device's version to discard it."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这项更改所属的论文或写作稿已在此设备上删除。选择保留此设备的版本即可丢弃它。"
+          }
+        }
+      }
+    },
+    "This device" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This device"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此设备"
+          }
+        }
+      }
+    },
+    "This device credential is invalid or has been revoked. Import a new credential." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This device credential is invalid or has been revoked. Import a new credential."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此设备凭证无效或已被撤销，请导入新的设备凭证。"
+          }
+        }
+      }
+    },
     "This empty note will be removed." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -8338,6 +9477,40 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "这条空笔记将被移除。"
+          }
+        }
+      }
+    },
+    "This item was deleted here and changed on another device." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This item was deleted here and changed on another device."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此条目已在此设备上删除，并在另一台设备上修改。"
+          }
+        }
+      }
+    },
+    "This item was deleted on another device." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This item was deleted on another device."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此条目已在另一台设备上删除。"
           }
         }
       }
@@ -8440,6 +9613,57 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "此 PDF 由扫描页面图像和 OCR 文字层组成。请使用“翻译扫描版 PDF”。"
+          }
+        }
+      }
+    },
+    "This server will receive a copy of your paper library: %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This server will receive a copy of your paper library: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "以下服务器将接收你的论文库副本：%@"
+          }
+        }
+      }
+    },
+    "This sync state was created by a newer version of Freddie." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This sync state was created by a newer version of Freddie."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此同步状态由更新版本的 Freddie 创建。"
+          }
+        }
+      }
+    },
+    "This synced document requires a newer version of Freddie." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This synced document requires a newer version of Freddie."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此同步文档需要更新版本的 Freddie。"
           }
         }
       }
@@ -9005,6 +10229,23 @@
         }
       }
     },
+    "Unable to connect sync: %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unable to connect sync: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法连接同步服务：%@"
+          }
+        }
+      }
+    },
     "Unable to load writings: %@" : {
       "localizations" : {
         "zh-Hans" : {
@@ -9049,6 +10290,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "无法将 HTML 内容渲染为 PDF。"
+          }
+        }
+      }
+    },
+    "Unable to resolve sync conflict: %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unable to resolve sync conflict: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法处理同步冲突：%@"
           }
         }
       }
@@ -9103,6 +10361,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "无法更新写作稿"
+          }
+        }
+      }
+    },
+    "Unable to sync: %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unable to sync: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法同步：%@"
           }
         }
       }
@@ -9260,6 +10535,40 @@
         }
       }
     },
+    "Up to date" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Up to date"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已是最新"
+          }
+        }
+      }
+    },
+    "Uploading changes…" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uploading changes…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在上传更改…"
+          }
+        }
+      }
+    },
     "Use Another Provider" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -9267,6 +10576,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "换用其他 Provider"
+          }
+        }
+      }
+    },
+    "Use Server Version" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Use Server Version"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "使用服务器版本"
           }
         }
       }
@@ -9415,6 +10741,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "视频"
+          }
+        }
+      }
+    },
+    "Waiting for open documents…" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Waiting for open documents…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在等待打开的文档结束编辑…"
           }
         }
       }
@@ -9596,6 +10939,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "黄色"
+          }
+        }
+      }
+    },
+    "Your local library will be kept. Freddie will fetch the server history again and ask you to review conflicting changes." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your local library will be kept. Freddie will fetch the server history again and ask you to review conflicting changes."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "本地论文库会被保留。Freddie 将重新获取服务器历史，并让你核对冲突的更改。"
           }
         }
       }

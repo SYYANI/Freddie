@@ -58,6 +58,20 @@ final class WritingDocument {
         hasUnsavedChanges = false
     }
 
+    func reloadAfterSync(markdown: String) {
+        guard !hasUnsavedChanges, textView?.hasMarkedText() != true, markdown != textStorage.string else { return }
+        let originalLength = textStorage.length
+        let callback = textStorage.onCharactersEdited
+        textStorage.onCharactersEdited = nil
+        textStorage.replaceCharacters(in: NSRange(location: 0, length: originalLength), with: markdown)
+        textStorage.onCharactersEdited = callback
+        undoManager.removeAllActions()
+        pendingIndicatorRange = nil
+        selectedRange = NSRange(location: min(currentSelection.location, textStorage.length), length: 0)
+        textView?.setSelectedRange(selectedRange)
+        onCharactersEdited?(NSRange(location: 0, length: originalLength), textStorage.length - originalLength)
+    }
+
     /// Applies an edit made by the app as one undoable step, through the editor when
     /// one is showing the document.
     func apply(_ edit: WritingEdit) {
@@ -191,6 +205,18 @@ final class WritingDocumentCenter {
     func saveAll() {
         for document in documents.values {
             document.save()
+        }
+    }
+
+    var syncBlockedWritingIDs: Set<UUID> {
+        Set(documents.values.filter { $0.hasUnsavedChanges || $0.textView?.hasMarkedText() == true }.map(\.id))
+    }
+
+    func reloadAfterSync(_ ids: Set<UUID>) {
+        for id in ids {
+            guard let document = documents[id], !document.hasUnsavedChanges else { continue }
+            if let markdown = try? library.markdown(for: id) { document.reloadAfterSync(markdown: markdown) }
+            else { document.discardPendingSave(); documents[id] = nil }
         }
     }
 

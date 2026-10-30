@@ -40,6 +40,7 @@ struct InspectorPaneView: View {
     @State private var abstractTranslationTask: Task<Void, Never>?
     @State private var isEditingAuthors = false
     @State private var authorsDraft = ""
+    @State private var syncMetadataEditorID = UUID()
     @FocusState private var focusedMetadataField: MetadataField?
     var paper: Paper?
     var itemType: PaperItemTypeSelection?
@@ -82,7 +83,11 @@ struct InspectorPaneView: View {
             syncMetadataEditorState(with: paper)
             synchronizeAbstractPresentation(with: newPaperID)
         }
+        .onChange(of: LibrarySyncReaderActivity(paperID: paper?.id, isBusy: isEditingAuthors), initial: true) { _, activity in
+            LibrarySyncActivity.shared.update(syncMetadataEditorID, activity: activity)
+        }
         .onDisappear {
+            LibrarySyncActivity.shared.remove(syncMetadataEditorID)
             cancelAbstractTranslation()
         }
         .noteDeletionConfirmation($notePendingDeletion) { note in
@@ -719,6 +724,7 @@ private struct NoteEditor: View {
     let onFocusApplied: () -> Void
     @State private var isEditing = false
     @State private var isEditorFocusPending = false
+    @State private var syncNoteEditorID = UUID()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -805,6 +811,10 @@ private struct NoteEditor: View {
                 beginEditing()
             }
         }
+        .onChange(of: isEditing, initial: true) { [noteID = note.id, paperID = note.paperID] _, active in
+            LibrarySyncActivity.shared.noteEditing(noteID, owner: syncNoteEditorID, active: active, paperID: paperID)
+        }
+        .onDisappear { LibrarySyncActivity.shared.removeNoteEditor(syncNoteEditorID) }
     }
 
     private var noteAnchorSummary: String? {

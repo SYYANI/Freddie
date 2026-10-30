@@ -144,6 +144,7 @@ struct HTMLSidenote: Equatable, Sendable, Identifiable {
     var quote: String
     var htmlSelector: String
     var markdown: String
+    var paperID: UUID? = nil
 
     static func sidenotes(from notes: [Note], attachmentID: UUID?) -> [HTMLSidenote] {
         notes.compactMap { note in
@@ -155,7 +156,8 @@ struct HTMLSidenote: Equatable, Sendable, Identifiable {
                 id: note.id,
                 quote: note.trimmedQuote ?? "",
                 htmlSelector: htmlSelector,
-                markdown: note.body
+                markdown: note.body,
+                paperID: note.paperID
             )
         }
     }

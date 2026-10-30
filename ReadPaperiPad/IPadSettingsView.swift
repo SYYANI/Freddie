@@ -5,6 +5,7 @@ import UniformTypeIdentifiers
 private enum IPadSettingsTab: String, Hashable {
     case general
     case reader
+    case sync
     case digest
     case providers
     case models
@@ -145,6 +146,12 @@ struct IPadSettingsView: View {
                         .tag(IPadSettingsTab.reader)
                         .tabItem {
                             Label(String(localized: "Reader", bundle: bundle), systemImage: "book.closed")
+                        }
+
+                    LibrarySyncSettingsView()
+                        .tag(IPadSettingsTab.sync)
+                        .tabItem {
+                            Label(String(localized: "Sync", bundle: bundle), systemImage: "arrow.triangle.2.circlepath")
                         }
 
                     digestTab

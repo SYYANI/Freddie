@@ -31,6 +31,8 @@
 	</array>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.books</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>14.0</string>
 	<key>NSDocumentsFolderUsageDescription</key>

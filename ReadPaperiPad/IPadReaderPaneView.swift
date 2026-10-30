@@ -213,6 +213,10 @@ struct IPadReaderPaneView: View {
             restoreReadingState()
             revealNoteAnchor()
         }
+        .modifier(LibrarySyncReaderObserver(activity: LibrarySyncReaderActivity(paperID: paper?.id, isBusy: isTranslating || isAnnotating || pdfAnnotationSession.interactionMode != .browse)) {
+            htmlReloadToken += 1
+            pdfReloadToken += 1
+        })
         .onChange(of: paper?.id) { _, _ in
             outlineNavigationRequest = nil
             noteSelectionContext = nil
@@ -852,7 +856,9 @@ struct IPadReaderPaneView: View {
         beginTranslationRun(message: String(localized: "Translating HTML...", bundle: bundle))
         htmlSegmentUpdate = nil
 
+        let syncWork = LibrarySyncActivity.shared.beginWork(paperID: paper.id)
         translationTask = Task { @MainActor in
+            defer { LibrarySyncActivity.shared.endWork(syncWork) }
             var runOutcome: TranslationActivityCapsule.Phase?
             var keepStatus = false
             do {
@@ -929,7 +935,9 @@ struct IPadReaderPaneView: View {
         }()
 
         beginPDFTranslation()
+        let syncWork = LibrarySyncActivity.shared.beginWork(paperID: paper.id)
         translationTask = Task { @MainActor in
+            defer { LibrarySyncActivity.shared.endWork(syncWork) }
             do {
                 let resolvedRoute = try LLMRouteResolver().resolvePDFRoute(
                     settings: settings,
@@ -995,7 +1003,9 @@ struct IPadReaderPaneView: View {
         guard nextLastPage > currentLastPage else { return }
         let pageRange = (currentLastPage + 1)...nextLastPage
         beginPDFTranslation()
+        let syncWork = LibrarySyncActivity.shared.beginWork(paperID: paper.id)
         translationTask = Task { @MainActor in
+            defer { LibrarySyncActivity.shared.endWork(syncWork) }
             do {
                 let resolvedRoute = try LLMRouteResolver().resolvePDFRoute(
                     settings: settings,

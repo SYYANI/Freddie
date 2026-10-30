@@ -4,6 +4,7 @@ import SwiftUI
 
 @main
 struct ReadPaperApp: App {
+    @Environment(\.scenePhase) private var scenePhase
     @NSApplicationDelegateAdaptor(ReadPaperApplicationDelegate.self)
     private var applicationDelegate
     @StateObject private var systemAppearance = SystemAppearanceMonitor()
@@ -31,6 +32,8 @@ struct ReadPaperApp: App {
 
         WindowGroup(id: MainWindowScene.id) {
             ContentView()
+                .task { LibrarySyncController.shared.start(modelContainer: sharedModelContainer) }
+                .onChange(of: scenePhase) { _, phase in LibrarySyncController.shared.setForeground(phase == .active) }
                 .environment(\.localizationBundle, bundle)
                 .environment(\.pdfDisplayAppearance, displayAppearance)
                 .preferredColorScheme(.light)
@@ -76,6 +79,7 @@ struct ReadPaperApp: App {
 
         Settings {
             SettingsView()
+                .task { LibrarySyncController.shared.start(modelContainer: sharedModelContainer) }
                 .environment(\.localizationBundle, bundle)
                 .environment(\.pdfDisplayAppearance, displayAppearance)
                 .preferredColorScheme(.light)

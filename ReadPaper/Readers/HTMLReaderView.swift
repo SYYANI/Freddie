@@ -190,6 +190,9 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
     func updateNSView(_ view: WKWebView, context: Context) {
         updateView(view, context: context)
     }
+    static func dismantleNSView(_ view: WKWebView, coordinator: Coordinator) {
+        LibrarySyncActivity.shared.removeNoteEditor(coordinator.syncNoteEditorID)
+    }
     #else
     func makeUIView(context: Context) -> WKWebView {
         makeView(context: context)
@@ -197,6 +200,9 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
 
     func updateUIView(_ view: WKWebView, context: Context) {
         updateView(view, context: context)
+    }
+    static func dismantleUIView(_ view: WKWebView, coordinator: Coordinator) {
+        LibrarySyncActivity.shared.removeNoteEditor(coordinator.syncNoteEditorID)
     }
     #endif
 
@@ -312,6 +318,7 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
 
         let readAccessURL = fileURL.deletingLastPathComponent()
         if context.coordinator.loadedURL != fileURL {
+            LibrarySyncActivity.shared.removeNoteEditor(context.coordinator.syncNoteEditorID)
             context.coordinator.requestLoad(
                 fileURL: fileURL,
                 readAccessURL: readAccessURL,
@@ -325,6 +332,7 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
         }
 
         if context.coordinator.loadedReloadToken != reloadToken {
+            LibrarySyncActivity.shared.removeNoteEditor(context.coordinator.syncNoteEditorID)
             context.coordinator.requestLoad(
                 fileURL: fileURL,
                 readAccessURL: readAccessURL,
@@ -377,6 +385,7 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
     }
 
     final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
+        let syncNoteEditorID = UUID()
         private struct LoadRequest: Equatable {
             let fileURL: URL
             let readAccessURL: URL
@@ -1649,6 +1658,7 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
                 if (editingID && editingID !== id) { finishEditing(editingID); }
                 if (editingID !== id) {
                     editingID = id;
+                    post({ action: 'editing', id, active: true });
                     entry.card.classList.add('is-editing');
                     entry.editor.value = entry.draft ?? entry.note.markdown;
                     entry.body.hidden = true;
@@ -1670,6 +1680,7 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
                 if (editingID !== id) { return; }
                 const entry = cards.get(id);
                 editingID = null;
+                post({ action: 'editing', id, active: false });
                 if (!entry) { return; }
                 if (entry.draft !== null) {
                     entry.draftCommittedAt = Date.now();
@@ -1739,6 +1750,7 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
                 });
                 remove.addEventListener('click', event => {
                     event.stopPropagation();
+                    if (editingID === id) { finishEditing(id); }
                     post({ action: 'delete', id });
                 });
                 editor.addEventListener('input', () => {
@@ -2867,6 +2879,8 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
                 return
             }
             switch action {
+            case "editing":
+                LibrarySyncActivity.shared.noteEditing(noteID, owner: syncNoteEditorID, active: body["active"] as? Bool == true, paperID: sidenotes.first { $0.id == noteID }?.paperID)
             case "update", "commit":
                 guard let text = body["body"] as? String else { return }
                 onSidenoteEvent?(.bodyChanged(noteID: noteID, body: text, isFinal: action == "commit"))

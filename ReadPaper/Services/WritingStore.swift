@@ -145,6 +145,12 @@ struct WritingStore {
         try String(contentsOf: markdownURL(for: id), encoding: .utf8)
     }
 
+    /// Refresh a downloaded writing's cache without rewriting its original bytes.
+    func refreshSyncedMetadata(for id: UUID, createdAt: Date, modifiedAt: Date) throws {
+        let metadata = WritingMetadata(id: id, markdown: try loadMarkdown(for: id), createdAt: createdAt, modifiedAt: modifiedAt)
+        try writeMetadata(metadata, in: directory(for: id))
+    }
+
     /// Writes the Markdown, then its metadata, both atomically.
     @discardableResult
     func save(markdown: String, for id: UUID, createdAt: Date, now: Date = Date()) throws -> WritingMetadata {

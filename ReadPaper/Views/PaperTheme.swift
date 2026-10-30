@@ -226,7 +226,7 @@ struct ReadPaperReaderMaterialSurface: NSViewRepresentable {
     func makeNSView(context: Context) -> NSView {
         if #available(macOS 26.0, *) {
             let view = ReaderGlassSurfaceView()
-            configureGlass(view.glassView)
+            configureGlass(view)
             return view
         }
 
@@ -237,14 +237,15 @@ struct ReadPaperReaderMaterialSurface: NSViewRepresentable {
 
     func updateNSView(_ nsView: NSView, context: Context) {
         if #available(macOS 26.0, *), let view = nsView as? ReaderGlassSurfaceView {
-            configureGlass(view.glassView)
+            configureGlass(view)
         } else if let view = nsView as? NSVisualEffectView {
             configureLegacyMaterial(view)
         }
     }
 
     @available(macOS 26.0, *)
-    private func configureGlass(_ view: NSGlassEffectView) {
+    private func configureGlass(_ surface: ReaderGlassSurfaceView) {
+        let view = surface.glassView
         view.style = .regular
         if #available(macOS 27.0, *) {
             // macOS 27 applies the user's system-wide Liquid Glass tint to
@@ -252,18 +253,27 @@ struct ReadPaperReaderMaterialSurface: NSViewRepresentable {
             // makes the reader canvas look opaque, so let AppKit provide the
             // native material without an additional app-owned tint.
             view.tintColor = nil
+            // Bare glass still lets the wallpaper show through more clearly
+            // than the system sidebar and inspector. Glass over an already
+            // blurred sidebar material frosts the column to match them.
+            surface.backdropView.isHidden = false
+            configureLegacyMaterial(surface.backdropView, material: .sidebar)
         } else {
             // System-owned sidebars and inspectors receive extra container
             // tinting on macOS 26 that a standalone public glass view does not.
             // Add a restrained, appearance-adaptive tint so the reader keeps
             // its translucency while matching the surrounding panels.
             view.tintColor = NSColor.windowBackgroundColor.withAlphaComponent(0.78)
+            surface.backdropView.isHidden = true
         }
     }
 
-    private func configureLegacyMaterial(_ view: NSVisualEffectView) {
+    private func configureLegacyMaterial(
+        _ view: NSVisualEffectView,
+        material: NSVisualEffectView.Material = .underWindowBackground
+    ) {
         view.blendingMode = .behindWindow
-        view.material = .underWindowBackground
+        view.material = material
         view.state = .followsWindowActiveState
     }
 }
@@ -284,6 +294,9 @@ final class ReaderGlassSurfaceView: NSView {
     ]
 
     let glassView = NSGlassEffectView()
+    /// Sits under the inactive fill, so an inactive window still shows the
+    /// plain window background.
+    let backdropView = NSVisualEffectView()
     let inactiveFillView = WindowBackgroundFillView()
 
     /// Replaced in tests, where the host app cannot reliably become active.
@@ -296,7 +309,8 @@ final class ReaderGlassSurfaceView: NSView {
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
 
-        for view in [inactiveFillView, glassView] as [NSView] {
+        backdropView.isHidden = true
+        for view in [backdropView, inactiveFillView, glassView] as [NSView] {
             view.frame = bounds
             view.autoresizingMask = [.width, .height]
             addSubview(view)
@@ -406,6 +420,9 @@ final class PaperWindowChromeView: NSView {
     private var isPaperEnabled: Bool
     private weak var configuredWindow: NSWindow?
     private var originalWindowChrome: OriginalWindowChrome?
+    /// Set from `willEnterFullScreen`, before AppKit builds the full-screen
+    /// toolbar; the style mask only gains `.fullScreen` after that.
+    private var isInFullScreen = false
 
     init(colorScheme: ColorScheme, isPaperEnabled: Bool) {
         self.colorScheme = colorScheme
@@ -418,6 +435,11 @@ final class PaperWindowChromeView: NSView {
         fatalError("init(coder:) has not been implemented")
     }
 
+    private static let fullScreenNotifications: [Notification.Name] = [
+        NSWindow.willEnterFullScreenNotification,
+        NSWindow.didExitFullScreenNotification,
+    ]
+
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         updateWindowChrome()
@@ -427,7 +449,29 @@ final class PaperWindowChromeView: NSView {
         if newWindow !== window {
             restoreWindowChrome()
         }
+
+        let center = NotificationCenter.default
+        if let window {
+            for name in Self.fullScreenNotifications {
+                center.removeObserver(self, name: name, object: window)
+            }
+        }
+        if let newWindow {
+            for name in Self.fullScreenNotifications {
+                center.addObserver(
+                    self,
+                    selector: #selector(windowFullScreenStateDidChange(_:)),
+                    name: name,
+                    object: newWindow
+                )
+            }
+        }
         super.viewWillMove(toWindow: newWindow)
+    }
+
+    @objc private func windowFullScreenStateDidChange(_ notification: Notification) {
+        isInFullScreen = notification.name == NSWindow.willEnterFullScreenNotification
+        updateWindowChrome()
     }
 
     func apply(colorScheme: ColorScheme, isPaperEnabled: Bool) {
@@ -457,7 +501,21 @@ final class PaperWindowChromeView: NSView {
 
         window.styleMask.insert(.fullSizeContentView)
         window.titlebarAppearsTransparent = true
-        if isPaperEnabled {
+        if isInFullScreen || window.styleMask.contains(.fullScreen) {
+            // In full screen the toolbar moves to its own window. If the main
+            // window has any background color (even clear), AppKit keeps that
+            // toolbar transparent but puts an opaque white backstop behind
+            // the title, which showed as a white block over the reader. With
+            // no color set, AppKit gives the full-screen toolbar its standard
+            // opaque background instead. The opaque window also gives the
+            // reader glass something to sample: a full-screen space has
+            // nothing behind the window, so a clear one left it a flat gray.
+            // The paper surface is drawn by ContentView, so it needs no color
+            // here.
+            window.titlebarSeparatorStyle = .none
+            window.backgroundColor = nil
+            window.isOpaque = true
+        } else if isPaperEnabled {
             window.titlebarSeparatorStyle = .none
             window.backgroundColor = NSColor(
                 ReadPaperTheme.surfaceColor(.reader, scheme: colorScheme)

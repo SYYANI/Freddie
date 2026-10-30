@@ -3,6 +3,7 @@ import SwiftUI
 
 @main
 struct ReadPaperiPadApp: App {
+    @Environment(\.scenePhase) private var scenePhase
     private let sharedModelContainer: ModelContainer
 
     init() {
@@ -16,6 +17,8 @@ struct ReadPaperiPadApp: App {
     var body: some Scene {
         WindowGroup {
             SystemSynchronizedIPadContent()
+                .task { LibrarySyncController.shared.start(modelContainer: sharedModelContainer) }
+                .onChange(of: scenePhase) { _, phase in LibrarySyncController.shared.setForeground(phase == .active) }
                 .environment(\.localizationBundle, LanguageManager.shared.bundle)
         }
         .modelContainer(sharedModelContainer)
