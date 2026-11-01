@@ -243,6 +243,8 @@ struct HTMLLocalizer: @unchecked Sendable {
         try absolutizeHyperlinks(in: document, baseURL: sourceURL)
         try document.select("base[href]").remove()
         let repairedPreformattedProse = try splitPreformattedProseBlocks(in: document)
+        let repairedWeChatArticle = extraction == .readable
+            ? try revealWeChatArticle(in: document, sourceURL: sourceURL) : false
 
         switch extraction {
         case .original:
@@ -250,7 +252,7 @@ struct HTMLLocalizer: @unchecked Sendable {
         case .clipped(simplifies: false):
             break
         case .readable, .clipped(simplifies: true):
-            let readabilityInput = repairedPreformattedProse ? try document.outerHtml() : html
+            let readabilityInput = repairedPreformattedProse || repairedWeChatArticle ? try document.outerHtml() : html
             if let readableDocument = try makeReadableDocument(from: readabilityInput, sourceURL: sourceURL, fallback: document) {
                 return readableDocument
             }
@@ -286,7 +288,13 @@ struct HTMLLocalizer: @unchecked Sendable {
 
     func shouldUseRenderedHTML(_ renderedHTML: String, insteadOf originalHTML: String) -> Bool {
         hasMeaningfulHTMLContent(renderedHTML) &&
-            visibleBodyTextLength(in: renderedHTML) > visibleBodyTextLength(in: originalHTML)
+            (isBrowserChallengePage(originalHTML) ||
+             visibleBodyTextLength(in: renderedHTML) > visibleBodyTextLength(in: originalHTML))
+    }
+
+    func isBrowserChallengePage(_ html: String) -> Bool {
+        guard let document = try? SwiftSoup.parse(html) else { return false }
+        return isBrowserChallengePage(document)
     }
 
     func hasMeaningfulHTMLContent(_ html: String) -> Bool {
@@ -296,6 +304,13 @@ struct HTMLLocalizer: @unchecked Sendable {
             return false
         }
         let content = (try? document.select(".rp-readability-content").first()) ?? body
+        // Older WeChat imports sometimes saved just the metadata/footer surrounding
+        // the hidden article. Allow reimport to repair that shell in place.
+        if body.id() == "activity-detail",
+           (try? content.select("#img-content").first()) != nil,
+           (try? content.select("#js_content").first()) == nil {
+            return false
+        }
         return ((try? meaningfulText(in: content).count) ?? 0) >= 40 &&
             !needsXPostParagraphRepair(html)
     }
@@ -303,7 +318,35 @@ struct HTMLLocalizer: @unchecked Sendable {
     private func isBrowserChallengePage(_ document: Document) -> Bool {
         // Zhihu serves this JavaScript challenge with HTTP 403 (and sometimes 200).
         // Its welcome sentence is long enough to pass a plain text-length check.
-        (try? document.select("meta#zh-zse-ck").first()) != nil
+        if (try? document.select("meta#zh-zse-ck").first()) != nil { return true }
+        // WeChat redirects to a CAPTCHA page with HTTP 200. Its message is not an article.
+        return (try? document.select("#js_verify").first()) != nil &&
+            (try? document.select("script[src*=captcha.gtimg.com/TCaptcha.js]").first()) != nil
+    }
+
+    /// WeChat ships the complete article hidden until its scripts reveal it. Only unhide
+    /// that known article root before Readability; hidden descendants remain excluded.
+    private func revealWeChatArticle(in document: Document, sourceURL: URL) throws -> Bool {
+        guard sourceURL.host?.lowercased() == "mp.weixin.qq.com",
+              let article = try document.select("#js_content.rich_media_content").first() else { return false }
+
+        let style = try article.attr("style")
+        let visibleStyle = style.split(separator: ";").filter { declaration in
+            let property = declaration.split(separator: ":", maxSplits: 1).first?
+                .trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            return property != "visibility" && property != "opacity" && property != "display"
+        }.joined(separator: ";")
+        try article.attr("style", visibleStyle)
+        try article.removeAttr("hidden")
+        try article.removeAttr("aria-hidden")
+        // CDN image URLs end in /640?wx_fmt=..., so Readability's extension-based
+        // lazy-image heuristic does not promote them to src.
+        for image in try article.select("img[data-src]").array() {
+            guard let url = resolve(try image.attr("data-src"), relativeTo: sourceURL),
+                  ["http", "https"].contains(url.scheme?.lowercased() ?? "") else { continue }
+            try image.attr("src", url.absoluteString)
+        }
+        return true
     }
 
     func rewriteCSS(_ css: String, baseURL: URL, localizedFilenames: [URL: String]) throws -> String {

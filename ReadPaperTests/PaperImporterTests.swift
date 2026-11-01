@@ -774,6 +774,88 @@ final class PaperImporterTests: XCTestCase {
     }
 
     @MainActor
+    func testImportWeChatArticleRepairsMetadataOnlyImportWithoutBrowserRendering() async throws {
+        let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: rootURL) }
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [MockPaperImporterURLProtocol.self]
+        let session = URLSession(configuration: configuration)
+        let sourceURL = URL(string: "https://mp.weixin.qq.com/s/test-article")!
+        let fileStore = PaperFileStore(applicationSupportDirectory: rootURL)
+        let context = ModelContext(try makeContainer())
+        let existing = Paper(title: "微信文章标题", htmlURLString: sourceURL.absoluteString)
+        existing.localDirectoryPath = try fileStore.directory(for: existing.id).path
+        let chromeText = String(repeating: "公众号信息、阅读原文和页面按钮。", count: 5)
+        let oldHTML = """
+        <html><body id="activity-detail" class="rp-readability-body">
+        <article class="rp-readability-content"><div id="img-content"><p>\(chromeText)</p></div></article>
+        </body></html>
+        """
+        let htmlFile = try fileStore.write(Data(oldHTML.utf8), named: "paper.html", for: existing.id)
+        let attachment = PaperAttachment(paperID: existing.id, kind: .html, source: .webPage, filename: "paper.html", filePath: htmlFile.path)
+        context.insert(existing)
+        context.insert(attachment)
+        try context.save()
+        let paragraph = String(repeating: "微信正文已完整下载，静态提取时应恢复正文的可见性。", count: 20)
+        MockPaperImporterURLProtocol.requestHandler = { request in
+            XCTAssertEqual(request.url, sourceURL)
+            let html = """
+            <html><head><meta property="og:title" content="微信文章标题"></head><body id="activity-detail">
+            <div id="img-content"><div id="js_content" class="rich_media_content" style="visibility: hidden; opacity: 0;">
+            <p>\(paragraph)</p><h2>最后一节</h2><p>\(paragraph)</p></div></div></body></html>
+            """
+            return (HTTPURLResponse(url: sourceURL, statusCode: 200, httpVersion: nil, headerFields: ["Content-Type": "text/html"])!, Data(html.utf8))
+        }
+        let renderer = MockWebPageHTMLRenderer(renderedHTML: "")
+        let importer = PaperImporter(fileStore: fileStore, htmlLocalizer: HTMLLocalizer(session: session), webPageHTMLRenderer: renderer, session: session)
+
+        let repaired = try await importer.importWebPage(sourceURL.absoluteString, modelContext: context)
+
+        XCTAssertEqual(repaired.id, existing.id)
+        XCTAssertEqual(repaired.title, "微信文章标题")
+        XCTAssertTrue(renderer.renderedRequests.isEmpty)
+        XCTAssertEqual(try context.fetch(FetchDescriptor<Paper>()).count, 1)
+        XCTAssertEqual(try context.fetch(FetchDescriptor<PaperAttachment>()).map(\.id), [attachment.id])
+        let html = try String(contentsOf: htmlFile, encoding: .utf8)
+        XCTAssertTrue(html.contains(paragraph))
+        XCTAssertTrue(html.contains("最后一节"))
+        XCTAssertFalse(html.contains(chromeText))
+    }
+
+    @MainActor
+    func testImportWeChatVerificationPageDoesNotCreatePaper() async throws {
+        let challenge = """
+        <html><body><h2>环境异常</h2><p>\(String(repeating: "当前环境异常，完成验证后即可继续访问。", count: 4))</p>
+        <a id="js_verify">去验证</a><script src="https://captcha.gtimg.com/TCaptcha.js"></script></body></html>
+        """
+        for rendererError in [nil, PaperImportError.webPageRequiresVerification] as [Error?] {
+            let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+            defer { try? FileManager.default.removeItem(at: rootURL) }
+            let configuration = URLSessionConfiguration.ephemeral
+            configuration.protocolClasses = [MockPaperImporterURLProtocol.self]
+            let session = URLSession(configuration: configuration)
+            MockPaperImporterURLProtocol.requestHandler = { request in
+                (HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: ["Content-Type": "text/html"])!, Data(challenge.utf8))
+            }
+            let renderer = MockWebPageHTMLRenderer(renderedHTML: challenge, error: rendererError)
+            let importer = PaperImporter(fileStore: PaperFileStore(applicationSupportDirectory: rootURL), htmlLocalizer: HTMLLocalizer(session: session), webPageHTMLRenderer: renderer, session: session)
+            let context = ModelContext(try makeContainer())
+            do {
+                _ = try await importer.importWebPage("https://mp.weixin.qq.com/s/test-article", modelContext: context)
+                XCTFail("Expected browser verification error")
+            } catch PaperImportError.webPageRequiresVerification {
+                // Both a captured verification page and a verification redirect are rejected.
+            }
+            XCTAssertEqual(renderer.renderedRequests.count, 1)
+            XCTAssertTrue(try context.fetch(FetchDescriptor<Paper>()).isEmpty)
+            XCTAssertTrue(try context.fetch(FetchDescriptor<PaperAttachment>()).isEmpty)
+            let files = FileManager.default.enumerator(at: rootURL, includingPropertiesForKeys: nil)?
+                .compactMap { $0 as? URL } ?? []
+            XCTAssertFalse(files.contains { $0.lastPathComponent == "paper.html" })
+        }
+    }
+
+    @MainActor
     func testZhihuVerificationRedirectDetectionChecksHostAndPath() throws {
         for value in [
             "https://www.zhihu.com/account/unhuman?need_login=true&next=%2Fsignin",
@@ -789,6 +871,19 @@ final class PaperImporterTests: XCTestCase {
             "https://example.com/account/unhuman"
         ] {
             XCTAssertFalse(WebKitWebPageHTMLRenderer.requiresUserVerification(at: try XCTUnwrap(URL(string: value))))
+        }
+    }
+
+    @MainActor
+    func testWeChatVerificationRedirectDetectionChecksHostAndPath() throws {
+        XCTAssertTrue(WebKitWebPageHTMLRenderer.requiresUserVerification(at:
+            URL(string: "https://mp.weixin.qq.com/mp/wappoc_appmsgcaptcha?poc_token=test")!))
+        for value in [
+            "https://mp.weixin.qq.com/s/test-article",
+            "https://mp.weixin.qq.com.example.com/mp/wappoc_appmsgcaptcha",
+            "https://example.com/mp/wappoc_appmsgcaptcha"
+        ] {
+            XCTAssertFalse(WebKitWebPageHTMLRenderer.requiresUserVerification(at: URL(string: value)!))
         }
     }
 

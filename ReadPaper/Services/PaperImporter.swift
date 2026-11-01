@@ -242,6 +242,9 @@ final class PaperImporter {
             if htmlLocalizer.requiresBrowserRendering(originalHTML) {
                 let renderedHTML = try await webPageHTMLRenderer.renderHTML(for: request)
                 guard htmlLocalizer.shouldUseRenderedHTML(renderedHTML, insteadOf: originalHTML) else {
+                    if htmlLocalizer.isBrowserChallengePage(renderedHTML) {
+                        throw PaperImportError.webPageRequiresVerification
+                    }
                     throw URLError(.cannotDecodeContentData)
                 }
                 htmlData = Data(renderedHTML.utf8)
@@ -671,17 +674,22 @@ final class WebKitWebPageHTMLRenderer: NSObject, WebPageHTMLRendering, WKNavigat
         mainFrameStatusCode = response.statusCode
         if let url = response.url, Self.requiresUserVerification(at: url) {
             decisionHandler(.cancel)
-            finish(with: .failure(URLError(.userAuthenticationRequired)))
+            finish(with: .failure(PaperImportError.webPageRequiresVerification))
             return
         }
         decisionHandler(.allow)
     }
 
-    /// Zhihu sends suspected bots to a sign-in or verification page; never import it.
+    /// Never capture sign-in or verification pages as articles.
     static func requiresUserVerification(at url: URL) -> Bool {
-        guard let host = url.host?.lowercased(),
-              host == "zhihu.com" || host.hasSuffix(".zhihu.com") else { return false }
-        return ["/account/unhuman", "/signin", "/login"].contains(url.path)
+        guard let host = url.host?.lowercased() else { return false }
+        if host == "mp.weixin.qq.com" {
+            return url.path == "/mp/wappoc_appmsgcaptcha"
+        }
+        if host == "zhihu.com" || host.hasSuffix(".zhihu.com") {
+            return ["/account/unhuman", "/signin", "/login"].contains(url.path)
+        }
+        return false
     }
 
     private func captureDOM(from webView: WKWebView) {
@@ -702,7 +710,8 @@ final class WebKitWebPageHTMLRenderer: NSObject, WebPageHTMLRendering, WKNavigat
                     stableSince = Date.now();
                 }
                 const textLength = (document.body?.innerText || '').trim().length;
-                const isChallenge = !!document.querySelector('meta#zh-zse-ck');
+                const isChallenge = !!document.querySelector('meta#zh-zse-ck') ||
+                    (!!document.querySelector('#js_verify') && !!document.querySelector('script[src*="captcha.gtimg.com/TCaptcha.js"]'));
                 if (!isChallenge && ((textLength >= 40 && Date.now() - stableSince >= 300) || Date.now() - startedAt >= 10000)) {
                     resolve(html);
                     return;
@@ -748,7 +757,9 @@ final class WebKitWebPageHTMLRenderer: NSObject, WebPageHTMLRendering, WKNavigat
         let script = """
         (() => {
             const textLength = (document.body?.innerText || '').trim().length;
-            return textLength >= 40 && !document.querySelector('meta#zh-zse-ck')
+            const isChallenge = !!document.querySelector('meta#zh-zse-ck') ||
+                (!!document.querySelector('#js_verify') && !!document.querySelector('script[src*="captcha.gtimg.com/TCaptcha.js"]'));
+            return textLength >= 40 && !isChallenge
                 ? (document.documentElement?.outerHTML || '') : null;
         })();
         """

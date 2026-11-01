@@ -5,6 +5,75 @@ import XCTest
 @testable import ReadPaper
 
 final class HTMLLocalizerTests: XCTestCase {
+    func testWeChatVerificationPageIsNotReadableContent() {
+        let html = """
+        <html><body><div class="weui-msg">
+        <h2>环境异常</h2><p>\(String(repeating: "当前环境异常，完成验证后即可继续访问。", count: 3))</p>
+        <a id="js_verify">去验证</a></div>
+        <script src="https://captcha.gtimg.com/TCaptcha.js"></script></body></html>
+        """
+        let localizer = HTMLLocalizer()
+        XCTAssertTrue(localizer.requiresBrowserRendering(html))
+        XCTAssertFalse(localizer.hasMeaningfulHTMLContent(html))
+        XCTAssertFalse(localizer.shouldUseRenderedHTML(html, insteadOf: "<html><body></body></html>"))
+        let shortArticle = "<html><body><article><p>\(String(repeating: "正文内容。", count: 9))</p></article></body></html>"
+        XCTAssertTrue(localizer.shouldUseRenderedHTML(shortArticle, insteadOf: html))
+    }
+
+    func testWeChatArticleRevealsOnlyItsRootAndLocalizesLazyImages() async throws {
+        let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: rootURL) }
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [MockHTMLLocalizerURLProtocol.self]
+        let session = URLSession(configuration: configuration)
+        let imageURL = URL(string: "https://mmbiz.qpic.cn/article/640?wx_fmt=png")!
+        MockHTMLLocalizerURLProtocol.requestHandler = { request in
+            XCTAssertEqual(request.url, imageURL)
+            return (HTTPURLResponse(url: imageURL, statusCode: 200, httpVersion: nil, headerFields: nil)!, Data("article image".utf8))
+        }
+        let paragraph = String(repeating: "这是微信文章正文，应该完整保留而不是只提取标题和公众号信息。", count: 20)
+        let html = """
+        <html><head><title></title><meta property="og:title" content="微信文章标题"></head>
+        <body id="activity-detail"><h1 id="activity-name">微信文章标题</h1>
+        <div id="js_content" class="rich_media_content" style="visibility: hidden; opacity: 0; text-align: left;">
+        <h2>第一节</h2><p>\(paragraph)</p>
+        <p><img data-src="\(imageURL.absoluteString)"></p>
+        <p hidden>这段隐藏内容不应恢复。</p><p style="display: none">这个隐藏提示也不应恢复。</p>
+        <h2>最后一节</h2><p>\(paragraph)</p></div>
+        <div class="comments"><p>这条评论不应出现在正文。</p></div></body></html>
+        """
+        let outputURL = rootURL.appendingPathComponent("paper.html")
+        let localizer = HTMLLocalizer(session: session)
+        _ = try await localizer.localize(
+            htmlData: Data(html.utf8),
+            sourceURL: URL(string: "https://mp.weixin.qq.com/s/test-article")!,
+            outputURL: outputURL,
+            resourcesDirectory: rootURL.appendingPathComponent("Resources")
+        )
+        let document = try SwiftSoup.parse(String(contentsOf: outputURL, encoding: .utf8))
+        let content = try XCTUnwrap(try document.select(".rp-readability-content").first())
+        let text = try content.text()
+        XCTAssertEqual(try document.title(), "微信文章标题")
+        XCTAssertTrue(text.contains("第一节"))
+        XCTAssertTrue(text.contains("最后一节"))
+        XCTAssertTrue(text.contains(paragraph))
+        XCTAssertFalse(text.contains("隐藏"))
+        XCTAssertFalse(text.contains("评论"))
+        let image = try XCTUnwrap(try content.select("img[src]").first())
+        let imagePath = try image.attr("src")
+        XCTAssertTrue(imagePath.hasPrefix("Resources/"))
+        XCTAssertEqual(try Data(contentsOf: rootURL.appendingPathComponent(imagePath)), Data("article image".utf8))
+
+        // The same marker on another host, and full-page clips, keep their visibility.
+        for (url, extraction) in [
+            ("https://example.com/article", HTMLLocalizer.ContentExtraction.readable),
+            ("https://mp.weixin.qq.com/s/test-article", .original)
+        ] {
+            let untouched = try localizer.makeDocumentForLocalization(html: html, sourceURL: URL(string: url)!, extraction: extraction)
+            XCTAssertFalse(try untouched.select(".rp-readability-content").text().contains(paragraph))
+        }
+    }
+
     func testZhihuBrowserChallengeIsNotReadableContentEvenWithLongWelcomeText() {
         let html = """
         <html><head><meta id="zh-zse-ck" charset="UTF-8"></head>
