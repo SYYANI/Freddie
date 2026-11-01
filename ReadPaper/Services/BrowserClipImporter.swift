@@ -2,9 +2,9 @@ import Foundation
 import PDFKit
 import SwiftData
 
-/// A page saved from the browser extension in `BrowserExtension/`, as it posts it to
-/// `BrowserClipperServer`. The extension captures the page as the reader sees it, logged in
-/// and after scripts have run, which a download by URL often cannot.
+/// A page saved from the browser extension (its own repository, `../freddie-clipper`), as it
+/// posts it to `BrowserClipperServer`. The extension captures the page as the reader sees it,
+/// logged in and after scripts have run, which a download by URL often cannot.
 struct BrowserClip: Decodable, Sendable {
     enum Kind: String, Decodable, Sendable {
         /// Rendered HTML from the page.

@@ -9,6 +9,8 @@ final class LocalizationBehaviorTests: XCTestCase {
 
         LanguageManager.shared.setLanguage("zh-Hans")
         XCTAssertEqual(PaperImportError.missingPDF.localizedDescription, "这篇论文没有可用的 PDF 附件。")
+        XCTAssertEqual(PaperImportError.webPageRequiresVerification.localizedDescription,
+                       "此页面需要浏览器验证。请在浏览器中打开并完成验证，再使用 Freddie 浏览器扩展保存。")
         XCTAssertEqual(
             PDFTextLayerError.scannedWithOCR.localizedDescription,
             "此 PDF 由扫描页面图像和 OCR 文字层组成。请使用“翻译扫描版 PDF”。"
@@ -32,6 +34,8 @@ final class LocalizationBehaviorTests: XCTestCase {
 
         LanguageManager.shared.setLanguage("en")
         XCTAssertEqual(PaperImportError.missingPDF.localizedDescription, "No PDF attachment is available for this paper.")
+        XCTAssertEqual(PaperImportError.webPageRequiresVerification.localizedDescription,
+                       "This page requires browser verification. Open it in your browser, complete verification, then save it with the Freddie browser extension.")
         XCTAssertEqual(
             PDFTextLayerError.scannedWithOCR.localizedDescription,
             "This PDF uses scanned page images with an OCR text layer. Use Translate Scanned PDF instead."

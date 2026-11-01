@@ -68,6 +68,7 @@ enum PaperImportError: Error, LocalizedError {
     case unsupportedFile(URL)
     case noTranslatedPDFProduced
     case webPageHTTPError(statusCode: Int)
+    case webPageRequiresVerification
     case arxivHTTPError(statusCode: Int)
 
     var errorDescription: String? {
@@ -88,6 +89,8 @@ enum PaperImportError: Error, LocalizedError {
             AppLocalization.localized("BabelDOC finished without producing a translated PDF.")
         case .webPageHTTPError(let statusCode):
             AppLocalization.format("The web server returned an error (status %d).", statusCode)
+        case .webPageRequiresVerification:
+            AppLocalization.localized("This page requires browser verification. Open it in your browser, complete verification, then save it with the Freddie browser extension.")
         case .arxivHTTPError(let statusCode):
             AppLocalization.format("arXiv returned an error (status %d). Please try again later.", statusCode)
         }

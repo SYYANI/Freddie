@@ -140,7 +140,7 @@ final class HTMLPDFExporter: NSObject, WKNavigationDelegate {
         html[data-rp-display-mode='original'] .rp-translation-block { display: none !important; }
         html[data-rp-display-mode='translated'] [data-rp-source='true'] { display: none !important; }
         \(HTMLRegionVisibility.hiddenRegionCSS)
-        :root { color-scheme: light; }
+        :root { color-scheme: light !important; }
         html, body { background: white !important; color: black !important; }
         body { margin: 0 !important; }
         .rp-readability-shell { max-width: none !important; margin: 0 !important; padding: 0 !important; }

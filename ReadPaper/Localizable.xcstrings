@@ -9364,6 +9364,23 @@
         }
       }
     },
+    "This page requires browser verification. Open it in your browser, complete verification, then save it with the Freddie browser extension." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This page requires browser verification. Open it in your browser, complete verification, then save it with the Freddie browser extension."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此页面需要浏览器验证。请在浏览器中打开并完成验证，再使用 Freddie 浏览器扩展保存。"
+          }
+        }
+      }
+    },
     "Thesis" : {
       "comment" : "Bibliographic item type (Zotero item type name)",
       "localizations" : {

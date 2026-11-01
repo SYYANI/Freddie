@@ -1,4 +1,5 @@
 import Foundation
+import Network
 import SwiftData
 import XCTest
 @testable import ReadPaper
@@ -774,6 +775,110 @@ final class PaperImporterTests: XCTestCase {
     }
 
     @MainActor
+    func testImportWeChatArticleRepairsIncompleteImportsOnceWithoutBrowserRendering() async throws {
+        let sourceURL = URL(string: "https://mp.weixin.qq.com/s/test-article")!
+        let chromeText = String(repeating: "公众号信息、阅读原文和页面按钮。", count: 5)
+        let paragraph = String(repeating: "微信正文已完整下载，静态提取时应恢复正文的可见性。", count: 20)
+        // The article root is the wrapper's only child, so Readability renames it #img-content.
+        let articleHTML = """
+        <html><head><meta property="og:title" content="微信文章标题"></head><body id="activity-detail">
+        <div id="img-content"><div id="js_content" class="rich_media_content" style="visibility: hidden; opacity: 0;">
+        <p>\(paragraph)</p><h2>最后一节</h2><p>\(paragraph)</p></div></div></body></html>
+        """
+        let oldPages = [
+            // Readability dropped the hidden article and kept the account metadata.
+            """
+            <html><body id="activity-detail" class="rp-readability-body">
+            <article class="rp-readability-content"><div id="img-content"><p><span class="rich_media_meta">\(chromeText)</span></p></div></article>
+            </body></html>
+            """,
+            // Readability was rejected and the page was saved with its article still hidden.
+            articleHTML,
+            // A CAPTCHA page saved as an article; saving removed its script.
+            """
+            <html><body><div class="weui-msg"><h2>环境异常</h2><p>\(String(repeating: "当前环境异常，完成验证后即可继续访问。", count: 4))</p>
+            <a id="js_verify">去验证</a></div></body></html>
+            """
+        ]
+        for oldHTML in oldPages {
+            let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+            defer { try? FileManager.default.removeItem(at: rootURL) }
+            let configuration = URLSessionConfiguration.ephemeral
+            configuration.protocolClasses = [MockPaperImporterURLProtocol.self]
+            let session = URLSession(configuration: configuration)
+            let fileStore = PaperFileStore(applicationSupportDirectory: rootURL)
+            let context = ModelContext(try makeContainer())
+            let existing = Paper(title: "微信文章标题", htmlURLString: sourceURL.absoluteString)
+            existing.localDirectoryPath = try fileStore.directory(for: existing.id).path
+            let htmlFile = try fileStore.write(Data(oldHTML.utf8), named: "paper.html", for: existing.id)
+            let attachment = PaperAttachment(paperID: existing.id, kind: .html, source: .webPage, filename: "paper.html", filePath: htmlFile.path)
+            context.insert(existing)
+            context.insert(attachment)
+            try context.save()
+            var requestCount = 0
+            MockPaperImporterURLProtocol.requestHandler = { request in
+                XCTAssertEqual(request.url, sourceURL)
+                requestCount += 1
+                return (HTTPURLResponse(url: sourceURL, statusCode: 200, httpVersion: nil, headerFields: ["Content-Type": "text/html"])!, Data(articleHTML.utf8))
+            }
+            let renderer = MockWebPageHTMLRenderer(renderedHTML: "")
+            let importer = PaperImporter(fileStore: fileStore, htmlLocalizer: HTMLLocalizer(session: session), webPageHTMLRenderer: renderer, session: session)
+
+            let repaired = try await importer.importWebPage(sourceURL.absoluteString, modelContext: context)
+
+            XCTAssertEqual(repaired.id, existing.id)
+            XCTAssertEqual(repaired.title, "微信文章标题")
+            XCTAssertTrue(renderer.renderedRequests.isEmpty)
+            XCTAssertEqual(try context.fetch(FetchDescriptor<Paper>()).count, 1)
+            XCTAssertEqual(try context.fetch(FetchDescriptor<PaperAttachment>()).map(\.id), [attachment.id])
+            let html = try String(contentsOf: htmlFile, encoding: .utf8)
+            XCTAssertTrue(html.contains(paragraph))
+            XCTAssertTrue(html.contains("最后一节"))
+            XCTAssertFalse(html.contains(chromeText))
+            XCTAssertFalse(html.contains("环境异常"))
+
+            // The repaired copy is complete: importing again neither downloads nor rewrites it.
+            let reimported = try await importer.importWebPage(sourceURL.absoluteString, modelContext: context)
+            XCTAssertEqual(reimported.id, existing.id)
+            XCTAssertEqual(requestCount, 1)
+            XCTAssertEqual(try String(contentsOf: htmlFile, encoding: .utf8), html)
+        }
+    }
+
+    @MainActor
+    func testImportWeChatVerificationPageDoesNotCreatePaper() async throws {
+        let challenge = """
+        <html><body><h2>环境异常</h2><p>\(String(repeating: "当前环境异常，完成验证后即可继续访问。", count: 4))</p>
+        <a id="js_verify">去验证</a><script src="https://captcha.gtimg.com/TCaptcha.js"></script></body></html>
+        """
+        for rendererError in [nil, PaperImportError.webPageRequiresVerification] as [Error?] {
+            let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+            defer { try? FileManager.default.removeItem(at: rootURL) }
+            let configuration = URLSessionConfiguration.ephemeral
+            configuration.protocolClasses = [MockPaperImporterURLProtocol.self]
+            let session = URLSession(configuration: configuration)
+            MockPaperImporterURLProtocol.requestHandler = { request in
+                (HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: ["Content-Type": "text/html"])!, Data(challenge.utf8))
+            }
+            let renderer = MockWebPageHTMLRenderer(renderedHTML: challenge, error: rendererError)
+            let importer = PaperImporter(fileStore: PaperFileStore(applicationSupportDirectory: rootURL), htmlLocalizer: HTMLLocalizer(session: session), webPageHTMLRenderer: renderer, session: session)
+            let context = ModelContext(try makeContainer())
+            do {
+                _ = try await importer.importWebPage("https://mp.weixin.qq.com/s/test-article", modelContext: context)
+                XCTFail("Expected browser verification error")
+            } catch PaperImportError.webPageRequiresVerification {
+                // Both a captured verification page and a verification redirect are rejected.
+            }
+            XCTAssertEqual(renderer.renderedRequests.count, 1)
+            XCTAssertTrue(try context.fetch(FetchDescriptor<Paper>()).isEmpty)
+            XCTAssertTrue(try context.fetch(FetchDescriptor<PaperAttachment>()).isEmpty)
+            let files = FileManager.default.enumerator(at: rootURL, includingPropertiesForKeys: nil)?
+                .compactMap { $0 as? URL } ?? []
+            XCTAssertFalse(files.contains { $0.lastPathComponent == "paper.html" })
+        }
+    }
+
+    @MainActor
     func testZhihuVerificationRedirectDetectionChecksHostAndPath() throws {
         for value in [
             "https://www.zhihu.com/account/unhuman?need_login=true&next=%2Fsignin",
@@ -789,6 +894,36 @@ final class PaperImporterTests: XCTestCase {
             "https://example.com/account/unhuman"
         ] {
             XCTAssertFalse(WebKitWebPageHTMLRenderer.requiresUserVerification(at: try XCTUnwrap(URL(string: value))))
+        }
+    }
+
+    @MainActor
+    func testWebKitRendererReturnsWeChatCaptchaWithoutWaitingForTimeout() async throws {
+        let captcha = """
+        <html><body><div class="weui-msg"><h2>环境异常</h2><p>\(String(repeating: "当前环境异常，完成验证后即可继续访问。", count: 4))</p>
+        <a id="js_verify">去验证</a></div></body></html>
+        """
+        let server = try await LoopbackHTMLServer.start(serving: captcha)
+        defer { server.stop() }
+        let renderer = WebKitWebPageHTMLRenderer(timeout: 20)
+        let started = Date()
+
+        let html = try await renderer.renderHTML(for: URLRequest(url: server.url))
+
+        XCTAssertLessThan(Date().timeIntervalSince(started), 5)
+        XCTAssertTrue(HTMLLocalizer().isBrowserChallengePage(html))
+    }
+
+    @MainActor
+    func testWeChatVerificationRedirectDetectionChecksHostAndPath() throws {
+        XCTAssertTrue(WebKitWebPageHTMLRenderer.requiresUserVerification(at:
+            URL(string: "https://mp.weixin.qq.com/mp/wappoc_appmsgcaptcha?poc_token=test")!))
+        for value in [
+            "https://mp.weixin.qq.com/s/test-article",
+            "https://mp.weixin.qq.com.example.com/mp/wappoc_appmsgcaptcha",
+            "https://example.com/mp/wappoc_appmsgcaptcha"
+        ] {
+            XCTAssertFalse(WebKitWebPageHTMLRenderer.requiresUserVerification(at: URL(string: value)!))
         }
     }
 
@@ -876,6 +1011,42 @@ private final class MockPaperImporterURLProtocol: URLProtocol {
 }
 
 @MainActor
+/// Answers every request on a loopback port with one HTML page, so a real web view can load it.
+private final class LoopbackHTMLServer: Sendable {
+    let url: URL
+    private let listener: NWListener
+
+    private init(listener: NWListener, port: UInt16) {
+        self.listener = listener
+        url = URL(string: "http://127.0.0.1:\(port)/s/test-article")!
+    }
+
+    static func start(serving html: String) async throws -> LoopbackHTMLServer {
+        let port = UInt16.random(in: 41000...48000)
+        let parameters = NWParameters.tcp
+        parameters.requiredLocalEndpoint = .hostPort(host: .ipv4(.loopback), port: NWEndpoint.Port(rawValue: port)!)
+        let listener = try NWListener(using: parameters)
+        let body = Data(html.utf8)
+        let response = Data("HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: \(body.count)\r\nConnection: close\r\n\r\n".utf8) + body
+        listener.newConnectionHandler = { connection in
+            connection.start(queue: .global())
+            connection.receive(minimumIncompleteLength: 1, maximumLength: 65_536) { _, _, _, _ in
+                connection.send(content: response, completion: .contentProcessed { _ in connection.cancel() })
+            }
+        }
+        listener.start(queue: .global())
+        while listener.state != .ready {
+            if case .failed(let error) = listener.state { throw error }
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        return LoopbackHTMLServer(listener: listener, port: port)
+    }
+
+    func stop() {
+        listener.cancel()
+    }
+}
+
 private final class MockWebPageHTMLRenderer: WebPageHTMLRendering {
     let renderedHTML: String
     let cancelsCurrentTask: Bool
