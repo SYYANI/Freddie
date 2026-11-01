@@ -3,6 +3,25 @@ import XCTest
 
 final class LocalizationBehaviorTests: XCTestCase {
     @MainActor
+    func testOutputTokenLimitErrorExplainsRecoveryInBothLanguages() {
+        let originalOverride = LanguageManager.shared.languageOverride
+        defer { LanguageManager.shared.setLanguage(originalOverride) }
+        let error = LLMProviderError.outputTokenLimitExceeded(reason: "max_output_tokens")
+
+        LanguageManager.shared.setLanguage("zh-Hans")
+        XCTAssertEqual(
+            error.localizedDescription,
+            "模型在完成响应前已耗尽输出 token 额度（max_output_tokens）。请在“设置 → 模型 → 高级参数”中调高 Max tokens。推理消耗也计入额度，降低思考强度可能有帮助。"
+        )
+
+        LanguageManager.shared.setLanguage("en")
+        XCTAssertEqual(
+            error.localizedDescription,
+            "The model reached its output token limit before finishing (max_output_tokens). Increase Max tokens in Settings > Models > Advanced Parameters. Reasoning tokens also count toward this limit; lowering Reasoning Effort may help."
+        )
+    }
+
+    @MainActor
     func testAppOwnedErrorsUseCurrentLanguageOverride() {
         let originalOverride = LanguageManager.shared.languageOverride
         defer { LanguageManager.shared.setLanguage(originalOverride) }

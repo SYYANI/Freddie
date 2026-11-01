@@ -150,6 +150,10 @@ struct ReaderPaneView: View {
     /// The status message of a translation that stopped because no usable model is
     /// set up. The status row offers the setup only while it still shows that message.
     @State private var translationSetupErrorMessage: String?
+    /// Same, for a translation cut off by the model's output token limit; the status row
+    /// links to that model's Max tokens.
+    @State private var outputLimitErrorMessage: String?
+    @State private var outputLimitModelProfileID: UUID?
     @State private var needsTranslationSetup = false
     @State private var lastPDFReaderMode: ReaderMode = .pdf
     @State private var suspendReadingStatePersistence = false
@@ -2202,6 +2206,17 @@ struct ReaderPaneView: View {
                 .font(.caption)
             }
 
+            if outputLimitErrorMessage != nil, outputLimitErrorMessage == statusMessage {
+                Button(String(localized: "Model Settings…", bundle: bundle)) {
+                    TranslationSetupNavigation.showModelParameters(
+                        modelProfileID: outputLimitModelProfileID,
+                        using: openSettings
+                    )
+                }
+                .buttonStyle(.link)
+                .font(.caption)
+            }
+
             if pdfTranslationErrorLogURL != nil {
                 Button {
                     revealPDFTranslationErrorLog()
@@ -2402,7 +2417,7 @@ struct ReaderPaneView: View {
                 translationProgress = nil
                 statusMessage = String(localized: "Translation cancelled.", bundle: bundle)
             } catch {
-                handleTranslationError(error)
+                handleTranslationError(error, modelProfileID: settings.selectedHTMLModelProfileID)
             }
             endTranslationRun(runOutcome)
         }
@@ -2553,6 +2568,7 @@ struct ReaderPaneView: View {
                 translationProgress = nil
                 pdfTranslationErrorLogURL = nil
                 statusMessage = message
+                rememberOutputLimitError(error, modelProfileID: settings.selectedPDFModelProfileID)
             }
             endTranslationRun(runOutcome)
         }
@@ -3214,7 +3230,7 @@ struct ReaderPaneView: View {
         )
     }
 
-    private func handleTranslationError(_ error: Error) {
+    private func handleTranslationError(_ error: Error, modelProfileID: UUID? = nil) {
         translationProgress = nil
         pdfTranslationDiagnosticsNoticeID = nil
         if let babelDocError = error as? BabelDocRunError {
@@ -3224,6 +3240,16 @@ struct ReaderPaneView: View {
         }
         statusMessage = AppLocalization.errorMessage(error, bundle: bundle)
         translationSetupErrorMessage = error is LLMRouteError ? statusMessage : nil
+        rememberOutputLimitError(error, modelProfileID: modelProfileID)
+    }
+
+    private func rememberOutputLimitError(_ error: Error, modelProfileID: UUID?) {
+        if case .outputTokenLimitExceeded? = error as? LLMProviderError {
+            outputLimitErrorMessage = statusMessage
+            outputLimitModelProfileID = modelProfileID
+        } else {
+            outputLimitErrorMessage = nil
+        }
     }
 
     /// Looks for a usable route without reading an API key, so it never asks for

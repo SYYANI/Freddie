@@ -33,6 +33,28 @@ enum TranslationSetupNavigation {
         defaults.set(SettingsTab.general.rawValue, forKey: selectedTabKey)
         defaults.set(false, forKey: didDismissGettingStartedKey)
     }
+
+    /// The model whose Advanced Parameters (where Max tokens lives) Settings should show next.
+    static let modelToRevealKey = "ReadPaper.Settings.ModelToReveal"
+
+    @MainActor
+    static func showModelParameters(
+        modelProfileID: UUID?,
+        using openSettings: OpenSettingsAction,
+        defaults: UserDefaults = .standard
+    ) {
+        prepareModelParameters(modelProfileID: modelProfileID, defaults: defaults)
+        openSettings()
+    }
+
+    static func prepareModelParameters(modelProfileID: UUID?, defaults: UserDefaults = .standard) {
+        defaults.set(SettingsTab.models.rawValue, forKey: selectedTabKey)
+        if let modelProfileID {
+            defaults.set(modelProfileID.uuidString, forKey: modelToRevealKey)
+        } else {
+            defaults.removeObject(forKey: modelToRevealKey)
+        }
+    }
 }
 
 private struct NativeBabelDocSettingsProbe: Sendable {
@@ -121,6 +143,7 @@ private struct SettingsForm: View {
 
     @AppStorage(TranslationSetupNavigation.selectedTabKey) private var selectedTabRawValue = SettingsTab.general.rawValue
     @AppStorage(TranslationSetupNavigation.didDismissGettingStartedKey) private var didDismissGettingStarted = false
+    @AppStorage(TranslationSetupNavigation.modelToRevealKey) private var modelToRevealRawValue = ""
     @AppStorage(BabelDocInstallSource.userDefaultsKey) private var babelDocInstallSourceRawValue = BabelDocInstallSource.official.rawValue
     @AppStorage(PDFDisplayAppearance.userDefaultsKey)
     private var pdfDisplayAppearanceRawValue = PDFDisplayAppearance.defaultValue.rawValue
@@ -181,6 +204,8 @@ private struct SettingsForm: View {
     @State private var modelOutputPreview: String?
     @State private var isTestingModel = false
     @State private var showsModelAdvancedOptions = false
+    /// Keeps Advanced Parameters open for a model the reader sent the person to.
+    @State private var revealedModelID: UUID?
 
     @State private var quickSetupProviderID: UUID?
     @State private var quickSetupAPIKey = ""
@@ -433,6 +458,7 @@ private struct SettingsForm: View {
         .scrollContentBackground(.hidden)
         .task {
             loadInitialSelectionIfNeeded()
+            revealRequestedModelIfNeeded()
             await Task.yield()
             refreshStoredAPIKeyAvailability()
             chooseQuickSetupProviderIfNeeded()
@@ -445,6 +471,9 @@ private struct SettingsForm: View {
         }
         .onChange(of: selectedModelID) { _, _ in
             applySelectedModel()
+        }
+        .onChange(of: modelToRevealRawValue) { _, _ in
+            revealRequestedModelIfNeeded()
         }
         .onChange(of: providers.map(\.id)) { _, _ in
             refreshStoredAPIKeyAvailability()
@@ -1267,7 +1296,10 @@ private struct SettingsForm: View {
                         SettingsFieldRow(String(localized: "Top-P", bundle: bundle)) {
                             SettingsPlainTextField(text: $modelTopP)
                         }
-                        SettingsFieldRow(String(localized: "Max tokens", bundle: bundle)) {
+                        SettingsFieldRow(
+                            String(localized: "Max tokens", bundle: bundle),
+                            help: String(localized: "Limits output tokens, including reasoning tokens. Leave blank to use the default limit. If a response is cut off, increase this value or lower Reasoning Effort.", bundle: bundle)
+                        ) {
                             SettingsPlainTextField(text: $modelMaxTokens)
                         }
                     }
@@ -1695,6 +1727,21 @@ private struct SettingsForm: View {
         }
     }
 
+    /// Selects the model the reader asked for and opens its Advanced Parameters. The request
+    /// is consumed so reopening Settings later does not jump back to it.
+    private func revealRequestedModelIfNeeded() {
+        guard let modelID = UUID(uuidString: modelToRevealRawValue) else { return }
+        modelToRevealRawValue = ""
+        guard models.contains(where: { $0.id == modelID }) else { return }
+        revealedModelID = modelID
+        if selectedModelID == modelID {
+            // Re-applying would discard unsaved edits to the form.
+            showsModelAdvancedOptions = true
+        } else {
+            selectedModelID = modelID
+        }
+    }
+
     private func normalizeSelections() {
         if let currentProviderID = selectedProviderID,
            providers.contains(where: { $0.id == currentProviderID }) == false {
@@ -1753,7 +1800,8 @@ private struct SettingsForm: View {
         modelThinkingMode = model.thinkingModeValue
         modelReasoningEffort = model.reasoningEffortValue
         modelEnabled = model.isEnabled
-        showsModelAdvancedOptions = model.temperature != nil
+        showsModelAdvancedOptions = model.id == revealedModelID
+            || model.temperature != nil
             || model.topP != nil
             || model.maxTokens != nil
             || model.thinkingModeValue != nil

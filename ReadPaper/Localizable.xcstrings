@@ -12,91 +12,6 @@
         }
       }
     },
-    "Link or unreadable" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Link or unreadable"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "是链接或无法读取"
-          }
-        }
-      }
-    },
-    "Missing on this device" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Missing on this device"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "此设备上缺失"
-          }
-        }
-      }
-    },
-    "Outside the Freddie library" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Outside the Freddie library"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "位于 Freddie 论文库之外"
-          }
-        }
-      }
-    },
-    "Pending changes" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Pending changes"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "待同步更改"
-          }
-        }
-      }
-    },
-    "Syncs papers, files, annotations, reading positions, and writings across your own devices. Use a separate device credential on each device; your library stays available offline. Credentials stay in Keychain, and LLM API keys and device preferences are not synced. The sync server can read uploaded content." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Syncs papers, files, annotations, reading positions, and writings across your own devices. Use a separate device credential on each device; your library stays available offline. Credentials stay in Keychain, and LLM API keys and device preferences are not synced. The sync server can read uploaded content."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在自己的设备间同步论文、文件、批注、阅读位置和写作稿。每台设备使用独立的设备凭证，离线时仍可使用论文库。凭证保存在钥匙串中，LLM API 密钥和设备偏好不会同步。同步服务器可以读取上传的内容。"
-          }
-        }
-      }
-    },
     "“%@” and all of its local files, notes, reading state, and translation cache will be removed." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -373,6 +288,40 @@
         }
       }
     },
+    "A sync document exceeds the supported size." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A sync document exceeds the supported size."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "某个同步文档超过了支持的大小。"
+          }
+        }
+      }
+    },
+    "A synced file exceeds the supported size." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A synced file exceeds the supported size."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "某个同步文件超过了支持的大小。"
+          }
+        }
+      }
+    },
     "About %@" : {
       "localizations" : {
         "en" : {
@@ -601,40 +550,6 @@
         }
       }
     },
-    "A sync document exceeds the supported size." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "A sync document exceeds the supported size."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "某个同步文档超过了支持的大小。"
-          }
-        }
-      }
-    },
-    "A synced file exceeds the supported size." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "A synced file exceeds the supported size."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "某个同步文件超过了支持的大小。"
-          }
-        }
-      }
-    },
     "AI Explanation" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -852,16 +767,6 @@
         }
       }
     },
-    "Applying LaTeX structure" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "正在应用 LaTeX 结构"
-          }
-        }
-      }
-    },
     "Applying changes…" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -875,6 +780,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在应用更改…"
+          }
+        }
+      }
+    },
+    "Applying LaTeX structure" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在应用 LaTeX 结构"
           }
         }
       }
@@ -1677,17 +1592,6 @@
         }
       }
     },
-    "Checking PDF content" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "正在检查 PDF 内容"
-          }
-        }
-      }
-    },
     "Checking connection…" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1718,6 +1622,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在检查本地更改…"
+          }
+        }
+      }
+    },
+    "Checking PDF content" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在检查 PDF 内容"
           }
         }
       }
@@ -2895,17 +2810,6 @@
         }
       }
     },
-    "Downloading PDF" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "正在下载 PDF"
-          }
-        }
-      }
-    },
     "Downloading changes…" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2919,6 +2823,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在下载更改…"
+          }
+        }
+      }
+    },
+    "Downloading PDF" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在下载 PDF"
           }
         }
       }
@@ -4258,34 +4173,6 @@
         }
       }
     },
-    "Import Device Credential and Connect…" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Import Device Credential and Connect…"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "导入设备凭证并连接…"
-          }
-        }
-      }
-    },
-    "Import a PDF or fetch one from arXiv to read it here." : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "导入一个 PDF，或从 arXiv 获取一个 PDF 后在这里阅读。"
-          }
-        }
-      }
-    },
     "Import a device credential to connect sync." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -4299,6 +4186,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "请导入设备凭证以连接同步服务。"
+          }
+        }
+      }
+    },
+    "Import a PDF or fetch one from arXiv to read it here." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "导入一个 PDF，或从 arXiv 获取一个 PDF 后在这里阅读。"
           }
         }
       }
@@ -4353,6 +4251,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "导入 arXiv 论文？"
+          }
+        }
+      }
+    },
+    "Import Device Credential and Connect…" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Import Device Credential and Connect…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "导入设备凭证并连接…"
           }
         }
       }
@@ -4918,6 +4833,23 @@
         }
       }
     },
+    "Limits output tokens, including reasoning tokens. Leave blank to use the default limit. If a response is cut off, increase this value or lower Reasoning Effort." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Limits output tokens, including reasoning tokens. Leave blank to use the default limit. If a response is cut off, increase this value or lower Reasoning Effort."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "限制输出 token 总数，包括推理消耗。留空使用默认额度。若响应被截断，请调高此值或降低思考强度。"
+          }
+        }
+      }
+    },
     "Link" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -4947,6 +4879,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "链接已复制到剪贴板。"
+          }
+        }
+      }
+    },
+    "Link or unreadable" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Link or unreadable"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "是链接或无法读取"
           }
         }
       }
@@ -5213,6 +5162,23 @@
         }
       }
     },
+    "Missing on this device" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Missing on this device"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此设备上缺失"
+          }
+        }
+      }
+    },
     "Model deleted." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -5297,6 +5263,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "模型已保存。"
+          }
+        }
+      }
+    },
+    "Model Settings…" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "模型设置…"
           }
         }
       }
@@ -6106,6 +6082,23 @@
         }
       }
     },
+    "Outside the Freddie library" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Outside the Freddie library"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "位于 Freddie 论文库之外"
+          }
+        }
+      }
+    },
     "Page" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -6460,6 +6453,23 @@
     },
     "PDFKit · SwiftSoup" : {
 
+    },
+    "Pending changes" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pending changes"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "待同步更改"
+          }
+        }
+      }
     },
     "Pin Contents" : {
       "extractionState" : "manual",
@@ -7858,6 +7868,23 @@
         }
       }
     },
+    "Server" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Server"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "服务器"
+          }
+        }
+      }
+    },
     "Set an export directory in Settings > Digest before exporting Markdown." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -7876,23 +7903,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "将目标版本设为“latest”后，安装时会从当前选中的源解析最新的 BabelDOC 发布版本。你仍然可以输入具体版本来固定它。"
-          }
-        }
-      }
-    },
-    "Server" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Server"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "服务器"
           }
         }
       }
@@ -8271,23 +8281,6 @@
         }
       }
     },
-    "Sync Now" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sync Now"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "立即同步"
-          }
-        }
-      }
-    },
     "Sync cannot read a symbolic link or special file." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -8339,6 +8332,23 @@
         }
       }
     },
+    "Sync Now" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sync Now"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "立即同步"
+          }
+        }
+      }
+    },
     "Sync server returned HTTP %d." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -8352,6 +8362,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "同步服务器返回 HTTP %d。"
+          }
+        }
+      }
+    },
+    "Syncs papers, files, annotations, reading positions, and writings across your own devices. Use a separate device credential on each device; your library stays available offline. Credentials stay in Keychain, and LLM API keys and device preferences are not synced. The sync server can read uploaded content." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Syncs papers, files, annotations, reading positions, and writings across your own devices. Use a separate device credential on each device; your library stays available offline. Credentials stay in Keychain, and LLM API keys and device preferences are not synced. The sync server can read uploaded content."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在自己的设备间同步论文、文件、批注、阅读位置和写作稿。每台设备使用独立的设备凭证，离线时仍可使用论文库。凭证保存在钥匙串中，LLM API 密钥和设备偏好不会同步。同步服务器可以读取上传的内容。"
           }
         }
       }
@@ -8802,6 +8829,22 @@
         }
       }
     },
+    "The model reached its output token limit before finishing (%@). Increase Max tokens in Settings > Models > Advanced Parameters. Reasoning tokens also count toward this limit; lowering Reasoning Effort may help." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The model reached its output token limit before finishing (%1$@). Increase Max tokens in Settings > Models > Advanced Parameters. Reasoning tokens also count toward this limit; lowering Reasoning Effort may help."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "模型在完成响应前已耗尽输出 token 额度（%1$@）。请在“设置 → 模型 → 高级参数”中调高 Max tokens。推理消耗也计入额度，降低思考强度可能有帮助。"
+          }
+        }
+      }
+    },
     "the model repeated neighboring context" : {
       "localizations" : {
         "zh-Hans" : {
@@ -9098,23 +9141,6 @@
         }
       }
     },
-    "The sync server URL is not valid." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The sync server URL is not valid."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "同步服务器地址无效。"
-          }
-        }
-      }
-    },
     "The sync server has reached its storage limit." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -9179,6 +9205,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "同步服务器返回的数据过大。"
+          }
+        }
+      }
+    },
+    "The sync server URL is not valid." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The sync server URL is not valid."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "同步服务器地址无效。"
           }
         }
       }
@@ -9364,23 +9407,6 @@
         }
       }
     },
-    "This page requires browser verification. Open it in your browser, complete verification, then save it with the Freddie browser extension." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "This page requires browser verification. Open it in your browser, complete verification, then save it with the Freddie browser extension."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "此页面需要浏览器验证。请在浏览器中打开并完成验证，再使用 Freddie 浏览器扩展保存。"
-          }
-        }
-      }
-    },
     "Thesis" : {
       "comment" : "Bibliographic item type (Zotero item type name)",
       "localizations" : {
@@ -9539,6 +9565,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "这条笔记将被永久删除。"
+          }
+        }
+      }
+    },
+    "This page requires browser verification. Open it in your browser, complete verification, then save it with the Freddie browser extension." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This page requires browser verification. Open it in your browser, complete verification, then save it with the Freddie browser extension."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此页面需要浏览器验证。请在浏览器中打开并完成验证，再使用 Freddie 浏览器扩展保存。"
           }
         }
       }
@@ -10186,6 +10229,23 @@
         }
       }
     },
+    "Unable to connect sync: %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unable to connect sync: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法连接同步服务：%@"
+          }
+        }
+      }
+    },
     "Unable to Create Digest" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -10242,23 +10302,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "无法导入论文"
-          }
-        }
-      }
-    },
-    "Unable to connect sync: %@" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Unable to connect sync: %@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "无法连接同步服务：%@"
           }
         }
       }
@@ -10349,6 +10392,23 @@
         }
       }
     },
+    "Unable to sync: %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unable to sync: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法同步：%@"
+          }
+        }
+      }
+    },
     "Unable to Update Folder" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -10378,23 +10438,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "无法更新写作稿"
-          }
-        }
-      }
-    },
-    "Unable to sync: %@" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Unable to sync: %@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "无法同步：%@"
           }
         }
       }
@@ -10597,23 +10640,6 @@
         }
       }
     },
-    "Use Server Version" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Use Server Version"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "使用服务器版本"
-          }
-        }
-      }
-    },
     "Use arXiv LaTeX structure for PDF translation" : {
       "localizations" : {
         "zh-Hans" : {
@@ -10662,6 +10688,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "使用 PDF/BabelDOC 模型"
+          }
+        }
+      }
+    },
+    "Use Server Version" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Use Server Version"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "使用服务器版本"
           }
         }
       }
