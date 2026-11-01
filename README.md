@@ -40,9 +40,14 @@ for setup, conflict handling, and what is synced.
 - macOS 14.0+
 - Xcode with Swift 6 support
 - `xcodegen`
-- `swift-readability` checked out at `./swift-readability`
-- `reWriteBabelDoc` checked out at `../reWriteBabelDoc`
-- `arxivLatex` checked out at `../arxivLatex`
+
+Xcode resolves the Swift packages from their GitHub repositories. The selected
+branches are declared in `project.yml`; no sibling repository checkouts are
+required. The `scripts/build` command also downloads or builds the
+manifest-verified BabelDOC native runtime assets in Xcode's package checkout.
+Core ML conversion checks its pinned inputs and output structure, then records
+the generated model's SHA-256 in the bundled runtime manifest. The conversion
+output does not need to match a precomputed artifact hash.
 
 `create-dmg` is only needed if you want to build a distributable DMG locally.
 
@@ -53,12 +58,6 @@ Clone the repository:
 ```sh
 git clone <your-repo-url>
 cd read-paper
-```
-
-If `swift-readability` is missing, clone it into the expected local path:
-
-```sh
-git clone https://github.com/SYYANI/swift-readability.git swift-readability
 ```
 
 Generate the Xcode project:
@@ -143,25 +142,6 @@ The native BabelDOC helper and its manifest-pinned MuPDF, zstd, layout model,
 and font runtime are bundled with the app; no separate runtime install step is required.
 
 Even though the app bundle name is `Freddie`, the on-disk application support directory currently remains `ReadPaper`.
-
-Other system locations affected by the app:
-
-- `~/.cache/babeldoc/`: BabelDOC may create or update its own cache outside the app support directory during PDF translation-related work
-- macOS Keychain: provider API keys are stored as generic password items under the Keychain service `com.yiyan.ReadPaper`; SwiftData keeps only references such as `apiKeyRef`, not the raw keys themselves
-
-## Release
-
-The repository includes a GitHub Actions workflow that can generate an unsigned
-macOS DMG artifact on tag push or manual dispatch. The workflow restores
-`swift-readability` and an immutable, full-commit `reWriteBabelDoc` sibling,
-then downloads/builds and verifies the native runtime before Xcode runs.
-
-Manual runs accept `babeldoc_ref`; tag runs read the same full commit from the
-`BABELDOC_REF` repository variable. Unsigned artifacts are intentionally not
-published as GitHub Releases. Each artifact also includes
-`build-provenance.txt` with the exact source commits and runtime manifest hash.
-Public distribution remains gated on signing, notarization, Corresponding
-Source, and complete third-party notices.
 
 ## License
 

@@ -2,11 +2,6 @@ name: Build Unsigned DMG
 
 on:
   workflow_dispatch:
-    inputs:
-      babeldoc_ref:
-        description: Full 40-character reWriteBabelDoc commit (falls back to BABELDOC_REF repository variable)
-        required: false
-        type: string
   push:
     tags:
       - "v*"
@@ -18,7 +13,7 @@ jobs:
     runs-on: xcode-27
     timeout-minutes: 90
     permissions:
-      contents: read
+      contents: write
     env:
       APP_NAME: Freddie
       PROJECT_PATH: ReadPaper.xcodeproj
@@ -26,17 +21,25 @@ jobs:
       DERIVED_DATA_PATH: build/DerivedData
       APP_PATH: build/DerivedData/Build/Products/Release/Freddie.app
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
-      LOCAL_READABILITY_REPO: https://github.com/SYYANI/swift-readability.git
-      LOCAL_READABILITY_REF: 5fabfd7dbb75c3a26cf459d6bc5a3b6897a319f4
-      LOCAL_BABELDOC_REPO: https://github.com/SYYANI/BabelDOC.git
-      LOCAL_BABELDOC_REF: ${{ inputs.babeldoc_ref || vars.BABELDOC_REF }}
-      LOCAL_STREAMING_MARKDOWN_REPO: https://github.com/SYYANI/SwiftStreamingMarkdown.git
-      LOCAL_STREAMING_MARKDOWN_REF: 03549cb3256a7db99571c8bf0bd236420071e66e
+      BABELDOC_ROOT: build/DerivedData/SourcePackages/checkouts/BabelDOC
     steps:
       - name: Checkout
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
+          persist-credentials: false
+
+      - name: Configure private Swift package access
+        env:
+          READPAPER_PACKAGES_TOKEN: ${{ secrets.READPAPER_PACKAGES_TOKEN }}
+        run: |
+          if [ -z "$READPAPER_PACKAGES_TOKEN" ]; then
+            echo "::error::Set the READPAPER_PACKAGES_TOKEN Actions secret with read access to the five SYYANI Swift package repositories."
+            exit 1
+          fi
+          git config --global credential.https://github.com.useHttpPath true
+          git config --global --add credential.https://github.com.helper ""
+          git config --global --add credential.https://github.com.helper "$GITHUB_WORKSPACE/scripts/git-credential-private-packages"
 
       - name: Check Environment Versions
         run: |
@@ -49,82 +52,39 @@ jobs:
             exit 1
           fi
 
-      - name: Validate dependency pins
-        run: |
-          if [[ ! "$LOCAL_READABILITY_REF" =~ ^[0-9a-f]{40}$ ]]; then
-            echo "LOCAL_READABILITY_REF must be a full Git commit." >&2
-            exit 2
-          fi
-          if [[ ! "$LOCAL_BABELDOC_REF" =~ ^[0-9a-f]{40}$ ]]; then
-            echo "Provide a full reWriteBabelDoc commit through workflow input babeldoc_ref or repository variable BABELDOC_REF." >&2
-            exit 2
-          fi
-          if [[ ! "$LOCAL_STREAMING_MARKDOWN_REF" =~ ^[0-9a-f]{40}$ ]]; then
-            echo "LOCAL_STREAMING_MARKDOWN_REF must be a full Git commit." >&2
-            exit 2
-          fi
-
-      - name: Restore local package dependencies
-        run: |
-          if [ -e swift-readability ]; then
-            echo "Unexpected pre-existing local path: swift-readability" >&2
-            exit 2
-          fi
-          git init swift-readability
-          git -C swift-readability remote add origin "$LOCAL_READABILITY_REPO"
-          git -C swift-readability fetch --depth 1 origin "$LOCAL_READABILITY_REF"
-          git -C swift-readability checkout --detach FETCH_HEAD
-          actual_readability_ref="$(git -C swift-readability rev-parse HEAD)"
-          if [ "$actual_readability_ref" != "$LOCAL_READABILITY_REF" ]; then
-            echo "swift-readability checkout mismatch: expected $LOCAL_READABILITY_REF, got $actual_readability_ref" >&2
-            exit 1
-          fi
-
-          if [ -e ../reWriteBabelDoc ]; then
-            echo "Unexpected pre-existing sibling path: ../reWriteBabelDoc" >&2
-            exit 2
-          fi
-          git init ../reWriteBabelDoc
-          git -C ../reWriteBabelDoc remote add origin "$LOCAL_BABELDOC_REPO"
-          git -C ../reWriteBabelDoc fetch --depth 1 origin "$LOCAL_BABELDOC_REF"
-          git -C ../reWriteBabelDoc checkout --detach FETCH_HEAD
-          actual_babeldoc_ref="$(git -C ../reWriteBabelDoc rev-parse HEAD)"
-          if [ "$actual_babeldoc_ref" != "$LOCAL_BABELDOC_REF" ]; then
-            echo "reWriteBabelDoc checkout mismatch: expected $LOCAL_BABELDOC_REF, got $actual_babeldoc_ref" >&2
-            exit 1
-          fi
-
-          if [ -e ../SwiftStreamingMarkdown ]; then
-            echo "Unexpected pre-existing sibling path: ../SwiftStreamingMarkdown" >&2
-            exit 2
-          fi
-          git init ../SwiftStreamingMarkdown
-          git -C ../SwiftStreamingMarkdown remote add origin "$LOCAL_STREAMING_MARKDOWN_REPO"
-          git -C ../SwiftStreamingMarkdown fetch --depth 1 origin "$LOCAL_STREAMING_MARKDOWN_REF"
-          git -C ../SwiftStreamingMarkdown checkout --detach FETCH_HEAD
-          actual_streaming_markdown_ref="$(git -C ../SwiftStreamingMarkdown rev-parse HEAD)"
-          if [ "$actual_streaming_markdown_ref" != "$LOCAL_STREAMING_MARKDOWN_REF" ]; then
-            echo "SwiftStreamingMarkdown checkout mismatch: expected $LOCAL_STREAMING_MARKDOWN_REF, got $actual_streaming_markdown_ref" >&2
-            exit 1
-          fi
-
-      - name: Prepare and verify native runtime assets
-        run: |
-          ../reWriteBabelDoc/tools/download_native_assets.sh models
-          python3 ../reWriteBabelDoc/tools/download_runtime_fonts.py
-          ../reWriteBabelDoc/tools/build_native_libraries.sh zstd
-          python3 ../reWriteBabelDoc/tools/verify_mupdf_vendor.py
-          python3 ../reWriteBabelDoc/tools/verify_model_vendor.py
-          python3 ../reWriteBabelDoc/tools/verify_local_runtime_assets.py
-          python3 ../reWriteBabelDoc/tools/generate_native_runtime_manifest.py --check
-
       - name: Install build tools
         run: |
-          brew install xcodegen create-dmg
+          brew install xcodegen create-dmg uv
 
       - name: Generate Xcode project
         run: |
           xcodegen generate
+
+      - name: Test model preparation scripts
+        run: python3 -B -m unittest discover -s scripts/tests -v
+
+      - name: Resolve remote package dependencies
+        env:
+          READPAPER_PACKAGES_TOKEN: ${{ secrets.READPAPER_PACKAGES_TOKEN }}
+          GIT_TERMINAL_PROMPT: "0"
+        run: |
+          xcodebuild -resolvePackageDependencies \
+            -project "$PROJECT_PATH" \
+            -scheme "$SCHEME" \
+            -derivedDataPath "$DERIVED_DATA_PATH"
+
+      - name: Prepare and verify native runtime assets
+        run: |
+          ./scripts/prepare-generated-babeldoc-model "$BABELDOC_ROOT"
+          python3 "$BABELDOC_ROOT/tools/download_runtime_fonts.py"
+          # Keep the same Vendor directory while deferring BabelDOC's in-place
+          # manifest write to the atomic refresh step below.
+          BABELDOC_VENDOR_ROOT="$BABELDOC_ROOT/Vendor/." \
+            "$BABELDOC_ROOT/tools/build_native_libraries.sh" zstd
+          python3 "$BABELDOC_ROOT/tools/verify_mupdf_vendor.py"
+          python3 "$BABELDOC_ROOT/tools/verify_model_vendor.py"
+          python3 "$BABELDOC_ROOT/tools/verify_local_runtime_assets.py"
+          ./scripts/refresh-babeldoc-runtime-manifest "$BABELDOC_ROOT"
 
       - name: Build unsigned app
         run: |
@@ -134,18 +94,32 @@ jobs:
             -configuration Release \
             -destination "generic/platform=macOS" \
             -derivedDataPath "$DERIVED_DATA_PATH" \
+            -disableAutomaticPackageResolution \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY=""
 
+      - name: Seal unsigned app bundle
+        run: |
+          app_bundle_id="$(
+            /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' \
+              "$APP_PATH/Contents/Info.plist"
+          )"
+          codesign \
+            --force \
+            --sign - \
+            --identifier "$app_bundle_id" \
+            "$APP_PATH"
+
       - name: Verify app bundle
         run: |
           test -d "$APP_PATH"
-          python3 ../reWriteBabelDoc/tools/verify_native_runtime.py \
+          python3 "$BABELDOC_ROOT/tools/verify_native_runtime.py" \
             --root "$APP_PATH/Contents/Resources/BabelDOCNative" \
-            --manifest ../reWriteBabelDoc/Sources/BabelDocKit/Resources/runtime-manifest.json
+            --manifest "$BABELDOC_ROOT/Sources/BabelDocKit/Resources/runtime-manifest.json"
           codesign --verify --strict --verbose=2 \
             "$APP_PATH/Contents/Helpers/babeldoc-readpaper-helper"
+          codesign --verify --deep --strict --verbose=2 "$APP_PATH"
 
       - name: Resolve artifact names
         id: artifact_meta
@@ -173,12 +147,13 @@ jobs:
 
       - name: Record build provenance
         run: |
-          runtime_manifest=../reWriteBabelDoc/Sources/BabelDocKit/Resources/runtime-manifest.json
+          runtime_manifest="$BABELDOC_ROOT/Sources/BabelDocKit/Resources/runtime-manifest.json"
           {
             echo "read-paper=$GITHUB_SHA"
-            echo "swift-readability=$LOCAL_READABILITY_REF"
-            echo "reWriteBabelDoc=$LOCAL_BABELDOC_REF"
-            echo "SwiftStreamingMarkdown=$LOCAL_STREAMING_MARKDOWN_REF"
+            for package in swift-readability BabelDOC arxivLatex rebuild-pdf SwiftStreamingMarkdown; do
+              echo "$package=$(git -C "$DERIVED_DATA_PATH/SourcePackages/checkouts/$package" rev-parse HEAD)"
+            done
+            echo "layout-model-sha256=$(shasum -a 256 "$BABELDOC_ROOT/Vendor/Models/doclayout_yolo_docstructbench_imgsz1024.mlmodel" | awk '{print $1}')"
             echo "runtime-manifest-sha256=$(shasum -a 256 "$runtime_manifest" | awk '{print $1}')"
             echo "app-version=$APP_VERSION"
             echo "app-build=$APP_BUILD"
@@ -207,3 +182,14 @@ jobs:
           path: |
             ${{ steps.artifact_meta.outputs.dmg_path }}
             build/build-provenance.txt
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v3
+        with:
+          name: ${{ github.ref_name }}
+          files: |
+            ${{ steps.artifact_meta.outputs.dmg_path }}
+            build/build-provenance.txt
+          fail_on_unmatched_files: true
+          generate_release_notes: true

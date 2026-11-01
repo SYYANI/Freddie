@@ -437,7 +437,6 @@
 		4C7CA5A99A594D1189C9430A /* TouchPDFView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TouchPDFView.swift; sourceTree = "<group>"; };
 		51A72BDC5A78B51E6003243F /* PaperFileStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaperFileStore.swift; sourceTree = "<group>"; };
 		51DC680763D998C01CEC8F9E /* Temml-LICENSE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "Temml-LICENSE.txt"; sourceTree = "<group>"; };
-		527B9EF73BE955F99658B5AB /* rebuild-pdf */ = {isa = PBXFileReference; lastKnownFileType = folder; name = "rebuild-pdf"; path = "../rebuild-pdf"; sourceTree = SOURCE_ROOT; };
 		530B5C69AD3FCA0AFBBB8D69 /* SelectionAssistantOverlayTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectionAssistantOverlayTests.swift; sourceTree = "<group>"; };
 		56425134B5A64FC38C9DC3B1 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		585E60D2D3441D8A764523FD /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
@@ -455,7 +454,6 @@
 		6BF28DC82B3404FEF1D9A022 /* NoteAnchorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoteAnchorTests.swift; sourceTree = "<group>"; };
 		6D2246237CB8E21F487FA0FF /* ReadPaperApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadPaperApp.swift; sourceTree = "<group>"; };
 		6ED6FA2F9B9E105D70A1041C /* LibrarySyncClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibrarySyncClient.swift; sourceTree = "<group>"; };
-		703C8DC726DF6251058E63C6 /* swift-readability */ = {isa = PBXFileReference; lastKnownFileType = folder; path = "swift-readability"; sourceTree = SOURCE_ROOT; };
 		70518A1BB9FC4CC8F8EB38DF /* ReadingStateStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadingStateStore.swift; sourceTree = "<group>"; };
 		706D7F40C6EF37BA2B90B166 /* OpenAICompatibleLLMProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAICompatibleLLMProvider.swift; sourceTree = "<group>"; };
 		70B7ECD2878925F7F85A89EA /* temml.min.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = temml.min.js; sourceTree = "<group>"; };
@@ -464,7 +462,6 @@
 		756B3F8A255940BE24DE7FD6 /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
 		7576024A783F8B7F943BEA89 /* LibrarySyncTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibrarySyncTests.swift; sourceTree = "<group>"; };
 		75E0E94D4471276EDCB5EC00 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
-		785C6D14338CA3CC18D0C62D /* SwiftStreamingMarkdown */ = {isa = PBXFileReference; lastKnownFileType = folder; name = SwiftStreamingMarkdown; path = ../SwiftStreamingMarkdown; sourceTree = SOURCE_ROOT; };
 		78A4FD40176F3BF293CF2AD5 /* LLMModelProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLMModelProfile.swift; sourceTree = "<group>"; };
 		79F764730530AC64846F716F /* SelectionAssistantOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectionAssistantOverlay.swift; sourceTree = "<group>"; };
 		7AF6D836B623D85E6AE3073E /* PaperItemType.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaperItemType.swift; sourceTree = "<group>"; };
@@ -552,7 +549,6 @@
 		C7562BF2A4DB240D48D5B444 /* BrowserClipperServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserClipperServer.swift; sourceTree = "<group>"; };
 		C862C83D4633B12FAEE816C3 /* PaperThemeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaperThemeTests.swift; sourceTree = "<group>"; };
 		C9FEB183330047B2163900B1 /* PDFAnnotationStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PDFAnnotationStoreTests.swift; sourceTree = "<group>"; };
-		CA58A9F6F623388F3F96A066 /* reWriteBabelDoc */ = {isa = PBXFileReference; lastKnownFileType = folder; name = reWriteBabelDoc; path = ../reWriteBabelDoc; sourceTree = SOURCE_ROOT; };
 		CB95836DB915A8B3FDD49494 /* PDFAnnotationSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PDFAnnotationSession.swift; sourceTree = "<group>"; };
 		CD20AB596745F6A2DE939722 /* BabelDocRunnerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BabelDocRunnerTests.swift; sourceTree = "<group>"; };
 		CD5C1CDD81DA5A5B076ABDFC /* ReadPaperiPadApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReadPaperiPadApp.swift; sourceTree = "<group>"; };
@@ -584,7 +580,6 @@
 		ED097469DD9F2A5283A6FA56 /* Freddie.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Freddie.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		EE10FD7878B1F262941627F2 /* LibrarySyncRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibrarySyncRepository.swift; sourceTree = "<group>"; };
 		EF1825DEB6A675DDCEAB79A4 /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = wrapper.icon; path = AppIcon.icon; sourceTree = "<group>"; };
-		F0C2DF1D53036B50E8C28964 /* arxivLatex */ = {isa = PBXFileReference; lastKnownFileType = folder; name = arxivLatex; path = ../arxivLatex; sourceTree = SOURCE_ROOT; };
 		F1D66200F6C63D43F207E0E0 /* ProcessRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProcessRunner.swift; sourceTree = "<group>"; };
 		F1EEC0F670DD00EED541BC17 /* HTMLPDFExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HTMLPDFExporter.swift; sourceTree = "<group>"; };
 		F27116EE49A3703136DE1E0C /* HTMLRegionVisibility.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HTMLRegionVisibility.swift; sourceTree = "<group>"; };
@@ -719,18 +714,6 @@
 				CD5C1CDD81DA5A5B076ABDFC /* ReadPaperiPadApp.swift */,
 			);
 			path = ReadPaperiPad;
-			sourceTree = "<group>";
-		};
-		150F567549117DD069EF5912 /* Packages */ = {
-			isa = PBXGroup;
-			children = (
-				F0C2DF1D53036B50E8C28964 /* arxivLatex */,
-				527B9EF73BE955F99658B5AB /* rebuild-pdf */,
-				CA58A9F6F623388F3F96A066 /* reWriteBabelDoc */,
-				703C8DC726DF6251058E63C6 /* swift-readability */,
-				785C6D14338CA3CC18D0C62D /* SwiftStreamingMarkdown */,
-			);
-			name = Packages;
 			sourceTree = "<group>";
 		};
 		254F8BA8AB5B03DA1685C715 /* Resources */ = {
@@ -980,7 +963,6 @@
 		FFD37AF8B380F0E09C17D8CA = {
 			isa = PBXGroup;
 			children = (
-				150F567549117DD069EF5912 /* Packages */,
 				D13B300E54DA3FEBC95FFDF1 /* ReadPaper */,
 				80868B8CFFD4E8FD37054D61 /* ReadPaperBabelDocHelper */,
 				10681EC53AC5F5378CB0FBED /* ReadPaperiPad */,
@@ -1137,14 +1119,14 @@
 			mainGroup = FFD37AF8B380F0E09C17D8CA;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
+				FAFF8A8C39B7835E584AF455 /* XCRemoteSwiftPackageReference "BabelDOC" */,
+				E6BDC8A3561CED3B91F15E1B /* XCRemoteSwiftPackageReference "arxivLatex" */,
+				002AB4D2AF30FB7DBFD5B40F /* XCRemoteSwiftPackageReference "swift-readability" */,
+				ACD5A0C4D871E3588FADD259 /* XCRemoteSwiftPackageReference "rebuild-pdf" */,
 				2423AB4D81847F412331272E /* XCRemoteSwiftPackageReference "SwiftOpenAI" */,
 				933D5A0492F73A9308551225 /* XCRemoteSwiftPackageReference "SwiftSoup" */,
+				E4C1A653D2BBE9E6A6E18E78 /* XCRemoteSwiftPackageReference "SwiftStreamingMarkdown" */,
 				3799DB915D92FC0294B6B35E /* XCRemoteSwiftPackageReference "iosMath" */,
-				1735EA1B5DA75BD86402514B /* XCLocalSwiftPackageReference "../reWriteBabelDoc" */,
-				678FE872130B6DDB7B071640 /* XCLocalSwiftPackageReference "../arxivLatex" */,
-				EF98ECE644852981F660041E /* XCLocalSwiftPackageReference "swift-readability" */,
-				1E38C2B4966ABAC1787C82F0 /* XCLocalSwiftPackageReference "../rebuild-pdf" */,
-				6307DDA5936965F409643CBF /* XCLocalSwiftPackageReference "../SwiftStreamingMarkdown" */,
 			);
 			productRefGroup = EF36EA23E9C12D6765FFE9F9 /* Products */;
 			projectDirPath = "";
@@ -1202,11 +1184,11 @@
 			inputFileListPaths = (
 			);
 			inputPaths = (
-				"$(SRCROOT)/../reWriteBabelDoc/Sources/BabelDocKit/Resources/runtime-manifest.json",
-				"$(SRCROOT)/../reWriteBabelDoc/Vendor/MuPDF/lib/libmupdf.dylib",
-				"$(SRCROOT)/../reWriteBabelDoc/Vendor/Zstd/lib/libzstd.dylib",
-				"$(SRCROOT)/../reWriteBabelDoc/Vendor/Models/doclayout_yolo_docstructbench_imgsz1024.mlmodel",
-				"$(SRCROOT)/../reWriteBabelDoc/Vendor/Fonts/manifest.json",
+				"$(BUILD_DIR)/../../SourcePackages/checkouts/BabelDOC/Sources/BabelDocKit/Resources/runtime-manifest.json",
+				"$(BUILD_DIR)/../../SourcePackages/checkouts/BabelDOC/Vendor/MuPDF/lib/libmupdf.dylib",
+				"$(BUILD_DIR)/../../SourcePackages/checkouts/BabelDOC/Vendor/Zstd/lib/libzstd.dylib",
+				"$(BUILD_DIR)/../../SourcePackages/checkouts/BabelDOC/Vendor/Models/doclayout_yolo_docstructbench_imgsz1024.mlmodel",
+				"$(BUILD_DIR)/../../SourcePackages/checkouts/BabelDOC/Vendor/Fonts/manifest.json",
 			);
 			name = "Embed BabelDOC Runtime";
 			outputFileListPaths = (
@@ -1216,7 +1198,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "set -euo pipefail\npython3 \"${SRCROOT}/../reWriteBabelDoc/tools/stage_native_runtime.py\" \\\n  --destination \"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/BabelDOCNative\"\n";
+			shellScript = "set -euo pipefail\nbabeldoc_root=\"${BUILD_DIR}/../../SourcePackages/checkouts/BabelDOC\"\npython3 \"${babeldoc_root}/tools/stage_native_runtime.py\" \\\n  --destination \"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/BabelDOCNative\"\n";
 		};
 		9EDFF67B246F58AAA1B86177 /* Embed BabelDOC In-Process Runtime */ = {
 			isa = PBXShellScriptBuildPhase;
@@ -1227,9 +1209,9 @@
 			inputFileListPaths = (
 			);
 			inputPaths = (
-				"$(SRCROOT)/../reWriteBabelDoc/Sources/BabelDocKit/Resources/runtime-manifest.json",
-				"$(SRCROOT)/../reWriteBabelDoc/Vendor/Models/doclayout_yolo_docstructbench_imgsz1024.mlmodel",
-				"$(SRCROOT)/../reWriteBabelDoc/Vendor/Fonts/manifest.json",
+				"$(BUILD_DIR)/../../SourcePackages/checkouts/BabelDOC/Sources/BabelDocKit/Resources/runtime-manifest.json",
+				"$(BUILD_DIR)/../../SourcePackages/checkouts/BabelDOC/Vendor/Models/doclayout_yolo_docstructbench_imgsz1024.mlmodel",
+				"$(BUILD_DIR)/../../SourcePackages/checkouts/BabelDOC/Vendor/Fonts/manifest.json",
 			);
 			name = "Embed BabelDOC In-Process Runtime";
 			outputFileListPaths = (
@@ -1239,7 +1221,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "set -euo pipefail\npython3 \"${SRCROOT}/../reWriteBabelDoc/tools/stage_embedded_runtime.py\" \\\n  --destination \"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/BabelDOCEmbedded\"\n";
+			shellScript = "set -euo pipefail\nbabeldoc_root=\"${BUILD_DIR}/../../SourcePackages/checkouts/BabelDOC\"\npython3 \"${babeldoc_root}/tools/stage_embedded_runtime.py\" \\\n  --destination \"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/BabelDOCEmbedded\"\n";
 		};
 		A4D9FC13DD36F53C9790B96E /* Embed BabelDOC Helper */ = {
 			isa = PBXShellScriptBuildPhase;
@@ -2053,30 +2035,15 @@
 		};
 /* End XCConfigurationList section */
 
-/* Begin XCLocalSwiftPackageReference section */
-		1735EA1B5DA75BD86402514B /* XCLocalSwiftPackageReference "../reWriteBabelDoc" */ = {
-			isa = XCLocalSwiftPackageReference;
-			relativePath = ../reWriteBabelDoc;
-		};
-		1E38C2B4966ABAC1787C82F0 /* XCLocalSwiftPackageReference "../rebuild-pdf" */ = {
-			isa = XCLocalSwiftPackageReference;
-			relativePath = "../rebuild-pdf";
-		};
-		6307DDA5936965F409643CBF /* XCLocalSwiftPackageReference "../SwiftStreamingMarkdown" */ = {
-			isa = XCLocalSwiftPackageReference;
-			relativePath = ../SwiftStreamingMarkdown;
-		};
-		678FE872130B6DDB7B071640 /* XCLocalSwiftPackageReference "../arxivLatex" */ = {
-			isa = XCLocalSwiftPackageReference;
-			relativePath = ../arxivLatex;
-		};
-		EF98ECE644852981F660041E /* XCLocalSwiftPackageReference "swift-readability" */ = {
-			isa = XCLocalSwiftPackageReference;
-			relativePath = "swift-readability";
-		};
-/* End XCLocalSwiftPackageReference section */
-
 /* Begin XCRemoteSwiftPackageReference section */
+		002AB4D2AF30FB7DBFD5B40F /* XCRemoteSwiftPackageReference "swift-readability" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/SYYANI/swift-readability.git";
+			requirement = {
+				branch = main;
+				kind = branch;
+			};
+		};
 		2423AB4D81847F412331272E /* XCRemoteSwiftPackageReference "SwiftOpenAI" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/jamesrochabrun/SwiftOpenAI";
@@ -2101,6 +2068,38 @@
 				minimumVersion = 2.7.0;
 			};
 		};
+		ACD5A0C4D871E3588FADD259 /* XCRemoteSwiftPackageReference "rebuild-pdf" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/SYYANI/rebuild-pdf.git";
+			requirement = {
+				branch = main;
+				kind = branch;
+			};
+		};
+		E4C1A653D2BBE9E6A6E18E78 /* XCRemoteSwiftPackageReference "SwiftStreamingMarkdown" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/SYYANI/SwiftStreamingMarkdown.git";
+			requirement = {
+				branch = main;
+				kind = branch;
+			};
+		};
+		E6BDC8A3561CED3B91F15E1B /* XCRemoteSwiftPackageReference "arxivLatex" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/SYYANI/arxivLatex.git";
+			requirement = {
+				branch = main;
+				kind = branch;
+			};
+		};
+		FAFF8A8C39B7835E584AF455 /* XCRemoteSwiftPackageReference "BabelDOC" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/SYYANI/BabelDOC.git";
+			requirement = {
+				branch = dev_package_catal;
+				kind = branch;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -2121,6 +2120,7 @@
 		};
 		64D71AA1E9FC3CB00F43C27C /* BabelDocKit */ = {
 			isa = XCSwiftPackageProductDependency;
+			package = FAFF8A8C39B7835E584AF455 /* XCRemoteSwiftPackageReference "BabelDOC" */;
 			productName = BabelDocKit;
 		};
 		703F32046A3F245AC966A2EF /* SwiftOpenAI */ = {
@@ -2130,34 +2130,42 @@
 		};
 		8C91D32341DE2A88D7364C3F /* Readability */ = {
 			isa = XCSwiftPackageProductDependency;
+			package = 002AB4D2AF30FB7DBFD5B40F /* XCRemoteSwiftPackageReference "swift-readability" */;
 			productName = Readability;
 		};
 		92414CE9428CA4380C920377 /* LaTeXTransKit */ = {
 			isa = XCSwiftPackageProductDependency;
+			package = E6BDC8A3561CED3B91F15E1B /* XCRemoteSwiftPackageReference "arxivLatex" */;
 			productName = LaTeXTransKit;
 		};
 		9AEA6580455F72AA50F5D4A5 /* RebuildPDFKit */ = {
 			isa = XCSwiftPackageProductDependency;
+			package = ACD5A0C4D871E3588FADD259 /* XCRemoteSwiftPackageReference "rebuild-pdf" */;
 			productName = RebuildPDFKit;
 		};
 		A8629EE6EB6282F41BDF087D /* Readability */ = {
 			isa = XCSwiftPackageProductDependency;
+			package = 002AB4D2AF30FB7DBFD5B40F /* XCRemoteSwiftPackageReference "swift-readability" */;
 			productName = Readability;
 		};
 		AA84932078FE9D985EA8F323 /* BabelDocKit */ = {
 			isa = XCSwiftPackageProductDependency;
+			package = FAFF8A8C39B7835E584AF455 /* XCRemoteSwiftPackageReference "BabelDOC" */;
 			productName = BabelDocKit;
 		};
 		B0CCA1B27D1524ADADBDAE97 /* LaTeXTransKit */ = {
 			isa = XCSwiftPackageProductDependency;
+			package = E6BDC8A3561CED3B91F15E1B /* XCRemoteSwiftPackageReference "arxivLatex" */;
 			productName = LaTeXTransKit;
 		};
 		B8EAA1B17D2824B6C3109B0B /* SwiftStreamingMarkdown */ = {
 			isa = XCSwiftPackageProductDependency;
+			package = E4C1A653D2BBE9E6A6E18E78 /* XCRemoteSwiftPackageReference "SwiftStreamingMarkdown" */;
 			productName = SwiftStreamingMarkdown;
 		};
 		BAFDD8F8E234BC26852B46CF /* BabelDocKit */ = {
 			isa = XCSwiftPackageProductDependency;
+			package = FAFF8A8C39B7835E584AF455 /* XCRemoteSwiftPackageReference "BabelDOC" */;
 			productName = BabelDocKit;
 		};
 		C43FD6B6D997D13C81202017 /* SwiftStreamingMarkdown */ = {

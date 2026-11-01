@@ -1,0 +1,46 @@
+#!/usr/bin/env python3
+"""Replace a SwiftPM checkout's runtime manifest with the generated manifest."""
+
+from __future__ import annotations
+
+import os
+from pathlib import Path
+import stat
+import subprocess
+import sys
+import tempfile
+
+
+def main() -> None:
+    if len(sys.argv) != 2:
+        raise SystemExit(f"Usage: {sys.argv[0]} <BabelDOC package checkout>")
+
+    root = Path(sys.argv[1]).resolve()
+    manifest = root / "Sources/BabelDocKit/Resources/runtime-manifest.json"
+    generator = root / "tools/generate_native_runtime_manifest.py"
+
+    # Xcode may make tracked package files read-only. Replacing the file avoids
+    # opening the existing inode for writing, which can still be denied after
+    # chmod on a hosted macOS runner.
+    for path in (manifest.parent, manifest):
+        subprocess.run(["chflags", "nouchg", str(path)], check=True)
+        path.chmod(stat.S_IMODE(path.stat().st_mode) | stat.S_IWUSR)
+
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=".readpaper-runtime-manifest-", suffix=".json", dir=manifest.parent
+    )
+    os.close(descriptor)
+    temporary = Path(temporary_name)
+    try:
+        subprocess.run(
+            [sys.executable, str(generator), "--output", str(temporary)], check=True
+        )
+        if temporary.read_bytes() != manifest.read_bytes():
+            os.replace(temporary, manifest)
+        subprocess.run([sys.executable, str(generator), "--check"], check=True)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+if __name__ == "__main__":
+    main()

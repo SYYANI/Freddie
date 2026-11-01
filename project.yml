@@ -12,15 +12,20 @@ packages:
     url: https://github.com/jamesrochabrun/SwiftOpenAI
     from: 4.3.3
   Readability:
-    path: swift-readability
+    url: https://github.com/SYYANI/swift-readability.git
+    branch: main
   BabelDocSwift:
-    path: ../reWriteBabelDoc
+    url: https://github.com/SYYANI/BabelDOC.git
+    branch: dev_package_catal
   LaTeXTransSwift:
-    path: ../arxivLatex
+    url: https://github.com/SYYANI/arxivLatex.git
+    branch: main
   RebuildPDFSwift:
-    path: ../rebuild-pdf
+    url: https://github.com/SYYANI/rebuild-pdf.git
+    branch: main
   SwiftStreamingMarkdown:
-    path: ../SwiftStreamingMarkdown
+    url: https://github.com/SYYANI/SwiftStreamingMarkdown.git
+    branch: main
   iosMath:
     url: https://github.com/junyan72/iosMath
     revision: ba9ab7729b151329c54fd895a7c1859981d9484c
@@ -70,14 +75,15 @@ targets:
       - name: Embed BabelDOC Runtime
         script: |
           set -euo pipefail
-          python3 "${SRCROOT}/../reWriteBabelDoc/tools/stage_native_runtime.py" \
+          babeldoc_root="${BUILD_DIR}/../../SourcePackages/checkouts/BabelDOC"
+          python3 "${babeldoc_root}/tools/stage_native_runtime.py" \
             --destination "${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/BabelDOCNative"
         inputFiles:
-          - $(SRCROOT)/../reWriteBabelDoc/Sources/BabelDocKit/Resources/runtime-manifest.json
-          - $(SRCROOT)/../reWriteBabelDoc/Vendor/MuPDF/lib/libmupdf.dylib
-          - $(SRCROOT)/../reWriteBabelDoc/Vendor/Zstd/lib/libzstd.dylib
-          - $(SRCROOT)/../reWriteBabelDoc/Vendor/Models/doclayout_yolo_docstructbench_imgsz1024.mlmodel
-          - $(SRCROOT)/../reWriteBabelDoc/Vendor/Fonts/manifest.json
+          - $(BUILD_DIR)/../../SourcePackages/checkouts/BabelDOC/Sources/BabelDocKit/Resources/runtime-manifest.json
+          - $(BUILD_DIR)/../../SourcePackages/checkouts/BabelDOC/Vendor/MuPDF/lib/libmupdf.dylib
+          - $(BUILD_DIR)/../../SourcePackages/checkouts/BabelDOC/Vendor/Zstd/lib/libzstd.dylib
+          - $(BUILD_DIR)/../../SourcePackages/checkouts/BabelDOC/Vendor/Models/doclayout_yolo_docstructbench_imgsz1024.mlmodel
+          - $(BUILD_DIR)/../../SourcePackages/checkouts/BabelDOC/Vendor/Fonts/manifest.json
         outputFiles:
           - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/BabelDOCNative/runtime-manifest.json
         basedOnDependencyAnalysis: false
@@ -163,12 +169,13 @@ targets:
       - name: Embed BabelDOC In-Process Runtime
         script: |
           set -euo pipefail
-          python3 "${SRCROOT}/../reWriteBabelDoc/tools/stage_embedded_runtime.py" \
+          babeldoc_root="${BUILD_DIR}/../../SourcePackages/checkouts/BabelDOC"
+          python3 "${babeldoc_root}/tools/stage_embedded_runtime.py" \
             --destination "${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/BabelDOCEmbedded"
         inputFiles:
-          - $(SRCROOT)/../reWriteBabelDoc/Sources/BabelDocKit/Resources/runtime-manifest.json
-          - $(SRCROOT)/../reWriteBabelDoc/Vendor/Models/doclayout_yolo_docstructbench_imgsz1024.mlmodel
-          - $(SRCROOT)/../reWriteBabelDoc/Vendor/Fonts/manifest.json
+          - $(BUILD_DIR)/../../SourcePackages/checkouts/BabelDOC/Sources/BabelDocKit/Resources/runtime-manifest.json
+          - $(BUILD_DIR)/../../SourcePackages/checkouts/BabelDOC/Vendor/Models/doclayout_yolo_docstructbench_imgsz1024.mlmodel
+          - $(BUILD_DIR)/../../SourcePackages/checkouts/BabelDOC/Vendor/Fonts/manifest.json
         outputFiles:
           - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/BabelDOCEmbedded/runtime-manifest.json
         basedOnDependencyAnalysis: false

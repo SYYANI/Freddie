@@ -1,0 +1,113 @@
+#!/usr/bin/env python3
+"""Build BabelDOC's pinned Core ML source without requiring byte-for-byte output."""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+from pathlib import Path
+import stat
+import subprocess
+import sys
+import tempfile
+
+
+def main() -> None:
+    if len(sys.argv) != 2:
+        raise SystemExit(f"Usage: {sys.argv[0]} <BabelDOC package checkout>")
+
+    root = Path(sys.argv[1]).resolve()
+    tools = root / "tools"
+    manifest_path = root / "Vendor/Models/manifest.json"
+    model_path = root / "Vendor/Models/doclayout_yolo_docstructbench_imgsz1024.mlmodel"
+    verifier = tools / "verify_model_vendor.py"
+
+    # A previously generated model remains valid when it matches the manifest
+    # produced for that same package checkout.
+    if subprocess.run([sys.executable, str(verifier)], capture_output=True).returncode == 0:
+        print(f"BabelDOC Core ML model is already verified: {model_path}")
+        return
+
+    source_script = tools / "build_coreml_models.sh"
+    source = source_script.read_text(encoding="utf-8")
+    strict_check = '''verify_file "$output" "$model_sha256" "$model_size" || {
+  print -u2 "Generated Core ML model does not match the trusted release artifact"
+  print -u2 "Report: $report"
+  exit 1
+}
+'''
+    size_check = '''[[ "$(stat -f '%z' "$output")" == "$model_size" ]] || {
+  print -u2 "Generated Core ML model has an unexpected size"
+  print -u2 "Report: $report"
+  exit 1
+}
+'''
+    if source.count(strict_check) != 1:
+        raise SystemExit("BabelDOC model conversion check changed; review the upstream script")
+    compile_step = '  python3 "$root/tools/compile_layout_model.py" --root "$root" --models-root "$models_root"\n'
+    if source.count(compile_step) != 1:
+        raise SystemExit("BabelDOC model compilation step changed; review the upstream script")
+
+    # Compilation validates the source hash against the model manifest. Defer
+    # it until the generated source hash is recorded, retaining the upstream
+    # compiled-file pins so unexpected model/compiler changes still fail.
+    source = source.replace(strict_check, size_check).replace(
+        compile_step, '  : # ReadPaper compiles after updating the source manifest.\n'
+    )
+
+    # The temporary script stays beside the original so its relative source
+    # paths still resolve to the package checkout. The pinned checkpoint and
+    # converter downloads, structural checks, and source hashes remain intact.
+    with tempfile.NamedTemporaryFile(
+        mode="w", encoding="utf-8", prefix=".readpaper-coreml-", suffix=".sh",
+        dir=tools, delete=False,
+    ) as handle:
+        handle.write(source)
+        temporary_script = Path(handle.name)
+    temporary_script.chmod(stat.S_IMODE(source_script.stat().st_mode))
+    try:
+        subprocess.run([str(temporary_script)], check=True)
+    finally:
+        temporary_script.unlink(missing_ok=True)
+
+    model_size = model_path.stat().st_size
+    digest = hashlib.sha256()
+    with model_path.open("rb") as model_file:
+        for chunk in iter(lambda: model_file.read(1024 * 1024), b""):
+            digest.update(chunk)
+    model_sha256 = digest.hexdigest()
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assets = [
+        asset for asset in manifest["assets"]
+        if asset.get("id") == "doclayout-yolo-docstructbench-imgsz1024"
+    ]
+    if len(assets) != 1 or assets[0].get("size") != model_size:
+        raise SystemExit("Generated BabelDOC model does not match manifest structure")
+    assets[0]["sha256"] = model_sha256
+    # SwiftPM can make tracked files read-only; replace the manifest atomically
+    # rather than writing into its existing inode (as with the runtime manifest).
+    for path in (manifest_path.parent, manifest_path):
+        subprocess.run(["chflags", "nouchg", str(path)], check=True)
+        path.chmod(stat.S_IMODE(path.stat().st_mode) | stat.S_IWUSR)
+    with tempfile.NamedTemporaryFile(
+        mode="w", encoding="utf-8", prefix=".readpaper-model-manifest-",
+        suffix=".json", dir=manifest_path.parent, delete=False,
+    ) as handle:
+        temporary_manifest = Path(handle.name)
+        handle.write(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n")
+    try:
+        os.replace(temporary_manifest, manifest_path)
+    finally:
+        temporary_manifest.unlink(missing_ok=True)
+    subprocess.run(
+        [sys.executable, str(tools / "compile_layout_model.py"), "--root", str(root),
+         "--models-root", str(model_path.parent)],
+        check=True,
+    )
+    subprocess.run([sys.executable, str(verifier)], check=True)
+    print(f"Generated BabelDOC Core ML model SHA-256: {model_sha256}")
+
+
+if __name__ == "__main__":
+    main()

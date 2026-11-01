@@ -54,10 +54,10 @@ xcodebuild -project ReadPaper.xcodeproj -scheme ReadPaper -destination 'platform
 GitHub Actions 构建 DMG：
 
 - 仓库已包含 [`.github/workflows/release.yml`](/Users/yiyan/Desktop/read-paper/.github/workflows/release.yml)，支持在 GitHub Actions 上构建 DMG；触发方式为手动 `workflow_dispatch` 或推送 `v*` tag。
-- 当前 workflow 运行在 `xcode-27`（macOS 27 + Xcode 27）并检查 SDK 不低于 27：用 macOS 26 SDK 链接的 App 在 macOS 27 上，工具栏里 `Menu` 的图标会比按钮小约两成（标注、翻译、分享三个菜单明显偏小），所以不要退回 `macos-26`。workflow 会恢复固定 commit 的本地 `swift-readability`，并从手动输入 `babeldoc_ref` 或仓库变量 `BABELDOC_REF` 恢复完整 40 位 commit 的 `../reWriteBabelDoc`。随后下载并验证模型/字体/许可证、从固定源码构建 zstd、校验 MuPDF 与 trusted runtime manifest，再安装 `xcodegen` 和 `create-dmg` 执行无签名 Release 构建。
-- CI 产物当前是 unsigned 的 `Freddie.app` 和 `Freddie-<version>-unsigned.dmg`；helper 在关闭 Xcode signing 时仍做 ad-hoc 签名以满足 App 内信任契约。artifact 同时包含记录三份源码 commit、runtime manifest hash 和版本号的 `build-provenance.txt`。tag 与手动触发都只上传 Actions artifact；在 Developer ID 签名、notarization、Corresponding Source 和完整第三方 notices 闭环前，不自动创建公开 GitHub Release。
+- 当前 workflow 运行在 `xcode-27`（macOS 27 + Xcode 27）并检查 SDK 不低于 27：用 macOS 26 SDK 链接的 App 在 macOS 27 上，工具栏里 `Menu` 的图标会比按钮小约两成（标注、翻译、分享三个菜单明显偏小），所以不要退回 `macos-26`。workflow 通过 Xcode 解析 `project.yml` 中的 GitHub Swift Package 分支；五个 `SYYANI` 仓库（`swift-readability`、`BabelDOC`、`arxivLatex`、`rebuild-pdf`、`SwiftStreamingMarkdown`）是 private，需要 Actions Secret `READPAPER_PACKAGES_TOKEN`（仅授予这五个仓库 Contents Read），`scripts/git-credential-private-packages` 只给这五个仓库路径返回 token。解析后从 `SourcePackages/checkouts/BabelDOC` 准备和验证模型、字体、许可证、zstd、MuPDF 与 trusted runtime manifest，再执行无 Developer ID 的 Release 构建，并在打包前对完整 App bundle 做 ad-hoc 资源封印与严格签名验证。构建时的实际依赖 commit 写入 `build-provenance.txt`。
+- CI 产物当前是无 Developer ID 的 `Freddie.app` 和 `Freddie-<version>-unsigned.dmg`；helper 和完整 App bundle 会做 ad-hoc 签名，分别满足 App 内信任契约与 bundle 资源完整性检查。artifact 同时包含记录 App 与五个远程包源码 commit、runtime manifest hash 和版本号的 `build-provenance.txt`。在 `v*` tag 上运行时还会把 DMG 和 provenance 上传为 GitHub Release；在分支上手动触发只上传 Actions artifact。Developer ID 签名、notarization、Corresponding Source 和完整第三方 notices 仍待完成。
 - 后续若调整 app 名称、scheme、产物路径、签名或打包方式，要同步更新 workflow 中的 `APP_NAME`、`APP_PATH`、`DMG_PATH` 和 release 上传逻辑，避免本地可构建但 CI 打包失效。
-- `project.yml` 依赖本地路径包 `../rebuild-pdf`（`RebuildPDFKit`），但该仓库还没有远端，workflow 也还没有像 `../reWriteBabelDoc` 那样检出它；在 CI 上构建前要先推送仓库，并在 workflow 里按固定 commit 检出、写入 `build-provenance.txt`。
+- 分支约定：开发分支（如 `embed—native-catal-ocr`）的 `project.yml` 用本地路径包（`swift-readability`、`../reWriteBabelDoc`、`../arxivLatex`、`../rebuild-pdf`、`../SwiftStreamingMarkdown`），`main` 用对应的 GitHub URL 和分支，CI 只构建 `main`/tag。开发分支合并进 `main` 时保留 `main` 的 `packages` 段；开发分支新增本地包时，要在 `main` 上补成 URL，并同步 `scripts/git-credential-private-packages` 的仓库列表、workflow 的 provenance 包列表和 token 的仓库授权。CI 构建的是各包远程分支的最新提交，推送 `main` 前先推送对应的包仓库。
 
 如果沙箱或受限终端里 `xcodebuild` 因 Xcode/SwiftPM/clang 缓存目录权限失败，不要先判断为代码失败；换到可写 Xcode 缓存的环境或使用 Xcode 运行后再确认。
 
@@ -73,7 +73,7 @@ GitHub Actions 构建 DMG：
 - `ReadPaper/Localizable.xcstrings`：应用自有 UI、状态文案和错误文案的字符串目录，当前以英文 source string 为 key，并提供 `en` / `zh-Hans`。
 - `ReadPaper/InfoPlist.xcstrings`：Info.plist 对用户可见文案的字符串目录，例如 `NSDocumentsFolderUsageDescription`。
 - `project.yml`：XcodeGen 的项目源配置。调整 target、依赖、构建设置时改这里并重新生成项目。
-- `.github/workflows/release.yml`：GitHub Actions 的 unsigned DMG 验证构建流程；负责恢复固定 commit 的 `swift-readability` 与 `reWriteBabelDoc`、准备并验证原生 runtime、安装 `xcodegen` 与 `create-dmg`、构建 unsigned `Freddie.app` 并上传 Actions artifact。公开 Release 仍保持关闭。
+- `.github/workflows/release.yml`：GitHub Actions 的 unsigned DMG 构建流程；负责解析远程 Swift Package、准备并验证原生 runtime、安装 `xcodegen` 与 `create-dmg`、构建 unsigned `Freddie.app` 并上传 Actions artifact；`v*` tag 构建成功后同时发布 GitHub Release。
 - `ReadPaper.xcodeproj/project.xcworkspace/xcuserdata/`：Xcode 用户状态。除非任务明确要求，不要编辑或整理这类文件。
 - `ReadPaper.xcodeproj/project.xcworkspace/xcuserdata/yiyan.xcuserdatad/UserInterfaceState.xcuserstate`：本地 Xcode 窗口/界面状态文件，默认视为无需处理的噪音文件；不要因为它是 dirty 而额外清理、提交或回退。
 
