@@ -56,6 +56,10 @@ struct HTMLLocalizer: @unchecked Sendable {
     // clipped body no longer has, so paragraphs run together. Default spacing with a
     // bare type selector's specificity beats such resets (it comes later) but loses to
     // any source rule with a class that still applies.
+    // Readability can collapse an inner grid wrapper while retaining an outer one
+    // (Anthropic). Descendant-scoped column spans then stop matching, placing each
+    // paragraph in a separate narrow column. Normalize prose grids and their item
+    // placement together; leave display alone so CSS-hidden content stays hidden.
     static let readableProseLayoutCSS = """
     body.rp-readability-body [data-rp-preserve-layout] {
         display: block;
@@ -65,6 +69,16 @@ struct HTMLLocalizer: @unchecked Sendable {
     }
     html:has(> body.rp-readability-body) {
         max-width: none !important;
+    }
+    body.rp-readability-body :is(.rp-readability-content, .rp-readability-content :is(article, section, main, header, footer, aside, div)):not(:where(svg *, math *, pre *, code *, [data-rp-preserve-layout], [data-rp-preserve-layout] *)) {
+        grid-template-columns: minmax(0, 1fr) !important;
+        grid-template-rows: none !important;
+        grid-template-areas: none !important;
+        grid-auto-flow: row !important;
+    }
+    body.rp-readability-body :is(.rp-readability-content, .rp-readability-content :is(article, section, main, header, footer, aside, div)):not(:where(svg *, math *, pre *, code *, [data-rp-preserve-layout], [data-rp-preserve-layout] *)) > :not(:where(svg, svg *, math, math *, pre *, code *, [data-rp-preserve-layout] *)) {
+        grid-column: 1 / -1 !important;
+        grid-row: auto !important;
     }
     :where(body.rp-readability-body :is(.rp-readability-header, .rp-readability-content)) :is(p, ul, ol, blockquote, pre, figure, dl):not(:where([data-rp-preserve-layout] *)) {
         margin-block-end: 1em;

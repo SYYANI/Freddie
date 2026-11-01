@@ -351,6 +351,85 @@ final class HTMLLocalizerTests: XCTestCase {
     }
 
     @MainActor
+    func testReadingLayoutStacksGridContentAfterReadabilityCollapsesItsWrapper() async throws {
+        let paragraph = String(repeating: "Article paragraphs must remain wide and follow one another in reading order. ", count: 8)
+        // Anthropic's article has two nested grids. Readability collapses the inner
+        // wrapper, so its descendant-scoped column spans no longer match the prose.
+        let html = """
+        <html><head><title>Grid article</title><style>
+        .content-grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 12px; }
+        .article-body { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); grid-column: 1 / span 12; }
+        .article-body .reading-column { grid-column: 4 / span 6; }
+        .content-grid .wide { grid-column: 3 / span 8; grid-row: 1; }
+        .content-grid .hidden-block { display: none; }
+        </style></head><body><article><div class="content-grid"><div class="article-body">
+        <p id="opening" class="reading-column">\(paragraph)</p>
+        <h2 class="reading-column">The next section</h2>
+        <p class="reading-column wide">\(paragraph)</p>
+        <p class="reading-column">\(paragraph)</p>
+        </div></div></article></body></html>
+        """
+        let localizer = HTMLLocalizer()
+        let document = try localizer.makeDocumentForLocalization(
+            html: html, sourceURL: URL(string: "https://example.com/grid-article")!
+        )
+        XCTAssertEqual(try document.select(".rp-readability-content .content-grid").count, 1)
+        XCTAssertEqual(try document.select(".rp-readability-content .article-body").count, 0)
+        let prepared = try HTMLTranslationPipeline.prepareDocument(document.outerHtml())
+        let translated = try HTMLTranslationPipeline.applyTranslations(
+            toPreparedHTML: prepared.preparedHTML, candidates: prepared.candidates,
+            translations: Dictionary(uniqueKeysWithValues: prepared.candidates.map { ($0.segmentID, "译文也应独占一行，按原文的阅读顺序排列。") })
+        )
+
+        for savedBeforeRepair in [false, true] {
+            let page = try SwiftSoup.parse(translated)
+            if savedBeforeRepair {
+                // Old imports retain their source CSS and DOM. Only the reader's
+                // injected stylesheet can repair them, without rewriting anchors.
+                try page.getElementById("rp-readability-style")?.remove()
+            }
+            let configuration = WKWebViewConfiguration()
+            configuration.websiteDataStore = .nonPersistent()
+            let webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 900, height: 700), configuration: configuration)
+            let loaded = expectation(description: "Grid article loaded")
+            let observer = HTMLLayoutNavigationObserver(loaded: loaded)
+            webView.navigationDelegate = observer
+            webView.loadHTMLString(try page.outerHtml(), baseURL: nil)
+            await fulfillment(of: [loaded], timeout: 15)
+            if savedBeforeRepair {
+                _ = try await webView.evaluateJavaScript(HTMLReaderView.Coordinator.instrumentationScript)
+            }
+            // A CSS-hidden block must stay hidden when normalizing grid layout.
+            _ = try await webView.evaluateJavaScript("""
+            document.querySelector('.content-grid').insertAdjacentHTML('beforeend',
+                '<div class="hidden-block">Hidden content</div>'); true
+            """)
+            for mode in TranslationDisplayMode.allCases {
+                let metrics = try await webView.evaluateJavaScript("""
+                (() => {
+                    document.documentElement.setAttribute('data-rp-display-mode', '\(mode.rawValue)');
+                    const grid = document.querySelector('.content-grid');
+                    const blocks = [...grid.children].filter(e => getComputedStyle(e).display !== 'none');
+                    const bounds = blocks.map(e => e.getBoundingClientRect());
+                    return {
+                        count: bounds.length,
+                        singleColumn: bounds.every((r, i) => r.width >= grid.clientWidth - 1
+                            && (i === 0 || r.top >= bounds[i - 1].bottom - 1)),
+                        hiddenDisplay: getComputedStyle(grid.querySelector('.hidden-block')).display,
+                        bodyFits: document.documentElement.scrollWidth <= window.innerWidth
+                    };
+                })()
+                """)
+                let state = try XCTUnwrap(metrics as? [String: Any])
+                XCTAssertGreaterThanOrEqual(try XCTUnwrap(state["count"] as? Int), 4)
+                XCTAssertEqual(state["singleColumn"] as? Bool, true, "\(mode), saved before repair: \(savedBeforeRepair)")
+                XCTAssertEqual(state["hiddenDisplay"] as? String, "none")
+                XCTAssertEqual(state["bodyFits"] as? Bool, true)
+            }
+        }
+    }
+
+    @MainActor
     func testReadingLayoutKeepsParagraphSpacingUnderSourceReset() async throws {
         // 36Kr resets every paragraph margin and adds spacing back only below an
         // ancestor that a clip or Readability leaves out.

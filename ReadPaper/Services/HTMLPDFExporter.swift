@@ -137,6 +137,7 @@ final class HTMLPDFExporter: NSObject, WKNavigationDelegate {
     private static func printCSS(fontSize: Double) -> String {
         """
         \(HTMLReaderTypography.css(fontSize: fontSize))
+        \(HTMLLocalizer.readableProseLayoutCSS)
         html[data-rp-display-mode='original'] .rp-translation-block { display: none !important; }
         html[data-rp-display-mode='translated'] [data-rp-source='true'] { display: none !important; }
         \(HTMLRegionVisibility.hiddenRegionCSS)
