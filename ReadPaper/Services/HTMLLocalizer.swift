@@ -304,11 +304,7 @@ struct HTMLLocalizer: @unchecked Sendable {
             return false
         }
         let content = (try? document.select(".rp-readability-content").first()) ?? body
-        // Older WeChat imports sometimes saved just the metadata/footer surrounding
-        // the hidden article. Allow reimport to repair that shell in place.
-        if body.id() == "activity-detail",
-           (try? content.select("#img-content").first()) != nil,
-           (try? content.select("#js_content").first()) == nil {
+        if body.id() == "activity-detail", isIncompleteWeChatArticle(in: content) {
             return false
         }
         return ((try? meaningfulText(in: content).count) ?? 0) >= 40 &&
@@ -320,8 +316,48 @@ struct HTMLLocalizer: @unchecked Sendable {
         // Its welcome sentence is long enough to pass a plain text-length check.
         if (try? document.select("meta#zh-zse-ck").first()) != nil { return true }
         // WeChat redirects to a CAPTCHA page with HTTP 200. Its message is not an article.
+        // Saved copies have lost the CAPTCHA script, so its WeUI message box counts too.
         return (try? document.select("#js_verify").first()) != nil &&
-            (try? document.select("script[src*=captcha.gtimg.com/TCaptcha.js]").first()) != nil
+            ((try? document.select("script[src*=captcha.gtimg.com/TCaptcha.js]").first()) != nil ||
+             (try? document.select(".weui-msg").first()) != nil)
+    }
+
+    /// Earlier WeChat imports saved either the page with its article still hidden or,
+    /// after Readability dropped that hidden root, just the account metadata around it.
+    /// Reimport repairs both in place.
+    private func isIncompleteWeChatArticle(in content: Element) -> Bool {
+        if let article = try? content.select("#js_content.rich_media_content").first() {
+            return article.hasAttr("hidden") || (try? article.attr("aria-hidden")) == "true" ||
+                Self.styleDeclarations((try? article.attr("style")) ?? "").contains(where: Self.hidesElement)
+        }
+        // Readability collapses a wrapper with one child and copies the wrapper's id onto it,
+        // so a complete article can be saved as #img-content. Judge it by what it holds.
+        guard let wrapper = try? content.select("#img-content").first(),
+              (try? wrapper.select(".rich_media_meta").first()) != nil,
+              let remaining = wrapper.copy() as? Element else { return false }
+        _ = try? remaining.select(".rich_media_meta, .rich_media_tool_area, #meta_content_hide_info").remove()
+        return ((try? meaningfulText(in: remaining).count) ?? 0) < 40 &&
+            ((try? remaining.select("img, video, math").isEmpty()) ?? true)
+    }
+
+    private static func styleDeclarations(_ style: String) -> [(property: String, value: String)] {
+        style.split(separator: ";").map { declaration in
+            let parts = declaration.split(separator: ":", maxSplits: 1)
+            let property = parts.first.map(String.init) ?? ""
+            let value = parts.count > 1 ? String(parts[1]) : ""
+            return (property.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
+                    value.replacingOccurrences(of: "!important", with: "")
+                        .trimmingCharacters(in: .whitespacesAndNewlines).lowercased())
+        }
+    }
+
+    private static func hidesElement(_ declaration: (property: String, value: String)) -> Bool {
+        switch declaration.property {
+        case "visibility": declaration.value == "hidden"
+        case "display": declaration.value == "none"
+        case "opacity": Double(declaration.value) == 0
+        default: false
+        }
     }
 
     /// WeChat ships the complete article hidden until its scripts reveal it. Only unhide

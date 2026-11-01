@@ -692,6 +692,15 @@ final class WebKitWebPageHTMLRenderer: NSObject, WebPageHTMLRendering, WKNavigat
         return false
     }
 
+    /// Zhihu's check reloads into the article by itself, so capture waits for it. WeChat's
+    /// CAPTCHA waits for a person: capture it at once so the importer can say so instead of
+    /// timing out. Mirrors `HTMLLocalizer.isBrowserChallengePage`.
+    private static let challengeScript = """
+    const isUserChallenge = !!document.querySelector('#js_verify') &&
+        (!!document.querySelector('script[src*="captcha.gtimg.com/TCaptcha.js"]') || !!document.querySelector('.weui-msg'));
+    const isChallenge = isUserChallenge || !!document.querySelector('meta#zh-zse-ck');
+    """
+
     private func captureDOM(from webView: WKWebView) {
         guard let mainFrameStatusCode, (200..<300).contains(mainFrameStatusCode),
               !isCapturingDOM else { return }
@@ -710,9 +719,9 @@ final class WebKitWebPageHTMLRenderer: NSObject, WebPageHTMLRendering, WKNavigat
                     stableSince = Date.now();
                 }
                 const textLength = (document.body?.innerText || '').trim().length;
-                const isChallenge = !!document.querySelector('meta#zh-zse-ck') ||
-                    (!!document.querySelector('#js_verify') && !!document.querySelector('script[src*="captcha.gtimg.com/TCaptcha.js"]'));
-                if (!isChallenge && ((textLength >= 40 && Date.now() - stableSince >= 300) || Date.now() - startedAt >= 10000)) {
+                \(Self.challengeScript)
+                if (isUserChallenge ||
+                    (!isChallenge && ((textLength >= 40 && Date.now() - stableSince >= 300) || Date.now() - startedAt >= 10000))) {
                     resolve(html);
                     return;
                 }
@@ -757,9 +766,8 @@ final class WebKitWebPageHTMLRenderer: NSObject, WebPageHTMLRendering, WKNavigat
         let script = """
         (() => {
             const textLength = (document.body?.innerText || '').trim().length;
-            const isChallenge = !!document.querySelector('meta#zh-zse-ck') ||
-                (!!document.querySelector('#js_verify') && !!document.querySelector('script[src*="captcha.gtimg.com/TCaptcha.js"]'));
-            return textLength >= 40 && !isChallenge
+            \(Self.challengeScript)
+            return isUserChallenge || (textLength >= 40 && !isChallenge)
                 ? (document.documentElement?.outerHTML || '') : null;
         })();
         """
