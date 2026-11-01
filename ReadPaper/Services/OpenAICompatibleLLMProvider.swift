@@ -471,6 +471,7 @@ enum LLMProviderError: LocalizedError, Equatable {
     case unauthorized
     case cancelled
     case emptyResponse
+    case outputTokenLimitExceeded(reason: String)
     case webSearchCompletedWithoutAnswer
     case unknown(String)
 
@@ -492,6 +493,11 @@ enum LLMProviderError: LocalizedError, Equatable {
             return AppLocalization.localized("The request was cancelled.")
         case .emptyResponse:
             return AppLocalization.localized("The provider returned an empty response.")
+        case .outputTokenLimitExceeded(let reason):
+            return AppLocalization.format(
+                "The model reached its output token limit before finishing (%@). Increase Max tokens in Settings > Models > Advanced Parameters. Reasoning tokens also count toward this limit; lowering Reasoning Effort may help.",
+                reason
+            )
         case .webSearchCompletedWithoutAnswer:
             return AppLocalization.localized(
                 "The web search completed, but the provider did not generate an answer."
@@ -1857,6 +1863,9 @@ private struct LLMResponsesResponseBody: Decodable {
         case "incomplete":
             let reason = incompleteDetails?.reason?
                 .trimmingCharacters(in: .whitespacesAndNewlines)
+            if reason == "max_output_tokens" {
+                return .outputTokenLimitExceeded(reason: "max_output_tokens")
+            }
             if let reason, reason.isEmpty == false {
                 return .network(AppLocalization.format(
                     "The provider returned an incomplete response: %@",
@@ -2216,7 +2225,9 @@ private struct LLMAnthropicMessagesResponseBody {
             return .network(AppLocalization.localized(
                 "The model declined to answer this request."
             ))
-        case "max_tokens", "model_context_window_exceeded":
+        case "max_tokens":
+            return .outputTokenLimitExceeded(reason: "max_tokens")
+        case "model_context_window_exceeded":
             return .network(AppLocalization.format(
                 "The provider returned an incomplete response: %@",
                 stopReason ?? ""

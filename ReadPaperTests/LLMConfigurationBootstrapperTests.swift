@@ -595,6 +595,20 @@ final class LLMDefaultProfilesTests: XCTestCase {
         XCTAssertFalse(defaults.bool(forKey: TranslationSetupNavigation.didDismissGettingStartedKey))
     }
 
+    func testModelParametersNavigationOpensModelsOnTheTruncatingModel() {
+        let modelID = UUID()
+
+        TranslationSetupNavigation.prepareModelParameters(modelProfileID: modelID, defaults: defaults)
+
+        XCTAssertEqual(defaults.string(forKey: TranslationSetupNavigation.selectedTabKey), "models")
+        XCTAssertEqual(defaults.string(forKey: TranslationSetupNavigation.modelToRevealKey), modelID.uuidString)
+
+        // Without a known model, only the tab changes; a stale request is not left behind.
+        TranslationSetupNavigation.prepareModelParameters(modelProfileID: nil, defaults: defaults)
+        XCTAssertEqual(defaults.string(forKey: TranslationSetupNavigation.selectedTabKey), "models")
+        XCTAssertNil(defaults.string(forKey: TranslationSetupNavigation.modelToRevealKey))
+    }
+
     func testUnknownProviderDefaultsToChatCompletions() {
         let store = LLMProviderAPIStyleStore(userDefaults: defaults)
         let providerID = UUID()

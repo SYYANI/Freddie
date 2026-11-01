@@ -1355,10 +1355,7 @@ final class OpenAICompatibleLLMProviderTests: XCTestCase {
         } catch let error as LLMProviderError {
             XCTAssertEqual(
                 error,
-                .network(AppLocalization.format(
-                    "The provider returned an incomplete response: %@",
-                    "max_output_tokens"
-                ))
+                .outputTokenLimitExceeded(reason: "max_output_tokens")
             )
         }
     }
@@ -1803,6 +1800,71 @@ extension OpenAICompatibleLLMProviderTests {
     private func lastRequestJSON() throws -> [String: Any] {
         let body = try XCTUnwrap(MockURLProtocol.requestBodies.last)
         return try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
+    }
+
+    func testTranslationRejectsOutputTokenExhaustionAcrossProtocols() async throws {
+        let cases: [(LLMAPIStyle, String, String)] = [
+            (.responses, """
+                {"status":"incomplete","incomplete_details":{"reason":"max_output_tokens"},
+                 "output":[{"type":"message","content":[{"type":"output_text","text":"部分译文"}]}]}
+                """, "max_output_tokens"),
+            // Reasoning can consume the budget before any visible text is produced.
+            (.responses, """
+                {"status":"incomplete","incomplete_details":{"reason":"max_output_tokens"},"output":[]}
+                """, "max_output_tokens"),
+            (.chatCompletions, """
+                {"choices":[{"message":{"content":"部分译文"},"finish_reason":"length"}]}
+                """, "length"),
+            (.anthropicMessages, """
+                {"content":[{"type":"text","text":"部分译文"}],"stop_reason":"max_tokens"}
+                """, "max_tokens")
+        ]
+
+        for (style, body, reason) in cases {
+            let configuration = respond(with: body)
+            let client = TranslationLLMClient(
+                provider: OpenAICompatibleLLMProvider(sessionConfigurationOverride: configuration)
+            )
+            let route = LLMModelRouteSnapshot(
+                providerProfileID: UUID(), providerName: "Test provider",
+                modelProfileID: UUID(), modelProfileName: "Test model",
+                baseURL: "https://api.example.com/v1", apiStyle: style,
+                apiKeyRef: "test-key", modelName: "test-model", maxTokens: 256
+            )
+
+            do {
+                _ = try await client.translate(
+                    "A complete source paragraph.", targetLanguage: "zh-Hans",
+                    route: route, apiKey: "sk-test"
+                )
+                XCTFail("A truncated translation must not be returned for caching (\(style)).")
+            } catch let error as LLMProviderError {
+                XCTAssertEqual(error, .outputTokenLimitExceeded(reason: reason))
+            }
+
+            let tokenKey = style == .responses ? "max_output_tokens" : "max_tokens"
+            XCTAssertEqual(try lastRequestJSON()[tokenKey] as? Int, 256)
+        }
+        // Do not silently retry beyond the user's configured output budget.
+        XCTAssertEqual(MockURLProtocol.requestPaths.count, cases.count)
+    }
+
+    func testTranslationReturnsCompletedResponse() async throws {
+        let configuration = respond(with: """
+            {"choices":[{"message":{"content":"  完整译文。  "},"finish_reason":"stop"}]}
+            """)
+        let client = TranslationLLMClient(
+            provider: OpenAICompatibleLLMProvider(sessionConfigurationOverride: configuration)
+        )
+        let translation = try await client.translate(
+            "Complete source.", targetLanguage: "zh-Hans",
+            route: LLMModelRouteSnapshot(
+                providerProfileID: UUID(), providerName: "Test provider",
+                modelProfileID: UUID(), modelProfileName: "Test model",
+                baseURL: "https://api.example.com/v1", apiKeyRef: "test-key", modelName: "test-model"
+            ), apiKey: "sk-test"
+        )
+        XCTAssertEqual(translation, "完整译文。")
     }
 
     func testChatCompletionsSendsImagePartsAndReportsLengthAndUsage() async throws {

@@ -55,6 +55,12 @@ struct TranslationLLMClient: TranslationLLMClientProtocol {
             )
         )
 
+        // Chat Completions returns partial text with finish_reason=length.
+        // Never let the HTML/abstract pipeline cache it as a complete translation.
+        if response.finishReason == .length {
+            throw LLMProviderError.outputTokenLimitExceeded(reason: "length")
+        }
+
         let content = response.text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard content.isEmpty == false else {
             throw LLMProviderError.emptyResponse
