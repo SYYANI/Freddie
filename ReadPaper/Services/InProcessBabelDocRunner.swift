@@ -45,7 +45,8 @@ struct InProcessBabelDocRunner {
             onlyIncludeTranslatedPages: pageRange != nil,
             documentTitle: documentTitle,
             glossary: preferences.translationGlossary,
-            semanticHints: semanticHints
+            semanticHints: semanticHints,
+            translatesFigureText: preferences.translatesFigureText
         )
         let configuration = BabelDocOpenAIConfiguration(
             baseURL: baseURL,

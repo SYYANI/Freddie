@@ -12,6 +12,26 @@
         }
       }
     },
+    "Translate text inside figures" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "翻译图内文字"
+          }
+        }
+      }
+    },
+    "When off, PDF translation leaves chart labels, legends and tick values in figures exactly as they are. When on, figure titles and legends are translated too." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "关闭时，PDF 翻译不会改动图表中的标签、图例和刻度数值；开启后，图内的标题和图例也会被翻译。"
+          }
+        }
+      }
+    },
     "“%@” and all of its local files, notes, reading state, and translation cache will be removed." : {
       "extractionState" : "stale",
       "localizations" : {
