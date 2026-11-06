@@ -390,6 +390,9 @@ struct BabelDocRunner {
         if let semanticHintsURL {
             arguments += ["--semantic-hints", semanticHintsURL.path]
         }
+        if preferences.translatesFigureText {
+            arguments.append("--translate-figure-text")
+        }
         if let temperature = route.temperature {
             arguments += ["--temperature", "\(temperature)"]
         }

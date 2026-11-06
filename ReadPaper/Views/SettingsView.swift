@@ -159,6 +159,8 @@ private struct SettingsForm: View {
     private var translationGlossary = ""
     @AppStorage(BabelDocSemanticHintPreference.userDefaultsKey)
     private var babelDocSemanticHintsEnabled = BabelDocSemanticHintPreference.defaultValue
+    @AppStorage(PDFFigureTextTranslationPreference.userDefaultsKey)
+    private var translatesPDFFigureText = PDFFigureTextTranslationPreference.defaultValue
     @AppStorage(LaTeXIntegrationPreferences.translationEnabledKey)
     private var latexTranslationEnabled = false
     @AppStorage(LaTeXIntegrationPreferences.toolchainDirectoryKey)
@@ -608,6 +610,12 @@ private struct SettingsForm: View {
                         isOn: $babelDocSemanticHintsEnabled
                     )
                     .help(String(localized: "When enabled, ReadPaper uses available arXiv source to improve BabelDOC structure and translation context. No TeX installation is required, and failures fall back to PDF-only analysis.", bundle: bundle))
+
+                    Toggle(
+                        String(localized: "Translate text inside figures", bundle: bundle),
+                        isOn: $translatesPDFFigureText
+                    )
+                    .help(String(localized: "When off, PDF translation leaves chart labels, legends and tick values in figures exactly as they are. When on, figure titles and legends are translated too.", bundle: bundle))
 
                     VStack(alignment: .leading, spacing: 8) {
                         ReadPaperInfoLabel(

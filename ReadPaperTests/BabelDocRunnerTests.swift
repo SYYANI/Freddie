@@ -281,6 +281,34 @@ final class BabelDocRunnerTests: XCTestCase {
         XCTAssertEqual(arguments[arguments.firstIndex(of: "--glossary")! + 1], "attention = 注意力")
     }
 
+    func testNativeArgumentsTranslateFigureTextOnlyWhenEnabled() {
+        let tool = NativeBabelDocToolPaths(
+            executable: URL(fileURLWithPath: "/native/bin/babeldoc-native"),
+            runtimeRoot: URL(fileURLWithPath: "/native", isDirectory: true),
+            runtimeManifest: URL(fileURLWithPath: "/app/runtime-manifest.json"),
+            runtimeVersion: "1.0.0",
+            mupdfLibrary: URL(fileURLWithPath: "/native/lib/libmupdf.dylib"),
+            zstdLibrary: URL(fileURLWithPath: "/native/lib/libzstd.dylib"),
+            layoutModel: URL(fileURLWithPath: "/native/models/layout.mlmodel"),
+            fontDirectory: URL(fileURLWithPath: "/native/fonts", isDirectory: true)
+        )
+        func arguments(translatesFigureText: Bool) -> [String] {
+            var preferences = Self.preferences
+            preferences.translatesFigureText = translatesFigureText
+            return BabelDocRunner.nativeArguments(
+                inputPDF: URL(fileURLWithPath: "/tmp/source.pdf"),
+                outputPDF: URL(fileURLWithPath: "/tmp/translated.pdf"),
+                preferences: preferences,
+                route: Self.route,
+                tool: tool
+            )
+        }
+
+        XCTAssertFalse(PDFFigureTextTranslationPreference.defaultValue, "Figures stay untranslated by default.")
+        XCTAssertFalse(arguments(translatesFigureText: false).contains("--translate-figure-text"))
+        XCTAssertTrue(arguments(translatesFigureText: true).contains("--translate-figure-text"))
+    }
+
     func testNativeArgumentsSelectAPIStyleForProviderProtocol() {
         let tool = NativeBabelDocToolPaths(
             executable: URL(fileURLWithPath: "/native/bin/babeldoc-native"),
