@@ -4,7 +4,7 @@ import SwiftData
 struct SelectionAssistantScopeResolver {
     static func resolve(_ request: SelectionAssistantRequest) -> AssistantScope {
         guard request.scope == .automatic else { return request.scope }
-        if request.action == .translate { return .nearby }
+        if request.action == .translate || request.isQuickGloss { return .nearby }
 
         let question = request.question?
             .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
@@ -168,8 +168,9 @@ struct SelectionAssistantOrchestrator {
         }
 
         // What the reader already learned about the terms in this passage, here or in
-        // other papers. A plain translation does not need it.
-        if resolvedRequest.action != .translate {
+        // other papers. A plain translation does not need it, and the quick gloss stays
+        // short and uncited.
+        if resolvedRequest.action != .translate, resolvedRequest.isQuickGloss == false {
             let paperTitles = Self.paperTitles(near: paper)
             sources.append(contentsOf: await learningContext.sources(
                 mentionedIn: [resolvedRequest.selection, resolvedRequest.question ?? ""].joined(separator: "\n"),

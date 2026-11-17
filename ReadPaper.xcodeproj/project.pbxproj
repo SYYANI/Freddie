@@ -270,6 +270,7 @@
 		BE5296B1E21114A685F2AB8E /* PaperFolderService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05DFB8583F85B560B170D0D6 /* PaperFolderService.swift */; };
 		BEBF197F4257357F15F0BCF7 /* NoteMarkdownPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72E527A1CB9BF6F7422C42BA /* NoteMarkdownPreview.swift */; };
 		BF292A5786953F7B9F64BA8C /* DocumentOutlinePanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D06E08E7244538EAB449D7D /* DocumentOutlinePanel.swift */; };
+		BFABC8295F234C4B6DFD0AD7 /* SelectionAssistantAutoRunTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5FD98E92A2EDF7DF573E7BD /* SelectionAssistantAutoRunTests.swift */; };
 		BFB5DC5EA84E77A4BE9E5F9A /* LearningOrganizerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFCF291DB159DAB94C133A93 /* LearningOrganizerTests.swift */; };
 		BFE0544E7900F13B44CA1F0D /* PaperLibraryFilterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7CD28F2D7B9F97F3335C9D1 /* PaperLibraryFilterTests.swift */; };
 		C01AEDB3842EF42D795D9464 /* LibrarySidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D81E9697498069EC2F633A5 /* LibrarySidebarView.swift */; };
@@ -602,6 +603,7 @@
 		E342738FD553970643EE1F6D /* LanguageManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LanguageManager.swift; sourceTree = "<group>"; };
 		E3B8354421E9159F37194453 /* ArxivImportProgress.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ArxivImportProgress.swift; sourceTree = "<group>"; };
 		E56EC341627319DA8CE698A6 /* BabelDocToolManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BabelDocToolManagerTests.swift; sourceTree = "<group>"; };
+		E5FD98E92A2EDF7DF573E7BD /* SelectionAssistantAutoRunTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectionAssistantAutoRunTests.swift; sourceTree = "<group>"; };
 		E6E92728C43A017D4F19D275 /* PaperFileStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaperFileStoreTests.swift; sourceTree = "<group>"; };
 		EBA58435DCA0AF5A28A23115 /* OpenAICompatibleLLMProviderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAICompatibleLLMProviderTests.swift; sourceTree = "<group>"; };
 		EBDEC1CC3A092C0C03C8FAC9 /* HTMLTeXRenderingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HTMLTeXRenderingTests.swift; sourceTree = "<group>"; };
@@ -918,6 +920,7 @@
 				31F4A5AE575B4BE0C4DE3E4A /* ReadingStateStoreTests.swift */,
 				FCA5D572D0C1E47ECE90927A /* ScannedPDFTranslationServiceTests.swift */,
 				738973A1A6296FAAB69D2405 /* SecureAPIKeyVaultTests.swift */,
+				E5FD98E92A2EDF7DF573E7BD /* SelectionAssistantAutoRunTests.swift */,
 				D30DC0CB0ED56CD6835AA136 /* SelectionAssistantConversationStoreTests.swift */,
 				EBF7DE075E33762AAE9C79DF /* SelectionAssistantOrchestratorTests.swift */,
 				530B5C69AD3FCA0AFBBB8D69 /* SelectionAssistantOverlayTests.swift */,
@@ -1366,6 +1369,7 @@
 				68276F37DC0F83B2129BFBB5 /* ReadingStateStoreTests.swift in Sources */,
 				56BE0C65EA8C0A0ACDBC8745 /* ScannedPDFTranslationServiceTests.swift in Sources */,
 				093412E3E5A877EE8577C38B /* SecureAPIKeyVaultTests.swift in Sources */,
+				BFABC8295F234C4B6DFD0AD7 /* SelectionAssistantAutoRunTests.swift in Sources */,
 				2A11330BC2F760902D108B57 /* SelectionAssistantConversationStoreTests.swift in Sources */,
 				B7742F1C9EC0DFCD82B119A7 /* SelectionAssistantOrchestratorTests.swift in Sources */,
 				55BD46855D3DDECA2DE801B1 /* SelectionAssistantOverlayTests.swift in Sources */,
@@ -1741,7 +1745,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 184;
+				CURRENT_PROJECT_VERSION = 185;
 				DEVELOPMENT_LANGUAGE = en;
 				ENABLE_TESTABILITY = NO;
 				INFOPLIST_FILE = ReadPaper/Info.plist;
@@ -1752,7 +1756,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.0.17;
+				MARKETING_VERSION = 1.0.18;
 				PRODUCT_BUNDLE_IDENTIFIER = com.yiyan.ReadPaper;
 				PRODUCT_MODULE_NAME = ReadPaper;
 				PRODUCT_NAME = Freddie;
@@ -1908,7 +1912,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 184;
+				CURRENT_PROJECT_VERSION = 185;
 				DEVELOPMENT_LANGUAGE = en;
 				DEVELOPMENT_TEAM = 3VM5RUH8V5;
 				ENABLE_TESTABILITY = YES;
@@ -1918,7 +1922,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0.17;
+				MARKETING_VERSION = 1.0.18;
 				PRODUCT_BUNDLE_IDENTIFIER = com.yiyan.ReadPaper.iPad;
 				PRODUCT_MODULE_NAME = ReadPaperiPad;
 				PRODUCT_NAME = Freddie;
@@ -1961,7 +1965,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 184;
+				CURRENT_PROJECT_VERSION = 185;
 				DEVELOPMENT_LANGUAGE = en;
 				DEVELOPMENT_TEAM = 3VM5RUH8V5;
 				ENABLE_TESTABILITY = YES;
@@ -1971,7 +1975,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0.17;
+				MARKETING_VERSION = 1.0.18;
 				PRODUCT_BUNDLE_IDENTIFIER = com.yiyan.ReadPaper.iPad;
 				PRODUCT_MODULE_NAME = ReadPaperiPad;
 				PRODUCT_NAME = Freddie;
@@ -1992,7 +1996,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 184;
+				CURRENT_PROJECT_VERSION = 185;
 				DEVELOPMENT_LANGUAGE = en;
 				ENABLE_TESTABILITY = YES;
 				INFOPLIST_FILE = ReadPaper/Info.plist;
@@ -2003,7 +2007,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.0.17;
+				MARKETING_VERSION = 1.0.18;
 				PRODUCT_BUNDLE_IDENTIFIER = com.yiyan.ReadPaper;
 				PRODUCT_MODULE_NAME = ReadPaper;
 				PRODUCT_NAME = Freddie;

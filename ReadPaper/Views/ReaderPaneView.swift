@@ -97,6 +97,8 @@ struct ReaderPaneView: View {
     private var didConfirmScannedPDFTranslation = false
     @AppStorage(ScannedPDFTranscription.displayedPaperIDsKey)
     private var transcriptionPaperIDsStorage = ""
+    @AppStorage(SelectionAssistantPreferences.quickGlossOnSelectionEnabledKey)
+    private var quickGlossOnSelectionEnabled = false
 
     var paper: Paper?
     var attachments: [PaperAttachment]
@@ -184,6 +186,8 @@ struct ReaderPaneView: View {
     @State private var selectionAssistantProgress: SelectionAssistantProgress?
     @State private var selectionAssistantInitialConversation: SelectionAssistantConversationSnapshot?
     @State private var selectionAssistantHistoryAnchors: [SelectionAssistantHistoryAnchor] = []
+    @State private var selectionAssistantAutoRun: SelectionAssistantAutoRun?
+    @State private var selectionAssistantAutoRunTask: Task<Void, Never>?
     @State private var selectionRecall = LearningRecall()
     @State private var selectionRecallPaperTitles: [UUID: String] = [:]
     @State private var selectionRecallTask: Task<Void, Never>?
@@ -1415,6 +1419,16 @@ struct ReaderPaneView: View {
 
         Divider()
 
+        Toggle(isOn: $quickGlossOnSelectionEnabled) {
+            Label(
+                String(localized: "Translate & Explain on Selection", bundle: bundle),
+                systemImage: "sparkles"
+            )
+        }
+        .help(String(localized: "Shortly after you select a passage in the source PDF, show its translation and a plain-language explanation.", bundle: bundle))
+
+        Divider()
+
         Menu(String(localized: "Annotation Color", bundle: bundle)) {
             annotationColorButton(.yellow, title: String(localized: "Yellow", bundle: bundle))
             annotationColorButton(.green, title: String(localized: "Green", bundle: bundle))
@@ -2144,7 +2158,9 @@ struct ReaderPaneView: View {
                     quoteInWriting: quoteInWriting,
                     recall: selectionRecall,
                     recallPaperTitles: selectionRecallPaperTitles,
-                    onOpenRecallEntry: openRecallEntry
+                    onOpenRecallEntry: openRecallEntry,
+                    autoRun: selectionAssistantAutoRun,
+                    deleteConversation: deleteSelectionAssistantConversation
                 )
                 .transition(.move(edge: .bottom).combined(with: .opacity))
                 .zIndex(10)
@@ -3611,6 +3627,11 @@ struct ReaderPaneView: View {
         noteSelectionContext = selection
         selectionAssistantDismissTask?.cancel()
         selectionAssistantDismissTask = nil
+        selectionAssistantAutoRunTask?.cancel()
+        selectionAssistantAutoRunTask = nil
+        if selection?.selectionAssistantIdentity != selectionAssistantAutoRun?.selectionIdentity {
+            selectionAssistantAutoRun = nil
+        }
 
         if let selection {
             isSelectionAssistantPinned = false
@@ -3625,6 +3646,7 @@ struct ReaderPaneView: View {
             }
             selectionAssistantSelection = selection
             refreshSelectionRecall(for: selection)
+            scheduleQuickGloss(for: selection)
             return
         }
 
@@ -3636,6 +3658,38 @@ struct ReaderPaneView: View {
             selectionAssistantSelection = nil
             selectionAssistantInitialConversation = nil
             selectionAssistantDismissTask = nil
+        }
+    }
+
+    /// With the reader's switch on, asks for the quick translation and explanation once a
+    /// selection in the source PDF has settled. Every change of the selection cancels the
+    /// pending request, so dragging across a paragraph sends one request, not one per move.
+    private func scheduleQuickGloss(for selection: NoteSelectionContext) {
+        guard quickGlossOnSelectionEnabled,
+              paper != nil,
+              let quote = selection.trimmedQuote,
+              quote.count >= SelectionAssistantPreferences.quickGlossMinimumCharacterCount,
+              let attachmentID = selection.attachmentID,
+              let attachment = attachments.first(where: { $0.id == attachmentID }),
+              attachment.kind != .translatedPDF,
+              attachment.kind != .html
+        else { return }
+
+        let identity = selection.selectionAssistantIdentity
+        guard selectionAssistantAutoRun?.selectionIdentity != identity else { return }
+        selectionAssistantAutoRunTask = Task { @MainActor in
+            repeat {
+                try? await Task.sleep(for: SelectionAssistantPreferences.quickGlossSelectionDelay)
+                guard Task.isCancelled == false else { return }
+                // A drag that pauses mid-way has not finished selecting.
+            } while NSEvent.pressedMouseButtons & 1 != 0
+            guard quickGlossOnSelectionEnabled,
+                  selectionAssistantSelection?.selectionAssistantIdentity == identity else { return }
+            selectionAssistantAutoRunTask = nil
+            selectionAssistantAutoRun = SelectionAssistantAutoRun(
+                selectionIdentity: identity,
+                token: (selectionAssistantAutoRun?.token ?? 0) &+ 1
+            )
         }
     }
 
@@ -3787,6 +3841,17 @@ struct ReaderPaneView: View {
     }
 
     @MainActor
+    private func deleteSelectionAssistantConversation(_ selection: NoteSelectionContext) {
+        guard let paper else { return }
+        try? SelectionAssistantConversationStore().delete(
+            paperID: paper.id,
+            selectionIdentity: selection.selectionAssistantIdentity
+        )
+        refreshSelectionAssistantHistoryAnchors()
+        clearSelectionAssistant()
+    }
+
+    @MainActor
     private func refreshSelectionAssistantHistoryAnchors() {
         guard let paper else {
             selectionAssistantHistoryAnchors = []
@@ -3802,6 +3867,9 @@ struct ReaderPaneView: View {
         selectionAssistantProgress = nil
         selectionAssistantInitialConversation = nil
         isSelectionAssistantPinned = false
+        selectionAssistantAutoRunTask?.cancel()
+        selectionAssistantAutoRunTask = nil
+        selectionAssistantAutoRun = nil
         selectionAssistantSelection = nil
         selectionRecallTask?.cancel()
         selectionRecall = LearningRecall()

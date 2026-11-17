@@ -33,6 +33,10 @@ struct SelectionAssistantRequest: Equatable, Sendable {
     var question: String?
     var conversation: [SelectionAssistantConversationTurn]
     var scope: AssistantScope
+    /// An `.explain` request answered as a short translation followed by a plain-language
+    /// explanation. Not a separate action: conversations are stored with their action, and
+    /// older versions cannot decode one they do not know.
+    var isQuickGloss: Bool
 
     init(
         action: SelectionAssistantAction,
@@ -40,9 +44,11 @@ struct SelectionAssistantRequest: Equatable, Sendable {
         localContext: String? = nil,
         question: String? = nil,
         conversation: [SelectionAssistantConversationTurn] = [],
-        scope: AssistantScope = .nearby
+        scope: AssistantScope = .nearby,
+        isQuickGloss: Bool = false
     ) {
         self.action = action
+        self.isQuickGloss = isQuickGloss && action == .explain
         self.selection = Self.normalized(selection, limit: 4_000) ?? ""
         self.localContext = Self.normalized(localContext, limit: 8_000)
         self.question = Self.normalized(question, limit: 1_000)
@@ -418,6 +424,10 @@ enum SelectionAssistantPrompt {
         case .translate:
             task = """
             Translate only SELECTED_TEXT into \(targetLanguage). Preserve its meaning, uncertainty, terminology, symbols, numbers, citations, and Markdown emphasis. Use LOCAL_CONTEXT only to disambiguate meaning. Do not explain or summarize.
+            """
+        case .explain where request.isQuickGloss:
+            task = """
+            The reader just selected SELECTED_TEXT and wants to understand it at a glance. Answer in \(targetLanguage) with exactly two short parts, each starting with a bold Markdown label written in \(targetLanguage): first a label meaning "Translation", followed by a faithful translation of SELECTED_TEXT that keeps its terminology, symbols, numbers, and citations; then a label meaning "In plain words", followed by what the passage is saying, explained the way you would to a curious newcomer. Use everyday words and short sentences, explain each piece of jargon in a few words the first time it appears, and add one concrete example or analogy only when it makes the idea easier. Keep the second part to at most four sentences. If SELECTED_TEXT is already written in \(targetLanguage), leave out the translation part. Use LOCAL_CONTEXT only to work out what the passage means here. Do not add source labels, and do not invent claims that the supplied material does not support.
             """
         case .explain:
             task = """

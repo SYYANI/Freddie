@@ -3,6 +3,20 @@ import XCTest
 @testable import ReadPaper
 
 final class SelectionAssistantOrchestratorTests: XCTestCase {
+    func testQuickGlossStaysWithNearbyContext() {
+        XCTAssertEqual(
+            SelectionAssistantScopeResolver.resolve(
+                SelectionAssistantRequest(
+                    action: .explain,
+                    selection: "The method section defines the experiment",
+                    scope: .automatic,
+                    isQuickGloss: true
+                )
+            ),
+            .nearby
+        )
+    }
+
     func testAutomaticScopeUsesPrivacyAwareLocalFirstPolicy() {
         XCTAssertEqual(
             SelectionAssistantScopeResolver.resolve(

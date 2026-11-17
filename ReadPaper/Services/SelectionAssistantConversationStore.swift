@@ -36,6 +36,17 @@ struct SelectionAssistantConversationStore {
         try data.write(to: archiveURL(paperID: paperID), options: .atomic)
     }
 
+    /// Removes the conversation for one selection, and with it the history underline
+    /// drawn from it. Learning events already derived from it stay in the learning log.
+    func delete(paperID: UUID, selectionIdentity: String) throws {
+        var archive = try loadArchive(paperID: paperID)
+        let count = archive.conversations.count
+        archive.conversations.removeAll { $0.selectionIdentity == selectionIdentity }
+        guard archive.conversations.count != count else { return }
+        let data = try JSONEncoder().encode(archive)
+        try data.write(to: archiveURL(paperID: paperID), options: .atomic)
+    }
+
     func historyAnchors(
         paperID: UUID,
         attachmentID: UUID? = nil

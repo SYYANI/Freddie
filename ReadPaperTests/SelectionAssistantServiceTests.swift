@@ -44,6 +44,42 @@ final class SelectionAssistantServiceTests: XCTestCase {
         XCTAssertTrue(messages[1].content.contains("<<<PAPER_TITLE>>>\nPaper Blog"))
     }
 
+    func testQuickGlossPromptAsksForTranslationThenPlainExplanation() {
+        let request = SelectionAssistantRequest(
+            action: .explain,
+            selection: "stochastic gradient descent",
+            localContext: "We train with stochastic gradient descent.",
+            isQuickGloss: true
+        )
+        let messages = SelectionAssistantPrompt.messages(
+            for: request,
+            paperTitle: "Paper Blog",
+            targetLanguage: "zh-CN"
+        )
+
+        XCTAssertTrue(request.isQuickGloss)
+        XCTAssertTrue(messages[0].content.contains("faithful translation of SELECTED_TEXT"))
+        XCTAssertTrue(messages[0].content.contains("curious newcomer"))
+        XCTAssertFalse(messages[0].content.contains("Explain SELECTED_TEXT clearly"))
+        XCTAssertTrue(messages[1].content.contains("<<<SELECTED_TEXT>>>\nstochastic gradient descent"))
+    }
+
+    func testQuickGlossOnlyAppliesToExplainRequests() {
+        let request = SelectionAssistantRequest(
+            action: .translate,
+            selection: "a term",
+            isQuickGloss: true
+        )
+        let messages = SelectionAssistantPrompt.messages(
+            for: request,
+            paperTitle: "Paper Blog",
+            targetLanguage: "zh-CN"
+        )
+
+        XCTAssertFalse(request.isQuickGloss)
+        XCTAssertTrue(messages[0].content.contains("Translate only SELECTED_TEXT into zh-CN"))
+    }
+
     func testEvidenceSourcesAreLabeledAndReturnedStructurally() async throws {
         let provider = SelectionAssistantProviderSpy(response: "The claim is supported [S1].")
         let service = SelectionAssistantService(provider: provider)

@@ -12,12 +12,32 @@
         }
       }
     },
-    "Write About It" : {
+    "Delete This Conversation" : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "写下来"
+            "value" : "删除这段对话"
+          }
+        }
+      }
+    },
+    "Delete this conversation?" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "删除这段对话？"
+          }
+        }
+      }
+    },
+    "The answer and its underline in the paper are removed. This cannot be undone." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "回答和论文里对应的下划线都会被删除，无法撤销。"
           }
         }
       }
@@ -8591,6 +8611,17 @@
         }
       }
     },
+    "Shortly after you select a passage in the source PDF, show its translation and a plain-language explanation." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在原文 PDF 中选中文字后稍作停顿，显示这段文字的译文和通俗易懂的解释。"
+          }
+        }
+      }
+    },
     "Show" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -10456,6 +10487,17 @@
         }
       }
     },
+    "Translate & Explain on Selection" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选中后翻译并解释"
+          }
+        }
+      }
+    },
     "Translate All" : {
       "localizations" : {
         "zh-Hans" : {
@@ -10473,6 +10515,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "翻译全部 %1$d 页"
+          }
+        }
+      }
+    },
+    "Translate and explain text when I select it in a PDF" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在 PDF 中选中文字后自动翻译并解释"
           }
         }
       }
@@ -10780,6 +10833,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "翻译（部分）"
+          }
+        }
+      }
+    },
+    "Translation & Explanation" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "翻译与解释"
           }
         }
       }
@@ -11661,6 +11725,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "写点笔记…"
+          }
+        }
+      }
+    },
+    "Write About It" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "写下来"
           }
         }
       }

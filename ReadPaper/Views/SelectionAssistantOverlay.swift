@@ -94,8 +94,13 @@ struct SelectionAssistantOverlay: View {
     var recall = LearningRecall()
     var recallPaperTitles: [UUID: String] = [:]
     var onOpenRecallEntry: (@MainActor (LearningConcept.Entry) -> Void)? = nil
+    /// Starts the quick translation and explanation for this selection without a click.
+    var autoRun: SelectionAssistantAutoRun? = nil
+    /// Deletes the saved conversation for this selection (and its history underline).
+    var deleteConversation: (@MainActor (NoteSelectionContext) -> Void)? = nil
 
     @State private var question = ""
+    @State private var isQuickGloss = false
     @State private var isEnteringQuestion = false
     @State private var isWorking = false
     @State private var activeAction: SelectionAssistantAction?
@@ -114,6 +119,7 @@ struct SelectionAssistantOverlay: View {
     @State private var measuredResultCardSize: CGSize = .zero
     @State private var resizeStartSize: CGSize?
     @State private var expandedRecallConceptID: String?
+    @State private var isConfirmingDelete = false
     @FocusState private var isQuestionFieldFocused: Bool
     @FocusState private var isFollowUpFieldFocused: Bool
 
@@ -179,10 +185,19 @@ struct SelectionAssistantOverlay: View {
         .animation(layoutAnimation, value: isEnteringQuestion)
         .animation(layoutAnimation, value: recall)
         .animation(layoutAnimation, value: expandedRecallConceptID)
-        .onAppear(perform: restoreInitialConversation)
+        .onAppear {
+            restoreInitialConversation()
+            runAutoRunIfNeeded()
+        }
         .onChange(of: selection.selectionAssistantIdentity) { _, _ in
             resetForNewSelection()
             restoreInitialConversation()
+            // The reset above cancels a run started by the `autoRun` change below when
+            // both arrive in the same update.
+            runAutoRunIfNeeded()
+        }
+        .onChange(of: autoRun) { _, _ in
+            runAutoRunIfNeeded()
         }
         .onChange(of: initialConversation?.modifiedAt) { _, _ in
             restoreInitialConversation()
@@ -404,6 +419,28 @@ struct SelectionAssistantOverlay: View {
                     .help(String(localized: "Copy", bundle: bundle))
                 }
 
+                if deleteConversation != nil, conversation.isEmpty == false, isWorking == false {
+                    Button {
+                        onInteractionBegan()
+                        isConfirmingDelete = true
+                    } label: {
+                        Image(systemName: "trash")
+                    }
+                    .buttonStyle(.plain)
+                    .help(String(localized: "Delete This Conversation", bundle: bundle))
+                    .accessibilityLabel(String(localized: "Delete This Conversation", bundle: bundle))
+                    .confirmationDialog(
+                        String(localized: "Delete this conversation?", bundle: bundle),
+                        isPresented: $isConfirmingDelete
+                    ) {
+                        Button(String(localized: "Delete", bundle: bundle), role: .destructive) {
+                            deleteCurrentConversation()
+                        }
+                    } message: {
+                        Text("The answer and its underline in the paper are removed. This cannot be undone.", bundle: bundle)
+                    }
+                }
+
                 if isWorking {
                     Button(action: stopGeneration) {
                         Image(systemName: "stop.circle.fill")
@@ -582,13 +619,33 @@ struct SelectionAssistantOverlay: View {
         runInitialAction(.ask, question: normalized)
     }
 
-    private func runInitialAction(_ action: SelectionAssistantAction, question: String?) {
+    /// Runs the quick gloss once for the selection it was requested for. A conversation
+    /// already on screen for that selection (restored or in progress) is left alone, so
+    /// selecting the same passage again does not pay for a second answer.
+    private func runAutoRunIfNeeded() {
+        guard let autoRun,
+              autoRun.selectionIdentity == selection.selectionAssistantIdentity,
+              activeAction == nil,
+              isWorking == false else { return }
+        isEnteringQuestion = false
+        runInitialAction(.explain, question: nil, isQuickGloss: true)
+    }
+
+    private func runInitialAction(
+        _ action: SelectionAssistantAction,
+        question: String?,
+        isQuickGloss: Bool = false
+    ) {
         task?.cancel()
+        let instruction = isQuickGloss
+            ? "Translate the selected text and explain it in plain words."
+            : initialInstruction(for: action)
         withAnimation(layoutAnimation) {
+            self.isQuickGloss = isQuickGloss
             activeAction = action
             conversation = []
             completedRequests = []
-            pendingQuestion = question ?? initialInstruction(for: action)
+            pendingQuestion = question ?? instruction
             conversationScrollRequest = .init(turnIndex: 0)
             followUpQuestion = ""
             errorText = nil
@@ -604,7 +661,8 @@ struct SelectionAssistantOverlay: View {
             selection: selection.quote,
             localContext: selection.localContext,
             question: question,
-            scope: .automatic
+            scope: .automatic,
+            isQuickGloss: isQuickGloss
         )
         task = Task { @MainActor in
             do {
@@ -614,7 +672,7 @@ struct SelectionAssistantOverlay: View {
                 guard Task.isCancelled == false else { return }
                 withAnimation(layoutAnimation) {
                     conversation = [SelectionAssistantConversationTurn(
-                        question: pendingQuestion ?? initialInstruction(for: action),
+                        question: pendingQuestion ?? instruction,
                         result: result
                     )]
                     completedRequests = [request]
@@ -710,6 +768,7 @@ struct SelectionAssistantOverlay: View {
             isEnteringQuestion = false
             isWorking = false
             activeAction = nil
+            isQuickGloss = false
             errorText = nil
             saveErrorText = nil
             isSavedAsNote = false
@@ -719,6 +778,12 @@ struct SelectionAssistantOverlay: View {
             measuredResultCardSize = .zero
             resizeStartSize = nil
         }
+    }
+
+    private func deleteCurrentConversation() {
+        let selection = selection
+        resetForNewSelection()
+        deleteConversation?(selection)
     }
 
     private func closeResultCard() {
@@ -799,6 +864,7 @@ struct SelectionAssistantOverlay: View {
               initialConversation.turns.isEmpty == false,
               isWorking == false else { return }
         activeAction = initialConversation.action
+        isQuickGloss = false
         conversation = initialConversation.turns
         completedRequests = []
         pendingQuestion = nil
@@ -922,7 +988,9 @@ struct SelectionAssistantOverlay: View {
         case .translate:
             return String(localized: "Translation", bundle: bundle)
         case .explain:
-            return String(localized: "AI Explanation", bundle: bundle)
+            return isQuickGloss
+                ? String(localized: "Translation & Explanation", bundle: bundle)
+                : String(localized: "AI Explanation", bundle: bundle)
         case .ask:
             return String(localized: "Ask AI", bundle: bundle)
         case nil:
@@ -1023,7 +1091,7 @@ struct SelectionAssistantConversationView: View {
                                 }
                             }
                             .id(SelectionAssistantConversationScrollTarget.turn(index))
-                            .measureConversationHeight(.turn(index))
+                            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { recordConversationHeight($0, for: .turn(index)) }
                         }
                     }
 
@@ -1032,36 +1100,15 @@ struct SelectionAssistantConversationView: View {
                         .id(SelectionAssistantConversationScrollTarget.bottom)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .measureConversationHeight(.content)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { recordConversationHeight($0, for: .content) }
             }
             // Keep the viewport tied to the measured content height. Streaming
             // still follows the bottom, but a short first answer must not reserve
             // the entire maximum height and leave a large empty card behind.
             .frame(minHeight: 0, idealHeight: conversationViewportHeight, maxHeight: conversationViewportHeight)
             .clipped()
-            .measureConversationHeight(.viewport)
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { recordConversationHeight($0, for: .viewport) }
             .opacity(hasConversationAreaContent ? 1 : 0)
-            .onPreferenceChange(SelectionAssistantConversationHeightPreferenceKey.self) { height in
-                var normalizedHeights = height.mapValues { ceil(max(0, $0)) }
-                // Finalization replaces the streamed Markdown node and can report
-                // a shorter content height after trimming/citation normalization.
-                // Retain the largest content measurement already presented so the
-                // card never collapses at the end of generation.
-                normalizedHeights[.content] = max(
-                    normalizedHeights[.content] ?? 0,
-                    conversationHeights[.content] ?? 0
-                )
-                guard normalizedHeights != conversationHeights else { return }
-
-                // Streaming updates arrive much faster than a layout animation can
-                // finish. Keep geometry bookkeeping out of the surrounding card's
-                // animation transaction so successive tokens cannot make it pulse.
-                var transaction = Transaction()
-                transaction.animation = nil
-                withTransaction(transaction) {
-                    conversationHeights = normalizedHeights
-                }
-            }
             .task(id: conversationScrollUpdate) {
                 let update = conversationScrollUpdate
                 guard let target = update.target else { return }
@@ -1094,6 +1141,33 @@ struct SelectionAssistantConversationView: View {
         .onChange(of: partialAnswer.isEmpty) { _, isEmpty in
             guard isEmpty == false else { return }
             streamingAnswerRequestID = conversationScrollRequest?.id
+        }
+    }
+
+    /// Heights come from `onGeometryChange` rather than a preference key: a preference
+    /// read across the scroll view sometimes missed the answer's Markdown growing after
+    /// its asynchronous parse, leaving a restored answer clipped to a sources-only viewport.
+    private func recordConversationHeight(
+        _ height: CGFloat,
+        for element: SelectionAssistantConversationGeometry
+    ) {
+        var normalizedHeight = ceil(max(0, height))
+        if element == .content {
+            // Finalization replaces the streamed Markdown node and can report a shorter
+            // content height after trimming/citation normalization. Retain the largest
+            // content measurement already presented so the card never collapses at the
+            // end of generation.
+            normalizedHeight = max(normalizedHeight, conversationHeights[.content] ?? 0)
+        }
+        guard conversationHeights[element] != normalizedHeight else { return }
+
+        // Streaming updates arrive much faster than a layout animation can finish. Keep
+        // geometry bookkeeping out of the surrounding card's animation transaction so
+        // successive tokens cannot make it pulse.
+        var transaction = Transaction()
+        transaction.animation = nil
+        withTransaction(transaction) {
+            conversationHeights[element] = normalizedHeight
         }
     }
 
@@ -1291,17 +1365,6 @@ private struct SelectionAssistantConversationScrollUpdate: Equatable {
     }
 }
 
-private struct SelectionAssistantConversationHeightPreferenceKey: PreferenceKey {
-    static var defaultValue: [SelectionAssistantConversationGeometry: CGFloat] { [:] }
-
-    static func reduce(
-        value: inout [SelectionAssistantConversationGeometry: CGFloat],
-        nextValue: () -> [SelectionAssistantConversationGeometry: CGFloat]
-    ) {
-        value.merge(nextValue(), uniquingKeysWith: max)
-    }
-}
-
 private struct SelectionAssistantCircleButtonStyle: ButtonStyle {
     @Environment(\.isEnabled) private var isEnabled
 
@@ -1325,17 +1388,6 @@ private extension View {
                 Color.clear.preference(
                     key: SelectionAssistantResultCardSizePreferenceKey.self,
                     value: geometry.size
-                )
-            }
-        }
-    }
-
-    func measureConversationHeight(_ element: SelectionAssistantConversationGeometry) -> some View {
-        background {
-            GeometryReader { geometry in
-                Color.clear.preference(
-                    key: SelectionAssistantConversationHeightPreferenceKey.self,
-                    value: [element: geometry.size.height]
                 )
             }
         }
