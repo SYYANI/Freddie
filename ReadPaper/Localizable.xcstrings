@@ -972,6 +972,16 @@
         }
       }
     },
+    "As you read, passages you highlighted, noted or asked about before appear here when they relate to what is on screen." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "阅读时，如果屏幕上的内容与你以前高亮、记过笔记或提问过的段落相关，它们会出现在这里。"
+          }
+        }
+      }
+    },
     "Ask a follow-up..." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1487,6 +1497,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "图书章节"
+          }
+        }
+      }
+    },
+    "Both mention %@" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "都提到 %@"
           }
         }
       }
@@ -2144,6 +2164,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "完整联网搜索 Trace"
+          }
+        }
+      }
+    },
+    "Concept: %@" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "概念：%@"
           }
         }
       }
@@ -3022,6 +3052,17 @@
         }
       }
     },
+    "Drag a card into the writing to quote it" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "把卡片拖进正文即可引用"
+          }
+        }
+      }
+    },
     "Drag to pan over images and blank areas; selectable text keeps the text-selection cursor. When disabled, non-text areas use the standard arrow cursor." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -3061,6 +3102,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "电子邮件"
+          }
+        }
+      }
+    },
+    "Echoes" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "回响"
           }
         }
       }
@@ -4651,6 +4702,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "插入图片…"
+          }
+        }
+      }
+    },
+    "Insert in Writing" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "插入写作稿"
           }
         }
       }
@@ -6253,6 +6314,16 @@
         }
       }
     },
+    "Not Related" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "不相关"
+          }
+        }
+      }
+    },
     "Not Selected" : {
       "localizations" : {
         "zh-Hans" : {
@@ -6384,6 +6455,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "在浏览器中打开"
+          }
+        }
+      }
+    },
+    "Open in Paper" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打开原文"
           }
         }
       }
@@ -7450,7 +7531,6 @@
       }
     },
     "Quote in Writing" : {
-      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -8320,6 +8400,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "此设备无法使用安全隔区。"
+          }
+        }
+      }
+    },
+    "Seen" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已看过"
           }
         }
       }
@@ -11875,6 +11965,66 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "黄色"
+          }
+        }
+      }
+    },
+    "You asked" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你问过"
+          }
+        }
+      }
+    },
+    "You asked for an explanation" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你请求过解释"
+          }
+        }
+      }
+    },
+    "You highlighted" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你高亮过"
+          }
+        }
+      }
+    },
+    "You noted" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你记过笔记"
+          }
+        }
+      }
+    },
+    "You quoted" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你引用过"
+          }
+        }
+      }
+    },
+    "You translated" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你翻译过"
           }
         }
       }

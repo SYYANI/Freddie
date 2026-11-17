@@ -63,6 +63,8 @@ struct InspectorPaneView: View {
     /// Starts a paragraph about a concept in the open writing. Nil where writings cannot
     /// take insertions from here.
     var onWriteAboutConcept: ((String, PaperCitation, String?) -> Void)? = nil
+    /// Quotes a passage offered as an echo in the open writing.
+    var onQuoteEchoInWriting: ((LearningEvent) -> Void)? = nil
     var onQuoteInWriting: (() -> Void)? = nil
 
     var body: some View {
@@ -143,7 +145,8 @@ struct InspectorPaneView: View {
                     paper: paper,
                     notes: notes,
                     onOpenCitation: onOpenCitation,
-                    onWriteAboutConcept: onWriteAboutConcept
+                    onWriteAboutConcept: onWriteAboutConcept,
+                    onQuoteEchoInWriting: onQuoteEchoInWriting
                 )
             }
         }
@@ -160,7 +163,12 @@ struct InspectorPaneView: View {
                 .init(
                     value: .learning,
                     title: String(localized: "Learning", bundle: bundle),
-                    showsBadge: paper.map { LearningOrganizer.shared.unseenPaperIDs.contains($0.id) } ?? false
+                    // New organizer results, or echoes of past reading for the screen that
+                    // the reader has not looked at yet.
+                    showsBadge: paper.map {
+                        LearningOrganizer.shared.unseenPaperIDs.contains($0.id)
+                            || (mode != .learning && LearningEchoModel.shared.hasUnacknowledgedReadingEchoes)
+                    } ?? false
                 ),
             ]
         )

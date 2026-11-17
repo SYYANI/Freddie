@@ -527,6 +527,7 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
         )
         context.coordinator.applyCitationMarks(citationMarks, in: view, force: shouldReloadDocument)
         context.coordinator.applyNoteNavigationIfNeeded(noteNavigationRequest, in: view)
+        context.coordinator.readingFocusSink = context.environment.readingFocusSink
         context.coordinator.observeOutlineGeometry(in: view)
         context.coordinator.applyFindRequest(findRequest, in: view)
         context.coordinator.applySidenoteAnchors(
@@ -589,6 +590,10 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
         var onNoteSelectionChanged: ((NoteSelectionContext?) -> Void)?
         var onArxivLinkActivated: ((URL) -> Void)?
         var onOutlineLocationChanged: ((Int, Double) -> Void)?
+        /// Where the text on screen is reported for echoes of past reading.
+        var readingFocusSink: ReadingFocusSink?
+        private var readingFocusTask: Task<Void, Never>?
+        private var lastReadingFocusText: String?
         private var outlineGeometryObservation: NSKeyValueObservation?
         #if os(macOS)
         private var outlineGeometryNotification: NSObjectProtocol?
@@ -1065,6 +1070,8 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
         }
 
         func detach() {
+            readingFocusTask?.cancel()
+            readingFocusTask = nil
             #if os(macOS)
             if let outlineGeometryNotification { NotificationCenter.default.removeObserver(outlineGeometryNotification) }
             outlineGeometryNotification = nil
@@ -2278,7 +2285,7 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
         }
 
         func observeOutlineGeometry(in view: PDFView) {
-            guard onOutlineLocationChanged != nil else { return }
+            guard onOutlineLocationChanged != nil || readingFocusSink != nil else { return }
             func findScroll(_ view: PlatformOutlineView) -> PlatformOutlineScrollView? {
                 if let scroll = view as? PlatformOutlineScrollView { return scroll }
                 return view.subviews.lazy.compactMap { findScroll($0) }.first
@@ -2330,7 +2337,47 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
                 self.isPageIndexUpdateScheduled = false
                 self.updateCurrentPageIndexIfNeeded()
                 self.publishOutlineLocation()
+                self.scheduleReadingFocusReport()
             }
+        }
+
+        /// Reports the text on screen once scrolling has settled.
+        private func scheduleReadingFocusReport() {
+            guard readingFocusSink != nil else { return }
+            readingFocusTask?.cancel()
+            readingFocusTask = Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .milliseconds(450))
+                guard Task.isCancelled == false else { return }
+                self?.reportReadingFocus()
+            }
+        }
+
+        private func reportReadingFocus() {
+            guard let sink = readingFocusSink, let view = pdfView, let document = view.document else { return }
+            #if os(macOS)
+            let y = view.isFlipped ? view.bounds.minY + 100 : view.bounds.maxY - 100
+            #else
+            let y = view.bounds.minY + 100
+            #endif
+            let currentPage = view.page(for: CGPoint(x: view.bounds.midX, y: y), nearest: true)
+            let pageIndex = currentPage.map { document.index(for: $0) }.flatMap { $0 == NSNotFound ? nil : $0 }
+            var parts: [String] = []
+            var length = 0
+            for page in view.visiblePages {
+                let rect = view.convert(view.bounds, to: page).intersection(page.bounds(for: .cropBox))
+                guard rect.isNull == false, rect.isEmpty == false,
+                      let selection = page.selection(for: rect),
+                      let text = (PDFWordSpacing.text(of: selection) ?? selection.string)?
+                          .trimmingCharacters(in: .whitespacesAndNewlines),
+                      text.isEmpty == false else { continue }
+                parts.append(text)
+                length += text.count
+                if length >= HTMLReadingFocus.textLimit { break }
+            }
+            let text = String(parts.joined(separator: "\n").prefix(HTMLReadingFocus.textLimit))
+            guard text != lastReadingFocusText else { return }
+            lastReadingFocusText = text
+            sink.report(attachmentID: attachmentID, pageIndex: pageIndex, text: text)
         }
 
         func scheduleDocumentPageCountUpdate(_ pageCount: Int, force: Bool = false) {

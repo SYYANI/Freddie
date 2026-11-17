@@ -251,6 +251,14 @@ struct ReaderPaneView: View {
         return ScannedPDFTranscription.decode(transcriptionPaperIDsStorage).contains(paper.id)
     }
 
+    /// The paper's own text (not a translation) reports what is on screen, so the Learning
+    /// tab can echo what the reader marked or asked about before.
+    private var readingFocusSink: ReadingFocusSink? {
+        guard let paper else { return nil }
+        let ids = [htmlAttachment?.id, pdfAttachment?.id, scanTranscriptionAttachment?.id].compactMap { $0 }
+        return ReadingFocusSink(paperID: paper.id, attachmentIDs: Set(ids), model: .shared)
+    }
+
     /// The original as read: the PDF, or its corrected transcription when the reader chose it.
     private var originalPDFAttachment: PaperAttachment? {
         showsScanTranscription ? scanTranscriptionAttachment : pdfAttachment
@@ -2190,6 +2198,7 @@ struct ReaderPaneView: View {
                 }
             }
             .environment(\.selectionAnchorModel, selectionAnchor)
+            .environment(\.readingFocusSink, readingFocusSink)
 
             QuickTranslationBubbleLayer(translation: quickTranslation, anchor: selectionAnchor)
                 .zIndex(9)

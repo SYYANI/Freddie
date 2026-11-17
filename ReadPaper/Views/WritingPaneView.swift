@@ -73,6 +73,7 @@ struct WritingPaneView: View {
                 } else {
                     unavailableWriting
                 }
+                WritingEchoStrip(writingID: writing.id, center: center, onOpenCitation: onOpenCitation)
                 Divider()
                 footer(writing)
             } else {

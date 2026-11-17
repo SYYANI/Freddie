@@ -257,7 +257,8 @@ struct ContentView: View {
             onOpenCitation: openCitation,
             onOpenWriting: openWriting,
             onCreateWritingAboutPaper: createWriting(about:),
-            onWriteAboutConcept: writeAboutConcept
+            onWriteAboutConcept: writeAboutConcept,
+            onQuoteEchoInWriting: quoteEchoInWriting
         )
     }
 
@@ -734,6 +735,30 @@ struct ContentView: View {
             try WritingLibrary.shared.createWriting(markdown: markdown)
             WritingWindowState.shared.focusEditorWhenShown()
             openWindow(id: WritingWindowScene.id)
+        } catch {
+            writingErrorMessage = error.localizedDescription
+        }
+    }
+
+    /// Quotes a passage the reader marked or asked about before, offered as an echo, in
+    /// the open writing, then shows the writing.
+    private func quoteEchoInWriting(_ event: LearningEvent) {
+        guard let paper = papers.first(where: { $0.id == event.paperID }) else {
+            citationErrorMessage = String(localized: "The cited paper is no longer in your library.", bundle: bundle)
+            return
+        }
+        let label = PaperCitation.label(
+            authors: paper.authors,
+            title: paper.title,
+            year: paper.publishedAt.map { Calendar(identifier: .gregorian).component(.year, from: $0) },
+            pageIndex: event.pageIndex
+        )
+        do {
+            _ = try WritingDocumentCenter.shared.insertCitation(event.citation, label: label, quote: event.quote)
+            if WritingWindowState.shared.isOpen {
+                WritingWindowState.shared.focusEditorWhenShown()
+            }
+            showWritingPane()
         } catch {
             writingErrorMessage = error.localizedDescription
         }

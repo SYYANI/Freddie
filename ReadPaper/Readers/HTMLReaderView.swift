@@ -230,6 +230,7 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
         configuration.userContentController.add(coordinator, name: Coordinator.citationMarkMessageHandlerName)
         configuration.userContentController.add(coordinator, name: HTMLRegionEditing.messageHandlerName)
         configuration.userContentController.add(coordinator, name: HTMLDocumentOutline.messageHandlerName)
+        configuration.userContentController.add(coordinator, name: HTMLReadingFocus.messageHandlerName)
         configuration.userContentController.addUserScript(
             WKUserScript(
                 source: Coordinator.mediaPreparationScript,
@@ -281,6 +282,13 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
                 forMainFrameOnly: true
             )
         )
+        configuration.userContentController.addUserScript(
+            WKUserScript(
+                source: HTMLReadingFocus.script,
+                injectionTime: .atDocumentEnd,
+                forMainFrameOnly: true
+            )
+        )
         return configuration
     }
 
@@ -311,6 +319,7 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
         context.coordinator.regionEditCommand = regionEditCommand
         context.coordinator.onRegionEditEvent = onRegionEditEvent
         context.coordinator.onOutlineChanged = onOutlineChanged
+        context.coordinator.readingFocusSink = context.environment.readingFocusSink
         applyHostDisplayAppearance(displayAppearance, to: view)
         context.coordinator.clearSelectionHighlightIfNeeded(
             resetToken: selectionHighlightResetToken,
@@ -2117,6 +2126,8 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
         """
 
         var loadedURL: URL?
+        /// Where the text on screen is reported for echoes of past reading.
+        var readingFocusSink: ReadingFocusSink?
         var loadedReloadToken: Int?
         var attachmentID: UUID?
         var displayMode: TranslationDisplayMode = .bilingual
@@ -2428,6 +2439,14 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
                 onOutlineChanged?(outlineEntries, body["currentID"] as? String)
             case HTMLRegionEditing.messageHandlerName:
                 handleRegionEditMessage(message)
+            case HTMLReadingFocus.messageHandlerName:
+                guard message.frameInfo.isMainFrame,
+                      let body = message.body as? [String: Any],
+                      let text = body["text"] as? String,
+                      let address = body["documentURL"] as? String,
+                      let documentURL = URL(string: address), documentURL.isFileURL,
+                      let loadedURL, documentURL.standardizedFileURL.path == loadedURL.standardizedFileURL.path else { return }
+                readingFocusSink?.report(attachmentID: attachmentID, pageIndex: nil, text: text)
             default:
                 return
             }

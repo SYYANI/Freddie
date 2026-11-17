@@ -59,6 +59,8 @@ struct ReadPaperApp: App {
                 .environment(\.localizationBundle, bundle)
                 .environment(\.pdfDisplayAppearance, displayAppearance)
                 .preferredColorScheme(.light)
+                // Echo cards look up the papers they come from.
+                .modelContainer(sharedModelContainer)
         }
         .defaultSize(
             width: WritingWindowScene.defaultWidth,

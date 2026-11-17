@@ -1,16 +1,20 @@
 import SwiftData
 import SwiftUI
 
-/// The inspector's Learning tab: what the reader highlighted, noted, asked and quoted,
-/// for the selected paper (grouped by kind) or across the library (grouped by day).
+/// The inspector's Learning tab. It opens on echoes: the reader's past highlights,
+/// notes and questions that relate to what is on screen. The organized record of a paper,
+/// the concept library, the weekly summary and the raw activity are the archive behind it.
 struct LearningPaneView: View {
     enum Scope: String {
+        case echoes
         case paper
         case library
         case concepts
         case weekly
 
-        static let userDefaultsKey = "ReadPaper.Learning.Scope"
+        /// A new key: readers who had picked an archive view before echoes existed start
+        /// on echoes.
+        static let userDefaultsKey = "ReadPaper.Learning.Scope.v2"
     }
 
     /// The cross-paper list shows this many of the most recent records.
@@ -18,7 +22,7 @@ struct LearningPaneView: View {
 
     @Environment(\.modelContext) private var modelContext
     @Environment(\.localizationBundle) private var bundle
-    @AppStorage(Scope.userDefaultsKey) private var scopeRawValue = Scope.paper.rawValue
+    @AppStorage(Scope.userDefaultsKey) private var scopeRawValue = Scope.echoes.rawValue
     @State private var events: [LearningEvent] = []
     @State private var paperTitles: [UUID: String] = [:]
     @State private var loadedRequest: LoadRequest?
@@ -47,6 +51,8 @@ struct LearningPaneView: View {
     /// Starts a paragraph about a concept (name, where it came from, the passage) in the
     /// open writing.
     var onWriteAboutConcept: ((String, PaperCitation, String?) -> Void)? = nil
+    /// Quotes an echoed passage in the open writing.
+    var onQuoteEchoInWriting: ((LearningEvent) -> Void)? = nil
 
     private struct SeenCutoff: Equatable {
         var paperID: UUID
@@ -85,7 +91,7 @@ struct LearningPaneView: View {
     }
 
     private var scope: Scope {
-        Scope(rawValue: scopeRawValue) ?? .paper
+        Scope(rawValue: scopeRawValue) ?? .echoes
     }
 
     var body: some View {
@@ -98,7 +104,15 @@ struct LearningPaneView: View {
         VStack(spacing: 0) {
             header
             Divider()
-            if loadedRequest?.scope != scope || loadedRequest?.paperID != paper?.id {
+            if scope == .echoes {
+                LearningEchoesView(
+                    paper: paper,
+                    recorder: recorder,
+                    organizer: organizer,
+                    onOpenCitation: onOpenCitation,
+                    onQuoteInWriting: onQuoteEchoInWriting
+                )
+            } else if loadedRequest?.scope != scope || loadedRequest?.paperID != paper?.id {
                 Color.clear
             } else if scope == .paper, paper == nil {
                 emptyState(String(localized: "No Paper Selected", bundle: bundle))
@@ -122,6 +136,7 @@ struct LearningPaneView: View {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 0) {
                         switch scope {
+                        case .echoes: EmptyView()
                         case .paper: paperSections
                         case .library: librarySections
                         case .concepts: conceptRows
@@ -140,15 +155,24 @@ struct LearningPaneView: View {
 
     private var header: some View {
         HStack(spacing: 8) {
-            Text(
-                scope == .concepts
-                    ? String(format: String(localized: "%lld concepts", bundle: bundle), concepts.count)
-                    : String(format: String(localized: "%lld records", bundle: bundle), events.count)
-            )
+            Group {
+                switch scope {
+                case .echoes:
+                    // The picker says "Echoes"; the cards say the rest.
+                    EmptyView()
+                case .concepts:
+                    Text(String(format: String(localized: "%lld concepts", bundle: bundle), concepts.count))
+                default:
+                    Text(String(format: String(localized: "%lld records", bundle: bundle), events.count))
+                }
+            }
             .font(.caption)
             .foregroundStyle(.secondary)
+            .lineLimit(1)
             Spacer(minLength: 8)
             Picker(String(localized: "Scope", bundle: bundle), selection: $scopeRawValue) {
+                Text("Echoes", bundle: bundle).tag(Scope.echoes.rawValue)
+                Divider()
                 Text("This Paper", bundle: bundle).tag(Scope.paper.rawValue)
                 Text("Concepts", bundle: bundle).tag(Scope.concepts.rawValue)
                 Text("Weekly", bundle: bundle).tag(Scope.weekly.rawValue)
@@ -852,8 +876,20 @@ struct LearningPaneView: View {
             let values = notes.filter { $0.paperID == paper.id }.map(LearningEventSources.NoteValue.init)
             await recorder.collect(paperID: paper.id, notes: values)
         }
+        if request.scope == .echoes {
+            // Echoes are found by `LearningEchoModel`; collecting above keeps them current.
+            if let paper, paper.id == request.paperID {
+                let context = LearningOrganizer.PaperContext(id: paper.id, title: paper.title, abstract: paper.abstractText)
+                Task { await organizer.organize(context, trigger: .automatic, modelContext: modelContext) }
+            }
+            guard Task.isCancelled == false else { return }
+            loadedRequest = request
+            return
+        }
         let loaded: [LearningEvent]
         switch request.scope {
+        case .echoes:
+            loaded = []
         case .paper:
             loaded = if let paperID = request.paperID { await log.events(paperID: paperID) } else { [] }
         case .library, .concepts, .weekly:
