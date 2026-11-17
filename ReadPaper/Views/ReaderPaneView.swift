@@ -121,6 +121,8 @@ struct ReaderPaneView: View {
     var onArxivLinkActivated: (URL) -> Void
     /// Opens the writing that cites a passage marked in the reader.
     var onRevealCitation: (WritingCitationMark) -> Void = { _ in }
+    /// Opens a passage of any paper, for learning records that point outside this one.
+    var onOpenCitation: (PaperCitation, String?) -> Void = { _, _ in }
     var writingLibrary: WritingLibrary = .shared
     /// Whether the library has no papers yet, for the empty reader's call to action.
     var isLibraryEmpty = false
@@ -182,6 +184,11 @@ struct ReaderPaneView: View {
     @State private var selectionAssistantProgress: SelectionAssistantProgress?
     @State private var selectionAssistantInitialConversation: SelectionAssistantConversationSnapshot?
     @State private var selectionAssistantHistoryAnchors: [SelectionAssistantHistoryAnchor] = []
+    @State private var selectionRecall = LearningRecall()
+    @State private var selectionRecallPaperTitles: [UUID: String] = [:]
+    @State private var selectionRecallTask: Task<Void, Never>?
+    @State private var openQuestionNotice: LearningOpenQuestionNotice?
+    @State private var isOpenQuestionListPresented = false
     @State private var htmlSelectionHighlightResetToken = 0
     @State private var htmlNativeSelectionClearToken = 0
     @State private var sidenotePendingDeletion: Note?
@@ -448,6 +455,10 @@ struct ReaderPaneView: View {
                         translationSetupNotice
                             .transition(.move(edge: .bottom).combined(with: .opacity))
                     }
+                    if let openQuestionNotice, selectionAssistantSelection == nil {
+                        openQuestionNoticeView(openQuestionNotice)
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
                     if let copyToastMessage {
                         copyToast(message: copyToastMessage)
                             .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -471,6 +482,7 @@ struct ReaderPaneView: View {
                 restoreReadingStateForCurrentPaper()
                 restorePDFTranslationDiagnostics()
                 refreshSelectionAssistantHistoryAnchors()
+                refreshOpenQuestionNotice()
             }
             .modifier(LibrarySyncReaderObserver(activity: LibrarySyncReaderActivity(paperID: paper?.id, isBusy: isWorking || isEditingHTMLRegions || pdfAnnotationSession.interactionMode != .browse)) {
                 htmlReloadToken += 1
@@ -496,6 +508,7 @@ struct ReaderPaneView: View {
                 restoreReadingStateForCurrentPaper()
                 revealNavigationArrivingWithPaper()
                 refreshSelectionAssistantHistoryAnchors()
+                refreshOpenQuestionNotice()
             }
             .onChange(of: readerAvailability) { _, newValue in
                 if newValue.hasHTML == false {
@@ -2128,7 +2141,10 @@ struct ReaderPaneView: View {
                     onConversationChanged: persistSelectionAssistantConversation,
                     onInteractionBegan: pinSelectionAssistant,
                     onDismiss: clearSelectionAssistant,
-                    quoteInWriting: quoteInWriting
+                    quoteInWriting: quoteInWriting,
+                    recall: selectionRecall,
+                    recallPaperTitles: selectionRecallPaperTitles,
+                    onOpenRecallEntry: openRecallEntry
                 )
                 .transition(.move(edge: .bottom).combined(with: .opacity))
                 .zIndex(10)
@@ -3608,6 +3624,7 @@ struct ReaderPaneView: View {
                 selectionAssistantInitialConversation = nil
             }
             selectionAssistantSelection = selection
+            refreshSelectionRecall(for: selection)
             return
         }
 
@@ -3619,6 +3636,130 @@ struct ReaderPaneView: View {
             selectionAssistantSelection = nil
             selectionAssistantInitialConversation = nil
             selectionAssistantDismissTask = nil
+        }
+    }
+
+    /// Looks the selection up in the reader's learning records. Nothing is sent anywhere.
+    private func refreshSelectionRecall(for selection: NoteSelectionContext) {
+        selectionRecallTask?.cancel()
+        guard let quote = selection.trimmedQuote else {
+            selectionRecall = LearningRecall()
+            return
+        }
+        let identity = selection.selectionAssistantIdentity
+        selectionRecallTask = Task { @MainActor in
+            let recall = await LearningConceptIndex.shared.recall(mentionedIn: quote)
+            guard Task.isCancelled == false,
+                  selectionAssistantSelection?.selectionAssistantIdentity == identity else { return }
+            let paperIDs = Set(recall.concepts.flatMap(\.paperIDs))
+            if paperIDs.isEmpty == false {
+                let papers = (try? modelContext.fetch(
+                    FetchDescriptor<Paper>(predicate: #Predicate { paperIDs.contains($0.id) })
+                )) ?? []
+                selectionRecallPaperTitles = Dictionary(
+                    papers.map { ($0.id, $0.title) },
+                    uniquingKeysWith: { first, _ in first }
+                )
+            }
+            selectionRecall = recall
+        }
+    }
+
+    @MainActor
+    private func openRecallEntry(_ entry: LearningConcept.Entry) {
+        let target = selectionRecall.citation(for: entry)
+        clearSelectionAssistant()
+        onOpenCitation(target.citation, target.quote)
+    }
+
+    /// Questions the reader left open in this paper, offered once when it is opened again.
+    private func refreshOpenQuestionNotice() {
+        isOpenQuestionListPresented = false
+        openQuestionNotice = nil
+        guard let paperID = paper?.id else { return }
+        Task { @MainActor in
+            let notice = await LearningOpenQuestionNotice.load(paperID: paperID)
+            guard paper?.id == paperID else { return }
+            withAnimation(.easeOut(duration: 0.2)) {
+                openQuestionNotice = notice
+            }
+        }
+    }
+
+    private func dismissOpenQuestionNotice() {
+        isOpenQuestionListPresented = false
+        withAnimation(.easeOut(duration: 0.2)) {
+            openQuestionNotice = nil
+        }
+    }
+
+    private func openQuestionNoticeView(_ notice: LearningOpenQuestionNotice) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "questionmark.bubble")
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
+
+            Text(AppLocalization.format("Open questions from your last reading: %lld", bundle: bundle, notice.questions.count))
+                .font(.callout.weight(.medium))
+                .lineLimit(1)
+
+            Button(String(localized: "Show", bundle: bundle)) {
+                isOpenQuestionListPresented = true
+            }
+            .readPaperGlassButtonStyle(prominent: true)
+            .controlSize(.small)
+            .popover(isPresented: $isOpenQuestionListPresented, arrowEdge: .top) {
+                VStack(alignment: .leading, spacing: 12) {
+                    ForEach(notice.questions) { question in
+                        Button {
+                            dismissOpenQuestionNotice()
+                            if let target = question.target {
+                                onOpenCitation(target.citation, target.quote)
+                            }
+                        } label: {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(question.item.title)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                if let detail = question.item.detail {
+                                    Text(detail)
+                                        .font(.callout)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(3)
+                                }
+                            }
+                            .multilineTextAlignment(.leading)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(question.target == nil)
+                    }
+                }
+                .padding(16)
+                .frame(width: 340)
+            }
+
+            Button {
+                dismissOpenQuestionNotice()
+            } label: {
+                Label(String(localized: "Close", bundle: bundle), systemImage: "xmark")
+            }
+            .labelStyle(.iconOnly)
+            .buttonStyle(.borderless)
+            .controlSize(.small)
+            .help(String(localized: "Close", bundle: bundle))
+        }
+        .padding(.leading, 14)
+        .padding(.trailing, 10)
+        .padding(.vertical, 8)
+        .readPaperGlassEffect(in: Capsule())
+        .shadow(color: .black.opacity(0.14), radius: 10, y: 4)
+        .task(id: isOpenQuestionListPresented) {
+            // Leaves by itself unless the reader is looking at the list.
+            guard isOpenQuestionListPresented == false else { return }
+            try? await Task.sleep(for: .seconds(LearningOpenQuestionNotice.displayDuration))
+            guard Task.isCancelled == false else { return }
+            dismissOpenQuestionNotice()
         }
     }
 
@@ -3662,6 +3803,8 @@ struct ReaderPaneView: View {
         selectionAssistantInitialConversation = nil
         isSelectionAssistantPinned = false
         selectionAssistantSelection = nil
+        selectionRecallTask?.cancel()
+        selectionRecall = LearningRecall()
         htmlSelectionHighlightResetToken &+= 1
     }
 

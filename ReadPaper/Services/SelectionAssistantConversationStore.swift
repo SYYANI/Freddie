@@ -74,7 +74,19 @@ struct SelectionAssistantConversationStore {
 
     private func archiveURL(paperID: UUID) throws -> URL {
         try fileStore.notesDirectory(for: paperID)
-            .appendingPathComponent("assistant-conversations-v1.json")
+            .appendingPathComponent(Self.archiveFileName)
+    }
+
+    nonisolated static let archiveFileName = "assistant-conversations-v1.json"
+
+    /// The conversations in an archive file, for readers that work off the main actor.
+    nonisolated static func snapshots(at url: URL) -> [SelectionAssistantConversationSnapshot] {
+        guard let data = try? Data(contentsOf: url),
+              let archive = try? JSONDecoder().decode(Archive.self, from: data),
+              archive.version == 1 else {
+            return []
+        }
+        return archive.conversations
     }
 
     private static func normalized(

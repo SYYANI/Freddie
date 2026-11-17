@@ -439,6 +439,40 @@ final class WritingEditorTests: XCTestCase {
         XCTAssertTrue(try center.document(for: writing.id).textStorage.string.contains("[Vaswani](readpaper://"))
     }
 
+    func testWritingAboutAConceptAddsItsNameAndSourceAfterTheCaretsParagraph() throws {
+        let library = try makeLibrary()
+        let center = WritingDocumentCenter(library: library)
+        let paperID = UUID()
+        let citation = PaperCitation(paperID: paperID, pageIndex: 2, quotePrefix: "We employ label smoothing")
+
+        try center.insertConcept(
+            name: "Label\nsmoothing",
+            quote: "We employ label smoothing",
+            source: (label: "Vaswani et al., 2017, p. 3", citation: citation)
+        )
+        let writing = try XCTUnwrap(library.currentWriting)
+        let saved = try library.markdown(for: writing.id)
+        XCTAssertTrue(
+            saved.hasPrefix("**Label smoothing**\n\n> We employ label smoothing\n>\n> — [Vaswani et al., 2017, p. 3](readpaper://paper/\(paperID.uuidString)?p=3"),
+            saved
+        )
+        XCTAssertEqual(writing.citedPaperIDs, [paperID])
+
+        // No passage: the citation follows the name. No source at all: just the name.
+        XCTAssertEqual(
+            PaperCitation.conceptMarkdown(name: "BLEU", quote: " ", source: (label: "P", citation: PaperCitation(paperID: paperID))),
+            "**BLEU** ([P](readpaper://paper/\(paperID.uuidString)))"
+        )
+        XCTAssertEqual(PaperCitation.conceptMarkdown(name: "a*b", quote: "q", source: nil), "**a\\*b**")
+        try center.insertConcept(name: "BLEU", quote: nil, source: nil)
+        let text = try center.document(for: writing.id).textStorage.string
+        XCTAssertTrue(text.contains("\n\n**BLEU**"), text)
+        XCTAssertLessThan(
+            try XCTUnwrap(text.range(of: "label smoothing")).lowerBound,
+            try XCTUnwrap(text.range(of: "**BLEU**")).lowerBound
+        )
+    }
+
     func testRevealingACitationSelectsItsLabelInTheOpenWriting() throws {
         let library = try makeLibrary()
         let center = WritingDocumentCenter(library: library)

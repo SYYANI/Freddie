@@ -60,6 +60,9 @@ struct InspectorPaneView: View {
     var onOpenCitation: (PaperCitation, String?) -> Void
     var onOpenWriting: (UUID) -> Void
     var onCreateWritingAboutPaper: (Paper) -> Void
+    /// Starts a paragraph about a concept in the open writing. Nil where writings cannot
+    /// take insertions from here.
+    var onWriteAboutConcept: ((String, PaperCitation, String?) -> Void)? = nil
     var onQuoteInWriting: (() -> Void)? = nil
 
     var body: some View {
@@ -135,6 +138,13 @@ struct InspectorPaneView: View {
                 #else
                 IPadWritingPaneView(library: writingLibrary, onOpenCitation: onOpenCitation)
                 #endif
+            case .learning:
+                LearningPaneView(
+                    paper: paper,
+                    notes: notes,
+                    onOpenCitation: onOpenCitation,
+                    onWriteAboutConcept: onWriteAboutConcept
+                )
             }
         }
         .fontDesign(displayAppearance == .paper ? .serif : .default)
@@ -147,6 +157,11 @@ struct InspectorPaneView: View {
             options: [
                 .init(value: .paper, title: String(localized: "Paper", bundle: bundle)),
                 .init(value: .writing, title: String(localized: "Writing", bundle: bundle)),
+                .init(
+                    value: .learning,
+                    title: String(localized: "Learning", bundle: bundle),
+                    showsBadge: paper.map { LearningOrganizer.shared.unseenPaperIDs.contains($0.id) } ?? false
+                ),
             ]
         )
         .frame(maxWidth: .infinity)

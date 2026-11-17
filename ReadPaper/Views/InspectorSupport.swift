@@ -1,10 +1,11 @@
 import SwiftUI
 
-/// Which view the inspector shows: the selected paper's details, or the writing that
-/// stays open across papers.
+/// Which view the inspector shows: the selected paper's details, the writing that
+/// stays open across papers, or the learning record.
 enum InspectorMode: String {
     case paper
     case writing
+    case learning
 
     static let userDefaultsKey = "ReadPaper.Inspector.Mode"
 }

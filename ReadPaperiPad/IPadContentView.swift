@@ -277,7 +277,9 @@ struct IPadContentView: View {
             return
         }
         selectedPaperID = citation.paperID
-        noteNavigationRequest = citation.navigationRequest(quote: quote)
+        noteNavigationRequest = citation.hasDestination || quote != nil
+            ? citation.navigationRequest(quote: quote)
+            : nil
         isShowingInspector = false
     }
 

@@ -262,4 +262,24 @@ final class WritingDocumentCenter {
         document.save()
         return library.metadata(for: id)?.title ?? ""
     }
+
+    /// Starts a paragraph about a concept from the learning record in the writing open in
+    /// the Writing tab (a new writing when there is none): the concept's name and the
+    /// passage it came from, after the caret's paragraph. The caret is left after them,
+    /// where the reader writes.
+    func insertConcept(
+        name: String,
+        quote: String?,
+        source: (label: String, citation: PaperCitation)?
+    ) throws {
+        library.loadIfNeeded()
+        let id = try library.currentWriting?.id ?? library.createWriting().id
+        let document = try document(for: id)
+        document.apply(WritingInsertion.block(
+            PaperCitation.conceptMarkdown(name: name, quote: quote, source: source),
+            in: document.textStorage.string,
+            at: NSMaxRange(document.currentSelection)
+        ))
+        document.save()
+    }
 }

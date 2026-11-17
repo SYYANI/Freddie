@@ -19,6 +19,8 @@ struct ReadPaperSegmentedPicker<Value: Hashable>: View {
     struct Option {
         let value: Value
         let title: String
+        /// A dot beside the title: something new is behind this segment.
+        var showsBadge = false
     }
 
     let label: String
@@ -76,6 +78,16 @@ struct ReadPaperSegmentedPicker<Value: Hashable>: View {
             selection = option.value
         } label: {
             segmentTitle(option.title)
+                .overlay(alignment: .topTrailing) {
+                    if option.showsBadge, isSelected == false {
+                        Circle()
+                            .fill(Color.accentColor)
+                            .frame(width: 6, height: 6)
+                            .padding(.top, 5)
+                            .padding(.trailing, 5)
+                            .accessibilityHidden(true)
+                    }
+                }
                 .foregroundStyle(foregroundStyle(isAccented: isAccented))
                 .background {
                     if isSelected {

@@ -140,6 +140,38 @@ struct LLMRouteResolver {
         )
     }
 
+    /// The model that organizes learning records: the one chosen for it, otherwise the
+    /// reading assistant's. Only checks that a key is saved; read it with `apiKey(for:)`
+    /// right before a request, so showing the Learning tab never asks for Touch ID.
+    func resolveLearningRoute(
+        settings: AppSettings,
+        modelContext: ModelContext
+    ) throws -> LLMModelRouteSnapshot {
+        func stored(_ key: String) -> UUID? {
+            userDefaults.string(forKey: key).flatMap(UUID.init(uuidString:))
+        }
+        // A chosen model that was deleted or disabled falls back instead of stopping the
+        // organizer; the first choice's error is the one reported when nothing works.
+        let candidates = [
+            stored(LearningPreferences.modelProfileIDKey),
+            stored(SelectionAssistantPreferences.selectedModelProfileIDKey),
+            settings.selectedHTMLModelProfileID,
+        ]
+        var firstError: Error?
+        for modelID in candidates.compactMap({ $0 }) {
+            do {
+                return try resolveSnapshotWithSavedAPIKey(
+                    selectedModelID: modelID,
+                    missingSelectionError: .assistantModelNotSelected,
+                    modelContext: modelContext
+                )
+            } catch {
+                firstError = firstError ?? error
+            }
+        }
+        throw firstError ?? LLMRouteError.assistantModelNotSelected
+    }
+
     private func resolve(
         selectedModelID: UUID?,
         missingSelectionError: LLMRouteError,

@@ -173,6 +173,10 @@ private struct SettingsForm: View {
     private var selectedScannedPageModelProfileIDRawValue = ""
     @AppStorage(SelectionAssistantPreferences.externalSearchEnabledKey)
     private var externalAssistantSearchEnabled = false
+    @AppStorage(LearningPreferences.modelProfileIDKey)
+    private var selectedLearningModelProfileIDRawValue = ""
+    @AppStorage(LearningPreferences.automaticOrganizingKey)
+    private var automaticLearningOrganizingEnabled = true
 
     @State private var selectedProviderID: UUID?
     @State private var providerName = ""
@@ -337,6 +341,13 @@ private struct SettingsForm: View {
         Binding(
             get: { UUID(uuidString: selectedScannedPageModelProfileIDRawValue) },
             set: { selectedScannedPageModelProfileIDRawValue = $0?.uuidString ?? "" }
+        )
+    }
+
+    private var selectedLearningModelProfileIDBinding: Binding<UUID?> {
+        Binding(
+            get: { UUID(uuidString: selectedLearningModelProfileIDRawValue) },
+            set: { selectedLearningModelProfileIDRawValue = $0?.uuidString ?? "" }
         )
     }
 
@@ -793,6 +804,27 @@ private struct SettingsForm: View {
                         isOn: $externalAssistantSearchEnabled
                     )
                     .help(String(localized: "Uses the selected model's server-side web search (Responses API or Anthropic Messages API).", bundle: bundle))
+
+                    infoRow(
+                        String(localized: "Learning Record Model", bundle: bundle),
+                        message: String(localized: "Organizing a learning record sends the passages you highlighted, your notes, and your questions with their answers to this model. The paper's full text is not sent.", bundle: bundle)
+                    ) {
+                        Picker(
+                            String(localized: "Learning Record Model", bundle: bundle),
+                            selection: selectedLearningModelProfileIDBinding
+                        ) {
+                            Text("Use Reading Assistant Model", bundle: bundle).tag(Optional<UUID>.none)
+                            ForEach(sortedModels, id: \.id) { model in
+                                Text(modelDisplayName(model)).tag(Optional(model.id))
+                            }
+                        }
+                    }
+
+                    Toggle(
+                        String(localized: "Organize learning records automatically", bundle: bundle),
+                        isOn: $automaticLearningOrganizingEnabled
+                    )
+                    .help(String(localized: "When off, records are organized only when you click Organize Now in the Learning tab.", bundle: bundle))
                 }
             }
             .formStyle(.grouped)

@@ -90,6 +90,10 @@ struct SelectionAssistantOverlay: View {
     let onDismiss: @MainActor @Sendable () -> Void
     /// Adds the selection to the open writing; `true` adds only a citation (Option-click).
     var quoteInWriting: (@MainActor (NoteSelectionContext, Bool) -> Void)? = nil
+    /// What the reader's learning records already say about the terms in the selection.
+    var recall = LearningRecall()
+    var recallPaperTitles: [UUID: String] = [:]
+    var onOpenRecallEntry: (@MainActor (LearningConcept.Entry) -> Void)? = nil
 
     @State private var question = ""
     @State private var isEnteringQuestion = false
@@ -109,6 +113,7 @@ struct SelectionAssistantOverlay: View {
     @State private var userResultCardSize: CGSize?
     @State private var measuredResultCardSize: CGSize = .zero
     @State private var resizeStartSize: CGSize?
+    @State private var expandedRecallConceptID: String?
     @FocusState private var isQuestionFieldFocused: Bool
     @FocusState private var isFollowUpFieldFocused: Bool
 
@@ -143,6 +148,17 @@ struct SelectionAssistantOverlay: View {
                         )
                 }
 
+                if activeAction == nil, isEnteringQuestion == false, recall.isEmpty == false {
+                    recallArea
+                        .transition(.opacity.combined(with: .move(edge: .bottom)))
+                        .simultaneousGesture(
+                            DragGesture(minimumDistance: 0)
+                                .onChanged { _ in
+                                    onInteractionBegan()
+                                }
+                        )
+                }
+
                 actionCapsule
                     .simultaneousGesture(
                         DragGesture(minimumDistance: 0)
@@ -161,6 +177,8 @@ struct SelectionAssistantOverlay: View {
         }
         .animation(layoutAnimation, value: activeAction)
         .animation(layoutAnimation, value: isEnteringQuestion)
+        .animation(layoutAnimation, value: recall)
+        .animation(layoutAnimation, value: expandedRecallConceptID)
         .onAppear(perform: restoreInitialConversation)
         .onChange(of: selection.selectionAssistantIdentity) { _, _ in
             resetForNewSelection()
@@ -172,6 +190,113 @@ struct SelectionAssistantOverlay: View {
         .onDisappear {
             task?.cancel()
         }
+    }
+
+    /// One chip per concept the reader already has a record of; a chip opens what the
+    /// record says, without asking a model.
+    private var recallArea: some View {
+        VStack(spacing: 8) {
+            if let concept = recall.concepts.first(where: { $0.id == expandedRecallConceptID }) {
+                recallCard(concept)
+                    .frame(width: SelectionAssistantLayout.questionFieldWidth + 40, alignment: .leading)
+                    .selectionAssistantMaterial(cornerRadius: 14)
+                    .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .bottom)))
+            }
+            HStack(spacing: 6) {
+                ForEach(recall.concepts) { concept in
+                    let isExpanded = expandedRecallConceptID == concept.id
+                    Button {
+                        expandedRecallConceptID = isExpanded ? nil : concept.id
+                    } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: "text.book.closed")
+                                .foregroundStyle(isExpanded ? Color.accentColor : Color.secondary)
+                            Text(concept.name)
+                                .fontWeight(.medium)
+                                .lineLimit(1)
+                            Text(recallCaption(concept))
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .layoutPriority(1)
+                        }
+                        .font(.system(size: 12))
+                        .padding(.horizontal, 11)
+                        .padding(.vertical, 6)
+                        .contentShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .selectionAssistantMaterial(cornerRadius: 15)
+                    .help(String(localized: "Show what your learning record says about this", bundle: bundle))
+                    .accessibilityLabel(
+                        AppLocalization.format("In your learning record: %@", bundle: bundle, concept.name)
+                    )
+                }
+            }
+        }
+    }
+
+    private func recallCaption(_ concept: LearningConcept) -> String {
+        var parts: [String] = []
+        if concept.lookupCount > 0 {
+            parts.append(AppLocalization.format("looked up %lld×", bundle: bundle, concept.lookupCount))
+        } else {
+            parts.append(String(localized: "in your record", bundle: bundle))
+        }
+        if concept.paperIDs.count > 1 {
+            parts.append(AppLocalization.format("%lld papers", bundle: bundle, concept.paperIDs.count))
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    private func recallCard(_ concept: LearningConcept) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 7) {
+                Image(systemName: "text.book.closed")
+                Text(concept.name)
+                    .fontWeight(.semibold)
+                    .lineLimit(2)
+                Spacer(minLength: 8)
+                Button {
+                    expandedRecallConceptID = nil
+                } label: {
+                    Image(systemName: "xmark")
+                }
+                .buttonStyle(.plain)
+                .help(String(localized: "Close", bundle: bundle))
+            }
+            .foregroundStyle(Color.accentColor)
+
+            ForEach(Array(concept.entries.prefix(3).enumerated()), id: \.offset) { _, entry in
+                Button {
+                    onOpenRecallEntry?(entry)
+                } label: {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(entry.item.detail ?? entry.item.title)
+                            .lineLimit(5)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Text(recallEntryCaption(entry))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                    .multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(onOpenRecallEntry == nil)
+                .help(String(localized: "Go to where this came from", bundle: bundle))
+            }
+        }
+        .font(.system(size: 13))
+        .lineSpacing(2)
+        .padding(14)
+    }
+
+    private func recallEntryCaption(_ entry: LearningConcept.Entry) -> String {
+        let title = recallPaperTitles[entry.paperID] ?? String(localized: "Deleted Paper", bundle: bundle)
+        return [title, entry.item.updatedAt.formatted(date: .abbreviated, time: .omitted)].joined(separator: " · ")
     }
 
     @ViewBuilder
@@ -573,6 +698,7 @@ struct SelectionAssistantOverlay: View {
         task?.cancel()
         task = nil
         withAnimation(layoutAnimation) {
+            expandedRecallConceptID = nil
             question = ""
             followUpQuestion = ""
             conversation = []
@@ -1077,7 +1203,8 @@ struct SelectionAssistantConversationView: View {
         case .currentSelection: return "text.quote"
         case .paperHTML: return "doc.richtext"
         case .paperPDF: return "doc.text"
-        case .userNote: return "note.text"
+        case .userNote:
+            return source.id.hasPrefix(LearningAssistantContext.sourceIDPrefix) ? "text.book.closed" : "note.text"
         case .paperMetadata: return "info.circle"
         case .external: return "network"
         }

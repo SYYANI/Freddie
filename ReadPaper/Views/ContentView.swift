@@ -224,6 +224,7 @@ struct ContentView: View {
             onSaveSelectionAssistantNote: saveSelectionAssistantResultAsNote,
             onArxivLinkActivated: handleArxivLinkActivation,
             onRevealCitation: revealCitation,
+            onOpenCitation: openCitation,
             isLibraryEmpty: papers.isEmpty,
             onAddPaper: { isAddingPaper = true }
         )
@@ -255,7 +256,8 @@ struct ContentView: View {
             onOpenNoteAnchor: openNoteAnchor,
             onOpenCitation: openCitation,
             onOpenWriting: openWriting,
-            onCreateWritingAboutPaper: createWriting(about:)
+            onCreateWritingAboutPaper: createWriting(about:),
+            onWriteAboutConcept: writeAboutConcept
         )
     }
 
@@ -458,7 +460,11 @@ struct ContentView: View {
         .onChange(of: papers.map(\.id)) { _, _ in
             syncSelectionWithAvailablePapers()
         }
-        .onChange(of: selectedPaperID) { _, newValue in
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didResignActiveNotification)) { _ in
+            collectLearningEvents(for: selectedPaperID)
+        }
+        .onChange(of: selectedPaperID) { oldValue, newValue in
+            collectLearningEvents(for: oldValue)
             noteSelectionContext = nil
             focusedNoteID = nil
             // A citation opened from a writing switches papers and navigates in one step.
@@ -561,6 +567,19 @@ struct ContentView: View {
             try modelContext.save()
         } catch {
             assertionFailure("Failed to save selected paper: \(error.localizedDescription)")
+        }
+    }
+
+    /// Appends what the reader did in the paper to its learning log, then lets the organizer
+    /// update the paper's record when enough is new. File work happens off the main thread
+    /// and nothing is saved to SwiftData or UserDefaults.
+    private func collectLearningEvents(for paperID: UUID?) {
+        guard let paperID, let paper = papers.first(where: { $0.id == paperID }) else { return }
+        let context = LearningOrganizer.PaperContext(id: paperID, title: paper.title, abstract: paper.abstractText)
+        let values = notes.filter { $0.paperID == paperID }.map(LearningEventSources.NoteValue.init)
+        Task {
+            await LearningRecorder.shared.collect(paperID: paperID, notes: values)
+            await LearningOrganizer.shared.organize(context, trigger: .automatic, modelContext: modelContext)
         }
     }
 
@@ -672,7 +691,9 @@ struct ContentView: View {
             citationErrorMessage = String(localized: "The cited paper is no longer in your library.", bundle: bundle)
             return
         }
-        noteNavigationRequest = citation.navigationRequest(quote: quote)
+        noteNavigationRequest = citation.hasDestination || quote != nil
+            ? citation.navigationRequest(quote: quote)
+            : nil
         if selectedPaperID != citation.paperID {
             selectedPaperID = citation.paperID
         }
@@ -713,6 +734,31 @@ struct ContentView: View {
             try WritingLibrary.shared.createWriting(markdown: markdown)
             WritingWindowState.shared.focusEditorWhenShown()
             openWindow(id: WritingWindowScene.id)
+        } catch {
+            writingErrorMessage = error.localizedDescription
+        }
+    }
+
+    /// Puts a concept from the learning record into the open writing, with the passage it
+    /// was looked up in, and shows the writing so the reader can go on in their own words.
+    private func writeAboutConcept(_ name: String, citation: PaperCitation, quote: String?) {
+        let source = papers.first { $0.id == citation.paperID }.map { paper in
+            (
+                label: PaperCitation.label(
+                    authors: paper.authors,
+                    title: paper.title,
+                    year: paper.publishedAt.map { Calendar(identifier: .gregorian).component(.year, from: $0) },
+                    pageIndex: citation.pageIndex
+                ),
+                citation: citation
+            )
+        }
+        do {
+            try WritingDocumentCenter.shared.insertConcept(name: name, quote: quote, source: source)
+            if WritingWindowState.shared.isOpen {
+                WritingWindowState.shared.focusEditorWhenShown()
+            }
+            showWritingPane()
         } catch {
             writingErrorMessage = error.localizedDescription
         }

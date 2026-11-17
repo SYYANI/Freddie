@@ -1,4 +1,5 @@
 import Foundation
+import SwiftData
 
 struct SelectionAssistantScopeResolver {
     static func resolve(_ request: SelectionAssistantRequest) -> AssistantScope {
@@ -89,15 +90,18 @@ struct SelectionAssistantOrchestrator {
     private let assistantService: SelectionAssistantService
     private let fullTextSearchService: PaperFullTextSearchService
     private let userDefaults: UserDefaults
+    private let learningContext: LearningAssistantContext
 
     init(
         assistantService: SelectionAssistantService = SelectionAssistantService(),
         fullTextSearchService: PaperFullTextSearchService = PaperFullTextSearchService(),
-        userDefaults: UserDefaults = .standard
+        userDefaults: UserDefaults = .standard,
+        learningContext: LearningAssistantContext = .standard
     ) {
         self.assistantService = assistantService
         self.fullTextSearchService = fullTextSearchService
         self.userDefaults = userDefaults
+        self.learningContext = learningContext
     }
 
     func perform(
@@ -161,6 +165,16 @@ struct SelectionAssistantOrchestrator {
                     ))
                 }
             }
+        }
+
+        // What the reader already learned about the terms in this passage, here or in
+        // other papers. A plain translation does not need it.
+        if resolvedRequest.action != .translate {
+            let paperTitles = Self.paperTitles(near: paper)
+            sources.append(contentsOf: await learningContext.sources(
+                mentionedIn: [resolvedRequest.selection, resolvedRequest.question ?? ""].joined(separator: "\n"),
+                paperTitles: paperTitles
+            ))
         }
 
         try Task.checkCancellation()
@@ -296,6 +310,11 @@ struct SelectionAssistantOrchestrator {
             fields.append("Abstract: \(abstract)")
         }
         return fields.joined(separator: "\n")
+    }
+
+    private static func paperTitles(near paper: Paper) -> [UUID: String] {
+        let papers = (try? paper.modelContext?.fetch(FetchDescriptor<Paper>())) ?? [paper]
+        return Dictionary(papers.map { ($0.id, $0.title) }, uniquingKeysWith: { first, _ in first })
     }
 
     private static func userNotes(_ notes: [Note]) -> String {
