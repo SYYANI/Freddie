@@ -59,7 +59,7 @@ struct PaperSummaryService {
                 guard let document = PDFDocument(url: url) else { return "" }
                 // A bounded excerpt is evidence for a summary, never a full-text structure.
                 return String((0..<min(3, document.pageCount))
-                    .compactMap { document.page(at: $0)?.string }
+                    .compactMap { document.page(at: $0).flatMap(PDFWordSpacing.text(of:)) }
                     .joined(separator: "\n")
                     .prefix(12_000))
             }.value

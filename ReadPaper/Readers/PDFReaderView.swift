@@ -248,11 +248,19 @@ extension PDFPreferredManualScaling {
 }
 
 enum PDFNoteNavigationTextMatcher {
+    /// Matches with collapsed whitespace first, then ignoring it: quotes saved before
+    /// `PDFWordSpacing` lack the spaces PDFKit drops on some PDFs, and newer quotes have
+    /// spaces the page text lacks.
     static func range(of quote: String, in pageText: String) -> NSRange? {
-        let normalizedQuote = normalize(quote).text
+        range(of: quote, in: pageText, keepsSpaces: true)
+            ?? range(of: quote, in: pageText, keepsSpaces: false)
+    }
+
+    private static func range(of quote: String, in pageText: String, keepsSpaces: Bool) -> NSRange? {
+        let normalizedQuote = normalize(quote, keepsSpaces: keepsSpaces).text
         guard normalizedQuote.isEmpty == false else { return nil }
 
-        let normalizedPage = normalize(pageText)
+        let normalizedPage = normalize(pageText, keepsSpaces: keepsSpaces)
         let match = (normalizedPage.text as NSString).range(of: normalizedQuote)
         guard match.location != NSNotFound,
               match.length > 0,
@@ -270,7 +278,7 @@ enum PDFNoteNavigationTextMatcher {
         )
     }
 
-    private static func normalize(_ text: String) -> (text: String, sourceRanges: [NSRange]) {
+    private static func normalize(_ text: String, keepsSpaces: Bool) -> (text: String, sourceRanges: [NSRange]) {
         let source = text as NSString
         var normalized = ""
         var sourceRanges: [NSRange] = []
@@ -282,6 +290,7 @@ enum PDFNoteNavigationTextMatcher {
         ) { substring, substringRange, _, _ in
             guard let substring else { return }
             if substring.rangeOfCharacter(from: .whitespacesAndNewlines) != nil {
+                guard keepsSpaces else { return }
                 if normalized.isEmpty == false, pendingWhitespaceRange == nil {
                     pendingWhitespaceRange = substringRange
                 } else if let currentWhitespaceRange = pendingWhitespaceRange {
@@ -1891,7 +1900,7 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
                     .intersection(page.bounds(for: .cropBox))
                     .standardized
                 guard bounds.width >= 1, bounds.height >= 1 else { return nil }
-                let quote = line.string?
+                let quote = PDFWordSpacing.text(of: line)?
                     .components(separatedBy: .whitespacesAndNewlines)
                     .filter { $0.isEmpty == false }
                     .joined(separator: " ")
@@ -2568,7 +2577,7 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
                 return nil
             }
 
-            let quote = selection.string?
+            let quote = PDFWordSpacing.text(of: selection)?
                 .components(separatedBy: .whitespacesAndNewlines)
                 .filter { !$0.isEmpty }
                 .joined(separator: " ") ?? ""
@@ -2582,7 +2591,7 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
             let contextStart = max(0, pageIndex - 1)
             let contextEnd = min(document.pageCount - 1, pageIndex + 1)
             let localContext = (contextStart...contextEnd)
-                .compactMap { document.page(at: $0)?.string }
+                .compactMap { document.page(at: $0).flatMap(PDFWordSpacing.text(of:)) }
                 .joined(separator: "\n\n")
 
             return NoteSelectionContext(
@@ -2819,6 +2828,19 @@ private final class InteractivePDFView: PDFView, PDFPreferredManualScaling {
             return
         }
         super.perform(action)
+    }
+
+    /// PDFKit copies without the word spaces it drops on some PDFs.
+    override func copy(_ sender: Any?) {
+        guard let selection = currentSelection,
+              let text = PDFWordSpacing.text(of: selection),
+              text != selection.string else {
+            super.copy(sender)
+            return
+        }
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(text, forType: .string)
     }
 
     override func magnify(with event: NSEvent) {

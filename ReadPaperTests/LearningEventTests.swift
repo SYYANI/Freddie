@@ -220,6 +220,103 @@ final class LearningEventTests: XCTestCase {
         XCTAssertEqual(events.first { $0.kind == .highlight }?.attachmentID, attachmentID)
     }
 
+    /// A quick translation's first turn carries the app's instruction as its question; the
+    /// Learning tab and the organizer must not treat it as the reader's words.
+    func testQuickActionInstructionIsNotTheReadersText() async throws {
+        let instruction = "Translate the selected text and explain it in plain words."
+        let sources = LearningEventSources(conversations: [
+            conversation(action: .explain, turns: [(instruction, "**翻译** 译文"), ("Why?", "Because.")]),
+        ])
+
+        let events = LearningEventCollector.events(paperID: paperID, sources: sources)
+        XCTAssertEqual(events.map(\.kind), [.explanation, .question])
+        XCTAssertNil(events[0].text)
+        XCTAssertEqual(events[0].quote, "scaled dot-product attention")
+        XCTAssertEqual(events[1].text, "Why?")
+
+        // A log written before the rule holds the instruction under the same ID: reading it
+        // drops the text, and collecting the conversation again appends nothing.
+        var old = events[0]
+        old.text = instruction
+        let url = root.appendingPathComponent("Learning/events/\(paperID.uuidString).jsonl")
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        try (String(decoding: try encoder.encode(old), as: UTF8.self) + "\n")
+            .write(to: url, atomically: true, encoding: .utf8)
+
+        let log = LearningEventLog(rootDirectory: root)
+        let stored = await log.events(paperID: paperID)
+        XCTAssertNil(stored.first?.text)
+        let appended = try await log.record(paperID: paperID, sources: sources)
+        XCTAssertEqual(appended.map(\.id), [events[1].id])
+    }
+
+    func testDeletedRecordStaysDeletedUntilALaterRevision() async throws {
+        let log = LearningEventLog(rootDirectory: root)
+        let noteID = UUID()
+        let sources = LearningEventSources(notes: [note(id: noteID, body: "first thought")])
+        let recorded = try await log.record(paperID: paperID, sources: sources)
+        let event = try XCTUnwrap(recorded.first)
+
+        try await log.delete(event)
+        let afterDeleting = await log.events(paperID: paperID)
+        XCTAssertTrue(afterDeleting.isEmpty)
+        let allAfterDeleting = await log.allEvents()
+        XCTAssertTrue(allAfterDeleting.isEmpty)
+
+        // The note is still in the store: collecting it again does not bring it back.
+        let repeated = try await log.record(paperID: paperID, sources: sources)
+        XCTAssertTrue(repeated.isEmpty)
+        let afterCollecting = await log.events(paperID: paperID)
+        XCTAssertTrue(afterCollecting.isEmpty)
+
+        // Editing the note is a new action, so its new revision shows.
+        let edited = note(id: noteID, body: "second thought", at: Date(timeIntervalSince1970: 4_000))
+        _ = try await log.record(paperID: paperID, sources: .init(notes: [edited]))
+        let afterEditing = await log.events(paperID: paperID)
+        XCTAssertEqual(afterEditing.map(\.text), ["second thought"])
+
+        // Append-only: the deleted event's line is still in the file.
+        let url = root.appendingPathComponent("Learning/events/\(paperID.uuidString).jsonl")
+        XCTAssertTrue(try String(contentsOf: url, encoding: .utf8).contains("first thought"))
+    }
+
+    func testDeletingAJoinedHighlightKeepsItsPerLineEventsHidden() async throws {
+        let color = PDFAnnotationColorValue(red: 1, green: 1, blue: 0, alpha: 1)
+        let date = Date(timeIntervalSince1970: 10_000)
+        let records = ["first line of a", "highlight"].map { quote in
+            PDFAnnotationRecord(
+                pageIndex: 0, kind: .highlight, bounds: .zero, color: color, quote: quote,
+                createdAt: date, modifiedAt: date
+            )
+        }
+        // Written before lines were joined: an event for the second line alone.
+        let perLine = LearningEvent(
+            id: "annotation/\(records[1].id.uuidString)/old", subject: "annotation/\(records[1].id.uuidString)",
+            paperID: paperID, kind: .highlight, occurredAt: date, isBackfilled: false,
+            attachmentID: attachmentID, pageIndex: 0, quote: records[1].quote
+        )
+        let url = root.appendingPathComponent("Learning/events/\(paperID.uuidString).jsonl")
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        try (String(decoding: try encoder.encode(perLine), as: UTF8.self) + "\n")
+            .write(to: url, atomically: true, encoding: .utf8)
+
+        let log = LearningEventLog(rootDirectory: root)
+        let annotations = records.map { LearningEventSources.Annotation(attachmentID: attachmentID, record: $0) }
+        _ = try await log.record(paperID: paperID, sources: .init(annotations: annotations))
+        let shown = LearningEvent.latestRevisions(of: await log.events(paperID: paperID))
+        let joined = try XCTUnwrap(shown.first)
+        XCTAssertEqual(shown.map(\.quote), ["first line of a highlight"])
+
+        try await log.delete(joined)
+
+        let remaining = await log.events(paperID: paperID)
+        XCTAssertTrue(remaining.isEmpty)
+    }
+
     func testUnreadableLinesAreSkippedAndKept() async throws {
         let log = LearningEventLog(rootDirectory: root)
         _ = try await log.record(paperID: paperID, sources: .init(notes: [note()]))

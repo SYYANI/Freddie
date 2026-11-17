@@ -55,6 +55,18 @@ struct LearningEvent: Codable, Equatable, Identifiable, Sendable {
         pageIndex != nil || htmlSelector?.isEmpty == false
     }
 
+    /// Translations and explanations are started by a quick action, so the question sent
+    /// with them is the app's instruction, not the reader's words: it is not shown or
+    /// handed to the organizer. Logs written before this rule still hold it, so reading
+    /// the log applies it too. The ID keeps the question's digest so collecting the same
+    /// turn again appends nothing.
+    var withoutInstruction: LearningEvent {
+        guard kind == .translation || kind == .explanation else { return self }
+        var event = self
+        event.text = nil
+        return event
+    }
+
     /// The latest revision of each subject that no other event replaces, oldest first.
     static func latestRevisions(of events: [LearningEvent]) -> [LearningEvent] {
         var replaced = Set<String>()
@@ -284,7 +296,7 @@ enum LearningEventCollector {
                 quote: normalized(conversation.quote),
                 text: question,
                 response: answer
-            )
+            ).withoutInstruction
         }
     }
 

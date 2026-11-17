@@ -23,7 +23,7 @@ struct PaperSearchBlock: Codable, Equatable, Sendable, Identifiable {
 }
 
 struct PaperFullTextIndex: Codable, Equatable, Sendable {
-    static let currentVersion = 1
+    static let currentVersion = 2
 
     var version: Int
     var paperID: UUID
@@ -291,7 +291,7 @@ struct PaperFullTextSearchService {
         let url = attachment.resolvedFileURL(fileStore: fileStore)
         let document = PDFDocument(url: url)
         let blocks = (0..<(document?.pageCount ?? 0)).compactMap { pageIndex -> PaperSearchBlock? in
-            guard let text = document?.page(at: pageIndex)?.string.map(Self.normalizedWhitespace),
+            guard let text = document?.page(at: pageIndex).flatMap(PDFWordSpacing.text(of:)).map(Self.normalizedWhitespace),
                   text.count >= 4 else { return nil }
             return PaperSearchBlock(
                 id: "pdf-\(attachment.id.uuidString)-\(pageIndex)",

@@ -2675,6 +2675,16 @@
         }
       }
     },
+    "Delete Record" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "删除记录"
+          }
+        }
+      }
+    },
     "Delete This Conversation" : {
       "extractionState" : "stale",
       "localizations" : {

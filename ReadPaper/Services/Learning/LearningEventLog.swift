@@ -34,7 +34,11 @@ actor LearningEventLog {
 
         let url = try fileURL(paperID: paperID)
         let isFirstCollection = fileManager.fileExists(atPath: url.path) == false
-        var knownIDs = Set(Self.readEvents(at: url).map(\.id))
+        // Deleted events stay known, so the sources they came from do not add them back.
+        var knownIDs = Set(Self.readLines(at: url).compactMap { line -> String? in
+            if case let .event(event) = line { return event.id }
+            return nil
+        })
         var newEvents: [LearningEvent] = []
         for var event in LearningEventCollector.events(paperID: paperID, sources: sources, now: now)
         where knownIDs.insert(event.id).inserted {
@@ -56,12 +60,32 @@ actor LearningEventLog {
         if isFirstCollection {
             try data.write(to: url, options: .atomic)
         } else {
-            let handle = try FileHandle(forWritingTo: url)
-            defer { try? handle.close() }
-            try handle.seekToEnd()
-            try handle.write(contentsOf: data)
+            try append(data, to: url)
         }
         return newEvents
+    }
+
+    /// Hides an event the reader deleted, together with the earlier revisions of its
+    /// subject and the per-line highlight events it absorbed. The log stays append-only:
+    /// a deletion line is added, so collecting the same sources again adds nothing, while
+    /// a later revision (an edited note, a new answer) shows up again.
+    func delete(_ event: LearningEvent, now: Date = Date()) throws {
+        let url = try fileURL(paperID: event.paperID)
+        guard fileManager.fileExists(atPath: url.path) else { return }
+        let deletion = Deletion(
+            deletedSubjects: [event.subject] + (event.replaces ?? []).filter { $0 != event.subject },
+            deletedAt: now
+        )
+        var data = try Self.encoder.encode(deletion)
+        data.append(0x0A)
+        try append(data, to: url)
+    }
+
+    private func append(_ data: Data, to url: URL) throws {
+        let handle = try FileHandle(forWritingTo: url)
+        defer { try? handle.close() }
+        try handle.seekToEnd()
+        try handle.write(contentsOf: data)
     }
 
     /// The paper's events in the order they were appended.
@@ -99,18 +123,47 @@ actor LearningEventLog {
         try eventsDirectory().appendingPathComponent("\(paperID.uuidString).jsonl")
     }
 
+    /// A line the reader's deletion appended. Versions before deletions skip it like any
+    /// line they cannot read, and so still show the event.
+    private struct Deletion: Codable {
+        var deletedSubjects: [String]
+        var deletedAt: Date
+    }
+
+    private enum Line {
+        case event(LearningEvent)
+        case deletion(Deletion)
+    }
+
     /// Lines that do not decode (written by a newer version, or cut short by a crash) are
     /// skipped and stay in the file. Two app instances can append the same event, so
     /// repeated IDs are dropped.
-    private static func readEvents(at url: URL) -> [LearningEvent] {
+    private static func readLines(at url: URL) -> [Line] {
         guard let data = try? Data(contentsOf: url) else { return [] }
         let decoder = Self.decoder
         var seen = Set<String>()
         return data.split(separator: 0x0A).compactMap { line in
-            guard let event = try? decoder.decode(LearningEvent.self, from: line),
-                  seen.insert(event.id).inserted else { return nil }
-            return event
+            if let event = try? decoder.decode(LearningEvent.self, from: line) {
+                return seen.insert(event.id).inserted ? .event(event) : nil
+            }
+            return (try? decoder.decode(Deletion.self, from: line)).map(Line.deletion)
         }
+    }
+
+    /// The events left once deletions apply: each removes the events of its subjects
+    /// appended before it.
+    private static func readEvents(at url: URL) -> [LearningEvent] {
+        var events: [LearningEvent] = []
+        for line in readLines(at: url) {
+            switch line {
+            case let .event(event):
+                events.append(event.withoutInstruction)
+            case let .deletion(deletion):
+                let subjects = Set(deletion.deletedSubjects)
+                events.removeAll { subjects.contains($0.subject) }
+            }
+        }
+        return events
     }
 
     private static func conversations(in notesDirectory: URL) -> [SelectionAssistantConversationSnapshot] {
@@ -190,5 +243,16 @@ final class LearningRecorder {
             revision &+= 1
         }
         return appended
+    }
+
+    /// Removes a record from the Learning tab, from future organizing and from the
+    /// concept library. Records the organizer already built from it stay.
+    func delete(_ event: LearningEvent) async {
+        do {
+            try await log.delete(event)
+            revision &+= 1
+        } catch {
+            // The file is gone or unwritable; the next load shows the log as it is.
+        }
     }
 }

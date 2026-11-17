@@ -500,7 +500,7 @@ struct LearningPaneView: View {
                         .foregroundStyle(concept.stage.tint)
                 }
                 if let detail = concept.entries.first?.item.detail {
-                    Text(detail)
+                    Text(NoteMarkdownRenderer.preview(detail))
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .lineLimit(3)
@@ -723,7 +723,7 @@ struct LearningPaneView: View {
                         }
                     }
                     if let detail = item.detail {
-                        Text(detail)
+                        Text(NoteMarkdownRenderer.preview(detail))
                             .font(.callout)
                             .foregroundStyle(.secondary)
                     }
@@ -769,8 +769,10 @@ struct LearningPaneView: View {
                     .frame(width: 16)
                     .accessibilityLabel(LearningGroup(event.kind).title(bundle: bundle))
                 VStack(alignment: .leading, spacing: 4) {
+                    // A note's body and the assistant's answer are Markdown; the quote is
+                    // the paper's own text.
                     if let text = event.text {
-                        Text(text)
+                        Text(NoteMarkdownRenderer.preview(text))
                             .lineLimit(4)
                     }
                     if let quote = event.quote {
@@ -780,7 +782,7 @@ struct LearningPaneView: View {
                             .lineLimit(3)
                     }
                     if let response = event.response {
-                        Text(response)
+                        Text(NoteMarkdownRenderer.preview(response))
                             .font(.callout)
                             .foregroundStyle(.secondary)
                             .lineLimit(3)
@@ -798,6 +800,13 @@ struct LearningPaneView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        // Only in the context menu: deleting a record is rare, and the row stays one tap
+        // target for opening the passage.
+        .contextMenu {
+            Button(String(localized: "Delete Record", bundle: bundle), role: .destructive) {
+                Task { await recorder.delete(event) }
+            }
+        }
     }
 
     private func caption(for event: LearningEvent, showsPaper: Bool) -> String {
