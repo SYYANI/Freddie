@@ -175,6 +175,8 @@ private struct SettingsForm: View {
     private var externalAssistantSearchEnabled = false
     @AppStorage(SelectionAssistantPreferences.quickGlossOnSelectionEnabledKey)
     private var quickGlossOnSelectionEnabled = false
+    @AppStorage(SelectionAssistantPreferences.quickTranslateOnSelectionEnabledKey)
+    private var quickTranslateOnSelectionEnabled = false
     @AppStorage(LearningPreferences.modelProfileIDKey)
     private var selectedLearningModelProfileIDRawValue = ""
     @AppStorage(LearningPreferences.automaticOrganizingKey)
@@ -807,9 +809,32 @@ private struct SettingsForm: View {
                     )
                     .help(String(localized: "Uses the selected model's server-side web search (Responses API or Anthropic Messages API).", bundle: bundle))
 
+                    // The two switches exclude each other: both answer the same selection.
+                    Toggle(
+                        String(localized: "Show a translation next to text when I select it", bundle: bundle),
+                        isOn: Binding(
+                            get: { quickTranslateOnSelectionEnabled },
+                            set: { isOn in
+                                quickTranslateOnSelectionEnabled = isOn
+                                if isOn {
+                                    quickGlossOnSelectionEnabled = false
+                                }
+                            }
+                        )
+                    )
+                    .help(String(localized: "Shortly after you select text, show its translation next to it. Nothing is saved.", bundle: bundle))
+
                     Toggle(
                         String(localized: "Translate and explain text when I select it in a PDF", bundle: bundle),
-                        isOn: $quickGlossOnSelectionEnabled
+                        isOn: Binding(
+                            get: { quickGlossOnSelectionEnabled },
+                            set: { isOn in
+                                quickGlossOnSelectionEnabled = isOn
+                                if isOn {
+                                    quickTranslateOnSelectionEnabled = false
+                                }
+                            }
+                        )
                     )
                     .help(String(localized: "Shortly after you select a passage in the source PDF, show its translation and a plain-language explanation.", bundle: bundle))
 

@@ -99,6 +99,8 @@ struct ReaderPaneView: View {
     private var transcriptionPaperIDsStorage = ""
     @AppStorage(SelectionAssistantPreferences.quickGlossOnSelectionEnabledKey)
     private var quickGlossOnSelectionEnabled = false
+    @AppStorage(SelectionAssistantPreferences.quickTranslateOnSelectionEnabledKey)
+    private var quickTranslateOnSelectionEnabled = false
 
     var paper: Paper?
     var attachments: [PaperAttachment]
@@ -188,6 +190,8 @@ struct ReaderPaneView: View {
     @State private var selectionAssistantHistoryAnchors: [SelectionAssistantHistoryAnchor] = []
     @State private var selectionAssistantAutoRun: SelectionAssistantAutoRun?
     @State private var selectionAssistantAutoRunTask: Task<Void, Never>?
+    @State private var quickTranslation = QuickTranslationModel()
+    @State private var selectionAnchor = SelectionAnchorModel()
     @State private var selectionRecall = LearningRecall()
     @State private var selectionRecallPaperTitles: [UUID: String] = [:]
     @State private var selectionRecallTask: Task<Void, Never>?
@@ -1204,6 +1208,10 @@ struct ReaderPaneView: View {
             Label(String(localized: "Reset Font Size", bundle: bundle), systemImage: "arrow.counterclockwise")
         }
         .disabled(htmlReaderFontSize == HTMLReaderTypography.defaultFontSize)
+
+        Divider()
+
+        quickTranslateOnSelectionToggle
     }
 
     private var htmlRegionEditButton: some View {
@@ -1371,6 +1379,44 @@ struct ReaderPaneView: View {
         }
     }
 
+    private var quickTranslateOnSelectionToggle: some View {
+        Toggle(isOn: quickTranslateOnSelectionBinding) {
+            Label(
+                String(localized: "Translate on Selection", bundle: bundle),
+                systemImage: "translate"
+            )
+        }
+        .help(String(localized: "Shortly after you select text, show its translation next to it. Nothing is saved.", bundle: bundle))
+    }
+
+    /// The two "on selection" switches exclude each other: both answer the same selection.
+    private var quickTranslateOnSelectionBinding: Binding<Bool> {
+        Binding(
+            get: { quickTranslateOnSelectionEnabled },
+            set: { isOn in
+                quickTranslateOnSelectionEnabled = isOn
+                if isOn {
+                    quickGlossOnSelectionEnabled = false
+                } else {
+                    quickTranslation.dismiss()
+                }
+            }
+        )
+    }
+
+    private var quickGlossOnSelectionBinding: Binding<Bool> {
+        Binding(
+            get: { quickGlossOnSelectionEnabled },
+            set: { isOn in
+                quickGlossOnSelectionEnabled = isOn
+                if isOn {
+                    quickTranslateOnSelectionEnabled = false
+                    quickTranslation.dismiss()
+                }
+            }
+        )
+    }
+
     @ViewBuilder
     private var pdfAnnotationMenuItems: some View {
         annotationModeButton(
@@ -1419,7 +1465,9 @@ struct ReaderPaneView: View {
 
         Divider()
 
-        Toggle(isOn: $quickGlossOnSelectionEnabled) {
+        quickTranslateOnSelectionToggle
+
+        Toggle(isOn: quickGlossOnSelectionBinding) {
             Label(
                 String(localized: "Translate & Explain on Selection", bundle: bundle),
                 systemImage: "sparkles"
@@ -2141,6 +2189,10 @@ struct ReaderPaneView: View {
                     }
                 }
             }
+            .environment(\.selectionAnchorModel, selectionAnchor)
+
+            QuickTranslationBubbleLayer(translation: quickTranslation, anchor: selectionAnchor)
+                .zIndex(9)
 
             if let selection = selectionAssistantSelection,
                selection.trimmedQuote != nil,
@@ -3647,9 +3699,11 @@ struct ReaderPaneView: View {
             selectionAssistantSelection = selection
             refreshSelectionRecall(for: selection)
             scheduleQuickGloss(for: selection)
+            updateQuickTranslation(for: selection)
             return
         }
 
+        quickTranslation.dismiss()
         guard isSelectionAssistantPinned == false else { return }
         selectionAssistantDismissTask = Task { @MainActor in
             try? await Task.sleep(nanoseconds: 350_000_000)
@@ -3666,6 +3720,7 @@ struct ReaderPaneView: View {
     /// pending request, so dragging across a paragraph sends one request, not one per move.
     private func scheduleQuickGloss(for selection: NoteSelectionContext) {
         guard quickGlossOnSelectionEnabled,
+              quickTranslateOnSelectionEnabled == false,
               paper != nil,
               let quote = selection.trimmedQuote,
               quote.count >= SelectionAssistantPreferences.quickGlossMinimumCharacterCount,
@@ -3691,6 +3746,66 @@ struct ReaderPaneView: View {
                 token: (selectionAssistantAutoRun?.token ?? 0) &+ 1
             )
         }
+    }
+
+    /// With the reader's switch on, shows the selection's translation in a bubble next to
+    /// it. A selection that already has a saved conversation opens that instead.
+    private func updateQuickTranslation(for selection: NoteSelectionContext) {
+        guard quickTranslateOnSelectionEnabled,
+              paper != nil,
+              let settings,
+              isSelectionAssistantPinned == false,
+              selectionAssistantInitialConversation == nil,
+              let attachmentID = selection.attachmentID,
+              let attachment = attachments.first(where: { $0.id == attachmentID }),
+              QuickTranslationEligibility.canTranslate(
+                  quote: selection.quote,
+                  attachmentKind: attachment.kind,
+                  targetLanguage: settings.targetLanguage
+              )
+        else {
+            quickTranslation.dismiss()
+            return
+        }
+        quickTranslation.selectionChanged(
+            selection,
+            targetLanguage: settings.targetLanguage,
+            translate: performQuickTranslation
+        )
+    }
+
+    /// One short request with the neighbouring sentences as context. The answer goes to the
+    /// bubble only: it is never handed to `persistSelectionAssistantConversation`.
+    @MainActor
+    private func performQuickTranslation(
+        _ selection: NoteSelectionContext,
+        onPartialTranslation: @escaping @MainActor (String) -> Void
+    ) async throws -> String {
+        guard let paper, let settings else {
+            throw LLMProviderError.invalidConfiguration(
+                String(localized: "Translation settings are unavailable.", bundle: bundle)
+            )
+        }
+        let route = try LLMRouteResolver().resolveAssistantRoute(
+            settings: settings,
+            modelContext: modelContext
+        )
+        let request = SelectionAssistantRequest(
+            action: .translate,
+            selection: selection.quote,
+            localContext: QuickTranslationContext.nearby(quote: selection.quote, in: selection.localContext),
+            scope: .nearby
+        )
+        let result = try await SelectionAssistantService().perform(
+            request,
+            paperTitle: paper.title,
+            targetLanguage: settings.targetLanguage,
+            route: route,
+            onPartialAnswer: { partialTranslation in
+                await onPartialTranslation(partialTranslation)
+            }
+        )
+        return result.answer
     }
 
     /// Looks the selection up in the reader's learning records. Nothing is sent anywhere.
@@ -3824,6 +3939,8 @@ struct ReaderPaneView: View {
             htmlNativeSelectionClearToken &+= 1
         }
         isSelectionAssistantPinned = true
+        // The reader turned to the assistant's card; the bubble would only sit in its way.
+        quickTranslation.dismiss()
     }
 
     private func handleHTMLSelectionAssistantDismissal() {
@@ -3870,6 +3987,7 @@ struct ReaderPaneView: View {
         selectionAssistantAutoRunTask?.cancel()
         selectionAssistantAutoRunTask = nil
         selectionAssistantAutoRun = nil
+        quickTranslation.dismiss()
         selectionAssistantSelection = nil
         selectionRecallTask?.cancel()
         selectionRecall = LearningRecall()

@@ -192,6 +192,7 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
     }
     static func dismantleNSView(_ view: WKWebView, coordinator: Coordinator) {
         LibrarySyncActivity.shared.removeNoteEditor(coordinator.syncNoteEditorID)
+        coordinator.attachSelectionAnchor(nil)
     }
     #else
     func makeUIView(context: Context) -> WKWebView {
@@ -224,6 +225,7 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
         configuration.userContentController.add(coordinator, name: Coordinator.scrollMessageHandlerName)
         configuration.userContentController.add(coordinator, name: Coordinator.selectionMessageHandlerName)
         configuration.userContentController.add(coordinator, name: Coordinator.selectionResetMessageHandlerName)
+        configuration.userContentController.add(coordinator, name: Coordinator.selectionRectMessageHandlerName)
         configuration.userContentController.add(coordinator, name: Coordinator.sidenoteMessageHandlerName)
         configuration.userContentController.add(coordinator, name: Coordinator.citationMarkMessageHandlerName)
         configuration.userContentController.add(coordinator, name: HTMLRegionEditing.messageHandlerName)
@@ -290,6 +292,9 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
         context.coordinator.scrollRatio = $scrollRatio
         context.coordinator.onNoteSelectionChanged = onNoteSelectionChanged
         context.coordinator.onSelectionAssistantDismissed = onSelectionAssistantDismissed
+        #if os(macOS)
+        context.coordinator.attachSelectionAnchor(context.environment.selectionAnchorModel)
+        #endif
         context.coordinator.selectionAssistantHistoryAnchors = selectionAssistantHistoryAnchors
         context.coordinator.citationMarks = citationMarks
         context.coordinator.onCitationMarksActivated = onCitationMarksActivated
@@ -397,6 +402,7 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
         static let scrollMessageHandlerName = "rpScroll"
         static let selectionMessageHandlerName = "rpSelection"
         static let selectionResetMessageHandlerName = "rpSelectionReset"
+        static let selectionRectMessageHandlerName = "rpSelectionRect"
         static let sidenoteMessageHandlerName = "rpSidenote"
         static let citationMarkMessageHandlerName = "rpCitationMark"
         /// A click on a cited passage waits this long for a second click, which selects a
@@ -1089,17 +1095,37 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
                 }, 120);
             }, { passive: true });
 
+            // Where the live selection sits in the viewport, for views the app shows next to it.
+            const selectionClientRect = () => {
+                const selection = window.getSelection();
+                if (!selection || selection.rangeCount === 0 || selection.isCollapsed) { return null; }
+                const rect = selection.getRangeAt(0).getBoundingClientRect();
+                if (!rect || (rect.width === 0 && rect.height === 0)) { return null; }
+                return { x: rect.left, y: rect.top, width: rect.width, height: rect.height };
+            };
+            let hasReportedSelection = false;
+            const postSelection = payload => {
+                hasReportedSelection = !!payload;
+                window.webkit.messageHandlers.rpSelection.postMessage(payload);
+            };
+            const reportSelectionRect = () => {
+                if (!hasReportedSelection) { return; }
+                window.webkit.messageHandlers.rpSelectionRect?.postMessage(selectionClientRect());
+            };
+            window.addEventListener('scroll', reportSelectionRect, { passive: true });
+            window.addEventListener('resize', reportSelectionRect);
+
             let selectionTimer = null;
             const reportSelection = () => {
                 if (document.documentElement.getAttribute('\(HTMLRegionVisibility.editingAttribute)') === 'true') {
-                    window.webkit.messageHandlers.rpSelection.postMessage(null);
+                    postSelection(null);
                     return;
                 }
                 const selection = window.getSelection();
                 const quote = normalizeText(selection ? selection.toString() : '');
                 if (!quote) {
                     if (Date.now() < assistantHistorySelectionGraceUntil) { return; }
-                    window.webkit.messageHandlers.rpSelection.postMessage(null);
+                    postSelection(null);
                     return;
                 }
 
@@ -1107,7 +1133,7 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
                 const segmentID = anchorElement ? anchorElement.getAttribute('data-rp-segment-id') : null;
                 const selector = segmentID ? selectorForSegment(segmentID) : buildOriginalPathAnchor(anchorElement);
                 if (!selector) {
-                    window.webkit.messageHandlers.rpSelection.postMessage(null);
+                    postSelection(null);
                     return;
                 }
 
@@ -1129,7 +1155,7 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
                     .join('\\n\\n')
                     .slice(0, 8000);
 
-                window.webkit.messageHandlers.rpSelection.postMessage({ quote, selector, localContext });
+                postSelection({ quote, selector, localContext, rect: selectionClientRect() });
             };
 
             document.addEventListener('selectionchange', () => {
@@ -2130,6 +2156,9 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
         private var pendingNoteNavigationRequest: NoteNavigationRequest?
         private var lastAppliedNoteNavigationID: UUID?
         private var lastPublishedNoteSelection: NoteSelectionContext?
+        #if os(macOS)
+        private weak var selectionAnchor: SelectionAnchorModel?
+        #endif
         private var lastSelectionHighlightResetToken = 0
         private var lastNativeSelectionClearToken = 0
         private var lastSelectionAssistantHistorySignature: String?
@@ -2369,8 +2398,11 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
             case Self.selectionMessageHandlerName:
                 handleSelectionMessage(message)
             case Self.selectionResetMessageHandlerName:
+                updateSelectionAnchor(with: nil, in: message.webView)
                 publishNoteSelection(nil)
                 onSelectionAssistantDismissed?()
+            case Self.selectionRectMessageHandlerName:
+                updateSelectionAnchor(with: message.body, in: message.webView)
             case Self.sidenoteMessageHandlerName:
                 handleSidenoteMessage(message)
             case Self.citationMarkMessageHandlerName:
@@ -2940,6 +2972,7 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
 
         private func handleSelectionMessage(_ message: WKScriptMessage) {
             guard let body = message.body as? [String: Any] else {
+                updateSelectionAnchor(with: nil, in: message.webView)
                 publishNoteSelection(nil)
                 return
             }
@@ -2951,11 +2984,55 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
                 localContext: body["localContext"] as? String
             )
             guard selection.trimmedQuote != nil, selection.hasAnchor else {
+                updateSelectionAnchor(with: nil, in: message.webView)
                 publishNoteSelection(nil)
                 return
             }
+            updateSelectionAnchor(with: body["rect"], in: message.webView)
             publishNoteSelection(selection)
         }
+
+        /// `body` is the selection's viewport rect as posted by the page script, or anything
+        /// else when there is no live selection (a history underline was clicked, the
+        /// selection was cleared).
+        private func updateSelectionAnchor(with body: Any?, in webView: WKWebView?) {
+            #if os(macOS)
+            guard let selectionAnchor else { return }
+            guard let webView,
+                  let rect = Self.selectionRect(from: body, viewHeight: webView.bounds.height, isFlipped: webView.isFlipped) else {
+                selectionAnchor.clear(owner: self)
+                return
+            }
+            selectionAnchor.update(rect.intersection(webView.bounds), in: webView, owner: self)
+            #endif
+        }
+
+        /// Converts a viewport rect (origin at the top left) into the web view's coordinates.
+        static func selectionRect(from body: Any?, viewHeight: CGFloat, isFlipped: Bool) -> CGRect? {
+            guard let body = body as? [String: Any],
+                  let x = (body["x"] as? NSNumber)?.doubleValue,
+                  let y = (body["y"] as? NSNumber)?.doubleValue,
+                  let width = (body["width"] as? NSNumber)?.doubleValue,
+                  let height = (body["height"] as? NSNumber)?.doubleValue,
+                  [x, y, width, height].allSatisfy(\.isFinite),
+                  width > 0 || height > 0 else {
+                return nil
+            }
+            return CGRect(
+                x: x,
+                y: isFlipped ? y : viewHeight - y - height,
+                width: max(width, 1),
+                height: max(height, 1)
+            )
+        }
+
+        #if os(macOS)
+        func attachSelectionAnchor(_ model: SelectionAnchorModel?) {
+            guard selectionAnchor !== model else { return }
+            selectionAnchor?.clear(owner: self)
+            selectionAnchor = model
+        }
+        #endif
 
         private func publishNoteSelection(_ selection: NoteSelectionContext?) {
             guard lastPublishedNoteSelection != selection else { return }

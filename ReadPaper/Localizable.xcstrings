@@ -12,36 +12,6 @@
         }
       }
     },
-    "Delete This Conversation" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "删除这段对话"
-          }
-        }
-      }
-    },
-    "Delete this conversation?" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "删除这段对话？"
-          }
-        }
-      }
-    },
-    "The answer and its underline in the paper are removed. This cannot be undone." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "回答和论文里对应的下划线都会被删除，无法撤销。"
-          }
-        }
-      }
-    },
     "“%@” and all of its local files, notes, reading state, and translation cache will be removed." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2701,6 +2671,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "删除 Provider？"
+          }
+        }
+      }
+    },
+    "Delete This Conversation" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "删除这段对话"
+          }
+        }
+      }
+    },
+    "Delete this conversation?" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "删除这段对话？"
           }
         }
       }
@@ -8622,6 +8614,17 @@
         }
       }
     },
+    "Shortly after you select text, show its translation next to it. Nothing is saved." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选中文字后稍作停顿，在文字旁边显示译文。不保存任何内容。"
+          }
+        }
+      }
+    },
     "Show" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -8640,6 +8643,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "在页面中定位已隐藏的区域"
+          }
+        }
+      }
+    },
+    "Show a translation next to text when I select it" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选中文字后在旁边显示译文"
           }
         }
       }
@@ -9261,6 +9275,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "无法写入带标注的 PDF。"
+          }
+        }
+      }
+    },
+    "The answer and its underline in the paper are removed. This cannot be undone." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "回答和论文里对应的下划线都会被删除，无法撤销。"
           }
         }
       }
@@ -10596,6 +10620,17 @@
         }
       }
     },
+    "Translate on Selection" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选中后翻译"
+          }
+        }
+      }
+    },
     "Translate pages %@–%@" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -10919,6 +10954,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "翻译不可用"
+          }
+        }
+      }
+    },
+    "Translation: %@" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "译文：%@"
           }
         }
       }

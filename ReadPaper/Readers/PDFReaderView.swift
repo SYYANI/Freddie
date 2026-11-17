@@ -428,6 +428,7 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
             interactiveView.onDebugRegionSelected = onDebugRegionSelected
         }
         context.coordinator.attachScrollSync(scrollSync, side: scrollSyncSide, to: view)
+        context.coordinator.attachSelectionAnchor(context.environment.selectionAnchorModel, to: view)
         #else
         if let touchView = view as? TouchPDFView {
             touchView.annotationInteractionMode = annotationSession?.interactionMode ?? .browse
@@ -642,6 +643,10 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
         private var isSidenotePositionUpdateScheduled = false
         #if os(macOS)
         private weak var observedSidenoteScrollView: NSScrollView?
+        private weak var selectionAnchor: SelectionAnchorModel?
+        private weak var selectionAnchorScrollView: NSScrollView?
+        private var selectionAnchorGeometryObservers: [NSObjectProtocol] = []
+        private var isSelectionAnchorUpdateScheduled = false
         private(set) weak var scrollSync: DualPDFScrollSync?
         private var scrollSyncSide: DualPDFSelectionSource = .original
         #endif
@@ -1061,6 +1066,9 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
             findTextLoadTask = nil
             #if os(macOS)
             stopObservingSidenoteGeometry()
+            stopObservingSelectionAnchorGeometry()
+            selectionAnchor?.clear(owner: self)
+            selectionAnchor = nil
             if let pdfView {
                 scrollSync?.unregister(pdfView, side: scrollSyncSide)
             }
@@ -1279,6 +1287,73 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
 
         @objc private func handleSidenoteGeometryChanged(_ notification: Notification) {
             scheduleSidenotePositionUpdate()
+        }
+
+        /// Reports where the current selection sits in the view, and keeps reporting while
+        /// the reader scrolls, zooms, or resizes, so a view shown next to the selection
+        /// moves with the text.
+        func attachSelectionAnchor(_ model: SelectionAnchorModel?, to pdfView: PDFView) {
+            if selectionAnchor !== model {
+                selectionAnchor?.clear(owner: self)
+                selectionAnchor = model
+                scheduleSelectionAnchorUpdate()
+            }
+            guard model != nil,
+                  let scrollView = pdfView.subviews.lazy.compactMap({ $0 as? NSScrollView }).first else {
+                stopObservingSelectionAnchorGeometry()
+                return
+            }
+            guard selectionAnchorScrollView !== scrollView else { return }
+            stopObservingSelectionAnchorGeometry()
+            selectionAnchorScrollView = scrollView
+            scrollView.contentView.postsBoundsChangedNotifications = true
+            // Block observers, so removing the sidenote observers registered for the same
+            // notifications on `self` leaves these in place.
+            let center = NotificationCenter.default
+            let handler: @Sendable (Notification) -> Void = { [weak self] _ in
+                MainActor.assumeIsolated {
+                    self?.scheduleSelectionAnchorUpdate()
+                }
+            }
+            selectionAnchorGeometryObservers = [
+                center.addObserver(forName: NSView.boundsDidChangeNotification, object: scrollView.contentView, queue: nil, using: handler),
+                center.addObserver(forName: NSView.frameDidChangeNotification, object: scrollView.contentView, queue: nil, using: handler),
+                center.addObserver(forName: Notification.Name.PDFViewScaleChanged, object: pdfView, queue: nil, using: handler)
+            ]
+        }
+
+        private func stopObservingSelectionAnchorGeometry() {
+            for observer in selectionAnchorGeometryObservers {
+                NotificationCenter.default.removeObserver(observer)
+            }
+            selectionAnchorGeometryObservers = []
+            selectionAnchorScrollView = nil
+        }
+
+        private func scheduleSelectionAnchorUpdate() {
+            guard selectionAnchor != nil, isSelectionAnchorUpdateScheduled == false else { return }
+            isSelectionAnchorUpdateScheduled = true
+            // After the current scroll event or view update, before the next frame.
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.isSelectionAnchorUpdateScheduled = false
+                self.updateSelectionAnchor()
+            }
+        }
+
+        func updateSelectionAnchor() {
+            guard let selectionAnchor else { return }
+            guard let pdfView, let selection = pdfView.currentSelection else {
+                selectionAnchor.clear(owner: self)
+                return
+            }
+            var bounds = CGRect.null
+            for page in selection.pages {
+                let pageBounds = selection.bounds(for: page)
+                guard pageBounds.isNull == false, pageBounds.isEmpty == false else { continue }
+                bounds = bounds.union(pdfView.convert(pageBounds, from: page))
+            }
+            selectionAnchor.update(bounds.intersection(pdfView.bounds), in: pdfView, owner: self)
         }
         #endif
 
@@ -2431,6 +2506,9 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
                 }
                 self.publishSelection(selection)
                 self.publishAnnotationCapabilities()
+                #if os(macOS)
+                self.updateSelectionAnchor()
+                #endif
             }
         }
 
