@@ -337,27 +337,4 @@ final class LearningEventTests: XCTestCase {
         let all = await log.allEvents()
         XCTAssertEqual(all, stored.sorted { $0.occurredAt < $1.occurredAt })
     }
-
-    func testPaneGroupsByKindAndByDay() {
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(identifier: "UTC")!
-        let events = LearningEventCollector.events(
-            paperID: paperID,
-            sources: .init(
-                notes: [
-                    note(at: Date(timeIntervalSince1970: 100)),
-                    note(body: "thought", at: Date(timeIntervalSince1970: 90_000)),
-                ],
-                conversations: [conversation(action: .translate, turns: [("", "译文"), ("Why?", "Because.")])]
-            )
-        )
-
-        let sections = LearningPaneView.sections(of: events)
-        XCTAssertEqual(sections.map(\.group), [.questions, .lookups, .marks])
-        XCTAssertEqual(sections.last?.events.map(\.kind), [.note, .highlight])
-
-        let days = LearningPaneView.days(of: events, calendar: calendar)
-        XCTAssertEqual(days.map(\.events.count), [1, 3])
-        XCTAssertGreaterThan(days[0].day, days[1].day)
-    }
 }

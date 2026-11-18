@@ -245,8 +245,8 @@ final class LearningRecorder {
         return appended
     }
 
-    /// Removes a record from the Learning tab, from future organizing and from the
-    /// concept library. Records the organizer already built from it stay.
+    /// Removes a record from echoes, from future organizing and from the concept
+    /// library. Records the organizer already built from it stay.
     func delete(_ event: LearningEvent) async {
         do {
             try await log.delete(event)

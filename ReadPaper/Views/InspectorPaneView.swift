@@ -162,13 +162,12 @@ struct InspectorPaneView: View {
                 .init(value: .writing, title: String(localized: "Writing", bundle: bundle)),
                 .init(
                     value: .learning,
-                    title: String(localized: "Learning", bundle: bundle),
-                    // New organizer results, or echoes of past reading for the screen that
-                    // the reader has not looked at yet.
-                    showsBadge: paper.map {
-                        LearningOrganizer.shared.unseenPaperIDs.contains($0.id)
-                            || (mode != .learning && LearningEchoModel.shared.hasUnacknowledgedReadingEchoes)
-                    } ?? false
+                    title: String(localized: "Echoes", bundle: bundle),
+                    // Echoes of past reading for the screen that the reader has not looked
+                    // at yet.
+                    showsBadge: paper != nil
+                        && mode != .learning
+                        && LearningEchoModel.shared.hasUnacknowledgedReadingEchoes
                 ),
             ]
         )

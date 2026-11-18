@@ -94,6 +94,8 @@ struct SelectionAssistantOverlay: View {
     var recall = LearningRecall()
     var recallPaperTitles: [UUID: String] = [:]
     var onOpenRecallEntry: (@MainActor (LearningConcept.Entry) -> Void)? = nil
+    /// Renames a recalled concept in every paper's record; the reader's name sticks.
+    var onRenameRecallConcept: (@MainActor (LearningConcept, String) -> Void)? = nil
     /// Starts the quick translation and explanation for this selection without a click.
     var autoRun: SelectionAssistantAutoRun? = nil
     /// Deletes the saved conversation for this selection (and its history underline).
@@ -119,6 +121,9 @@ struct SelectionAssistantOverlay: View {
     @State private var measuredResultCardSize: CGSize = .zero
     @State private var resizeStartSize: CGSize?
     @State private var expandedRecallConceptID: String?
+    /// The name being typed while renaming the expanded concept.
+    @State private var recallRenameDraft: String?
+    @FocusState private var isRecallRenameFieldFocused: Bool
     @State private var isConfirmingDelete = false
     @FocusState private var isQuestionFieldFocused: Bool
     @FocusState private var isFollowUpFieldFocused: Bool
@@ -222,6 +227,7 @@ struct SelectionAssistantOverlay: View {
                     let isExpanded = expandedRecallConceptID == concept.id
                     Button {
                         expandedRecallConceptID = isExpanded ? nil : concept.id
+                        recallRenameDraft = nil
                     } label: {
                         HStack(spacing: 5) {
                             Image(systemName: "text.book.closed")
@@ -265,21 +271,36 @@ struct SelectionAssistantOverlay: View {
 
     private func recallCard(_ concept: LearningConcept) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 7) {
-                Image(systemName: "text.book.closed")
-                Text(concept.name)
-                    .fontWeight(.semibold)
-                    .lineLimit(2)
-                Spacer(minLength: 8)
-                Button {
-                    expandedRecallConceptID = nil
-                } label: {
-                    Image(systemName: "xmark")
+            if let draft = recallRenameDraft {
+                recallRenamer(concept, name: draft)
+            } else {
+                HStack(spacing: 7) {
+                    Image(systemName: "text.book.closed")
+                    Text(concept.name)
+                        .fontWeight(.semibold)
+                        .lineLimit(2)
+                    Spacer(minLength: 8)
+                    if onRenameRecallConcept != nil {
+                        Button {
+                            recallRenameDraft = concept.name
+                            isRecallRenameFieldFocused = true
+                        } label: {
+                            Image(systemName: "pencil")
+                        }
+                        .buttonStyle(.plain)
+                        .help(String(localized: "Rename…", bundle: bundle))
+                        .accessibilityLabel(String(localized: "Rename…", bundle: bundle))
+                    }
+                    Button {
+                        expandedRecallConceptID = nil
+                    } label: {
+                        Image(systemName: "xmark")
+                    }
+                    .buttonStyle(.plain)
+                    .help(String(localized: "Close", bundle: bundle))
                 }
-                .buttonStyle(.plain)
-                .help(String(localized: "Close", bundle: bundle))
+                .foregroundStyle(Color.accentColor)
             }
-            .foregroundStyle(Color.accentColor)
 
             ForEach(Array(concept.entries.prefix(3).enumerated()), id: \.offset) { _, entry in
                 Button {
@@ -307,6 +328,44 @@ struct SelectionAssistantOverlay: View {
         .font(.system(size: 13))
         .lineSpacing(2)
         .padding(14)
+    }
+
+    private func recallRenamer(_ concept: LearningConcept, name: String) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            TextField(
+                String(localized: "Name", bundle: bundle),
+                text: Binding(get: { recallRenameDraft ?? "" }, set: { recallRenameDraft = $0 })
+            )
+            .textFieldStyle(.plain)
+            .focused($isRecallRenameFieldFocused)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 5)
+            .readPaperFieldWell(isFocused: isRecallRenameFieldFocused)
+            .onSubmit { commitRecallRename(of: concept, to: name) }
+            .onExitCommand { recallRenameDraft = nil }
+            Text("Renames it in every paper. Give it the name of another concept to merge the two.", bundle: bundle)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 8) {
+                Spacer(minLength: 0)
+                Button(String(localized: "Cancel", bundle: bundle)) {
+                    recallRenameDraft = nil
+                }
+                Button(String(localized: "Rename", bundle: bundle)) {
+                    commitRecallRename(of: concept, to: name)
+                }
+                .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+            .controlSize(.small)
+        }
+    }
+
+    private func commitRecallRename(of concept: LearningConcept, to name: String) {
+        let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        recallRenameDraft = nil
+        guard name.isEmpty == false, name != concept.name else { return }
+        onRenameRecallConcept?(concept, name)
     }
 
     private func recallEntryCaption(_ entry: LearningConcept.Entry) -> String {

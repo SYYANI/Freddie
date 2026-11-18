@@ -205,9 +205,6 @@ final class LearningOrganizer {
     private(set) var runningPaperIDs: Set<UUID> = []
     /// The last run's error per paper, cleared by the next successful run.
     private(set) var failures: [UUID: String] = [:]
-    /// Papers whose record the organizer changed and the reader has not looked at since.
-    /// Kept for this run of the app; each record's `lastSeenAt` marks the entries.
-    private(set) var unseenPaperIDs: Set<UUID> = []
 
     @ObservationIgnored private let log: LearningEventLog
     @ObservationIgnored private let store: LearningRecordStore
@@ -312,9 +309,6 @@ final class LearningOrganizer {
                     )
                     revision &+= 1
                 }
-                if applied > 0 {
-                    unseenPaperIDs.insert(paper.id)
-                }
                 failures[paper.id] = nil
                 failedPendingDigests[paper.id] = nil
                 return applied
@@ -367,19 +361,6 @@ final class LearningOrganizer {
             }
         }
         revision &+= 1
-    }
-
-    /// The reader is looking at the paper's record. Returns when they last did, which
-    /// decides the entries shown as new during this visit.
-    func markSeen(paperID: UUID, now: Date = Date()) async -> Date? {
-        unseenPaperIDs.remove(paperID)
-        return try? await store.update(paperID: paperID) { record in
-            // A paper without a record gets no file just for being looked at.
-            guard record.organizedAt != nil else { return Date?.none }
-            let previous = record.lastSeenAt
-            record.lastSeenAt = now
-            return previous
-        }
     }
 
     private func change(

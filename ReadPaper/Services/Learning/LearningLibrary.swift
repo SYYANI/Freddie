@@ -46,27 +46,6 @@ struct LearningConcept: Equatable, Identifiable, Sendable {
     }
 }
 
-/// One calendar week of learning, derived from the events and records without a model.
-struct LearningWeek: Equatable, Identifiable, Sendable {
-    struct PaperActivity: Equatable, Sendable {
-        var paperID: UUID
-        var eventCount: Int
-    }
-
-    var start: Date
-    /// The week's last day.
-    var end: Date
-    var eventCount: Int
-    /// Most active first.
-    var papers: [PaperActivity]
-    /// Concepts the reader met for the first time this week, in any paper.
-    var newConcepts: [LearningConcept.Entry]
-    /// Questions first recorded this week that are still open.
-    var openQuestions: [LearningConcept.Entry]
-
-    var id: Date { start }
-}
-
 enum LearningLibrary {
     /// Case, width, diacritics, hyphens and spacing do not distinguish concepts.
     static func normalizedName(_ name: String) -> String {
@@ -194,60 +173,6 @@ enum LearningLibrary {
             .sorted { ($0.lookupCount, $0.id.count, $0.id) > ($1.lookupCount, $1.id.count, $1.id) }
             .prefix(limit)
             .map { $0 }
-    }
-
-    /// Weeks with activity, newest first. A backfilled citation only knows when it was
-    /// collected, not when it was written, so it is left out.
-    static func weeks(
-        events: [LearningEvent],
-        records: [PaperLearningRecord],
-        calendar: Calendar = .current
-    ) -> [LearningWeek] {
-        func weekStart(_ date: Date) -> Date {
-            calendar.dateInterval(of: .weekOfYear, for: date)?.start ?? calendar.startOfDay(for: date)
-        }
-        let dated = LearningEvent.latestRevisions(of: events)
-            .filter { ($0.isBackfilled && $0.kind == .citation) == false }
-        let eventsByWeek = Dictionary(grouping: dated) { weekStart($0.occurredAt) }
-        // A concept is new in the week the reader first met it, in whichever paper.
-        var firstEntryByConcept: [String: LearningConcept.Entry] = [:]
-        var itemsByWeek: [Date: [LearningConcept.Entry]] = [:]
-        for record in records {
-            for item in record.items {
-                let entry = LearningConcept.Entry(paperID: record.paperID, item: item)
-                switch item.kind {
-                case .concept:
-                    let key = normalizedName(item.title)
-                    if let first = firstEntryByConcept[key], first.item.createdAt <= item.createdAt { continue }
-                    firstEntryByConcept[key] = entry
-                case .question where item.isResolved == false:
-                    itemsByWeek[weekStart(item.createdAt), default: []].append(entry)
-                case .question, .takeaway:
-                    break
-                }
-            }
-        }
-        for entry in firstEntryByConcept.values {
-            itemsByWeek[weekStart(entry.item.createdAt), default: []].append(entry)
-        }
-
-        return Set(eventsByWeek.keys).union(itemsByWeek.keys).sorted(by: >).map { start in
-            let weekEvents = eventsByWeek[start] ?? []
-            let items = (itemsByWeek[start] ?? []).sorted {
-                ($0.item.createdAt, $0.item.title) > ($1.item.createdAt, $1.item.title)
-            }
-            let papers = Dictionary(grouping: weekEvents, by: \.paperID)
-                .map { LearningWeek.PaperActivity(paperID: $0.key, eventCount: $0.value.count) }
-                .sorted { ($0.eventCount, $0.paperID.uuidString) > ($1.eventCount, $1.paperID.uuidString) }
-            return LearningWeek(
-                start: start,
-                end: calendar.date(byAdding: .day, value: 6, to: start) ?? start,
-                eventCount: weekEvents.count,
-                papers: papers,
-                newConcepts: items.filter { $0.item.kind == .concept },
-                openQuestions: items.filter { $0.item.kind == .question }
-            )
-        }
     }
 
     private static func isWordBoundary(in text: String, before index: String.Index, name: Character?) -> Bool {

@@ -259,39 +259,6 @@ final class LearningOrganizerTests: XCTestCase {
         XCTAssertFalse(user.contains("[i2]"))
     }
 
-    func testEntriesChangedAfterTheLastVisitAreUnseenButTheReadersEditsAreNot() async throws {
-        let store = LearningRecordStore(rootDirectory: root)
-        let organizer = LearningOrganizer(log: LearningEventLog(rootDirectory: root), store: store, defaults: defaults)
-        let never = await organizer.markSeen(paperID: paperID, now: Date(timeIntervalSince1970: 50))
-        XCTAssertNil(never)
-        let untouched = try await store.record(paperID: paperID)
-        XCTAssertNil(untouched.lastSeenAt, "Looking at a paper without a record writes nothing")
-
-        let base = recordWithTwoConcepts()
-        try await store.update(paperID: paperID) { record in
-            record = base
-            record.organizedAt = Date(timeIntervalSince1970: 100)
-        }
-        let first = await organizer.markSeen(paperID: paperID, now: Date(timeIntervalSince1970: 150))
-        XCTAssertNil(first)
-        await organizer.editItem("i1", title: "Renamed", detail: nil, paperID: paperID)
-        try await store.update(paperID: paperID) { record in
-            _ = record.apply(
-                LearningRecordPatch(entries: [
-                    .init(ref: "i2", kind: nil, title: nil, detail: "more", resolved: nil, evidence: ["e1"]),
-                ]),
-                eventIDsByAlias: ["e1": "event-7"],
-                now: Date(timeIntervalSince1970: 200)
-            )
-        }
-        let second = await organizer.markSeen(paperID: paperID, now: Date(timeIntervalSince1970: 250))
-        XCTAssertEqual(second, Date(timeIntervalSince1970: 150))
-        let record = try await store.record(paperID: paperID)
-        XCTAssertEqual(record.unseenItemIDs(since: second), ["i2"])
-        XCTAssertEqual(record.unseenItemIDs(since: nil), [])
-        XCTAssertEqual(record.items.first { $0.id == "i1" }?.title, "Renamed")
-    }
-
     func testItemLimitPerKind() {
         var record = PaperLearningRecord(paperID: paperID)
         let entries = (0..<(PaperLearningRecord.itemLimitPerKind + 5)).map {
@@ -450,7 +417,6 @@ final class LearningOrganizerTests: XCTestCase {
         XCTAssertTrue(item.isResolved)
         XCTAssertEqual(item.detail, "asked again")
         XCTAssertEqual(item.evidence.count, 2)
-        XCTAssertEqual(LearningPaneView.recordSections(of: record).map(\.group), [.resolvedQuestions])
     }
 
     func testNewerRecordIsNeitherReadNorOverwritten() async throws {

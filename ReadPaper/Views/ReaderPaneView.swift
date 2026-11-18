@@ -2220,6 +2220,7 @@ struct ReaderPaneView: View {
                     recall: selectionRecall,
                     recallPaperTitles: selectionRecallPaperTitles,
                     onOpenRecallEntry: openRecallEntry,
+                    onRenameRecallConcept: renameRecallConcept,
                     autoRun: selectionAssistantAutoRun,
                     deleteConversation: deleteSelectionAssistantConversation
                 )
@@ -3848,6 +3849,18 @@ struct ReaderPaneView: View {
         let target = selectionRecall.citation(for: entry)
         clearSelectionAssistant()
         onOpenCitation(target.citation, target.quote)
+    }
+
+    /// Renames the concept in every paper, then looks the selection up again so the chip
+    /// shows the reader's name.
+    @MainActor
+    private func renameRecallConcept(_ concept: LearningConcept, to name: String) {
+        Task { @MainActor in
+            await LearningOrganizer.shared.renameConcept(concept, to: name)
+            if let selection = selectionAssistantSelection {
+                refreshSelectionRecall(for: selection)
+            }
+        }
     }
 
     /// Questions the reader left open in this paper, offered once when it is opened again.

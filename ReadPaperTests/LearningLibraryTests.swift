@@ -105,42 +105,6 @@ final class LearningLibraryTests: XCTestCase {
         XCTAssertEqual(LearningLibrary.concepts(mentionedIn: "RNN dropout 注意力 self-attention", among: concepts, limit: 2).count, 2)
     }
 
-    func testWeeksSummarizeActivityNewConceptsAndOpenQuestions() {
-        var calendar = Calendar(identifier: .iso8601)
-        calendar.timeZone = TimeZone(identifier: "UTC")!
-        let week1 = Date(timeIntervalSince1970: 1_700_000_000) // Tue 14 Nov 2023
-        let week2 = week1.addingTimeInterval(7 * 86_400)
-        let events = [
-            event("a1", .question, paper: paperA, at: week1.timeIntervalSince1970),
-            event("a2", .highlight, paper: paperA, at: week1.timeIntervalSince1970 + 60),
-            event("b1", .note, paper: paperB, at: week1.timeIntervalSince1970 + 120, text: "t"),
-            event("b2", .citation, paper: paperB, at: week2.timeIntervalSince1970, backfilled: true),
-            event("b3", .highlight, paper: paperB, at: week2.timeIntervalSince1970 + 60),
-        ]
-        let records = [
-            record(paperA, [
-                item("i1", .concept, "Attention", evidence: ["a1"], at: week1.timeIntervalSince1970),
-                item("i2", .question, "Open?", evidence: ["a1"], at: week1.timeIntervalSince1970),
-                item("i3", .question, "Settled?", evidence: ["a1"], at: week1.timeIntervalSince1970, resolved: true),
-                item("i4", .takeaway, "A point", evidence: ["a2"], at: week1.timeIntervalSince1970),
-            ]),
-            // Met again in another paper a week later: not new that week.
-            record(paperB, [item("i1", .concept, "attention", evidence: ["b3"], at: week2.timeIntervalSince1970)]),
-        ]
-
-        let weeks = LearningLibrary.weeks(events: events, records: records, calendar: calendar)
-
-        XCTAssertEqual(weeks.count, 2)
-        XCTAssertEqual(weeks[0].eventCount, 1, "A backfilled citation has no real date")
-        XCTAssertEqual(weeks[0].papers.map(\.paperID), [paperB])
-        XCTAssertTrue(weeks[0].newConcepts.isEmpty)
-        XCTAssertEqual(weeks[1].eventCount, 3)
-        XCTAssertEqual(weeks[1].papers.first, .init(paperID: paperA, eventCount: 2))
-        XCTAssertEqual(weeks[1].newConcepts.map(\.item.title), ["Attention"])
-        XCTAssertEqual(weeks[1].openQuestions.map(\.item.title), ["Open?"])
-        XCTAssertEqual(calendar.dateComponents([.day], from: weeks[1].start, to: weeks[1].end).day, 6)
-    }
-
     func testAssistantContextTurnsMentionedConceptsIntoNoteSources() async {
         let events = [event("a1", .explanation, paper: paperA, at: 10)]
         let records = [record(paperA, [item("i1", .concept, "Label smoothing", evidence: ["a1"], at: 100)])]
@@ -196,7 +160,7 @@ final class LearningLibraryTests: XCTestCase {
         XCTAssertTrue(passage.isEmpty, "A long selection is a passage, not a term")
     }
 
-    func testWritingAboutAConceptQuotesAPassageTheReaderCanReturnTo() {
+    func testQuotingAConceptsPassageInAWritingCountsAsWrittenAbout() {
         var unanchored = event("a1", .explanation, paper: paperA, at: 10)
         unanchored.pageIndex = nil
         var anchored = event("b1", .question, paper: paperB, at: 20)
@@ -211,10 +175,6 @@ final class LearningLibraryTests: XCTestCase {
             ],
             eventsByID: eventsByID
         )
-        let source = LearningPaneView.writingSource(for: concepts[0], eventsByID: eventsByID)
-        XCTAssertEqual(source.citation.paperID, paperB)
-        XCTAssertEqual(source.quote, "the anchored passage")
-
         // Once that passage is quoted in a writing, the concept counts as written about.
         XCTAssertEqual(concepts[0].stage, .recurring)
         var quotation = event("c1", .citation, paper: paperB, at: 40)
@@ -226,13 +186,6 @@ final class LearningLibraryTests: XCTestCase {
             eventsByID: all
         )
         XCTAssertEqual(afterWriting[0].stage, .writtenAbout)
-
-        let onlyBare = LearningPaneView.writingSource(for: concepts[0], eventsByID: ["a2": bare])
-        XCTAssertEqual(onlyBare.citation.paperID, paperA)
-        XCTAssertNil(onlyBare.quote)
-        let nothing = LearningPaneView.writingSource(for: concepts[0], eventsByID: [:])
-        XCTAssertEqual(nothing.citation.paperID, paperA)
-        XCTAssertFalse(nothing.citation.hasDestination)
     }
 
     func testOpenQuestionNoticeListsOpenQuestionsNewestFirstAndOnlyOnReturning() {

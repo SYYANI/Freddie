@@ -149,16 +149,6 @@
         }
       }
     },
-    "%1$lld papers · looked up %2$lld times" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$lld 篇论文 · 查询 %2$lld 次"
-          }
-        }
-      }
-    },
     "%d pages could not be rebuilt and show the scan. Translate the scanned PDF again to retry them; finished pages are reused." : {
       "localizations" : {
         "zh-Hans" : {
@@ -202,36 +192,6 @@
         }
       }
     },
-    "%lld concepts" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld 个概念"
-          }
-        }
-      }
-    },
-    "%lld new or updated" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld 条新增或更新"
-          }
-        }
-      }
-    },
-    "%lld new records to organize" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld 条新记录待整理"
-          }
-        }
-      }
-    },
     "%lld papers" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -239,16 +199,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%lld 篇论文"
-          }
-        }
-      }
-    },
-    "%lld records" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld 条记录"
           }
         }
       }
@@ -270,16 +220,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "有 %lld 个段落因模型返回无效输出而被跳过。再次翻译即可重试这些段落。"
-          }
-        }
-      }
-    },
-    "%lld sources" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld 处出处"
           }
         }
       }
@@ -638,16 +578,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "AI 解释"
-          }
-        }
-      }
-    },
-    "All Activity" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "全部活动"
           }
         }
       }
@@ -1823,16 +1753,6 @@
         }
       }
     },
-    "Choose a model in Settings to organize learning records." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在设置中选择模型后即可整理学习记录。"
-          }
-        }
-      }
-    },
     "Choose a PDF translation model in Settings first." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2174,16 +2094,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "概念：%@"
-          }
-        }
-      }
-    },
-    "Concepts" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "概念"
           }
         }
       }
@@ -2785,16 +2695,6 @@
         }
       }
     },
-    "Details" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "详情"
-          }
-        }
-      }
-    },
     "Development" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -3149,16 +3049,6 @@
         }
       }
     },
-    "Edit…" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "编辑…"
-          }
-        }
-      }
-    },
     "Embedded PDF" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -3349,16 +3239,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "解释所选文字"
-          }
-        }
-      }
-    },
-    "Explanations and Translations" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "解释与翻译"
           }
         }
       }
@@ -3789,16 +3669,6 @@
         }
       }
     },
-    "First Seen" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "初次遇到"
-          }
-        }
-      }
-    },
     "Folder Name" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -3942,16 +3812,6 @@
         }
       }
     },
-    "From your" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "来自你的"
-          }
-        }
-      }
-    },
     "Full Paper" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -4047,16 +3907,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "快速开始指南已隐藏。"
-          }
-        }
-      }
-    },
-    "Give it the name of another concept to merge the two." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "改成另一个概念的名字，即可把两者合并。"
           }
         }
       }
@@ -4249,26 +4099,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "高亮所选内容"
-          }
-        }
-      }
-    },
-    "Highlights and Notes" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "高亮与笔记"
-          }
-        }
-      }
-    },
-    "Highlights, notes, questions and citations you make while reading are collected here." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "阅读时的高亮、笔记、提问和写作引用会汇总到这里。"
           }
         }
       }
@@ -5386,16 +5216,6 @@
         }
       }
     },
-    "Looked Up Often" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "常查"
-          }
-        }
-      }
-    },
     "Low" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -5458,26 +5278,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "地图"
-          }
-        }
-      }
-    },
-    "Mark as Open" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "标为未解决"
-          }
-        }
-      }
-    },
-    "Mark as Resolved" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "标为已解决"
           }
         }
       }
@@ -5774,16 +5574,6 @@
         }
       }
     },
-    "Move to Concepts" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "移到“概念”"
-          }
-        }
-      }
-    },
     "Move to Folder" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -5791,16 +5581,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "移到文件夹"
-          }
-        }
-      }
-    },
-    "Move to Questions" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "移到“问题”"
           }
         }
       }
@@ -5822,16 +5602,6 @@
         }
       }
     },
-    "Move to Takeaways" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "移到“要点”"
-          }
-        }
-      }
-    },
     "Move to Trash" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -5844,6 +5614,7 @@
       }
     },
     "Name" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -5871,16 +5642,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "新建"
-          }
-        }
-      }
-    },
-    "New Concepts" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "新概念"
           }
         }
       }
@@ -5933,16 +5694,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "新 Provider"
-          }
-        }
-      }
-    },
-    "New since your last visit" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "上次查看后的新内容"
           }
         }
       }
@@ -6002,16 +5753,6 @@
         }
       }
     },
-    "No concepts yet." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "还没有概念。"
-          }
-        }
-      }
-    },
     "No Deleted Writings" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -6047,16 +5788,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "没有可用的 HTML"
-          }
-        }
-      }
-    },
-    "No learning records yet." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "还没有学习记录。"
           }
         }
       }
@@ -6372,16 +6103,6 @@
         }
       }
     },
-    "Nothing to organize yet." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "还没有需要整理的记录。"
-          }
-        }
-      }
-    },
     "Official PyPI" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -6513,16 +6234,6 @@
         }
       }
     },
-    "Open Questions" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "未解决的问题"
-          }
-        }
-      }
-    },
     "Open questions from your last reading: %lld" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -6594,16 +6305,6 @@
         }
       }
     },
-    "Organize Now" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "立即整理"
-          }
-        }
-      }
-    },
     "Organize with AI…" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -6617,16 +6318,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "用 AI 整理…"
-          }
-        }
-      }
-    },
-    "Organized %@" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "上次整理于 %@"
           }
         }
       }
@@ -6655,16 +6346,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "整理学习记录时，会把你高亮的段落、笔记，以及提问和对应的回答发送给这个模型，不会发送论文全文。"
-          }
-        }
-      }
-    },
-    "Organizing…" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "正在整理…"
           }
         }
       }
@@ -6823,16 +6504,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "“%1$@”中的论文将移至“未归档”，不会删除任何论文。"
-          }
-        }
-      }
-    },
-    "Papers Read" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "读过的论文"
           }
         }
       }
@@ -7498,16 +7169,6 @@
         }
       }
     },
-    "Questions" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "提问"
-          }
-        }
-      }
-    },
     "Quick reading notes stay attached to the current paper." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -7558,16 +7219,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "已将引文插入“%@”。"
-          }
-        }
-      }
-    },
-    "Quoted in Writings" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "写作引用"
           }
         }
       }
@@ -7817,16 +7468,6 @@
         }
       }
     },
-    "Remove" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "移除"
-          }
-        }
-      }
-    },
     "Remove BabelDOC" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -7856,16 +7497,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "移出文件夹"
-          }
-        }
-      }
-    },
-    "Removed “%@”" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "已移除“%@”"
           }
         }
       }
@@ -8028,16 +7659,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "调整 AI 浮窗大小"
-          }
-        }
-      }
-    },
-    "Resolved Questions" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "已解决的问题"
           }
         }
       }
@@ -8347,16 +7968,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "翻译扫描版 PDF 需要 XeLaTeX。请安装 MacTeX，或在“设置 > LaTeX”中选择它所在的目录。"
-          }
-        }
-      }
-    },
-    "Scope" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "范围"
           }
         }
       }
@@ -9173,16 +8784,6 @@
         }
       }
     },
-    "Takeaways" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "要点"
-          }
-        }
-      }
-    },
     "Target language" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -9223,16 +8824,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Temperature"
-          }
-        }
-      }
-    },
-    "Terms you look up or ask about appear here after a paper's learning record is organized." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "查询或提问过的术语，会在论文的学习记录整理后出现在这里。"
           }
         }
       }
@@ -11768,26 +11359,6 @@
         }
       }
     },
-    "Weekly" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "周记"
-          }
-        }
-      }
-    },
-    "What You Did" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "阅读痕迹"
-          }
-        }
-      }
-    },
     "When enabled, ReadPaper uses available arXiv source to improve BabelDOC structure and translation context. No TeX installation is required, and failures fall back to PDF-only analysis." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -11934,16 +11505,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "有 %lld 篇写作稿引用了这篇论文。写作稿的文字会保留，但其中的引用将无法再打开这篇论文。"
-          }
-        }
-      }
-    },
-    "Written About" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "已写下"
           }
         }
       }

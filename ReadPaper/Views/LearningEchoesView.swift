@@ -18,6 +18,9 @@ struct LearningEchoesView: View {
     /// Quotes the echoed passage in the open writing. Nil where writings cannot take
     /// insertions from here.
     var onQuoteInWriting: ((LearningEvent) -> Void)? = nil
+    /// Starts a paragraph about the concept a card was offered for. Nil where writings
+    /// cannot take insertions from here.
+    var onWriteAboutConcept: ((String, PaperCitation, String?) -> Void)? = nil
 
     /// The current paper's screen; echoes found for another paper are not shown.
     private var reading: LearningEchoModel.ReadingEchoes? {
@@ -131,6 +134,16 @@ struct LearningEchoesView: View {
         }
     }
 
+    /// A card offered because the screen names a concept from the reader's records can
+    /// start a paragraph about it: the reader's own words are the next step.
+    private func writeAbout(_ echo: LearningEcho) -> (() -> Void)? {
+        guard let onWriteAboutConcept, let concept = echo.conceptName else { return nil }
+        return {
+            model.markOpened(echo)
+            onWriteAboutConcept(concept, echo.event.citation, echo.event.quote)
+        }
+    }
+
     @ViewBuilder
     private func actions(_ echo: LearningEcho, paperID: UUID) -> some View {
         Button(String(localized: "Open in Paper", bundle: bundle)) {
@@ -142,9 +155,17 @@ struct LearningEchoesView: View {
                 onQuoteInWriting(echo.event)
             }
         }
+        if let writeAbout = writeAbout(echo) {
+            Button(String(localized: "Write About It", bundle: bundle), action: writeAbout)
+        }
         Divider()
         Button(String(localized: "Not Related", bundle: bundle)) {
             dismiss(echo, paperID: paperID)
+        }
+        // Not Related only quiets the card for this paper; deleting removes the record
+        // everywhere, and collecting again does not bring it back.
+        Button(String(localized: "Delete Record", bundle: bundle), role: .destructive) {
+            Task { await recorder.delete(echo.event) }
         }
     }
 

@@ -63,8 +63,8 @@ struct PaperLearningRecord: Codable, Equatable, Sendable {
     /// Entries the reader removed, oldest first. The organizer does not add them again,
     /// and the reader can put the latest one back.
     var removedItems: [LearningRecordItem]?
-    /// When the reader last looked at this record in the Learning tab. Entries the
-    /// organizer changed after it are marked as new.
+    /// When the reader last looked at this record in the old Learning tab list. No longer
+    /// written; kept so records saved by earlier versions decode and round-trip.
     var lastSeenAt: Date?
 
     func items(of kind: LearningRecordItem.Kind) -> [LearningRecordItem] {
@@ -269,12 +269,6 @@ extension PaperLearningRecord {
         items.append(removed.remove(at: index))
         removedItems = removed.isEmpty ? nil : removed
         return true
-    }
-
-    /// Entries the organizer added or changed since the reader last looked.
-    func unseenItemIDs(since cutoff: Date?) -> Set<String> {
-        guard let cutoff else { return [] }
-        return Set(items.filter { $0.updatedAt > cutoff }.map(\.id))
     }
 
     private static func clipped(_ value: String?, limit: Int) -> String? {
