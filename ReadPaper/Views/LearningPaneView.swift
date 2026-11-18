@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 /// The inspector's Learning tab: echoes, the reader's past highlights, notes and questions
 /// that relate to what is on screen. The organized records and the event log behind them

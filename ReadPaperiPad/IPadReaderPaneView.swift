@@ -444,9 +444,9 @@ struct IPadReaderPaneView: View {
             formatLabel: String(localized: "Reader", bundle: bundle),
             format: primaryReaderMode,
             formats: [
-                .init(value: .html, title: String(localized: "HTML", bundle: bundle)),
-                .init(value: .pdf, title: String(localized: "PDF", bundle: bundle)),
-            ],
+                htmlAttachment == nil ? nil : .init(value: .html, title: String(localized: "HTML", bundle: bundle)),
+                pdfAttachment == nil ? nil : .init(value: .pdf, title: String(localized: "PDF", bundle: bundle)),
+            ].compactMap { $0 },
             displayLabel: String(localized: "Display", bundle: bundle),
             display: display,
             displays: options

@@ -926,8 +926,12 @@ struct ReaderPaneView: View {
     @ToolbarContentBuilder
     private var readerToolbar: some ToolbarContent {
         if paper != nil {
-            segmentedPickerToolbarItem {
-                readerModePicker
+            // Only a paper with both HTML and PDF has a format to switch to. Adding or
+            // removing this one item leaves the other items in place (unlike replacing one).
+            if hasHTMLAndPDF {
+                segmentedPickerToolbarItem {
+                    readerModePicker
+                }
             }
 
             // The HTML and PDF readers share these items, and each keeps the same kind of
@@ -1108,6 +1112,11 @@ struct ReaderPaneView: View {
             return String(localized: "Add Note to Current Selection", bundle: bundle)
         }
         return String(localized: "Select text in PDF or HTML to attach a note.", bundle: bundle)
+    }
+
+    /// A paper with only HTML or only PDF has nothing to switch to.
+    private var hasHTMLAndPDF: Bool {
+        htmlAttachment != nil && pdfAttachment != nil
     }
 
     private var readerModePicker: some View {
