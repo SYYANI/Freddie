@@ -423,7 +423,7 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
         if context.coordinator.lastSelectionResetToken != selectionResetToken {
             context.coordinator.lastSelectionResetToken = selectionResetToken
             view.clearSelection()
-            context.coordinator.publishSelection(nil)
+            context.coordinator.clearSelectionAfterViewUpdate()
         }
         #if os(macOS)
         if let interactiveView = view as? InteractivePDFView {
@@ -455,7 +455,7 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
                 view.document = nil
                 context.coordinator.clearLoadedAnnotations()
                 context.coordinator.clearProgrammaticPageRestore()
-                context.coordinator.publishSelection(nil)
+                context.coordinator.clearSelectionAfterViewUpdate()
             }
             context.coordinator.loadedURL = nil
             context.coordinator.loadedPaperID = paperID
@@ -505,7 +505,7 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
                 force: true
             )
             context.coordinator.loadAnnotations(in: view)
-            context.coordinator.publishSelection(nil)
+            context.coordinator.clearSelectionAfterViewUpdate()
             context.coordinator.restoreReadingPosition(
                 restorePosition,
                 in: view,
@@ -2706,6 +2706,18 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
             guard lastPublishedSelection != selection else { return }
             lastPublishedSelection = selection
             onNoteSelectionChanged?(selection)
+        }
+
+        /// Clears the published selection from `updateNSView`. The callback changes the
+        /// parent's SwiftUI state, which must not happen while SwiftUI is updating views, so it
+        /// runs after the update unless a new selection was published meanwhile.
+        func clearSelectionAfterViewUpdate() {
+            guard lastPublishedSelection != nil else { return }
+            lastPublishedSelection = nil
+            Task { @MainActor [weak self] in
+                guard let self, self.lastPublishedSelection == nil else { return }
+                self.onNoteSelectionChanged?(nil)
+            }
         }
 
         private func currentSelectionContext() -> NoteSelectionContext? {

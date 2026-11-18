@@ -2218,7 +2218,7 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
             isLoading = false
             isDocumentReady = false
             invalidateFindText(keepingPosition: false)
-            publishNoteSelection(nil)
+            clearNoteSelectionAfterViewUpdate()
         }
 
         func requestLoad(
@@ -2265,7 +2265,7 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
             currentRequest = request
             pendingSegmentUpdates = []
             lastAppliedSegmentSequence = nil
-            publishNoteSelection(nil)
+            clearNoteSelectionAfterViewUpdate()
 
             guard preserveScrollPosition else {
                 pendingScrollRatio = request.targetScrollRatio
@@ -3105,6 +3105,18 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
             guard lastPublishedNoteSelection != selection else { return }
             lastPublishedNoteSelection = selection
             onNoteSelectionChanged?(selection)
+        }
+
+        /// Clears the published selection from a path that runs inside `updateNSView`. The
+        /// callback changes the parent's SwiftUI state, which must not happen while SwiftUI is
+        /// updating views, so it runs after the update unless a new selection arrived meanwhile.
+        private func clearNoteSelectionAfterViewUpdate() {
+            guard lastPublishedNoteSelection != nil else { return }
+            lastPublishedNoteSelection = nil
+            Task { @MainActor [weak self] in
+                guard let self, self.lastPublishedNoteSelection == nil else { return }
+                self.onNoteSelectionChanged?(nil)
+            }
         }
 
         private static func clampedScrollRatio(_ value: Double) -> Double {
