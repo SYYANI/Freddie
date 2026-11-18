@@ -311,4 +311,111 @@ final class LearningEchoTests: XCTestCase {
         model.reportWriting(writingID: writing, paragraph: paragraph + " ", fullText: quoted)
         await waitUntil { model.writing?.echoes.isEmpty == true }
     }
+
+    // MARK: - Marks beside paragraphs (v2)
+
+    private var collapseBlocks: [ReadingBlock] {
+        [
+            ReadingBlock(id: "intro", text: "Generative models are now trained at scale on web text."),
+            ReadingBlock(id: "collapse", text: collapsePage),
+            ReadingBlock(id: "optimizer", text: optimizerPage),
+        ]
+    }
+
+    func testEachEchoIsPlacedBesideTheParagraphSharingItsWords() {
+        let index = LearningEchoIndex(events: library, records: [])
+        let text = collapseBlocks.map(\.text).joined(separator: "\n")
+        let echoes = index.echoes(for: .init(text: text, paperID: collapse, pageIndex: 0))
+
+        XCTAssertEqual(echoes.map(\.id), ["synthetic"], "The screen decides what echoes")
+        XCTAssertEqual(index.placements(of: echoes, in: collapseBlocks), ["collapse": ["synthetic"]])
+        XCTAssertEqual(index.placements(of: echoes, in: []), [:])
+        XCTAssertEqual(
+            index.placements(of: echoes, in: [ReadingBlock(id: "other", text: "Nothing in common here.")]),
+            [:],
+            "A paragraph that shares nothing gets no mark"
+        )
+    }
+
+    func testAConceptEchoIsPlacedWhereTheConceptIsNamed() {
+        let lookup = event("kv", .explanation, paper: transformer, page: 5, quote: "Each decoding step reuses cached keys.")
+        var record = PaperLearningRecord(paperID: transformer)
+        record.items = [LearningRecordItem(
+            id: "i1", kind: .concept, title: "KV cache", detail: nil, isResolved: false, isResolvedByUser: false,
+            evidence: ["kv"], createdAt: Date(timeIntervalSince1970: 1), updatedAt: Date(timeIntervalSince1970: 1)
+        )]
+        let index = LearningEchoIndex(events: library + [lookup], records: [record])
+        let blocks = [
+            ReadingBlock(id: "a", text: "We serve long contexts on a single GPU."),
+            ReadingBlock(id: "b", text: "Memory is dominated by the KV cache at long context lengths."),
+        ]
+        let echoes = index.echoes(for: .init(text: blocks.map(\.text).joined(separator: " "), paperID: current))
+
+        XCTAssertEqual(echoes.map(\.id), ["kv"])
+        XCTAssertEqual(index.placements(of: echoes, in: blocks), ["b": ["kv"]])
+    }
+
+    func testMarksFollowTheScreenAndStepBackOnceSeen() async throws {
+        let model = makeModel(events: library, root: try temporaryRoot())
+        let attachment = UUID()
+        final class Received {
+            var marks: [[LearningEchoMark]] = []
+        }
+        let owner = Received()
+        model.observeMarks(owner: owner, paperID: collapse, attachmentID: attachment) { owner.marks.append($0) }
+        var received: [[LearningEchoMark]] { owner.marks }
+        XCTAssertEqual(received, [[]], "Observing reports the current marks at once")
+
+        model.reportReading(ReadingFocus(
+            paperID: collapse, attachmentID: attachment, pageIndex: 1,
+            text: collapseBlocks.map(\.text).joined(separator: "\n"), blocks: collapseBlocks
+        ))
+        await waitUntil { received.count == 2 }
+        XCTAssertEqual(received.last, [LearningEchoMark(blockID: "collapse", count: 1, isSeen: false)])
+        XCTAssertEqual(model.marks(paperID: collapse, attachmentID: UUID()), [], "Another attachment has no marks")
+
+        let echo = try XCTUnwrap(model.reading?.echoes.first)
+        model.markOpened(echo)
+        XCTAssertEqual(received.last, [LearningEchoMark(blockID: "collapse", count: 1, isSeen: true)])
+        model.markOpened(echo)
+        XCTAssertEqual(received.count, 3, "Nothing changed, nothing is sent")
+
+        model.stopObservingMarks(owner: owner)
+        model.forget(echo)
+        XCTAssertEqual(received.count, 3)
+        XCTAssertEqual(model.marks(paperID: collapse, attachmentID: attachment), [])
+    }
+
+    func testTheFanShowsTheParagraphsEchoesAndClosesWhenTheScreenMoves() async throws {
+        let model = makeModel(events: library, root: try temporaryRoot())
+        let focus = ReadingFocus(
+            paperID: collapse, attachmentID: UUID(), pageIndex: 1,
+            text: collapseBlocks.map(\.text).joined(separator: "\n"), blocks: collapseBlocks
+        )
+        model.reportReading(focus)
+        await waitUntil { model.reading?.echoes.isEmpty == false }
+
+        model.openFan(paperID: collapse, blockID: "optimizer", rect: .zero)
+        XCTAssertNil(model.fan, "A paragraph without echoes has no fan")
+        model.openFan(paperID: current, blockID: "collapse", rect: .zero)
+        XCTAssertNil(model.fan, "Not for another paper")
+        model.openFan(paperID: collapse, blockID: "collapse", rect: CGRect(x: 10, y: 20, width: 18, height: 18))
+        XCTAssertEqual(model.fan?.echoes.map(\.id), ["synthetic"])
+        XCTAssertEqual(model.fan?.rect.minY, 20)
+
+        model.reportReading(focus)
+        XCTAssertNotNil(model.fan, "The same screen keeps it open")
+        var moved = focus
+        moved.pageIndex = 2
+        model.reportReading(moved)
+        XCTAssertNil(model.fan, "Scrolling closes it")
+
+        model.reportReading(focus)
+        await waitUntil { model.reading?.focus == focus }
+        model.openFan(paperID: collapse, blockID: "collapse", rect: .zero)
+        let echo = try XCTUnwrap(model.fan?.echoes.first)
+        await model.dismiss(echo, context: LearningEchoModel.readingContext(collapse))
+        XCTAssertNil(model.fan, "Dismissing its last card closes it")
+        XCTAssertEqual(model.reading?.placements, [:])
+    }
 }

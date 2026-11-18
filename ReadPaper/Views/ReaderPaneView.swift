@@ -256,7 +256,7 @@ struct ReaderPaneView: View {
     private var readingFocusSink: ReadingFocusSink? {
         guard let paper else { return nil }
         let ids = [htmlAttachment?.id, pdfAttachment?.id, scanTranscriptionAttachment?.id].compactMap { $0 }
-        return ReadingFocusSink(paperID: paper.id, attachmentIDs: Set(ids), model: .shared)
+        return ReadingFocusSink(paperID: paper.id, attachmentIDs: Set(ids), model: .shared, anchorSpace: selectionAnchor)
     }
 
     /// The original as read: the PDF, or its corrected transcription when the reader chose it.
@@ -2211,6 +2211,19 @@ struct ReaderPaneView: View {
 
             QuickTranslationBubbleLayer(translation: quickTranslation, anchor: selectionAnchor)
                 .zIndex(9)
+
+            EchoFanLayer(
+                currentPaperID: paper?.id,
+                onOpenCitation: onOpenCitation,
+                onQuoted: { title in
+                    showCopyToast(message: AppLocalization.format(
+                        "Quoted in “%@”.",
+                        bundle: bundle,
+                        title.isEmpty ? String(localized: "Untitled Writing", bundle: bundle) : title
+                    ))
+                }
+            )
+            .zIndex(9)
 
             if let selection = selectionAssistantSelection,
                selection.trimmedQuote != nil,

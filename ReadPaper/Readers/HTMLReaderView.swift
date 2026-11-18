@@ -231,6 +231,7 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
         configuration.userContentController.add(coordinator, name: HTMLRegionEditing.messageHandlerName)
         configuration.userContentController.add(coordinator, name: HTMLDocumentOutline.messageHandlerName)
         configuration.userContentController.add(coordinator, name: HTMLReadingFocus.messageHandlerName)
+        configuration.userContentController.add(coordinator, name: HTMLReadingFocus.markMessageHandlerName)
         configuration.userContentController.addUserScript(
             WKUserScript(
                 source: Coordinator.mediaPreparationScript,
@@ -320,6 +321,7 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
         context.coordinator.onRegionEditEvent = onRegionEditEvent
         context.coordinator.onOutlineChanged = onOutlineChanged
         context.coordinator.readingFocusSink = context.environment.readingFocusSink
+        context.coordinator.observeEchoMarks(in: view)
         applyHostDisplayAppearance(displayAppearance, to: view)
         context.coordinator.clearSelectionHighlightIfNeeded(
             resetToken: selectionHighlightResetToken,
@@ -2128,6 +2130,8 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
         var loadedURL: URL?
         /// Where the text on screen is reported for echoes of past reading.
         var readingFocusSink: ReadingFocusSink?
+        /// The marks the page should show, sent again after every load.
+        private var echoMarks: [LearningEchoMark] = []
         var loadedReloadToken: Int?
         var attachmentID: UUID?
         var displayMode: TranslationDisplayMode = .bilingual
@@ -2369,6 +2373,36 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
             applyCitationMarks(to: webView)
             applyRegionEditing(to: webView)
             applyFindRequestIfNeeded(to: webView)
+            applyEchoMarks(to: webView)
+        }
+
+        /// Follows the paragraphs to mark for this attachment; nothing is marked without a
+        /// sink (tests, translations).
+        func observeEchoMarks(in webView: WKWebView) {
+            guard let readingFocusSink else {
+                if echoMarks.isEmpty == false {
+                    echoMarks = []
+                    applyEchoMarks(to: webView)
+                }
+                return
+            }
+            readingFocusSink.observeMarks(owner: self, attachmentID: attachmentID) { [weak self, weak webView] marks in
+                guard let self, let webView, marks != self.echoMarks else { return }
+                self.echoMarks = marks
+                self.applyEchoMarks(to: webView)
+            }
+        }
+
+        private func applyEchoMarks(to webView: WKWebView) {
+            guard isDocumentReady else { return }
+            let marks = echoMarks.map { mark -> [String: Any] in
+                [
+                    "id": mark.blockID,
+                    "seen": mark.isSeen,
+                    "label": AppLocalization.format("%lld echoes", mark.count),
+                ]
+            }
+            runJavaScript(HTMLReadingFocus.setMarksScript(marks), in: webView)
         }
 
         @MainActor
@@ -2446,7 +2480,21 @@ struct HTMLReaderView: PlatformHTMLViewRepresentable {
                       let address = body["documentURL"] as? String,
                       let documentURL = URL(string: address), documentURL.isFileURL,
                       let loadedURL, documentURL.standardizedFileURL.path == loadedURL.standardizedFileURL.path else { return }
-                readingFocusSink?.report(attachmentID: attachmentID, pageIndex: nil, text: text)
+                let blocks = (body["blocks"] as? [[String: Any]] ?? []).compactMap { block -> ReadingBlock? in
+                    guard let id = block["id"] as? String, let text = block["text"] as? String else { return nil }
+                    return ReadingBlock(id: id, text: text)
+                }
+                readingFocusSink?.report(attachmentID: attachmentID, pageIndex: nil, text: text, blocks: blocks)
+            case HTMLReadingFocus.markMessageHandlerName:
+                #if os(macOS)
+                guard message.frameInfo.isMainFrame,
+                      let webView = message.webView,
+                      let id = (message.body as? [String: Any])?["id"] as? String,
+                      let rect = Self.selectionRect(from: message.body, viewHeight: webView.bounds.height, isFlipped: webView.isFlipped) else {
+                    return
+                }
+                readingFocusSink?.openFan(blockID: id, rect: rect, in: webView)
+                #endif
             default:
                 return
             }

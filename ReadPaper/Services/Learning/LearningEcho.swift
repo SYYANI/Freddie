@@ -226,6 +226,7 @@ struct LearningEchoIndex: Sendable {
     let entries: [Entry]
     let concepts: [LearningConcept]
     private let documentFrequency: [String: Int]
+    private let entryIndexBySubject: [String: Int]
 
     init(events: [LearningEvent], records: [PaperLearningRecord]) {
         let latest = LearningEvent.latestRevisions(of: events)
@@ -265,9 +266,46 @@ struct LearningEchoIndex: Sendable {
             }
         }
         documentFrequency = frequency
+        entryIndexBySubject = Dictionary(
+            entries.enumerated().map { ($1.event.subject, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
     }
 
     var isEmpty: Bool { entries.isEmpty }
+
+    /// Which paragraph on screen each echo belongs to: the one sharing most of its words,
+    /// or naming the concept it was offered for. Echoes are found for the whole screen;
+    /// this only says where to mark them, so a paragraph never gets an echo the screen did
+    /// not. An echo that shares nothing with any one paragraph gets no mark. Block ID →
+    /// echo IDs, best echo first.
+    func placements(of echoes: [LearningEcho], in blocks: [ReadingBlock]) -> [String: [String]] {
+        guard blocks.isEmpty == false else { return [:] }
+        let blockTerms = blocks.map { Set(LearningEchoText.terms(in: $0.text).keys) }
+        let blockNames = blocks.map { LearningLibrary.normalizedName($0.text) }
+        var placements: [String: [String]] = [:]
+        for echo in echoes {
+            guard let index = entryIndexBySubject[echo.id] else { continue }
+            let entry = entries[index]
+            var best: (block: Int, weight: Double)?
+            for (blockIndex, terms) in blockTerms.enumerated() {
+                var weight = entry.terms.keys.filter(terms.contains).reduce(0) { total, term in
+                    total + adjustedWeight(of: term) * (term.contains(" ") ? 1.5 : 1)
+                }
+                if let concept = echo.conceptName,
+                   blockNames[blockIndex].contains(LearningLibrary.normalizedName(concept)) {
+                    weight += Self.fullStrengthWeight
+                }
+                if weight > 0, weight > best?.weight ?? 0 {
+                    best = (blockIndex, weight)
+                }
+            }
+            if let best {
+                placements[blocks[best.block].id, default: []].append(echo.id)
+            }
+        }
+        return placements
+    }
 
     /// How much a term says about a passage, 0…1: a term in few of the reader's past
     /// actions says more than one in most of them.
@@ -540,6 +578,13 @@ private extension JSONEncoder {
     }
 }
 
+/// One paragraph on screen, as the reader identifies it: an `rp-anchor` path in HTML, a
+/// page and paragraph number in PDF.
+struct ReadingBlock: Equatable, Sendable {
+    var id: String
+    var text: String
+}
+
 /// What the reader has on screen: the readers report it as they scroll.
 struct ReadingFocus: Equatable, Sendable {
     var paperID: UUID
@@ -547,20 +592,63 @@ struct ReadingFocus: Equatable, Sendable {
     /// Zero-based; nil for HTML.
     var pageIndex: Int?
     var text: String
+    /// The paragraphs `text` is made of, for marking echoes beside the right one.
+    var blocks: [ReadingBlock] = []
 }
 
-/// Lets a reader report the text on screen. The reader pane sets it for the attachments
-/// that hold the paper's own text (not a translation).
+/// A paragraph in the reader with echoes beside it.
+struct LearningEchoMark: Equatable, Sendable {
+    var blockID: String
+    var count: Int
+    /// Every echo of the paragraph has been opened: the mark steps back.
+    var isSeen: Bool
+}
+
+/// Lets a reader report the text on screen, get back the paragraphs to mark, and open the
+/// echoes of a marked paragraph. The reader pane sets it for the attachments that hold
+/// the paper's own text (not a translation).
 struct ReadingFocusSink {
     var paperID: UUID
     var attachmentIDs: Set<UUID>
     var model: LearningEchoModel
+    #if os(macOS)
+    /// Converts a mark's rect into the reader pane's coordinates for the fan.
+    var anchorSpace: SelectionAnchorModel? = nil
+    #endif
 
     @MainActor
-    func report(attachmentID: UUID?, pageIndex: Int?, text: String) {
+    func report(attachmentID: UUID?, pageIndex: Int?, text: String, blocks: [ReadingBlock] = []) {
         guard let attachmentID, attachmentIDs.contains(attachmentID) else { return }
-        model.reportReading(ReadingFocus(paperID: paperID, attachmentID: attachmentID, pageIndex: pageIndex, text: text))
+        model.reportReading(ReadingFocus(
+            paperID: paperID,
+            attachmentID: attachmentID,
+            pageIndex: pageIndex,
+            text: text,
+            blocks: blocks
+        ))
     }
+
+    /// Calls `handler` with the paragraphs of this attachment to mark, now and whenever
+    /// they change, until `stopObservingMarks(owner:)`.
+    @MainActor
+    func observeMarks(owner: AnyObject, attachmentID: UUID?, _ handler: @escaping @MainActor ([LearningEchoMark]) -> Void) {
+        guard let attachmentID, attachmentIDs.contains(attachmentID) else {
+            model.stopObservingMarks(owner: owner)
+            handler([])
+            return
+        }
+        model.observeMarks(owner: owner, paperID: paperID, attachmentID: attachmentID, handler)
+    }
+
+    #if os(macOS)
+    /// Opens the fan of a marked paragraph next to its mark; `rect` is in `view`'s
+    /// coordinates.
+    @MainActor
+    func openFan(blockID: String, rect: CGRect, in view: NSView) {
+        guard let rect = anchorSpace?.referenceRect(of: rect, in: view) else { return }
+        model.openFan(paperID: paperID, blockID: blockID, rect: rect)
+    }
+    #endif
 }
 
 private struct ReadingFocusSinkKey: EnvironmentKey {
@@ -586,6 +674,25 @@ final class LearningEchoModel {
     struct ReadingEchoes: Equatable {
         var focus: ReadingFocus
         var echoes: [LearningEcho]
+        /// Block ID → echo IDs marked beside that paragraph.
+        var placements: [String: [String]] = [:]
+    }
+
+    /// The echoes of one marked paragraph, fanned out next to its mark.
+    struct Fan: Equatable {
+        var paperID: UUID
+        var blockID: String
+        var echoes: [LearningEcho]
+        /// The mark, in the reader pane's coordinates (origin at the top left).
+        var rect: CGRect
+    }
+
+    private struct MarkObserver {
+        weak var owner: AnyObject?
+        var paperID: UUID
+        var attachmentID: UUID
+        var handler: @MainActor ([LearningEchoMark]) -> Void
+        var lastMarks: [LearningEchoMark]?
     }
 
     struct WritingEchoes: Equatable {
@@ -599,6 +706,9 @@ final class LearningEchoModel {
     private(set) var hasUnacknowledgedReadingEchoes = false
     /// Echoes the reader opened in this run of the app: they move to the "seen" pile.
     private(set) var openedSubjects: Set<String> = []
+    /// The fan open in the reader, if any. Only the fan layer observes it.
+    private(set) var fan: Fan?
+    @ObservationIgnored private var markObservers: [ObjectIdentifier: MarkObserver] = [:]
 
     @ObservationIgnored private let load: @Sendable () async -> (records: [PaperLearningRecord], events: [LearningEvent])
     @ObservationIgnored private let revision: @MainActor () -> Int
@@ -638,6 +748,10 @@ final class LearningEchoModel {
         if let reading, reading.focus.paperID != focus.paperID {
             setReading(nil)
         }
+        // The fan points at a mark that has just moved.
+        if fan != nil, focus != reading?.focus {
+            fan = nil
+        }
         readingTask?.cancel()
         readingTask = Task { [weak self, delay] in
             try? await Task.sleep(for: delay)
@@ -675,22 +789,112 @@ final class LearningEchoModel {
 
     func markOpened(_ echo: LearningEcho) {
         acknowledgedSubjects.insert(echo.id)
-        openedSubjects.insert(echo.id)
+        guard openedSubjects.insert(echo.id).inserted else { return }
         updateUnacknowledged()
+        notifyMarkObservers()
+    }
+
+    // MARK: - Marks and the fan
+
+    /// The paragraphs of an attachment to mark, from the current screen's echoes.
+    func marks(paperID: UUID, attachmentID: UUID) -> [LearningEchoMark] {
+        guard let reading, reading.focus.paperID == paperID, reading.focus.attachmentID == attachmentID else {
+            return []
+        }
+        return reading.placements
+            .map { blockID, echoIDs in
+                LearningEchoMark(
+                    blockID: blockID,
+                    count: echoIDs.count,
+                    isSeen: echoIDs.allSatisfy(openedSubjects.contains)
+                )
+            }
+            .sorted { $0.blockID < $1.blockID }
+    }
+
+    func observeMarks(
+        owner: AnyObject,
+        paperID: UUID,
+        attachmentID: UUID,
+        _ handler: @escaping @MainActor ([LearningEchoMark]) -> Void
+    ) {
+        let key = ObjectIdentifier(owner)
+        if let existing = markObservers[key], existing.paperID == paperID, existing.attachmentID == attachmentID {
+            markObservers[key]?.handler = handler
+            return
+        }
+        markObservers[key] = MarkObserver(owner: owner, paperID: paperID, attachmentID: attachmentID, handler: handler)
+        notifyMarkObservers()
+    }
+
+    func stopObservingMarks(owner: AnyObject) {
+        markObservers[ObjectIdentifier(owner)] = nil
+    }
+
+    private func notifyMarkObservers() {
+        for (key, observer) in markObservers {
+            guard observer.owner != nil else {
+                markObservers[key] = nil
+                continue
+            }
+            let marks = marks(paperID: observer.paperID, attachmentID: observer.attachmentID)
+            guard marks != observer.lastMarks else { continue }
+            markObservers[key]?.lastMarks = marks
+            observer.handler(marks)
+        }
+    }
+
+    /// Fans out the echoes of a marked paragraph; `rect` is the mark in the reader pane's
+    /// coordinates.
+    func openFan(paperID: UUID, blockID: String, rect: CGRect) {
+        guard let reading, reading.focus.paperID == paperID,
+              let ids = reading.placements[blockID], ids.isEmpty == false else { return }
+        let echoes = ids.compactMap { id in reading.echoes.first { $0.id == id } }
+        guard echoes.isEmpty == false else { return }
+        fan = Fan(paperID: paperID, blockID: blockID, echoes: echoes, rect: rect)
+    }
+
+    func closeFan() {
+        if fan != nil {
+            fan = nil
+        }
     }
 
     /// Not offered again in this paper (or writing).
     func dismiss(_ echo: LearningEcho, context: String) async {
         dismissed?[context, default: []].insert(echo.id)
-        if var reading, context == Self.readingContext(reading.focus.paperID) {
-            reading.echoes.removeAll { $0.id == echo.id }
-            setReading(reading)
+        if let reading, context == Self.readingContext(reading.focus.paperID) {
+            removeFromReading(echo)
         }
         if var writing, context == Self.writingContext(writing.writingID) {
             writing.echoes.removeAll { $0.id == echo.id }
             self.writing = writing
         }
         await dismissals.dismiss(echo.id, context: context)
+    }
+
+    /// Takes a deleted record off the screen, the marks and the fan at once, before the
+    /// next search would.
+    func forget(_ echo: LearningEcho) {
+        removeFromReading(echo)
+        if var writing {
+            writing.echoes.removeAll { $0.id == echo.id }
+            self.writing = writing
+        }
+    }
+
+    private func removeFromReading(_ echo: LearningEcho) {
+        if var reading {
+            reading.echoes.removeAll { $0.id == echo.id }
+            reading.placements = reading.placements
+                .mapValues { $0.filter { $0 != echo.id } }
+                .filter { $0.value.isEmpty == false }
+            setReading(reading)
+        }
+        if var fan {
+            fan.echoes.removeAll { $0.id == echo.id }
+            self.fan = fan.echoes.isEmpty ? nil : fan
+        }
     }
 
     // MARK: - Searching
@@ -706,11 +910,13 @@ final class LearningEchoModel {
         let excluded = await dismissedSubjects(context: Self.readingContext(focus.paperID))
         let query = LearningEchoIndex.Query(text: focus.text, paperID: focus.paperID, pageIndex: focus.pageIndex)
         let similarity = similarity
-        let echoes = await Task.detached(priority: .utility) {
-            index.echoes(for: query, excludingSubjects: excluded, similarity: similarity)
+        let blocks = focus.blocks
+        let (echoes, placements) = await Task.detached(priority: .utility) {
+            let echoes = index.echoes(for: query, excludingSubjects: excluded, similarity: similarity)
+            return (echoes, index.placements(of: echoes, in: blocks))
         }.value
         guard Task.isCancelled == false, lastReadingQuery?.focus == focus else { return }
-        setReading(ReadingEchoes(focus: focus, echoes: echoes))
+        setReading(ReadingEchoes(focus: focus, echoes: echoes, placements: placements))
     }
 
     private func refreshWriting(writingID: UUID, paragraph: String, fullText: String) async {
@@ -767,6 +973,7 @@ final class LearningEchoModel {
         guard newValue != reading else { return }
         reading = newValue
         updateUnacknowledged()
+        notifyMarkObservers()
     }
 
     private func setWriting(_ newValue: WritingEchoes) {

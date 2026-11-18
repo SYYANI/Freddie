@@ -528,6 +528,7 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
         context.coordinator.applyCitationMarks(citationMarks, in: view, force: shouldReloadDocument)
         context.coordinator.applyNoteNavigationIfNeeded(noteNavigationRequest, in: view)
         context.coordinator.readingFocusSink = context.environment.readingFocusSink
+        context.coordinator.observeEchoMarks(in: view)
         context.coordinator.observeOutlineGeometry(in: view)
         context.coordinator.applyFindRequest(findRequest, in: view)
         context.coordinator.applySidenoteAnchors(
@@ -594,6 +595,13 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
         var readingFocusSink: ReadingFocusSink?
         private var readingFocusTask: Task<Void, Never>?
         private var lastReadingFocusText: String?
+        /// Guessed paragraphs per page of `echoParagraphDocument`, for echo marks.
+        private var echoParagraphs: [Int: [PDFEchoParagraph]] = [:]
+        private weak var echoParagraphDocument: PDFDocument?
+        /// The marks to show, and the annotations showing them in `echoMarkDocument`.
+        private var echoMarks: [LearningEchoMark] = []
+        private var echoMarkAnnotations: [PDFEchoMarkAnnotation] = []
+        private weak var echoMarkDocument: PDFDocument?
         private var outlineGeometryObservation: NSKeyValueObservation?
         #if os(macOS)
         private var outlineGeometryNotification: NSObjectProtocol?
@@ -1018,6 +1026,9 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
                 }
                 interactiveView.onBrowseClick = { [weak self] page, point in
                     guard let self else { return false }
+                    if self.handleEchoMarkClick(on: page, at: point) {
+                        return true
+                    }
                     self.flashSidenote(on: page, at: point)
                     return self.handleSelectionAssistantHistoryClick(on: page, at: point)
                 }
@@ -1072,6 +1083,8 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
         func detach() {
             readingFocusTask?.cancel()
             readingFocusTask = nil
+            readingFocusSink?.model.stopObservingMarks(owner: self)
+            clearEchoMarkAnnotations()
             #if os(macOS)
             if let outlineGeometryNotification { NotificationCenter.default.removeObserver(outlineGeometryNotification) }
             outlineGeometryNotification = nil
@@ -2361,24 +2374,102 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
             #endif
             let currentPage = view.page(for: CGPoint(x: view.bounds.midX, y: y), nearest: true)
             let pageIndex = currentPage.map { document.index(for: $0) }.flatMap { $0 == NSNotFound ? nil : $0 }
-            var parts: [String] = []
+            // Whole paragraphs that are at least partly on screen.
+            var blocks: [ReadingBlock] = []
             var length = 0
-            for page in view.visiblePages {
-                let rect = view.convert(view.bounds, to: page).intersection(page.bounds(for: .cropBox))
-                guard rect.isNull == false, rect.isEmpty == false,
-                      let selection = page.selection(for: rect),
-                      let text = (PDFWordSpacing.text(of: selection) ?? selection.string)?
-                          .trimmingCharacters(in: .whitespacesAndNewlines),
-                      text.isEmpty == false else { continue }
-                parts.append(text)
-                length += text.count
-                if length >= HTMLReadingFocus.textLimit { break }
+            visiblePages: for page in view.visiblePages {
+                let index = document.index(for: page)
+                guard index != NSNotFound else { continue }
+                let visible = view.convert(view.bounds, to: page).intersection(page.bounds(for: .cropBox))
+                guard visible.isNull == false, visible.isEmpty == false else { continue }
+                for paragraph in echoParagraphs(onPageAt: index, in: document) where paragraph.bounds.intersects(visible) {
+                    blocks.append(ReadingBlock(id: paragraph.id, text: paragraph.text))
+                    length += paragraph.text.count + 1
+                    if length >= HTMLReadingFocus.textLimit { break visiblePages }
+                }
             }
-            let text = String(parts.joined(separator: "\n").prefix(HTMLReadingFocus.textLimit))
+            let text = String(blocks.map(\.text).joined(separator: "\n").prefix(HTMLReadingFocus.textLimit))
             guard text != lastReadingFocusText else { return }
             lastReadingFocusText = text
-            sink.report(attachmentID: attachmentID, pageIndex: pageIndex, text: text)
+            sink.report(attachmentID: attachmentID, pageIndex: pageIndex, text: text, blocks: blocks)
         }
+
+        private func echoParagraphs(onPageAt index: Int, in document: PDFDocument) -> [PDFEchoParagraph] {
+            if echoParagraphDocument !== document {
+                echoParagraphDocument = document
+                echoParagraphs = [:]
+            }
+            if let cached = echoParagraphs[index] { return cached }
+            guard let page = document.page(at: index) else { return [] }
+            let paragraphs = PDFEchoParagraphs.paragraphs(on: page, pageIndex: index)
+            echoParagraphs[index] = paragraphs
+            return paragraphs
+        }
+
+        // MARK: Echo marks
+
+        /// Follows the paragraphs to mark for this attachment; nothing is marked without a
+        /// sink (tests, translations).
+        func observeEchoMarks(in view: PDFView) {
+            guard let readingFocusSink else {
+                if echoMarks.isEmpty == false {
+                    echoMarks = []
+                    clearEchoMarkAnnotations()
+                }
+                return
+            }
+            readingFocusSink.observeMarks(owner: self, attachmentID: attachmentID) { [weak self, weak view] marks in
+                guard let self, marks != self.echoMarks else { return }
+                self.echoMarks = marks
+                if let view { self.renderEchoMarks(in: view) }
+            }
+            // A reloaded document has new pages: draw the marks on them again.
+            if echoMarks.isEmpty == false, echoMarkDocument !== view.document {
+                renderEchoMarks(in: view)
+            }
+        }
+
+        private func renderEchoMarks(in view: PDFView) {
+            clearEchoMarkAnnotations()
+            guard let document = view.document else { return }
+            echoMarkDocument = document
+            for mark in echoMarks {
+                guard let pageIndex = PDFEchoParagraphs.pageIndex(of: mark.blockID),
+                      let page = document.page(at: pageIndex),
+                      let paragraph = echoParagraphs(onPageAt: pageIndex, in: document).first(where: { $0.id == mark.blockID }) else {
+                    continue
+                }
+                let annotation = PDFEchoMarkAnnotation(
+                    bounds: PDFEchoParagraphs.markRect(for: paragraph, pageBounds: page.bounds(for: .cropBox)),
+                    blockID: mark.blockID,
+                    isSeen: mark.isSeen
+                )
+                page.addAnnotation(annotation)
+                echoMarkAnnotations.append(annotation)
+            }
+        }
+
+        private func clearEchoMarkAnnotations() {
+            for annotation in echoMarkAnnotations {
+                annotation.page?.removeAnnotation(annotation)
+            }
+            echoMarkAnnotations = []
+            echoMarkDocument = nil
+        }
+
+        /// The echo mark under a click, if any.
+        func echoMark(on page: PDFPage, at point: CGPoint) -> PDFEchoMarkAnnotation? {
+            echoMarkAnnotations.last { $0.page === page && $0.bounds.insetBy(dx: -3, dy: -3).contains(point) }
+        }
+
+        #if os(macOS)
+        /// Opens the fan of a marked paragraph; true when the click was on a mark.
+        private func handleEchoMarkClick(on page: PDFPage, at point: CGPoint) -> Bool {
+            guard let mark = echoMark(on: page, at: point), let view = pdfView else { return false }
+            readingFocusSink?.openFan(blockID: mark.blockID, rect: view.convert(mark.bounds, from: page), in: view)
+            return true
+        }
+        #endif
 
         func scheduleDocumentPageCountUpdate(_ pageCount: Int, force: Bool = false) {
             pendingDocumentPageCount = max(0, pageCount)

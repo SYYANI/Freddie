@@ -165,7 +165,10 @@ struct LearningEchoesView: View {
         // Not Related only quiets the card for this paper; deleting removes the record
         // everywhere, and collecting again does not bring it back.
         Button(String(localized: "Delete Record", bundle: bundle), role: .destructive) {
-            Task { await recorder.delete(echo.event) }
+            Task {
+                await recorder.delete(echo.event)
+                model.forget(echo)
+            }
         }
     }
 

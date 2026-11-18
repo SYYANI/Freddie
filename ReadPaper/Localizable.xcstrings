@@ -12,6 +12,16 @@
         }
       }
     },
+    "%lld echoes" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld 条回响"
+          }
+        }
+      }
+    },
     "“%@” and all of its local files, notes, reading state, and translation cache will be removed." : {
       "extractionState" : "stale",
       "localizations" : {

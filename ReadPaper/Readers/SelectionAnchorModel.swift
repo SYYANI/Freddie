@@ -25,19 +25,23 @@ final class SelectionAnchorModel {
             clear(owner: owner)
             return
         }
-        guard let referenceView, referenceView.window != nil, view.window === referenceView.window else {
-            self.owner = owner
-            setRect(nil)
-            return
-        }
         self.owner = owner
+        setRect(referenceRect(of: rect, in: view))
+    }
+
+    /// `rect`, given in `view`'s coordinates, in the reader pane's (origin at the top
+    /// left); nil when the views are not in the same window.
+    func referenceRect(of rect: CGRect, in view: NSView) -> CGRect? {
+        guard let referenceView, referenceView.window != nil, view.window === referenceView.window else {
+            return nil
+        }
         let converted = view.convert(rect, to: referenceView)
-        setRect(referenceView.isFlipped ? converted : CGRect(
+        return referenceView.isFlipped ? converted : CGRect(
             x: converted.minX,
             y: referenceView.bounds.height - converted.maxY,
             width: converted.width,
             height: converted.height
-        ))
+        )
     }
 
     func clear(owner: AnyObject) {
