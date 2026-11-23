@@ -205,6 +205,5 @@ struct DocumentOutlinePanel: View {
     private func navigate(_ entry: DocumentOutlineEntry) {
         guard entry.pageIndex != nil || entry.anchor != nil else { return }
         onNavigate(entry)
-        if !model.isPinned || !allowsPinning { model.isPresented = false }
     }
 }

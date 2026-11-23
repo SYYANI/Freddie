@@ -75,8 +75,7 @@ final class DocumentOutlineHTMLTests: XCTestCase {
         sendKey("\r", code: 36, window: window)
         try await Task.sleep(for: .milliseconds(100))
         XCTAssertEqual(navigations, ["1"])
-        XCTAssertFalse(model.isPresented, "Unpinned navigation closes the panel")
-        model.isPresented = true
+        XCTAssertTrue(model.isPresented, "Unpinned navigation keeps the panel open")
         model.isPinned = true
         // Direct typing filters the entries; Return opens the matching heading.
         for character in "Experiments" { sendKey(String(character), code: 0, window: window) }
