@@ -257,8 +257,6 @@ struct HTMLLocalizer: @unchecked Sendable {
         try absolutizeHyperlinks(in: document, baseURL: sourceURL)
         try document.select("base[href]").remove()
         let repairedPreformattedProse = try splitPreformattedProseBlocks(in: document)
-        let repairedWeChatArticle = extraction == .readable
-            ? try revealWeChatArticle(in: document, sourceURL: sourceURL) : false
 
         switch extraction {
         case .original:
@@ -266,8 +264,8 @@ struct HTMLLocalizer: @unchecked Sendable {
         case .clipped(simplifies: false):
             break
         case .readable, .clipped(simplifies: true):
-            let readabilityInput = repairedPreformattedProse || repairedWeChatArticle ? try document.outerHtml() : html
-            if let readableDocument = try makeReadableDocument(from: readabilityInput, sourceURL: sourceURL, fallback: document) {
+            let readabilityInput = repairedPreformattedProse ? try document.outerHtml() : html
+            if let readableDocument = try makeReadableDocument(from: readabilityInput, sourceURL: sourceURL, into: document) {
                 return readableDocument
             }
             guard extraction != .readable else { return document }
@@ -372,31 +370,6 @@ struct HTMLLocalizer: @unchecked Sendable {
         case "opacity": Double(declaration.value) == 0
         default: false
         }
-    }
-
-    /// WeChat ships the complete article hidden until its scripts reveal it. Only unhide
-    /// that known article root before Readability; hidden descendants remain excluded.
-    private func revealWeChatArticle(in document: Document, sourceURL: URL) throws -> Bool {
-        guard sourceURL.host?.lowercased() == "mp.weixin.qq.com",
-              let article = try document.select("#js_content.rich_media_content").first() else { return false }
-
-        let style = try article.attr("style")
-        let visibleStyle = style.split(separator: ";").filter { declaration in
-            let property = declaration.split(separator: ":", maxSplits: 1).first?
-                .trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-            return property != "visibility" && property != "opacity" && property != "display"
-        }.joined(separator: ";")
-        try article.attr("style", visibleStyle)
-        try article.removeAttr("hidden")
-        try article.removeAttr("aria-hidden")
-        // CDN image URLs end in /640?wx_fmt=..., so Readability's extension-based
-        // lazy-image heuristic does not promote them to src.
-        for image in try article.select("img[data-src]").array() {
-            guard let url = resolve(try image.attr("data-src"), relativeTo: sourceURL),
-                  ["http", "https"].contains(url.scheme?.lowercased() ?? "") else { continue }
-            try image.attr("src", url.absoluteString)
-        }
-        return true
     }
 
     func rewriteCSS(_ css: String, baseURL: URL, localizedFilenames: [URL: String]) throws -> String {
@@ -614,18 +587,20 @@ struct HTMLLocalizer: @unchecked Sendable {
         }
     }
 
-    private func makeReadableDocument(from html: String, sourceURL: URL, fallback document: Document) throws -> Document? {
+    private func makeReadableDocument(from html: String, sourceURL: URL, into document: Document) throws -> Document? {
         do {
+            // Which nodes count as the article is swift-readability's job, including
+            // site rules (e.g. WeChat's hidden article root). Fix extraction there.
             let readability = try Readability(
-                html: readabilityInputPreservingCompositeGraphics(html, document: document),
+                html: html,
                 baseURL: sourceURL,
-                options: ReadabilityOptions(keepClasses: true)
+                options: ReadabilityOptions(
+                    keepClasses: true,
+                    preservesCompositeGraphics: true,
+                    recoversExplicitArticleBody: true
+                )
             )
-            let parsedResult = try readability.parse()
-            let result = try recoverExplicitArticleBodyIfNeeded(
-                from: parsedResult,
-                in: document
-            )
+            let result = try readability.parse()
             guard try shouldUseReadabilityResult(result) else {
                 return nil
             }
@@ -643,45 +618,6 @@ struct HTMLLocalizer: @unchecked Sendable {
         return visibleText.count >= 40
     }
 
-    /// Streaming SSR frameworks can ship the complete article inside a temporary hidden
-    /// container and move it into place with JavaScript. Readability correctly ignores that
-    /// hidden subtree, but static parsing then sees only the loading shell. Explicit article
-    /// markers are a stronger signal than such a tiny extraction, so recover their content
-    /// directly without depending on the page's hydration scripts.
-    private func recoverExplicitArticleBodyIfNeeded(
-        from result: ReadabilityResult,
-        in document: Document
-    ) throws -> ReadabilityResult {
-        let resultDocument = try SwiftSoup.parseBodyFragment(result.content)
-        let resultTextLength = try resultDocument.body().map { try meaningfulText(in: $0).count } ?? 0
-
-        var bestCandidate: (element: Element, text: String)?
-        for candidate in try document.select("[itemprop=articleBody], .instapaper_body").array() {
-            let text = try meaningfulText(in: candidate)
-            if text.count > (bestCandidate?.text.count ?? 0) {
-                bestCandidate = (candidate, text)
-            }
-        }
-
-        guard let bestCandidate,
-              bestCandidate.text.count >= 400,
-              resultTextLength * 5 < bestCandidate.text.count else {
-            return result
-        }
-
-        return ReadabilityResult(
-            title: result.title,
-            byline: result.byline,
-            dir: result.dir,
-            lang: result.lang,
-            content: try bestCandidate.element.outerHtml(),
-            textContent: bestCandidate.text,
-            excerpt: result.excerpt,
-            siteName: result.siteName,
-            publishedTime: result.publishedTime
-        )
-    }
-
     private func meaningfulText(in element: Element) throws -> String {
         guard let copy = element.copy() as? Element else {
             return try element.text().trimmingCharacters(in: .whitespacesAndNewlines)
@@ -694,59 +630,28 @@ struct HTMLLocalizer: @unchecked Sendable {
         try updateMetadata(from: result, in: document)
         try injectReadabilityStyles(into: document)
         try document.body()?.addClass("rp-readability-body")
-        // ai2html charts combine a background image with positioned HTML labels.
-        // Readability strips their styles and can flatten the artboard wrappers;
-        // keep the source subtree only when the chart survived article selection.
-        let graphics = try compositeGraphics(in: document)
         try document.body()?.html(renderReadableBody(for: result))
-        for graphic in graphics {
-            guard let extracted = try document.getElementById(graphic.id()),
-                  let copy = graphic.copy() as? Element else { continue }
-            let wrapper = try document.createElement("div")
-            try wrapper.attr("data-rp-preserve-layout", "true")
-            try wrapper.appendChild(copy)
-            try extracted.replaceWith(wrapper)
-        }
+        try wrapCompositeGraphics(in: document)
         try splitPreformattedProseBlocks(in: document)
     }
 
-    private func compositeGraphics(in document: Document) throws -> [Element] {
-        let candidates = try document.select(".ai2html[id], [id^=g-][id$=-box]").array()
-        return try candidates.filter { candidate in
-            let parents = candidate.parents().array()
-            guard !parents.contains(where: {
-                $0.tagName().lowercased() == "nav" || (try? $0.attr("role")) == "navigation"
-            }) else { return false }
-            // Explicit graphic structure, rather than a generic positioned div,
-            // keeps scroll-animation wrappers on the normal prose repair path.
-            let hasLabels = try !candidate.select("[id^=g-ai], .g-artboard, .g-aiAbs").isEmpty()
-            let hasImage = try !candidate.select("img").isEmpty()
-            return hasLabels && hasImage && !candidates.contains { other in
-                other !== candidate && parents.contains { $0 === other }
-            }
+    /// ai2html charts position HTML labels over a background image. Readability keeps
+    /// their source markup (`preservesCompositeGraphics`); a clip body kept as-is never
+    /// went through it. The wrapper exempts them from the reading layout's flow repair.
+    private func wrapCompositeGraphics(in document: Document) throws {
+        guard let content = try document.select(".rp-readability-content").first() else { return }
+        let marker = CompositeGraphics.preservedLayoutAttribute
+        var graphics = try content.select("[\(marker)]").array()
+        if graphics.isEmpty {
+            graphics = try CompositeGraphics.roots(in: content)
         }
-    }
-
-    private func readabilityInputPreservingCompositeGraphics(_ html: String, document: Document) throws -> String {
-        guard try !compositeGraphics(in: document).isEmpty,
-              let input = document.copy() as? Document else { return html }
-        for graphic in try compositeGraphics(in: input) {
-            guard let image = try graphic.select("img").first()?.copy() as? Element else { continue }
-            // Present the composite as one semantic figure during article selection.
-            // Otherwise short chart labels can cause conditional div cleanup to drop
-            // the whole artboard. The original subtree is restored by its ID later.
-            let figure = try input.createElement("figure")
-            try figure.attr("id", graphic.id())
-            for attribute in ["hidden", "aria-hidden", "style"] where graphic.hasAttr(attribute) {
-                try figure.attr(attribute, graphic.attr(attribute))
-            }
-            try figure.appendChild(image)
-            let caption = try input.createElement("figcaption")
-            try caption.text(meaningfulText(in: graphic))
-            try figure.appendChild(caption)
-            try graphic.replaceWith(figure)
+        for graphic in graphics {
+            try graphic.removeAttr(marker)
+            let wrapper = try document.createElement("div")
+            try wrapper.attr("data-rp-preserve-layout", "true")
+            try graphic.before(wrapper)
+            try wrapper.appendChild(graphic)
         }
-        return try input.outerHtml()
     }
 
     @discardableResult

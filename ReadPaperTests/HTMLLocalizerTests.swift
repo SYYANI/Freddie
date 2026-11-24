@@ -197,6 +197,45 @@ final class HTMLLocalizerTests: XCTestCase {
         XCTAssertFalse(try style.outerHtml().contains("&gt;"))
     }
 
+    func testLocalizeKeepsCaptionedFiguresInsideMediaColumns() async throws {
+        let paragraph = String(repeating: "This paragraph discusses the figure in the article. ", count: 12)
+        let html = """
+        <html><body><nav><div class="media-column" data-type="image">
+          <figure><img src="/navigation.png"></figure></div></nav>
+        <article><p>\(paragraph)</p>
+          <div class="post_media-column" data-type="image"><figure>
+            <img src="/diagram.png?w=3840&amp;fm=webp" srcset="/small.png 640w" alt="Memory hierarchy">
+            <figcaption><div>The layers of memory.</div></figcaption>
+          </figure></div>
+          <p>\(paragraph)</p></article></body></html>
+        """
+        let rootURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: rootURL) }
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [MockHTMLLocalizerURLProtocol.self]
+        let imageBytes = Data("diagram".utf8)
+        MockHTMLLocalizerURLProtocol.requestHandler = { request in
+            let url = try XCTUnwrap(request.url)
+            XCTAssertEqual(url.absoluteString, "https://www.anthropic.com/diagram.png?w=3840&fm=webp")
+            return (HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!, imageBytes)
+        }
+        let output = rootURL.appendingPathComponent("paper.html")
+        _ = try await HTMLLocalizer(session: URLSession(configuration: configuration)).localize(
+            htmlData: Data(html.utf8), sourceURL: URL(string: "https://www.anthropic.com/research/components-of-agent-memory")!,
+            outputURL: output, resourcesDirectory: rootURL.appendingPathComponent("Resources")
+        )
+        let document = try SwiftSoup.parse(String(contentsOf: output, encoding: .utf8))
+        let figures = try document.select(".rp-readability-content figure")
+        XCTAssertEqual(figures.count, 1)
+        XCTAssertEqual(try figures.select("figcaption").text(), "The layers of memory.")
+        let image = try XCTUnwrap(try figures.select("img").first())
+        XCTAssertEqual(try image.attr("alt"), "Memory hierarchy")
+        XCTAssertFalse(image.hasAttr("srcset"))
+        let path = try image.attr("src")
+        XCTAssertTrue(path.hasPrefix("Resources/"))
+        XCTAssertEqual(try Data(contentsOf: rootURL.appendingPathComponent(path)), imageBytes)
+    }
+
     func testMakeDocumentForLocalizationDropsExcerptTruncatedFromTheOpeningParagraph() throws {
         let opening = "Anyone who works in the agency business has heard these words from a prospective client"
         let paragraph = String(repeating: "This is article content that should survive readability extraction. ", count: 12)

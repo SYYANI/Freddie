@@ -208,6 +208,7 @@ LLM 配置现已拆成独立 SwiftData 模型：`LLMProviderProfile` 负责 prov
 - 处理本地文件时使用 `URL`/`FileManager`，不要拼接易碎路径字符串，除非已有模型字段需要保存 `.path`。
 - 涉及 SwiftData 的异步 UI 流程目前多在 `@MainActor` 上运行；改并发代码时显式考虑 actor 隔离和取消。
 - 涉及 HTML 正文提取时优先复用 `HTMLLocalizer` 里的 `swift-readability` 路径；不要重新引入一套手写正文选择器去替代它。SwiftSoup 主要用于正文抽取之后的 DOM 本地化、资源重写和译文插入。
+- 哪些节点算正文归 `swift-readability`（本仓库里的 `swift-readability` 是指向 `../swift-readability` 的软链接，fork 自 neolee）：某个站点的正文、图片被丢掉或被错误保留时，在那边加站点规则（`Sources/Readability/Internal/SiteRules/`，站点把正文藏到脚本运行后才显示的用 `SourceDocumentRule`）或可选项，不要在 `HTMLLocalizer` 里改 Readability 的输入或回补它的输出。`HTMLLocalizer` 打开的可选项：`preservesCompositeGraphics`（ai2html 图表保留原始结构，输出带 `data-readability-preserve-layout`，App 再包成 `data-rp-preserve-layout` 外层；原样保留的剪藏不经过 Readability，用 `CompositeGraphics.roots(in:)` 找图表）和 `recoversExplicitArticleBody`。留在 App 的是抓取（验证页、知乎/微信验证码）、资源本地化、阅读排版样式、40 字回退原页面的门槛和重新导入的修复判断。`.whitespace-pre-wrap` 按空行分段也留在 App：它同样作用于不经过 Readability 的整页和原样剪藏。改完 `swift-readability` 要提交、推送到 fork，再更新 `release.yml` 的 `LOCAL_READABILITY_REF`，否则 CI 构建的仍是旧的抽取规则。
 - `HTMLLocalizer` 对明显过短、价值很低的 readability 结果会回退到原始文档；不要为了统一外观强行把所有页面都包进 readability shell。
 - 本地化 HTML 时优先隐藏或重写必要元素；但如果已经进入 `swift-readability` 的正文模式，允许直接替换为提炼后的正文包装页，不必强求保留原站完整布局。
 - 不要把 PDF 解析扩展成“任意 PDF 全文结构化翻译”的承诺；完整 PDF 翻译应继续作为 BabelDOC 外部工具路径。

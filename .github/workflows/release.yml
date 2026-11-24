@@ -27,7 +27,7 @@ jobs:
       APP_PATH: build/DerivedData/Build/Products/Release/Freddie.app
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
       LOCAL_READABILITY_REPO: https://github.com/SYYANI/swift-readability.git
-      LOCAL_READABILITY_REF: 5fabfd7dbb75c3a26cf459d6bc5a3b6897a319f4
+      LOCAL_READABILITY_REF: 0a43a7320bb1e3da8211659b49f8a2020bebd7e7
       LOCAL_BABELDOC_REPO: https://github.com/SYYANI/BabelDOC.git
       LOCAL_BABELDOC_REF: ${{ inputs.babeldoc_ref || vars.BABELDOC_REF }}
       LOCAL_STREAMING_MARKDOWN_REPO: https://github.com/SYYANI/SwiftStreamingMarkdown.git
