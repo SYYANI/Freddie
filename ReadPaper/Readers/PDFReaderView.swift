@@ -598,10 +598,15 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
         /// Guessed paragraphs per page of `echoParagraphDocument`, for echo marks.
         private var echoParagraphs: [Int: [PDFEchoParagraph]] = [:]
         private weak var echoParagraphDocument: PDFDocument?
-        /// The marks to show, and the annotations showing them in `echoMarkDocument`.
+        /// The marks to show, and where they sit on the pages of `echoMarkDocument`.
         private var echoMarks: [LearningEchoMark] = []
-        private var echoMarkAnnotations: [PDFEchoMarkAnnotation] = []
+        private var echoMarkPlacements: [PDFEchoMarkPlacement] = []
         private weak var echoMarkDocument: PDFDocument?
+        #if os(macOS)
+        /// The views drawing `echoMarkPlacements`, in the same order.
+        private var echoMarkViews: [PDFEchoMarkView] = []
+        private var echoMarkLayoutObservers: [NSObjectProtocol] = []
+        #endif
         private var outlineGeometryObservation: NSKeyValueObservation?
         #if os(macOS)
         private var outlineGeometryNotification: NSObjectProtocol?
@@ -1084,7 +1089,7 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
             readingFocusTask?.cancel()
             readingFocusTask = nil
             readingFocusSink?.model.stopObservingMarks(owner: self)
-            clearEchoMarkAnnotations()
+            clearEchoMarks()
             #if os(macOS)
             if let outlineGeometryNotification { NotificationCenter.default.removeObserver(outlineGeometryNotification) }
             outlineGeometryNotification = nil
@@ -2414,7 +2419,7 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
             guard let readingFocusSink else {
                 if echoMarks.isEmpty == false {
                     echoMarks = []
-                    clearEchoMarkAnnotations()
+                    clearEchoMarks()
                 }
                 return
             }
@@ -2430,7 +2435,7 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
         }
 
         private func renderEchoMarks(in view: PDFView) {
-            clearEchoMarkAnnotations()
+            clearEchoMarks()
             guard let document = view.document else { return }
             echoMarkDocument = document
             for mark in echoMarks {
@@ -2439,27 +2444,73 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
                       let paragraph = echoParagraphs(onPageAt: pageIndex, in: document).first(where: { $0.id == mark.blockID }) else {
                     continue
                 }
-                let annotation = PDFEchoMarkAnnotation(
+                echoMarkPlacements.append(PDFEchoMarkPlacement(
+                    page: page,
                     bounds: PDFEchoParagraphs.markRect(for: paragraph, pageBounds: page.bounds(for: .cropBox)),
                     blockID: mark.blockID,
                     isSeen: mark.isSeen
-                )
-                page.addAnnotation(annotation)
-                echoMarkAnnotations.append(annotation)
+                ))
             }
+            #if os(macOS)
+            guard echoMarkPlacements.isEmpty == false else { return }
+            echoMarkViews = echoMarkPlacements.map { PDFEchoMarkView(blockID: $0.blockID, isSeen: $0.isSeen) }
+            layoutEchoMarkViews(in: view)
+            // Page positions in the document view change with the display mode or box, a
+            // resize or a new document view; zooming magnifies the document view as a whole.
+            let center = NotificationCenter.default
+            let handler: @Sendable (Notification) -> Void = { [weak self, weak view] _ in
+                MainActor.assumeIsolated {
+                    guard let self, let view else { return }
+                    self.layoutEchoMarkViews(in: view)
+                }
+            }
+            echoMarkLayoutObservers = [
+                Notification.Name.PDFViewDisplayModeChanged,
+                Notification.Name.PDFViewDisplayBoxChanged,
+                Notification.Name.PDFViewScaleChanged
+            ].map { center.addObserver(forName: $0, object: view, queue: nil, using: handler) }
+            if let documentView = view.documentView {
+                echoMarkLayoutObservers.append(
+                    center.addObserver(forName: NSView.frameDidChangeNotification, object: documentView, queue: nil, using: handler)
+                )
+            }
+            #endif
         }
 
-        private func clearEchoMarkAnnotations() {
-            for annotation in echoMarkAnnotations {
-                annotation.page?.removeAnnotation(annotation)
+        #if os(macOS)
+        private func layoutEchoMarkViews(in view: PDFView) {
+            guard let documentView = view.documentView else { return }
+            for (placement, markView) in zip(echoMarkPlacements, echoMarkViews) {
+                if markView.superview !== documentView {
+                    markView.removeFromSuperview()
+                    documentView.addSubview(markView)
+                }
+                let frame = documentView.convert(view.convert(placement.bounds, from: placement.page), from: view)
+                if markView.frame != frame {
+                    markView.frame = frame
+                }
             }
-            echoMarkAnnotations = []
+        }
+        #endif
+
+        private func clearEchoMarks() {
+            #if os(macOS)
+            for observer in echoMarkLayoutObservers {
+                NotificationCenter.default.removeObserver(observer)
+            }
+            echoMarkLayoutObservers = []
+            for markView in echoMarkViews {
+                markView.removeFromSuperview()
+            }
+            echoMarkViews = []
+            #endif
+            echoMarkPlacements = []
             echoMarkDocument = nil
         }
 
         /// The echo mark under a click, if any.
-        func echoMark(on page: PDFPage, at point: CGPoint) -> PDFEchoMarkAnnotation? {
-            echoMarkAnnotations.last { $0.page === page && $0.bounds.insetBy(dx: -3, dy: -3).contains(point) }
+        func echoMark(on page: PDFPage, at point: CGPoint) -> PDFEchoMarkPlacement? {
+            echoMarkPlacements.last { $0.page === page && $0.bounds.insetBy(dx: -3, dy: -3).contains(point) }
         }
 
         #if os(macOS)

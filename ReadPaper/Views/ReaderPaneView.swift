@@ -1780,20 +1780,23 @@ struct ReaderPaneView: View {
                 Button {
                     exportHTMLPDF()
                 } label: {
-                    Label(String(localized: "Export HTML as PDF", bundle: bundle), systemImage: "doc.badge.arrow.up")
+                    Label(htmlPDFExportTitle, systemImage: "doc.badge.arrow.up")
                         .labelStyle(.titleAndIcon)
                 }
                 .disabled(htmlAttachment == nil || isExportingHTMLPDF)
             } else {
                 Divider()
 
-                Button {
-                    exportAnnotatedPDF()
-                } label: {
-                    Label(String(localized: "Export Annotated PDF", bundle: bundle), systemImage: "doc.badge.arrow.up")
-                        .labelStyle(.titleAndIcon)
+                // Each visible PDF gets its own item that names it, so the reader picks the
+                // original or the translation before the save panel, never by an implicit rule.
+                ForEach(annotatedPDFExportTargets, id: \.id) { attachment in
+                    Button {
+                        exportAnnotatedPDF(attachment)
+                    } label: {
+                        Label(annotatedPDFExportTitle(for: attachment), systemImage: "doc.badge.arrow.up")
+                            .labelStyle(.titleAndIcon)
+                    }
                 }
-                .disabled(currentPDFAnnotationExportAttachment == nil)
             }
         } label: {
             if isExportingHTMLPDF {
@@ -1817,9 +1820,12 @@ struct ReaderPaneView: View {
         panel.allowedContentTypes = [.pdf]
         panel.canCreateDirectories = true
         panel.isExtensionHidden = false
-        let title = paper.title.components(separatedBy: CharacterSet(charactersIn: "/:\n\r"))
-            .filter { !$0.isEmpty }.joined(separator: "-")
-        panel.nameFieldStringValue = (title.isEmpty ? "paper" : String(title.prefix(120))) + ".pdf"
+        let variant: String? = switch displayMode {
+        case .original: nil
+        case .bilingual: String(localized: "Bilingual", bundle: bundle)
+        case .translated: String(localized: "Translated", bundle: bundle)
+        }
+        panel.nameFieldStringValue = ExportFilename.pdf(title: paper.title, variant: variant)
         panel.prompt = String(localized: "Export", bundle: bundle)
         panel.message = String(localized: "Export the HTML using the current original, bilingual, or translated display mode.", bundle: bundle)
         guard panel.runModal() == .OK, let destinationURL = panel.url else { return }
@@ -1850,36 +1856,61 @@ struct ReaderPaneView: View {
         }
     }
 
-    private var currentPDFAnnotationExportAttachment: PaperAttachment? {
-        let visibleAttachments: [PaperAttachment]
-        switch readerMode {
-        case .html:
-            return nil
-        case .pdf:
-            visibleAttachments = [pdfAttachment].compactMap { $0 }
-        case .translatedPDF:
-            visibleAttachments = [translatedPDFAttachment].compactMap { $0 }
-        case .bilingualPDF:
-            visibleAttachments = [pdfAttachment, translatedPDFAttachment].compactMap { $0 }
+    private var htmlPDFExportTitle: String {
+        switch displayMode {
+        case .original: String(localized: "Export as PDF (Original)", bundle: bundle)
+        case .bilingual: String(localized: "Export as PDF (Bilingual)", bundle: bundle)
+        case .translated: String(localized: "Export as PDF (Translated)", bundle: bundle)
         }
-
-        if let activeAttachmentID = pdfAnnotationSession.activeAttachmentID,
-           let activeAttachment = visibleAttachments.first(where: { $0.id == activeAttachmentID }) {
-            return activeAttachment
-        }
-        return visibleAttachments.first
     }
 
-    private func exportAnnotatedPDF() {
-        guard let paper, let attachment = currentPDFAnnotationExportAttachment else { return }
+    /// The PDFs on screen, original first: one in single-column modes, both side by side.
+    private var annotatedPDFExportTargets: [PaperAttachment] {
+        switch readerMode {
+        case .html:
+            []
+        case .pdf:
+            [originalPDFAttachment].compactMap { $0 }
+        case .translatedPDF:
+            [translatedPDFAttachment].compactMap { $0 }
+        case .bilingualPDF:
+            [originalPDFAttachment, translatedPDFAttachment].compactMap { $0 }
+        }
+    }
+
+    private func annotatedPDFExportTitle(for attachment: PaperAttachment) -> String {
+        if attachment.kind == .translatedPDF {
+            // A partial translation only holds its first pages; say so before the export.
+            if isPartialPDFTranslation, let lastPage = attachment.translatedLastPage {
+                return AppLocalization.format(
+                    "Export Translated PDF (First %d Pages, with Annotations)",
+                    bundle: bundle,
+                    lastPage
+                )
+            }
+            return String(localized: "Export Translated PDF (with Annotations)", bundle: bundle)
+        }
+        if attachment.id == scanTranscriptionAttachment?.id {
+            return String(localized: "Export Corrected Transcription PDF (with Annotations)", bundle: bundle)
+        }
+        return String(localized: "Export Original PDF (with Annotations)", bundle: bundle)
+    }
+
+    private func exportAnnotatedPDF(_ attachment: PaperAttachment) {
+        guard let paper else { return }
 
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.pdf]
         panel.canCreateDirectories = true
         panel.isExtensionHidden = false
-        panel.nameFieldStringValue = attachment.fileURL
-            .deletingPathExtension()
-            .lastPathComponent + "-annotated.pdf"
+        let variant: String? = if attachment.kind == .translatedPDF {
+            String(localized: "Translated", bundle: bundle)
+        } else if attachment.id == scanTranscriptionAttachment?.id {
+            String(localized: "Corrected Transcription", bundle: bundle)
+        } else {
+            nil
+        }
+        panel.nameFieldStringValue = ExportFilename.pdf(title: paper.title, variant: variant)
         panel.prompt = String(localized: "Export", bundle: bundle)
 
         guard panel.runModal() == .OK, let destinationURL = panel.url else { return }

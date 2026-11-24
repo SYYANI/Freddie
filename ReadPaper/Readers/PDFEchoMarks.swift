@@ -1,6 +1,9 @@
 import CoreGraphics
 import Foundation
 import PDFKit
+#if os(macOS)
+import AppKit
+#endif
 
 /// A line of a PDF page as PDFKit selects it.
 struct PDFEchoLine: Equatable {
@@ -147,29 +150,54 @@ enum PDFEchoParagraphs {
     }
 }
 
-/// A mark beside a paragraph with echoes: a dot with a faint ring, drawn in the page
-/// margin. An in-memory annotation like the citation underlines; it is never saved.
-final class PDFEchoMarkAnnotation: PDFAnnotation {
-    var blockID = ""
-    var isSeen = false
+/// An echo mark placed on a page: the paragraph it marks and where, in page coordinates.
+struct PDFEchoMarkPlacement {
+    let page: PDFPage
+    let bounds: CGRect
+    let blockID: String
+    let isSeen: Bool
+}
 
-    convenience init(bounds: CGRect, blockID: String, isSeen: Bool) {
-        self.init(bounds: bounds, forType: .square, withProperties: nil)
+#if os(macOS)
+/// A mark beside a paragraph with echoes: a dot with a faint ring, drawn in the page
+/// margin. It is a view in PDFKit's document view, not a `PDFAnnotation`: PDFKit draws
+/// custom annotations into a page-sized bitmap at 1x page scale and does not redraw them
+/// when zoomed, so they blur; the document view is magnified by its scroll view, and
+/// AppKit redraws its subviews sharp at every magnification. Nothing is added to the PDF.
+final class PDFEchoMarkView: NSView {
+    let blockID: String
+    let isSeen: Bool
+
+    init(blockID: String, isSeen: Bool) {
         self.blockID = blockID
         self.isSeen = isSeen
-        shouldPrint = false
+        super.init(frame: .zero)
+        wantsLayer = true
+        // Above the page views PDFKit adds to the document view as pages come into view.
+        layer?.zPosition = 10
     }
 
-    override func draw(with box: PDFDisplayBox, in context: CGContext) {
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    override var isFlipped: Bool { true }
+
+    /// Clicks go to the PDF view, which opens the fan (`InteractivePDFView.onBrowseClick`).
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    override func draw(_ dirtyRect: NSRect) {
+        guard let context = NSGraphicsContext.current?.cgContext else { return }
+        // Sized like the page (the frame is in document-view points); drawn in units of
+        // the 16-point mark.
+        let unit = bounds.width / PDFEchoParagraphs.markSize
         let alpha: CGFloat = isSeen ? 0.3 : 0.75
         let color = CGColor(srgbRed: 10 / 255, green: 132 / 255, blue: 1, alpha: alpha)
         let center = CGPoint(x: bounds.midX, y: bounds.midY)
-        context.saveGState()
         context.setFillColor(color)
-        context.fillEllipse(in: CGRect(x: center.x - 3, y: center.y - 3, width: 6, height: 6))
+        context.fillEllipse(in: CGRect(x: center.x - 3 * unit, y: center.y - 3 * unit, width: 6 * unit, height: 6 * unit))
         context.setStrokeColor(color.copy(alpha: alpha * 0.55) ?? color)
-        context.setLineWidth(1)
-        context.strokeEllipse(in: CGRect(x: center.x - 6, y: center.y - 6, width: 12, height: 12))
-        context.restoreGState()
+        context.setLineWidth(unit)
+        context.strokeEllipse(in: CGRect(x: center.x - 6 * unit, y: center.y - 6 * unit, width: 12 * unit, height: 12 * unit))
     }
 }
+#endif

@@ -12,16 +12,6 @@
         }
       }
     },
-    "%lld echoes" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld 条回响"
-          }
-        }
-      }
-    },
     "“%@” and all of its local files, notes, reading state, and translation cache will be removed." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -198,6 +188,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%1$d/%2$d"
+          }
+        }
+      }
+    },
+    "%lld echoes" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld 条回响"
           }
         }
       }
@@ -3264,13 +3264,46 @@
         }
       }
     },
-    "Export Annotated PDF" : {
+    "Export as PDF (Bilingual)" : {
       "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "导出带标注的 PDF"
+            "value" : "导出为 PDF（双语）"
+          }
+        }
+      }
+    },
+    "Export as PDF (Original)" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "导出为 PDF（原文）"
+          }
+        }
+      }
+    },
+    "Export as PDF (Translated)" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "导出为 PDF（译文）"
+          }
+        }
+      }
+    },
+    "Export Corrected Transcription PDF (with Annotations)" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "导出矫正转写 PDF（含标注）"
           }
         }
       }
@@ -3318,23 +3351,6 @@
         }
       }
     },
-    "Export HTML as PDF" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Export HTML as PDF"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "将 HTML 导出为 PDF"
-          }
-        }
-      }
-    },
     "Export Markdown" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -3342,6 +3358,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "导出 Markdown"
+          }
+        }
+      }
+    },
+    "Export Original PDF (with Annotations)" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "导出原文 PDF（含标注）"
           }
         }
       }
@@ -3370,6 +3397,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "按当前的原文、双语或译文显示模式导出 HTML。"
+          }
+        }
+      }
+    },
+    "Export Translated PDF (First %d Pages, with Annotations)" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "导出译文 PDF（前 %d 页，含标注）"
+          }
+        }
+      }
+    },
+    "Export Translated PDF (with Annotations)" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "导出译文 PDF（含标注）"
           }
         }
       }

@@ -259,17 +259,30 @@ final class ReadingFocusReportingTests: XCTestCase {
 
         let pdfView = try XCTUnwrap(findPDFView(in: try XCTUnwrap(window.contentView)))
         let page = try XCTUnwrap(pdfView.document?.page(at: 0))
-        var mark: PDFEchoMarkAnnotation?
+        var mark: PDFEchoMarkView?
         for _ in 0..<100 where mark == nil {
-            mark = page.annotations.compactMap { $0 as? PDFEchoMarkAnnotation }.first
+            mark = pdfView.documentView?.subviews.lazy.compactMap { $0 as? PDFEchoMarkView }.first
             if mark == nil { try await Task.sleep(for: .milliseconds(30)) }
         }
-        let shown = try XCTUnwrap(mark, "A mark is drawn on the page")
+        let shown = try XCTUnwrap(mark, "A mark is drawn over the page")
         XCTAssertEqual(shown.blockID, "p0-1")
-        XCTAssertLessThan(shown.bounds.maxX, 40, "In the left margin")
+        XCTAssertTrue(page.annotations.isEmpty, "The mark is not a page annotation, which PDFKit would draw blurred when zoomed")
+        let markInView = pdfView.convert(shown.frame, from: shown.superview)
+        XCTAssertLessThan(pdfView.convert(markInView, to: page).maxX, 40, "In the left margin")
+
+        // Zooming keeps the mark where it was on the page, scaled with it.
+        let markEdge = pdfView.convert(CGPoint(x: markInView.maxX, y: markInView.midY), to: page)
+        pdfView.scaleFactor *= 2
+        let zoomed = pdfView.convert(shown.frame, from: shown.superview)
+        let zoomedOnPage = pdfView.convert(zoomed, to: page)
+        XCTAssertEqual(zoomedOnPage.maxX, markEdge.x, accuracy: 0.5)
+        XCTAssertEqual(zoomedOnPage.midY, markEdge.y, accuracy: 0.5)
+        XCTAssertEqual(zoomed.width, markInView.width * 2, accuracy: 0.5, "Scales with the page")
+        pdfView.scaleFactor /= 2
 
         // A real click on the mark: it opens the fan instead of starting a selection.
-        let center = pdfView.convert(CGPoint(x: shown.bounds.midX, y: shown.bounds.midY), from: page)
+        let markNow = pdfView.convert(shown.frame, from: shown.superview)
+        let center = CGPoint(x: markNow.midX, y: markNow.midY)
         let location = pdfView.convert(center, to: nil)
         for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
             let event = try XCTUnwrap(NSEvent.mouseEvent(

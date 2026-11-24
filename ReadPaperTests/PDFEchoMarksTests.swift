@@ -101,9 +101,12 @@ final class PDFEchoMarksTests: XCTestCase {
         XCTAssertTrue(page.contains(edge), "Never off the page")
     }
 
-    func testMarkAnnotationsAreNotPrinted() {
-        let mark = PDFEchoMarkAnnotation(bounds: CGRect(x: 0, y: 0, width: 16, height: 16), blockID: "p0-0", isSeen: true)
-        XCTAssertFalse(mark.shouldPrint)
+    @MainActor
+    func testMarkViewLetsClicksThroughAndStaysAbovePages() {
+        let mark = PDFEchoMarkView(blockID: "p0-0", isSeen: true)
+        mark.frame = CGRect(x: 0, y: 0, width: 16, height: 16)
+        XCTAssertNil(mark.hitTest(CGPoint(x: 8, y: 8)), "The PDF view handles the click")
+        XCTAssertGreaterThan(mark.layer?.zPosition ?? 0, 0)
         XCTAssertEqual(mark.blockID, "p0-0")
         XCTAssertTrue(mark.isSeen)
     }
