@@ -97,6 +97,17 @@ enum LLMTranslationModelKind: String, CaseIterable, Sendable {
     var usesPlainPrompt: Bool {
         self == .translationOnly
     }
+
+    /// BabelDOC follows the same rule: translation-only models get the plain prompt,
+    /// general models the envelope, and "automatic" starts with the envelope and
+    /// switches once the model keeps translating it.
+    var babelDocPromptStyle: BabelDocTranslationPromptStyle {
+        switch self {
+        case .automatic: .adaptive
+        case .translationOnly: .plain
+        case .general: .envelope
+        }
+    }
 }
 
 /// Stored in UserDefaults per model profile, like the provider API style, so the

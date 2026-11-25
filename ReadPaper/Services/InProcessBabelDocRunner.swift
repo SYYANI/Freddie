@@ -61,7 +61,8 @@ struct InProcessBabelDocRunner {
             requestsPerSecond: Double(max(preferences.babelDocQPS, 1)),
             systemPrompt: AcademicTranslationPrompt.systemPrompt(
                 targetLanguage: preferences.targetLanguage
-            )
+            ),
+            promptStyle: route.translationModelKind.babelDocPromptStyle
         )
 
         let worker = Task.detached(priority: .userInitiated) {

@@ -19,6 +19,8 @@ private struct Options {
     var thinkingMode: BabelDocThinkingMode?
     var reasoningEffort: BabelDocReasoningEffort?
     var systemPrompt: String?
+    var promptStyle: BabelDocTranslationPromptStyle = .envelope
+    var translatesFigureText = false
     var documentTitle: String?
     var glossary: String?
     var semanticHints: String?
@@ -130,6 +132,8 @@ private func usage() {
       --qps <number> --temperature <n> --top-p <n> --max-tokens <n>
       --thinking-mode <enabled|disabled> --reasoning-effort <low|high|max> --cpu
       --system-prompt <text> --document-title <text> --glossary <text>
+      --prompt-style <envelope|plain|auto>  Default: envelope
+      --translate-figure-text            Also translate text inside vector figures
       --semantic-hints <json>           Optional LaTeX semantic hint document
       --verify-runtime                   Verify runtime assets and exit
     """.utf8))
@@ -197,6 +201,13 @@ private func parse(_ arguments: [String]) throws -> Options {
             }
             options.reasoningEffort = effort
         case "--system-prompt": options.systemPrompt = try value(arguments, &index, for: "--system-prompt")
+        case "--prompt-style":
+            let raw = try value(arguments, &index, for: "--prompt-style")
+            guard let style = BabelDocTranslationPromptStyle(rawValue: raw) else {
+                throw HelperError.argument("--prompt-style must be envelope, plain, or auto.")
+            }
+            options.promptStyle = style
+        case "--translate-figure-text": options.translatesFigureText = true
         case "--document-title": options.documentTitle = try value(arguments, &index, for: "--document-title")
         case "--glossary": options.glossary = try value(arguments, &index, for: "--glossary")
         case "--semantic-hints":
@@ -280,7 +291,8 @@ private enum ReadPaperBabelDocHelperMain {
                     onlyIncludeTranslatedPages: options.onlySelectedPages,
                     documentTitle: options.documentTitle,
                     glossary: options.glossary,
-                    semanticHints: semanticHints
+                    semanticHints: semanticHints,
+                    translatesFigureText: options.translatesFigureText
                 ),
                 runtime: runtime,
                 openAI: .init(
@@ -297,7 +309,8 @@ private enum ReadPaperBabelDocHelperMain {
                     thinkingMode: options.thinkingMode,
                     reasoningEffort: options.reasoningEffort,
                     requestsPerSecond: options.qps,
-                    systemPrompt: options.systemPrompt
+                    systemPrompt: options.systemPrompt,
+                    promptStyle: options.promptStyle
                 ),
                 onProgress: { emitter.progress($0) }
             )
