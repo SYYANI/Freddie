@@ -14,6 +14,7 @@ struct LLMModelRouteSnapshot: Equatable, Sendable {
     var maxTokens: Int?
     var thinkingMode: LLMThinkingMode?
     var reasoningEffort: LLMReasoningEffort?
+    var translationModelKind: LLMTranslationModelKind
 
     init(
         providerProfileID: UUID,
@@ -28,7 +29,8 @@ struct LLMModelRouteSnapshot: Equatable, Sendable {
         topP: Double? = nil,
         maxTokens: Int? = nil,
         thinkingMode: LLMThinkingMode? = nil,
-        reasoningEffort: LLMReasoningEffort? = nil
+        reasoningEffort: LLMReasoningEffort? = nil,
+        translationModelKind: LLMTranslationModelKind = .automatic
     ) {
         self.providerProfileID = providerProfileID
         self.providerName = providerName
@@ -43,6 +45,17 @@ struct LLMModelRouteSnapshot: Equatable, Sendable {
         self.maxTokens = maxTokens
         self.thinkingMode = thinkingMode
         self.reasoningEffort = reasoningEffort
+        self.translationModelKind = translationModelKind
+    }
+
+    /// Translation requests start with the plain prompt (no system prompt or envelope).
+    var startsWithPlainTranslationPrompt: Bool {
+        translationModelKind.usesPlainPrompt
+    }
+
+    /// A run may switch to the plain prompt once the model keeps echoing the envelope.
+    var adaptsTranslationPrompt: Bool {
+        translationModelKind == .automatic
     }
 
     /// Stable identity for translation output. Keep this separate from the

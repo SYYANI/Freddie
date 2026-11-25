@@ -210,6 +210,8 @@ private struct SettingsForm: View {
     @State private var modelThinkingMode: LLMThinkingMode?
     @State private var modelReasoningEffort: LLMReasoningEffort?
     @State private var modelEnabled = true
+    @State private var modelTranslationKind: LLMTranslationModelKind = .automatic
+    @State private var isDetectingModelKind = false
     @State private var modelStatusMessage: String?
     @State private var modelOutputPreview: String?
     @State private var isTestingModel = false
@@ -251,6 +253,7 @@ private struct SettingsForm: View {
 
     private let keychainStore = KeychainStore()
     private let apiStyleStore = LLMProviderAPIStyleStore()
+    private let translationModelKindStore = LLMTranslationModelKindStore()
     private let defaultProfileDeletionStore = LLMDefaultProfileDeletionStore()
     private let validator = LLMProviderValidationUseCase()
 
@@ -1345,6 +1348,32 @@ private struct SettingsForm: View {
                 ) {
                     SettingsPlainTextField(text: $modelIdentifier)
                 }
+                SettingsFieldRow(
+                    String(localized: "Model type", bundle: bundle),
+                    help: String(localized: "Translation-only models such as HY-MT or NLLB translate everything they receive instead of following instructions. For them, web page and abstract translation send only the text to translate, without the system prompt, titles or neighboring paragraphs. Detect sends one test translation with the full prompt and sets the type from the answer. Automatic starts with the full prompt and switches during a translation when the model keeps repeating it. PDF translation is not affected.", bundle: bundle)
+                ) {
+                    HStack(spacing: 8) {
+                        Picker(String(localized: "Model type", bundle: bundle), selection: $modelTranslationKind) {
+                            Text("Automatic", bundle: bundle)
+                                .tag(LLMTranslationModelKind.automatic)
+                            Text("Translation-only model", bundle: bundle)
+                                .tag(LLMTranslationModelKind.translationOnly)
+                            Text("General model", bundle: bundle)
+                                .tag(LLMTranslationModelKind.general)
+                        }
+                        .labelsHidden()
+
+                        Button(
+                            isDetectingModelKind
+                                ? String(localized: "Detecting...", bundle: bundle)
+                                : String(localized: "Detect", bundle: bundle)
+                        ) {
+                            detectModelKind()
+                        }
+                        .disabled(isDetectingModelKind || isTestingModel)
+                        .help(String(localized: "Send one test translation to find out whether this model follows instructions.", bundle: bundle))
+                    }
+                }
                 SettingsFieldRow(String(localized: "Enabled", bundle: bundle)) {
                     Toggle("", isOn: $modelEnabled)
                         .labelsHidden()
@@ -2006,6 +2035,7 @@ private struct SettingsForm: View {
         modelThinkingMode = model.thinkingModeValue
         modelReasoningEffort = model.reasoningEffortValue
         modelEnabled = model.isEnabled
+        modelTranslationKind = translationModelKindStore.kind(for: model.id)
         showsModelAdvancedOptions = model.id == revealedModelID
             || model.temperature != nil
             || model.topP != nil
@@ -2041,6 +2071,7 @@ private struct SettingsForm: View {
         modelThinkingMode = nil
         modelReasoningEffort = nil
         modelEnabled = true
+        modelTranslationKind = .automatic
         showsModelAdvancedOptions = false
         modelStatusMessage = nil
         modelOutputPreview = nil
@@ -2306,6 +2337,7 @@ private struct SettingsForm: View {
 
             settings.modifiedAt = now
             try modelContext.save()
+            translationModelKindStore.setKind(modelTranslationKind, for: model.id)
 
             selectedModelID = model.id
             modelStatusMessage = String(localized: "Model saved.", bundle: bundle)
@@ -2332,6 +2364,7 @@ private struct SettingsForm: View {
             selectedScannedPageModelProfileIDRawValue = ""
         }
         modelContext.delete(model)
+        translationModelKindStore.setKind(.automatic, for: modelID)
 
         do {
             settings.modifiedAt = Date()
@@ -2387,6 +2420,82 @@ private struct SettingsForm: View {
                     result.latencyMs
                 )
                 modelOutputPreview = result.outputPreview
+            } catch {
+                modelStatusMessage = AppLocalization.errorMessage(error, bundle: bundle)
+                modelOutputPreview = nil
+            }
+        }
+    }
+
+    /// Probes the model being edited. A saved model keeps the result right away;
+    /// a new one keeps it when it is saved, like the other fields.
+    private func detectModelKind() {
+        isDetectingModelKind = true
+        modelStatusMessage = String(localized: "Sending a test translation...", bundle: bundle)
+        modelOutputPreview = nil
+
+        Task { @MainActor in
+            defer { isDetectingModelKind = false }
+
+            do {
+                guard let modelProviderID else {
+                    throw SettingsValidationError.message(String(localized: "Select a provider for the model.", bundle: bundle))
+                }
+                guard let provider = providers.first(where: { $0.id == modelProviderID }) else {
+                    throw LLMRouteError.providerNotFound
+                }
+                let modelName = try validator.validateModelName(modelIdentifier)
+                let storedKey = try apiKeyForTest(typed: "", storedRef: provider.apiKeyRef)
+                guard let apiKey = LLMLocalEndpoint.effectiveAPIKey(storedKey, baseURL: provider.baseURL) else {
+                    throw LLMRouteError.missingAPIKey(provider.name)
+                }
+                let apiStyle = apiStyleStore.apiStyle(for: provider.id)
+                let route = LLMModelRouteSnapshot(
+                    providerProfileID: provider.id,
+                    providerName: provider.name,
+                    modelProfileID: selectedModel?.id ?? UUID(),
+                    modelProfileName: modelName,
+                    baseURL: provider.baseURL,
+                    apiStyle: apiStyle,
+                    apiKeyRef: provider.apiKeyRef,
+                    modelName: modelName,
+                    temperature: try parseOptionalDouble(modelTemperature, label: String(localized: "Temperature", bundle: bundle)),
+                    topP: try parseOptionalDouble(modelTopP, label: String(localized: "Top-P", bundle: bundle)),
+                    maxTokens: try parseOptionalInt(modelMaxTokens, label: String(localized: "Max tokens", bundle: bundle)),
+                    thinkingMode: modelThinkingMode,
+                    reasoningEffort: modelReasoningEffort
+                )
+                let outcome = try await TranslationModelKindProbe.detect(
+                    client: TranslationLLMClient(),
+                    route: route,
+                    apiKey: apiKey,
+                    targetLanguage: settings.targetLanguage
+                )
+                modelOutputPreview = outcome.contextualOutput
+
+                let detectedKind: LLMTranslationModelKind
+                switch outcome.result {
+                case .general:
+                    detectedKind = .general
+                    modelStatusMessage = String(localized: "The model translated only the requested paragraph, so it is a general model.", bundle: bundle)
+                case .translationOnly:
+                    detectedKind = .translationOnly
+                    modelStatusMessage = String(localized: "The model translated the whole prompt instead of following it, so it is a translation-only model. Translations will send only the source text.", bundle: bundle)
+                case .inconclusive(let issue):
+                    modelStatusMessage = AppLocalization.format(
+                        "Could not tell the model type: %@. The setting was not changed.",
+                        bundle: bundle,
+                        issue.localizedDescription
+                    )
+                    return
+                }
+                modelTranslationKind = detectedKind
+                if let selectedModel {
+                    translationModelKindStore.setKind(detectedKind, for: selectedModel.id)
+                } else {
+                    modelStatusMessage = (modelStatusMessage ?? "") + " "
+                        + String(localized: "Save the model to keep this type.", bundle: bundle)
+                }
             } catch {
                 modelStatusMessage = AppLocalization.errorMessage(error, bundle: bundle)
                 modelOutputPreview = nil

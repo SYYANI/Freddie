@@ -785,24 +785,30 @@ final class HTMLTranslationPipelineTests: XCTestCase {
     }
 
     @MainActor
-    func testTranslateHTMLRetriesEchoedPromptWithoutNeighborContext() async throws {
+    func testTranslateHTMLSwitchesToPlainPromptWhenTheModelKeepsEchoingTheEnvelope() async throws {
         let environment = try makeEnvironment()
         defer { try? FileManager.default.removeItem(at: environment.rootURL) }
         let sourceHTML = """
         <html><body>
         <p>The first paragraph describes the scribal school and its many surviving exercises.</p>
         <p>The second paragraph explains how the empire shaped the curriculum of future elites.</p>
+        <p>The third paragraph compares the curricula of the two pedagogical spheres of influence.</p>
         </body></html>
         """
         try sourceHTML.write(to: environment.attachment.fileURL, atomically: true, encoding: .utf8)
         let candidates = try HTMLTranslationPipeline.prepareDocument(sourceHTML).candidates
-        XCTAssertEqual(candidates.count, 2)
-        let echoedPrompt = AcademicTranslationPrompt.userPrompt(
-            sourceText: candidates[0].sourceText,
-            context: candidates[0].translationContext(documentTitle: "Pipeline Test", glossary: nil)
-        )
-        let client = MockTranslationLLMClient(responses: [echoedPrompt, "可靠的译文。"])
+        XCTAssertEqual(candidates.count, 3)
+        let echoedPrompts = candidates.prefix(2).map { candidate in
+            AcademicTranslationPrompt.userPrompt(
+                sourceText: candidate.sourceText,
+                context: candidate.translationContext(documentTitle: "Pipeline Test", glossary: nil)
+            )
+        }
+        let client = MockTranslationLLMClient(responses: [
+            echoedPrompts[0], "第一段译文。", echoedPrompts[1], "第二段译文。", "第三段译文。"
+        ])
         let route = makeRoute(modelID: UUID(), providerID: UUID(), modelName: "unstable-model")
+        XCTAssertEqual(HTMLTranslationPipeline.plainPromptRescuesBeforeSwitching, 2)
 
         let outcome = try await HTMLTranslationPipeline(client: client).translateHTML(
             attachment: environment.attachment,
@@ -820,16 +826,99 @@ final class HTMLTranslationPipelineTests: XCTestCase {
 
         XCTAssertEqual(outcome.failedSegments, 0)
         let requests = await client.currentRequests()
-        XCTAssertEqual(requests.count, 3)
-        XCTAssertNotNil(requests[0].context.nextSegment)
-        XCTAssertNil(requests[1].context.nextSegment)
-        XCTAssertNil(requests[1].context.previousSegment)
-        XCTAssertEqual(requests[1].context.documentTitle, "Pipeline Test")
+        // Two segments rescued by the plain prompt, then the third starts with it.
+        XCTAssertEqual(requests.map(\.context.promptStyle), [.contextual, .plain, .contextual, .plain, .plain])
+        XCTAssertEqual(requests.map(\.text), [
+            candidates[0].sourceText, candidates[0].sourceText,
+            candidates[1].sourceText, candidates[1].sourceText,
+            candidates[2].sourceText
+        ])
 
         let translatedHTML = try String(contentsOf: environment.attachment.fileURL, encoding: .utf8)
         XCTAssertFalse(translatedHTML.contains("SOURCE_SEGMENT_TO_TRANSLATE"))
+        XCTAssertTrue(translatedHTML.contains("第三段译文。"))
         let cachedTexts = try environment.modelContext.fetch(FetchDescriptor<TranslationSegment>()).map(\.translatedText)
-        XCTAssertEqual(cachedTexts, ["可靠的译文。", "可靠的译文。"])
+        XCTAssertEqual(Set(cachedTexts), ["第一段译文。", "第二段译文。", "第三段译文。"])
+    }
+
+    @MainActor
+    func testTranslateHTMLKeepsContextualPromptWhenModelKindIsGeneral() async throws {
+        let environment = try makeEnvironment()
+        defer { try? FileManager.default.removeItem(at: environment.rootURL) }
+        let sourceHTML = """
+        <html><body>
+        <p>The first paragraph describes the scribal school and its many surviving exercises.</p>
+        <p>The second paragraph explains how the empire shaped the curriculum of future elites.</p>
+        <p>The third paragraph compares the curricula of the two pedagogical spheres of influence.</p>
+        </body></html>
+        """
+        try sourceHTML.write(to: environment.attachment.fileURL, atomically: true, encoding: .utf8)
+        let candidates = try HTMLTranslationPipeline.prepareDocument(sourceHTML).candidates
+        let echoedPrompts = candidates.prefix(2).map { candidate in
+            AcademicTranslationPrompt.userPrompt(
+                sourceText: candidate.sourceText,
+                context: candidate.translationContext(documentTitle: "Pipeline Test", glossary: nil)
+            )
+        }
+        let client = MockTranslationLLMClient(responses: [
+            echoedPrompts[0], "第一段译文。", echoedPrompts[1], "第二段译文。", "第三段译文。"
+        ])
+        var route = makeRoute(modelID: UUID(), providerID: UUID(), modelName: "unstable-model")
+        route.translationModelKind = .general
+
+        _ = try await HTMLTranslationPipeline(client: client).translateHTML(
+            attachment: environment.attachment,
+            paper: environment.paper,
+            preferences: TranslationPreferencesSnapshot(
+                targetLanguage: "zh-CN",
+                htmlTranslationConcurrency: 1,
+                babelDocQPS: 4,
+                babelDocVersion: "0.5.24"
+            ),
+            route: route,
+            apiKey: "sk-test",
+            modelContext: environment.modelContext
+        )
+
+        let requests = await client.currentRequests()
+        XCTAssertEqual(requests.map(\.context.promptStyle), [.contextual, .plain, .contextual, .plain, .contextual])
+    }
+
+    @MainActor
+    func testTranslateHTMLUsesSlidingWindowInsteadOfBatches() async throws {
+        let environment = try makeEnvironment()
+        defer { try? FileManager.default.removeItem(at: environment.rootURL) }
+        let paragraphs = (1...6).map { index in
+            "<p>Paragraph number \(index) is long enough to be sent for translation.</p>"
+        }
+        let sourceHTML = "<html><body>\(paragraphs.joined())</body></html>"
+        try sourceHTML.write(to: environment.attachment.fileURL, atomically: true, encoding: .utf8)
+        let candidates = try HTMLTranslationPipeline.prepareDocument(sourceHTML).candidates
+        XCTAssertEqual(candidates.count, 6)
+        // The first segment is slow; with batches of two, segments 3–6 would wait for it.
+        let client = DelayedTranslationLLMClient(slowText: candidates[0].sourceText)
+        var completedSegments: [String] = []
+
+        let outcome = try await HTMLTranslationPipeline(client: client).translateHTML(
+            attachment: environment.attachment,
+            paper: environment.paper,
+            preferences: TranslationPreferencesSnapshot(
+                targetLanguage: "zh-CN",
+                htmlTranslationConcurrency: 2,
+                babelDocQPS: 4,
+                babelDocVersion: "0.5.24"
+            ),
+            route: makeRoute(modelID: UUID(), providerID: UUID(), modelName: "paper-model"),
+            apiKey: "sk-test",
+            modelContext: environment.modelContext,
+            onSegmentTranslated: { completedSegments.append($0.segmentID) }
+        )
+
+        XCTAssertEqual(outcome.failedSegments, 0)
+        XCTAssertEqual(completedSegments.count, 6)
+        XCTAssertEqual(completedSegments.last, candidates[0].segmentID)
+        let maximumInFlight = await client.maximumInFlight
+        XCTAssertEqual(maximumInFlight, 2)
     }
 
     @MainActor
@@ -986,6 +1075,30 @@ final class HTMLLayoutNavigationObserver: NSObject, WKNavigationDelegate {
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         loaded.fulfill()
+    }
+}
+
+private actor DelayedTranslationLLMClient: TranslationLLMClientProtocol {
+    let slowText: String
+    private var inFlight = 0
+    private(set) var maximumInFlight = 0
+
+    init(slowText: String) {
+        self.slowText = slowText
+    }
+
+    func translate(
+        _ text: String,
+        targetLanguage _: String,
+        route _: LLMModelRouteSnapshot,
+        apiKey _: String,
+        context _: AcademicTranslationContext
+    ) async throws -> String {
+        inFlight += 1
+        maximumInFlight = max(maximumInFlight, inFlight)
+        defer { inFlight -= 1 }
+        try await Task.sleep(for: text == slowText ? .milliseconds(800) : .milliseconds(20))
+        return "译文：" + text.prefix(16)
     }
 }
 

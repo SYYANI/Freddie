@@ -148,6 +148,8 @@ LLM 配置现已拆成独立 SwiftData 模型：`LLMProviderProfile` 负责 prov
 - 翻译运行中的状态只在阅读器底部的浮动胶囊 `TranslationActivityCapsule` 里显示（与复制链接 toast 同一位置和玻璃样式）：进度以模糊光晕沿胶囊背景推进，右侧圆形玻璃取消按钮在进度前半段融进胶囊端部（必须在光晕的柔边到达连接处之前完全并入，否则光晕会溢出到两者之间的收窄处），结束时在端部显示对勾/叉；工具栏不再放取消按钮；胶囊只显示“翻译中 / 正在取消 / 完成 / 已取消”和计数，具体阶段文案放在 tooltip 里。各翻译流程把结果（`runOutcome`）交给 `endTranslationRun`，在清除 `isWorking` 的同一次更新里切换到结果，不要按状态文案字符串判断成败：完成（包括带警告的完成，PDF 常有少量段落失败）显示“完成”约 2 秒，取消显示“已取消”；警告、LaTeX 完成（那一行有“显示翻译后的 LaTeX 源码”按钮）和错误的文案另外留在顶部状态行，直到用户关闭。
 - HTML 翻译会保护 `math`、`.ltx_Math`、`cite`、`code`，生成 `[PROTECTED_N]` 占位符；改 prompt 或渲染时必须保持占位符可恢复。
 - 模型输出不可信：HTML 与摘要翻译统一走 `TranslationLLMClientProtocol.validatedTranslate`，由 `TranslationOutputValidator` 拦截回显 prompt 分隔标记、原样返回原文、复述相邻上下文和异常超长输出（失败会去掉相邻段上下文后重试）。仍无效的 HTML 段落跳过且不写入 `TranslationSegment`，整篇翻译继续并汇报跳过数；读取缓存时也要过同一校验并清除无效条目。改 prompt 分隔标签时同步 `AcademicTranslationPrompt.envelopeLabels`。
+- 翻译专用模型（HY-MT、NLLB 这类只会翻译、不按指令行事的模型）会把带标签的上下文信封整个翻译出来，每段都被判为 `promptEcho`。模型类型 `LLMTranslationModelKind`（自动 / 翻译专用 / 通用）按模型 profile 存 UserDefaults（`LLMTranslationModelKindStore`，不进 SwiftData），在“模型”页设置，经 `LLMModelRouteSnapshot.translationModelKind` 传给翻译。不按模型名称猜：旁边的“检测”按钮由 `TranslationModelKindProbe` 用完整提示词（标题、前后段）发一次测试翻译，回答是信封回显或异常超长、且纯原文格式随后给出可用译文时判为翻译专用，回答可用时判为通用，其他情况（例如原样返回）不改设置；已保存的模型立即写入结果。翻译专用时 HTML 与摘要翻译用 `AcademicTranslationPromptStyle.plain`：没有系统提示词和信封，只有 HY-MT 官方模板“把下面的文本翻译成…，不要额外解释。”加原文（有术语表时前面加“参考下面的翻译：”）。`validatedTranslation` 的重试规则：信封回显直接换纯原文格式，其他问题先去掉前后段，最后一次总是纯原文格式；“自动”下纯原文格式救回 `HTMLTranslationPipeline.plainPromptRescuesBeforeSwitching`（2）段后，本次运行剩下的段落都直接用纯原文格式。纯原文格式的译文与普通译文共用同一缓存身份。PDF（BabelDOC、LaTeX、扫描页）和划词助手不受影响。
+- HTML 全文翻译是滑动窗口：始终保持 `htmlTranslationConcurrency` 个请求在途，每收到一个结果先补发下一个再写页面；不要改回按批等待，那样一批里最慢的一段会拖住整批。
 - LaTeX 翻译的输出校验在 `../arxivLatex` 的 `PromptingLaTeXTranslator` 内完成：不可用的槽位响应会按单元重试，只有完整结果才写 checkpoint，未完成单元以 `untranslated-unit` / `partially-translated-unit` warning 返回；ReadPaper 只通过 `ReadPaperLaTeXTranslationOutput.incompleteUnitCount` 汇报数量，不要在 host 侧另写一套 LaTeX 回显检测。
 - PDF 翻译进度在阅读器中也优先使用确定型进度条和阶段文案。当前 `BabelDocRunner` 通过受控 Python bridge 订阅 BabelDOC 内部 progress events，把结构化事件以 JSON line 输出给 Swift 侧解析；不要回退成依赖 rich/tqdm 终端文本渲染结果做正则猜测。
 - 增量 PDF 翻译时，BabelDOC 可能只产出当前批次的译文页，阅读器中的 `translatedPDF` 也可能暂时只覆盖前 N 页。改 BabelDOC 参数、译文合并或阅读器展示时，要保留“partial translation”语义：双栏模式允许原文继续翻到后续页，译文侧只在自己的可用范围内 clamp，并继续支持后续批次合并、刷新和续翻。
@@ -240,7 +242,7 @@ xcodebuild -project ReadPaper.xcodeproj -scheme ReadPaper -destination 'platform
 - 阅读器关闭页面 JavaScript 但注入脚本（选区、查找、旁注、区域调整、TeX）照常工作，划选只由高亮绘制、不用网站 `::selection`：`HTMLReaderPageScriptTests`
 - HTML 候选抽取、占位符保护、译文插入：`HTMLTranslationPipelineTests`
 - HTML 区域调整（JS 与 Swift 路径一致性、隐藏/恢复落盘、签名校验、层级与徽标、⇧ 连选、写回顺序与退出前落盘）：`HTMLRegionVisibilityTests`
-- 翻译输出校验（prompt/原文/上下文回显、重试与回退）：`TranslationOutputValidatorTests`
+- 翻译输出校验（prompt/原文/上下文回显、重试与回退、信封回显换纯原文格式、模型类型检测）：`TranslationOutputValidatorTests`；HTML 翻译的滑动窗口与运行中切换纯原文格式：`HTMLTranslationPipelineTests`
 - PDF 无文字层检测（Type3 无映射字体、扫描件、glyph name 判定）：`PDFTextLayerInspectorTests`
 - 扫描版 PDF 翻译（模型适配、图像消息、截断映射、扫描页路由回退、错误映射、转写附件与显示选择、用真实 XeLaTeX 跑通整条路线并产出译文与矫正转写、复用检查点）：`ScannedPDFTranslationServiceTests`；全文索引优先用矫正转写的文字：`PaperFullTextSearchServiceTests`；RebuildPDFKit 本身（与 Python 的对照、XeLaTeX 排版、流水线检查点与失败页回退）在 `../rebuild-pdf` 里 `swift test`，`SampleReplayTests` 用 Python 运行留下的回答离线重放两篇样例（需本地 `.rebuild` 目录，约 1.5 分钟），`ThompsonReplayTests` 从三页真实模型回答重新转写排版，覆盖美分符号、图注后独立换栏和独立字号控制行；这些排版回归不能只用已完成的页面检查点验证，否则会跳过首次转写校验。
 - BabelDOC 安装源、latest 版本解析、uv 安装参数：`BabelDocToolManagerTests`

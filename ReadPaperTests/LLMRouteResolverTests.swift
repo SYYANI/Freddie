@@ -36,13 +36,19 @@ final class LLMRouteResolverTests: XCTestCase {
         try keychainStore.save("sk-test", account: provider.apiKeyRef)
         XCTAssertTrue(try keychainStore.contains(account: provider.apiKeyRef))
         apiStyleStore.setAPIStyle(.responses, for: provider.id)
+        LLMTranslationModelKindStore(userDefaults: defaults).setKind(.translationOnly, for: htmlModel.id)
 
         let resolver = LLMRouteResolver(
             keychainStore: keychainStore,
-            apiStyleStore: apiStyleStore
+            apiStyleStore: apiStyleStore,
+            userDefaults: defaults
         )
         let htmlRoute = try resolver.resolveHTMLRoute(settings: settings, modelContext: modelContext)
         let pdfRoute = try resolver.resolvePDFRoute(settings: settings, modelContext: modelContext)
+        XCTAssertEqual(htmlRoute.snapshot.translationModelKind, .translationOnly)
+        XCTAssertTrue(htmlRoute.snapshot.startsWithPlainTranslationPrompt)
+        XCTAssertEqual(pdfRoute.snapshot.translationModelKind, .automatic)
+        XCTAssertFalse(pdfRoute.snapshot.startsWithPlainTranslationPrompt)
 
         XCTAssertEqual(htmlRoute.snapshot.modelProfileID, htmlModel.id)
         XCTAssertEqual(pdfRoute.snapshot.modelProfileID, pdfModel.id)

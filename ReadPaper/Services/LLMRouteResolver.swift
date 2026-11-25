@@ -40,15 +40,19 @@ enum LLMRouteError: LocalizedError, Equatable {
 struct LLMRouteResolver {
     let keychainStore: KeychainStore
     let apiStyleStore: LLMProviderAPIStyleStore
+    let translationModelKindStore: LLMTranslationModelKindStore
     let userDefaults: UserDefaults
 
     init(
         keychainStore: KeychainStore = KeychainStore(),
         apiStyleStore: LLMProviderAPIStyleStore = LLMProviderAPIStyleStore(),
+        translationModelKindStore: LLMTranslationModelKindStore? = nil,
         userDefaults: UserDefaults = .standard
     ) {
         self.keychainStore = keychainStore
         self.apiStyleStore = apiStyleStore
+        self.translationModelKindStore = translationModelKindStore
+            ?? LLMTranslationModelKindStore(userDefaults: userDefaults)
         self.userDefaults = userDefaults
     }
 
@@ -251,7 +255,8 @@ struct LLMRouteResolver {
             topP: model.topP,
             maxTokens: model.maxTokens,
             thinkingMode: model.thinkingModeValue,
-            reasoningEffort: model.reasoningEffortValue
+            reasoningEffort: model.reasoningEffortValue,
+            translationModelKind: translationModelKindStore.kind(for: model.id)
         )
     }
 }

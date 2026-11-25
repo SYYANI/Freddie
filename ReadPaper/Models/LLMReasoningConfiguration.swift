@@ -82,3 +82,48 @@ struct LLMProviderAPIStyleStore {
         Self.keyPrefix + providerID.uuidString.lowercased()
     }
 }
+
+/// Whether a model follows instructions or only translates. Translation-only
+/// models (HY-MT, NLLB, …) translate the whole prompt envelope, titles and
+/// neighboring paragraphs included, so they get the plain prompt instead.
+enum LLMTranslationModelKind: String, CaseIterable, Sendable {
+    /// Starts with the full prompt and switches to the plain prompt during a run
+    /// once the model keeps repeating the envelope. "Detect" in the model settings
+    /// replaces it with one of the explicit kinds.
+    case automatic = "auto"
+    case translationOnly = "translation-only"
+    case general
+
+    var usesPlainPrompt: Bool {
+        self == .translationOnly
+    }
+}
+
+/// Stored in UserDefaults per model profile, like the provider API style, so the
+/// SwiftData schema stays unchanged.
+struct LLMTranslationModelKindStore {
+    static let keyPrefix = "ReadPaper.LLM.TranslationModelKind."
+
+    let userDefaults: UserDefaults
+
+    init(userDefaults: UserDefaults = .standard) {
+        self.userDefaults = userDefaults
+    }
+
+    func kind(for modelID: UUID) -> LLMTranslationModelKind {
+        userDefaults.string(forKey: key(for: modelID)).flatMap(LLMTranslationModelKind.init(rawValue:))
+            ?? .automatic
+    }
+
+    func setKind(_ kind: LLMTranslationModelKind, for modelID: UUID) {
+        if kind == .automatic {
+            userDefaults.removeObject(forKey: key(for: modelID))
+        } else {
+            userDefaults.set(kind.rawValue, forKey: key(for: modelID))
+        }
+    }
+
+    private func key(for modelID: UUID) -> String {
+        Self.keyPrefix + modelID.uuidString.lowercased()
+    }
+}

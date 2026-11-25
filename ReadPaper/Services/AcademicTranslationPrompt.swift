@@ -1,24 +1,44 @@
 import Foundation
 
+/// How a translation request is worded.
+enum AcademicTranslationPromptStyle: Equatable, Sendable {
+    /// System prompt plus the labelled envelope with titles and neighboring segments.
+    case contextual
+    /// Only the source text after a one-line instruction, for translation-only models
+    /// (HY-MT, NLLB, …) that translate the whole envelope instead of following it.
+    case plain
+}
+
 struct AcademicTranslationContext: Equatable, Sendable {
     var documentTitle: String?
     var sectionTitle: String?
     var previousSegment: String?
     var nextSegment: String?
     var glossary: String?
+    var promptStyle: AcademicTranslationPromptStyle
 
     init(
         documentTitle: String? = nil,
         sectionTitle: String? = nil,
         previousSegment: String? = nil,
         nextSegment: String? = nil,
-        glossary: String? = nil
+        glossary: String? = nil,
+        promptStyle: AcademicTranslationPromptStyle = .contextual
     ) {
         self.documentTitle = Self.nonempty(documentTitle)
         self.sectionTitle = Self.nonempty(sectionTitle)
         self.previousSegment = Self.nonempty(previousSegment)
         self.nextSegment = Self.nonempty(nextSegment)
         self.glossary = Self.nonempty(glossary)
+        self.promptStyle = promptStyle
+    }
+
+    /// The same context sent as a plain prompt. Titles and neighbors stay so the
+    /// output is still validated against them; only the glossary is sent.
+    var asPlainPrompt: AcademicTranslationContext {
+        var context = self
+        context.promptStyle = .plain
+        return context
     }
 
     private static func nonempty(_ value: String?) -> String? {
@@ -76,6 +96,27 @@ enum AcademicTranslationPrompt {
         append(context.glossary, label: "OPTIONAL_GLOSSARY", to: &sections)
         append(sourceText, label: "SOURCE_SEGMENT_TO_TRANSLATE", to: &sections)
         return sections.joined(separator: "\n\n")
+    }
+
+    /// The whole request for `.plain`: HY-MT's published template, which other
+    /// translation-only models also follow. No system prompt, no envelope labels,
+    /// so there is nothing for the model to translate besides the source.
+    static func plainPrompt(sourceText: String, targetLanguage: String, glossary: String?) -> String {
+        let glossary = glossary?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if let chineseName = chineseTargetName(for: targetLanguage) {
+            let reference = glossary.isEmpty ? "" : "参考下面的翻译：\n\(glossary)\n\n"
+            return "\(reference)把下面的文本翻译成\(chineseName)，不要额外解释。\n\n\(sourceText)"
+        }
+        let name = Locale(identifier: "en_US").localizedString(forIdentifier: targetLanguage) ?? targetLanguage
+        let reference = glossary.isEmpty ? "" : "Refer to the following translations:\n\(glossary)\n\n"
+        return "\(reference)Translate the following segment into \(name), without additional explanation.\n\n\(sourceText)"
+    }
+
+    private static func chineseTargetName(for targetLanguage: String) -> String? {
+        let code = targetLanguage.lowercased().replacingOccurrences(of: "_", with: "-")
+        guard code == "zh" || code.hasPrefix("zh-") else { return nil }
+        let traditional = ["hant", "tw", "hk", "mo"].contains { code.split(separator: "-").contains(Substring($0)) }
+        return traditional ? "繁体中文" : "简体中文"
     }
 
     private static func append(_ value: String?, label: String, to sections: inout [String]) {

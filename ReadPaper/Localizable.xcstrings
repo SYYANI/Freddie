@@ -1058,6 +1058,16 @@
         }
       }
     },
+    "Automatic" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自动"
+          }
+        }
+      }
+    },
     "Automatic (%@)" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2389,6 +2399,17 @@
         }
       }
     },
+    "Could not tell the model type: %@. The setting was not changed." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法判断模型类型：%@。设置未更改。"
+          }
+        }
+      }
+    },
     "Create" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2723,6 +2744,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "已删除的写作稿及其图片会保留在这台 iPad 上，直到你恢复稿件或移除应用。"
+          }
+        }
+      }
+    },
+    "Detect" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "检测"
+          }
+        }
+      }
+    },
+    "Detecting..." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在检测…"
           }
         }
       }
@@ -3911,6 +3954,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "通用"
+          }
+        }
+      }
+    },
+    "General model" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通用模型"
           }
         }
       }
@@ -5639,6 +5692,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "模型测试通过，耗时 %1$d ms。"
+          }
+        }
+      }
+    },
+    "Model type" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "模型类型"
           }
         }
       }
@@ -8011,6 +8075,17 @@
         }
       }
     },
+    "Save the model to keep this type." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "保存模型后生效。"
+          }
+        }
+      }
+    },
     "Saved to Notes" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -8338,6 +8413,17 @@
         }
       }
     },
+    "Send one test translation to find out whether this model follows instructions." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "发一次测试翻译，看这个模型是否按指令翻译。"
+          }
+        }
+      }
+    },
     "Send Question" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -8345,6 +8431,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "发送提问"
+          }
+        }
+      }
+    },
+    "Sending a test translation..." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在发送测试翻译…"
           }
         }
       }
@@ -9437,6 +9534,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "模型原样返回了未翻译的原文"
+          }
+        }
+      }
+    },
+    "The model translated only the requested paragraph, so it is a general model." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "模型只翻译了要求的那一段，是通用模型。"
+          }
+        }
+      }
+    },
+    "The model translated the whole prompt instead of following it, so it is a translation-only model. Translations will send only the source text." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "模型把整个提示词都翻译了，没有按指令只译那一段，是翻译专用模型。之后翻译只发送原文。"
           }
         }
       }
@@ -10823,6 +10942,27 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "翻译不可用"
+          }
+        }
+      }
+    },
+    "Translation-only model" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "翻译专用模型"
+          }
+        }
+      }
+    },
+    "Translation-only models such as HY-MT or NLLB translate everything they receive instead of following instructions. For them, web page and abstract translation send only the text to translate, without the system prompt, titles or neighboring paragraphs. Detect sends one test translation with the full prompt and sets the type from the answer. Automatic starts with the full prompt and switches during a translation when the model keeps repeating it. PDF translation is not affected." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "HY-MT、NLLB 这类翻译专用模型会把收到的内容全部翻译出来，而不是按指令只译其中一段。对这类模型，网页和摘要翻译只发送要翻译的原文，不带系统提示词、标题和前后段落。“检测”会用完整提示词发一次测试翻译，按回答设置类型。“自动”先用完整提示词，翻译中模型反复复述提示词时再切换。PDF 翻译不受影响。"
           }
         }
       }
