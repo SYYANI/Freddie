@@ -69,16 +69,15 @@ enum HTMLReadingFocus {
         const style = document.createElement('style');
         style.textContent = `
             #rp-echo-layer { position: absolute; left: 0; top: 0; width: 0; height: 0; z-index: 2147482000; pointer-events: none; }
-            .rp-echo-mark { position: absolute; width: 18px; height: 18px; margin: 0; padding: 0; border: 0;
-                background: transparent; cursor: pointer; pointer-events: auto; opacity: 0.7;
+            #rp-echo-layer .rp-echo-mark { all: initial; position: absolute; display: block; box-sizing: border-box;
+                width: 18px; height: 18px; margin: 0; padding: 0; border: 0;
+                background: center / 18px 18px no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 18 18'%3E%3Ccircle cx='9' cy='9' r='3' fill='rgb(10,132,255)'/%3E%3Ccircle cx='9' cy='9' r='6.5' fill='none' stroke='rgba(10,132,255,0.45)' stroke-width='1'/%3E%3C/svg%3E");
+                cursor: pointer; pointer-events: auto; opacity: 0.7;
                 transition: opacity .18s ease, transform .18s ease; -webkit-user-select: none; user-select: none; }
-            .rp-echo-mark::before { content: ''; position: absolute; left: 6px; top: 6px; width: 6px; height: 6px;
-                border-radius: 50%; background: rgb(10, 132, 255); }
-            .rp-echo-mark::after { content: ''; position: absolute; left: 2px; top: 2px; width: 12px; height: 12px;
-                border-radius: 50%; border: 1px solid rgba(10, 132, 255, 0.45); }
-            .rp-echo-mark:hover { opacity: 1; transform: scale(1.18); }
-            .rp-echo-mark[data-seen="true"] { opacity: 0.3; }
-            .rp-echo-mark[data-seen="true"]:hover { opacity: 0.8; }
+            #rp-echo-layer .rp-echo-mark::before, #rp-echo-layer .rp-echo-mark::after { content: none; display: none; }
+            #rp-echo-layer .rp-echo-mark:hover { opacity: 1; transform: scale(1.18); }
+            #rp-echo-layer .rp-echo-mark[data-seen="true"] { opacity: 0.3; }
+            #rp-echo-layer .rp-echo-mark[data-seen="true"]:hover { opacity: 0.8; }
             @media print { #rp-echo-layer { display: none; } }
         `;
         let layer = null, marks = [];
@@ -102,8 +101,11 @@ enum HTMLReadingFocus {
             if (left < 2) {
                 left = rect.right + 8 + 18 <= document.documentElement.clientWidth ? rect.right + 8 : rect.left + 2;
             }
-            node.style.top = top + 'px';
-            node.style.left = (left + window.scrollX) + 'px';
+            // Whole device pixels, so the thin ring is drawn crisp and even around the dot.
+            const scale = window.devicePixelRatio || 1;
+            const snap = value => Math.round(value * scale) / scale;
+            node.style.top = snap(top) + 'px';
+            node.style.left = snap(left + window.scrollX) + 'px';
         };
         const layout = () => {
             for (const mark of marks) {

@@ -1,86 +1,6 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
-    "Local" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "本地"
-          }
-        }
-      }
-    },
-    "Model" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "模型"
-          }
-        }
-      }
-    },
-    "Local Model" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "本地模型"
-          }
-        }
-      }
-    },
-    "Models on this server" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "此服务上的模型"
-          }
-        }
-      }
-    },
-    "The server is running but lists no models." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "服务正在运行，但没有列出任何模型。"
-          }
-        }
-      }
-    },
-    "Could not list models: %@" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "无法列出模型：%@"
-          }
-        }
-      }
-    },
-    "The server did not list its models (HTTP %d)." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "服务没有返回模型列表（HTTP %d）。"
-          }
-        }
-      }
-    },
-    "No API key needed. Works with OpenAI-compatible servers on this Mac or your network, such as oMLX, LM Studio, Ollama, llama.cpp and vLLM." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "无需 API 密钥。适用于本机或局域网内兼容 OpenAI 的服务，例如 oMLX、LM Studio、Ollama、llama.cpp 和 vLLM。"
-          }
-        }
-      }
-    },
     " (part %d/%d)" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2414,6 +2334,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "无法为已保存的 API 密钥创建访问控制。"
+          }
+        }
+      }
+    },
+    "Could not list models: %@" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法列出模型：%@"
           }
         }
       }
@@ -5322,6 +5253,27 @@
         }
       }
     },
+    "Local" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "本地"
+          }
+        }
+      }
+    },
+    "Local Model" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "本地模型"
+          }
+        }
+      }
+    },
     "Local PDF" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -5570,6 +5522,17 @@
         }
       }
     },
+    "Model" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "模型"
+          }
+        }
+      }
+    },
     "Model deleted." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -5687,6 +5650,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "模型"
+          }
+        }
+      }
+    },
+    "Models on this server" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此服务上的模型"
           }
         }
       }
@@ -5910,6 +5884,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Provider “%1$@” 没有保存 API key。"
+          }
+        }
+      }
+    },
+    "No API key needed. Works with OpenAI-compatible servers on this Mac or your network, such as oMLX, LM Studio, Ollama, llama.cpp and vLLM." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无需 API 密钥。适用于本机或局域网内兼容 OpenAI 的服务，例如 oMLX、LM Studio、Ollama、llama.cpp 和 vLLM。"
           }
         }
       }
@@ -9678,6 +9663,16 @@
         }
       }
     },
+    "The server did not list its models (HTTP %d)." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "服务没有返回模型列表（HTTP %d）。"
+          }
+        }
+      }
+    },
     "The server history has changed. Review it before continuing sync." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -9691,6 +9686,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "服务器历史已变化。请先核对，再继续同步。"
+          }
+        }
+      }
+    },
+    "The server is running but lists no models." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "服务正在运行，但没有列出任何模型。"
           }
         }
       }
