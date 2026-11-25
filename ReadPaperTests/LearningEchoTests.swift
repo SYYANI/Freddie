@@ -1,3 +1,5 @@
+import SwiftData
+import SwiftUI
 import XCTest
 @testable import ReadPaper
 
@@ -417,5 +419,53 @@ final class LearningEchoTests: XCTestCase {
         await model.dismiss(echo, context: LearningEchoModel.readingContext(collapse))
         XCTAssertNil(model.fan, "Dismissing its last card closes it")
         XCTAssertEqual(model.reading?.placements, [:])
+    }
+
+    func testTheFanPopoverOpensBesideTheMark() async throws {
+        let model = makeModel(events: library, root: try temporaryRoot())
+        let focus = ReadingFocus(
+            paperID: collapse, attachmentID: UUID(), pageIndex: 1,
+            text: collapseBlocks.map(\.text).joined(separator: "\n"), blocks: collapseBlocks
+        )
+        model.reportReading(focus)
+        await waitUntil { model.reading?.echoes.isEmpty == false }
+
+        let layer = EchoFanLayer(model: model, currentPaperID: collapse, onOpenCitation: { _, _ in })
+            .modelContainer(for: Paper.self, inMemory: true)
+        let window = NSWindow(
+            contentRect: CGRect(x: 200, y: 200, width: 800, height: 700),
+            styleMask: [.titled], backing: .buffered, defer: false
+        )
+        window.isReleasedWhenClosed = false
+        window.contentView = NSHostingView(rootView: layer)
+        window.makeKeyAndOrderFront(nil)
+        addTeardownBlock { @MainActor in
+            model.closeFan()
+            window.close()
+        }
+
+        // Far from the top left, where an anchor that is only drawn elsewhere would sit.
+        let mark = CGRect(x: 250, y: 480, width: 18, height: 18)
+        model.openFan(paperID: collapse, blockID: "collapse", rect: mark)
+        XCTAssertNotNil(model.fan)
+
+        func popoverWindow() -> NSWindow? {
+            NSApp.windows.first { $0 !== window && $0.isVisible && String(describing: type(of: $0)).contains("Popover") }
+        }
+        await waitUntil { popoverWindow() != nil }
+        let popover = try XCTUnwrap(popoverWindow())
+
+        let content = try XCTUnwrap(window.contentView)
+        let markInWindow = content.convert(
+            CGRect(x: mark.minX, y: content.isFlipped ? mark.minY : content.bounds.height - mark.maxY, width: mark.width, height: mark.height),
+            to: nil
+        )
+        let markOnScreen = window.convertToScreen(markInWindow)
+        // Points away from the left edge the mark sits near, so it opens to the right.
+        XCTAssertEqual(popover.frame.minX, markOnScreen.maxX, accuracy: 30, "Starts at the mark's right side")
+        XCTAssertTrue(
+            popover.frame.minY < markOnScreen.midY && markOnScreen.midY < popover.frame.maxY,
+            "Spans the mark's height: popover \(popover.frame), mark \(markOnScreen)"
+        )
     }
 }

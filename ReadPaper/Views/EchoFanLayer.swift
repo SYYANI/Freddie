@@ -16,7 +16,6 @@ struct EchoFanLayer: View {
             if let fan = model.fan, fan.paperID == currentPaperID {
                 Color.clear
                     .frame(width: max(fan.rect.width, 1), height: max(fan.rect.height, 1))
-                    .offset(x: fan.rect.minX, y: fan.rect.minY)
                     // Only an anchor: clicks reach the reader underneath.
                     .allowsHitTesting(false)
                     .popover(
@@ -35,6 +34,10 @@ struct EchoFanLayer: View {
                             onQuoted: onQuoted
                         )
                     }
+                    // A popover attaches to its view's layout frame: `offset` would only move
+                    // the drawing and leave it at the top left, and `position` before
+                    // `popover` would attach it to the whole reader.
+                    .position(x: fan.rect.midX, y: fan.rect.midY)
             }
         }
     }
