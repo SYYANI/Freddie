@@ -94,11 +94,16 @@ final class LLMProviderValidationUseCaseTests: XCTestCase {
             "http://172.20.1.1:1234",
             "http://studio.local:8000/v1",
             "https://llm.localhost",
+            "http://100.64.0.1:8000/v1",
+            "http://100.101.102.103/v1",
+            "http://100.127.255.254/v1",
         ]
         let remote = [
             "https://api.openai.com/v1",
             "https://api.deepseek.com",
             "http://172.32.0.1/v1",
+            "http://100.63.255.255/v1",
+            "http://100.128.0.1/v1",
             "http://8.8.8.8/v1",
             "http://127.0.0.1.example.com/v1",
             "ftp://127.0.0.1/v1",

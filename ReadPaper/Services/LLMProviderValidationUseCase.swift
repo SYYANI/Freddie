@@ -378,6 +378,9 @@ enum LLMLocalEndpoint {
         case 192: return second == 168
         case 172: return (16...31).contains(second)
         case 169: return second == 254
+        // Shared address space (100.64.0.0/10): Tailscale and other overlay or
+        // carrier-grade NAT networks. 100.0–100.63 are public, so they stay remote.
+        case 100: return (64...127).contains(second)
         default: return false
         }
     }
