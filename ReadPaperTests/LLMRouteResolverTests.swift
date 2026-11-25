@@ -271,6 +271,56 @@ final class LLMRouteResolverTests: XCTestCase {
     }
 
     @MainActor
+    func testLocalProviderResolvesWithoutAPIKeyAndPrefersSavedKey() throws {
+        let keychainStore = KeychainStore(
+            service: "LLMRouteResolverTests.\(UUID().uuidString)",
+            accessPolicy: .unprotected
+        )
+        let container = try makeContainer()
+        let modelContext = ModelContext(container)
+
+        let provider = LLMProviderProfile(
+            name: "Local",
+            baseURL: "http://127.0.0.1:18000/v1",
+            apiKeyRef: "local-ref-\(UUID().uuidString)",
+            testModel: "Inkling-2-Mini-oQ2.5e-mtp"
+        )
+        let model = LLMModelProfile(
+            providerID: provider.id,
+            name: "Inkling",
+            modelName: "Inkling-2-Mini-oQ2.5e-mtp"
+        )
+        let settings = AppSettings(
+            selectedHTMLModelProfileID: model.id,
+            selectedPDFModelProfileID: model.id
+        )
+        modelContext.insert(provider)
+        modelContext.insert(model)
+        modelContext.insert(settings)
+        try modelContext.save()
+        defer { try? keychainStore.delete(account: provider.apiKeyRef) }
+
+        let resolver = LLMRouteResolver(keychainStore: keychainStore)
+        let route = try resolver.resolvePDFRoute(settings: settings, modelContext: modelContext)
+        XCTAssertEqual(route.apiKey, LLMLocalEndpoint.placeholderAPIKey)
+        XCTAssertEqual(route.snapshot.modelName, "Inkling-2-Mini-oQ2.5e-mtp")
+        XCTAssertNoThrow(try resolver.resolveSummaryRoute(settings: settings, modelContext: modelContext))
+        XCTAssertTrue(
+            LLMTranslationSetupStatus.hasUsableRoute(
+                settings: settings,
+                modelContext: modelContext,
+                hasStoredAPIKey: { _ in false }
+            )
+        )
+
+        try keychainStore.save("sk-local", account: provider.apiKeyRef)
+        XCTAssertEqual(
+            try resolver.resolveHTMLRoute(settings: settings, modelContext: modelContext).apiKey,
+            "sk-local"
+        )
+    }
+
+    @MainActor
     private func makeContainer() throws -> ModelContainer {
         let schema = Schema([
             AppSettings.self,

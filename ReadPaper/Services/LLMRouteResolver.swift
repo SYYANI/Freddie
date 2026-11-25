@@ -98,9 +98,16 @@ struct LLMRouteResolver {
         }
     }
 
+    /// The saved key, or a placeholder for a local server that has none (see
+    /// `LLMLocalEndpoint`).
     func apiKey(for snapshot: LLMModelRouteSnapshot) throws -> String {
-        let apiKey = try keychainStore.load(account: snapshot.apiKeyRef)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        guard apiKey.isEmpty == false else {
+        let isLocal = LLMLocalEndpoint.isLocal(snapshot.baseURL)
+        // `contains` first so a local provider without a key never touches the vault.
+        if isLocal, try keychainStore.contains(account: snapshot.apiKeyRef) == false {
+            return LLMLocalEndpoint.placeholderAPIKey
+        }
+        let saved = try keychainStore.load(account: snapshot.apiKeyRef)
+        guard let apiKey = LLMLocalEndpoint.effectiveAPIKey(saved, baseURL: snapshot.baseURL) else {
             throw LLMRouteError.missingAPIKey(snapshot.providerName)
         }
         return apiKey
@@ -195,7 +202,9 @@ struct LLMRouteResolver {
             missingSelectionError: missingSelectionError,
             modelContext: modelContext
         )
-        guard try keychainStore.contains(account: snapshot.apiKeyRef) else {
+        guard try LLMLocalEndpoint.isLocal(snapshot.baseURL)
+            || keychainStore.contains(account: snapshot.apiKeyRef)
+        else {
             throw LLMRouteError.missingAPIKey(snapshot.providerName)
         }
         return snapshot

@@ -220,6 +220,12 @@ private struct SettingsForm: View {
     @State private var quickSetupProviderID: UUID?
     @State private var quickSetupAPIKey = ""
     @State private var quickSetupStatusMessage: String?
+    /// The local provider's quick setup edits its address and model instead of a key.
+    @State private var quickSetupBaseURL = ""
+    @State private var quickSetupModelName = ""
+    @State private var quickSetupDetectedModels: [String] = []
+    @State private var quickSetupDetectionMessage: String?
+    @State private var isDetectingQuickSetupModels = false
     @State private var isRunningQuickSetup = false
     @State private var showsQuickSetupForm = false
     @State private var showsTranslationPerformanceOptions = false
@@ -288,8 +294,13 @@ private struct SettingsForm: View {
 
     private var readyProviders: [LLMProviderProfile] {
         sortedProviders.filter { provider in
-            provider.isEnabled && providerIDsWithStoredAPIKeys.contains(provider.id)
+            provider.isEnabled && providerHasUsableAPIKey(provider)
         }
+    }
+
+    /// A saved key, or a local server that needs none (`LLMLocalEndpoint`).
+    private func providerHasUsableAPIKey(_ provider: LLMProviderProfile) -> Bool {
+        providerIDsWithStoredAPIKeys.contains(provider.id) || LLMLocalEndpoint.isLocal(provider.baseURL)
     }
 
     private var readyProviderIDs: Set<UUID> {
@@ -319,6 +330,9 @@ private struct SettingsForm: View {
     private var providerAPIKeyPrompt: String {
         if providerAPIKey.isEmpty, providerHasStoredAPIKey {
             return String(repeating: "•", count: 12)
+        }
+        if LLMLocalEndpoint.isLocal(providerBaseURL) {
+            return String(localized: "Optional for local servers", bundle: bundle)
         }
         return ""
     }
@@ -1152,7 +1166,7 @@ private struct SettingsForm: View {
                 }
                 SettingsFieldRow(
                     String(localized: "API key", bundle: bundle),
-                    help: String(localized: "API keys are protected with Touch ID or your device password. After the first approval, this Freddie installation stays authorized until the app is updated or the key changes. Leaving the API key field blank while editing keeps the saved key.", bundle: bundle)
+                    help: String(localized: "API keys are protected with Touch ID or your device password. After the first approval, this Freddie installation stays authorized until the app is updated or the key changes. Leaving the API key field blank while editing keeps the saved key. Servers on this Mac or your local network, such as http://127.0.0.1:18000/v1, work without a key.", bundle: bundle)
                 ) {
                     SettingsSecureTextField(text: $providerAPIKey, placeholder: providerAPIKeyPrompt)
                 }
@@ -1576,6 +1590,11 @@ private struct SettingsForm: View {
                     Image(systemName: "key.fill")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                } else if LLMLocalEndpoint.isLocal(provider.baseURL) {
+                    Image(systemName: "desktopcomputer")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .help(String(localized: "Local server: no API key needed", bundle: bundle))
                 }
 
                 Image(systemName: provider.isEnabled ? "checkmark.circle.fill" : "slash.circle")
@@ -1598,8 +1617,7 @@ private struct SettingsForm: View {
     }
 
     private func modelListRow(_ model: LLMModelProfile) -> some View {
-        let providerName = providers.first(where: { $0.id == model.providerID })?.name
-            ?? String(localized: "Unknown Provider", bundle: bundle)
+        let providerName = providerDisplayName(for: model)
 
         return VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .center, spacing: 8) {
@@ -1652,8 +1670,71 @@ private struct SettingsForm: View {
                 quickSetupProviderID = newValue
                 quickSetupAPIKey = ""
                 quickSetupStatusMessage = nil
+                if quickSetupDescriptor.isLocal {
+                    loadQuickSetupLocalFields()
+                }
             }
         )
+    }
+
+    private func quickSetupDisplayName(_ descriptor: LLMDefaultProfiles.ProviderDescriptor) -> String {
+        descriptor.isLocal ? String(localized: "Local Model", bundle: bundle) : descriptor.name
+    }
+
+    private var quickSetupCanRun: Bool {
+        if quickSetupDescriptor.isLocal {
+            return quickSetupBaseURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+                && quickSetupModelName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+        }
+        return quickSetupAPIKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+            || quickSetupHasStoredAPIKey
+    }
+
+    /// Starts from the saved local profile (or the built-in default), like `target(for:)`.
+    private func loadQuickSetupLocalFields() {
+        let target = LLMQuickSetup(apiStyleStore: apiStyleStore)
+            .target(for: quickSetupDescriptor, providers: providers, models: models)
+        quickSetupBaseURL = target.baseURL
+        quickSetupModelName = target.modelName
+        quickSetupDetectedModels = []
+        quickSetupDetectionMessage = nil
+    }
+
+    /// Lists the server's models shortly after the address stops changing, and picks
+    /// the first one when the current name is not among them.
+    private func detectQuickSetupModels() async {
+        let baseURL = quickSetupBaseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard baseURL.isEmpty == false else {
+            quickSetupDetectedModels = []
+            quickSetupDetectionMessage = nil
+            return
+        }
+        try? await Task.sleep(for: .milliseconds(500))
+        guard Task.isCancelled == false else { return }
+
+        isDetectingQuickSetupModels = true
+        defer { isDetectingQuickSetupModels = false }
+        do {
+            let modelIDs = try await validator.listModels(baseURL: baseURL)
+            guard Task.isCancelled == false else { return }
+            quickSetupDetectedModels = modelIDs
+            let currentName = quickSetupModelName.trimmingCharacters(in: .whitespacesAndNewlines)
+            if let first = modelIDs.first, modelIDs.contains(currentName) == false {
+                quickSetupModelName = first
+            }
+            // Success shows as the model menu; only problems need words.
+            quickSetupDetectionMessage = modelIDs.isEmpty
+                ? String(localized: "The server is running but lists no models.", bundle: bundle)
+                : nil
+        } catch {
+            guard Task.isCancelled == false else { return }
+            quickSetupDetectedModels = []
+            quickSetupDetectionMessage = AppLocalization.format(
+                "Could not list models: %@",
+                bundle: bundle,
+                AppLocalization.errorMessage(error, bundle: bundle)
+            )
+        }
     }
 
     private var quickSetupHasStoredAPIKey: Bool {
@@ -1719,23 +1800,29 @@ private struct SettingsForm: View {
         return VStack(alignment: .leading, spacing: 10) {
             Picker(String(localized: "Provider", bundle: bundle), selection: quickSetupProviderBinding) {
                 ForEach(LLMDefaultProfiles.providers, id: \.id) { provider in
-                    Text(verbatim: provider.name).tag(provider.id)
+                    Text(verbatim: quickSetupDisplayName(provider)).tag(provider.id)
                 }
             }
             .pickerStyle(.segmented)
             .labelsHidden()
             .disabled(isRunningQuickSetup)
 
-            SettingsFieldRow(String(localized: "API key", bundle: bundle)) {
-                SettingsSecureTextField(
-                    text: $quickSetupAPIKey,
-                    placeholder: quickSetupHasStoredAPIKey && quickSetupAPIKey.isEmpty
-                        ? String(repeating: "•", count: 12)
-                        : ""
-                )
-            }
+            if descriptor.isLocal {
+                quickSetupLocalFields(descriptor)
+            } else {
+                SettingsFieldRow(String(localized: "API key", bundle: bundle)) {
+                    SettingsSecureTextField(
+                        text: $quickSetupAPIKey,
+                        placeholder: quickSetupHasStoredAPIKey && quickSetupAPIKey.isEmpty
+                            ? String(repeating: "•", count: 12)
+                            : ""
+                    )
+                }
 
-            Link(String(localized: "Get an API Key", bundle: bundle), destination: descriptor.apiKeyPageURL)
+                if let apiKeyPageURL = descriptor.apiKeyPageURL {
+                    Link(String(localized: "Get an API Key", bundle: bundle), destination: apiKeyPageURL)
+                }
+            }
 
             HStack(spacing: 10) {
                 Button(
@@ -1746,11 +1833,7 @@ private struct SettingsForm: View {
                     runQuickSetup()
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(
-                    isRunningQuickSetup
-                        || (quickSetupAPIKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                            && !quickSetupHasStoredAPIKey)
-                )
+                .disabled(isRunningQuickSetup || !quickSetupCanRun)
 
                 if isRunningQuickSetup {
                     ProgressView()
@@ -1770,6 +1853,56 @@ private struct SettingsForm: View {
             if let quickSetupStatusMessage {
                 statusLabel(quickSetupStatusMessage)
             }
+        }
+    }
+
+    @ViewBuilder
+    private func quickSetupLocalFields(_ descriptor: LLMDefaultProfiles.ProviderDescriptor) -> some View {
+        SettingsFieldRow(String(localized: "Base URL", bundle: bundle)) {
+            SettingsPlainTextField(text: $quickSetupBaseURL, placeholder: descriptor.baseURL)
+        }
+        .disabled(isRunningQuickSetup)
+
+        SettingsFieldRow(String(localized: "Model", bundle: bundle)) {
+            HStack(spacing: 6) {
+                SettingsPlainTextField(text: $quickSetupModelName, placeholder: descriptor.model.modelName)
+                if quickSetupDetectedModels.isEmpty == false {
+                    Menu {
+                        ForEach(quickSetupDetectedModels, id: \.self) { modelID in
+                            Button(modelID) { quickSetupModelName = modelID }
+                        }
+                    } label: {
+                        Image(systemName: "chevron.up.chevron.down")
+                    }
+                    .menuStyle(.borderlessButton)
+                    .menuIndicator(.hidden)
+                    .fixedSize()
+                    .help(String(localized: "Models on this server", bundle: bundle))
+                }
+                if isDetectingQuickSetupModels {
+                    ProgressView()
+                        .controlSize(.small)
+                }
+            }
+        }
+        .disabled(isRunningQuickSetup)
+
+        VStack(alignment: .leading, spacing: 4) {
+            if let quickSetupDetectionMessage {
+                Label(quickSetupDetectionMessage, systemImage: "exclamationmark.triangle")
+            }
+            Text(String(localized: "No API key needed. Works with OpenAI-compatible servers on this Mac or your network, such as oMLX, LM Studio, Ollama, llama.cpp and vLLM.", bundle: bundle))
+        }
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .fixedSize(horizontal: false, vertical: true)
+        .onAppear {
+            if quickSetupBaseURL.isEmpty {
+                loadQuickSetupLocalFields()
+            }
+        }
+        .task(id: quickSetupBaseURL) {
+            await detectQuickSetupModels()
         }
     }
 
@@ -1951,10 +2084,13 @@ private struct SettingsForm: View {
             apiStyleStore.setAPIStyle(normalizedAPIStyle, for: provider.id)
 
             let trimmedAPIKey = providerAPIKey.trimmingCharacters(in: .whitespacesAndNewlines)
+            let savedAPIKey: Bool
             if trimmedAPIKey.isEmpty == false {
                 try keychainStore.save(trimmedAPIKey, account: provider.apiKeyRef)
+                savedAPIKey = true
             } else {
-                guard try keychainStore.migrateToUserPresenceIfNeeded(account: provider.apiKeyRef) else {
+                savedAPIKey = try keychainStore.migrateToUserPresenceIfNeeded(account: provider.apiKeyRef)
+                guard savedAPIKey || LLMLocalEndpoint.isLocal(normalizedBaseURL) else {
                     throw LLMProviderValidationError.emptyAPIKey
                 }
             }
@@ -1971,8 +2107,12 @@ private struct SettingsForm: View {
 
             selectedProviderID = provider.id
             providerAPIKey = ""
-            providerHasStoredAPIKey = true
-            providerIDsWithStoredAPIKeys.insert(provider.id)
+            providerHasStoredAPIKey = savedAPIKey
+            if savedAPIKey {
+                providerIDsWithStoredAPIKeys.insert(provider.id)
+            } else {
+                providerIDsWithStoredAPIKeys.remove(provider.id)
+            }
             providerStatusMessage = String(localized: "Provider saved.", bundle: bundle)
             providerOutputPreview = nil
             resetProviderWebSearchTestState()
@@ -2039,15 +2179,10 @@ private struct SettingsForm: View {
             defer { isTestingProvider = false }
 
             do {
-                let apiKey: String
-                let trimmedAPIKey = providerAPIKey.trimmingCharacters(in: .whitespacesAndNewlines)
-                if trimmedAPIKey.isEmpty == false {
-                    apiKey = trimmedAPIKey
-                } else if let selectedProvider {
-                    apiKey = try loadStoredAPIKey(ref: selectedProvider.apiKeyRef)
-                } else {
-                    throw LLMProviderValidationError.emptyAPIKey
-                }
+                let apiKey = try apiKeyForTest(
+                    typed: providerAPIKey,
+                    storedRef: selectedProvider?.apiKeyRef
+                )
 
                 let result = try await validator.testConnection(
                     baseURL: providerBaseURL,
@@ -2080,15 +2215,10 @@ private struct SettingsForm: View {
             defer { isTestingProviderWebSearch = false }
 
             do {
-                let apiKey: String
-                let trimmedAPIKey = providerAPIKey.trimmingCharacters(in: .whitespacesAndNewlines)
-                if trimmedAPIKey.isEmpty == false {
-                    apiKey = trimmedAPIKey
-                } else if let selectedProvider {
-                    apiKey = try loadStoredAPIKey(ref: selectedProvider.apiKeyRef)
-                } else {
-                    throw LLMProviderValidationError.emptyAPIKey
-                }
+                let apiKey = try apiKeyForTest(
+                    typed: providerAPIKey,
+                    storedRef: selectedProvider?.apiKeyRef
+                )
 
                 let result = try await validator.testWebSearch(
                     baseURL: providerBaseURL,
@@ -2233,7 +2363,7 @@ private struct SettingsForm: View {
                     throw LLMRouteError.providerNotFound
                 }
 
-                let apiKey = try loadStoredAPIKey(ref: provider.apiKeyRef)
+                let apiKey = try apiKeyForTest(typed: "", storedRef: provider.apiKeyRef)
                 let result = try await validator.testConnection(
                     baseURL: provider.baseURL,
                     apiStyle: apiStyleStore.apiStyle(for: provider.id),
@@ -2278,30 +2408,28 @@ private struct SettingsForm: View {
         let descriptor = quickSetupDescriptor
         let quickSetup = LLMQuickSetup(apiStyleStore: apiStyleStore)
         let target = quickSetup.target(for: descriptor, providers: providers, models: models)
-        let typedAPIKey = quickSetupAPIKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        let typedAPIKey = descriptor.isLocal ? "" : quickSetupAPIKey.trimmingCharacters(in: .whitespacesAndNewlines)
         let storedAPIKeyRef = providers.first { $0.id == descriptor.id }?.apiKeyRef
+        let localBaseURL = descriptor.isLocal ? quickSetupBaseURL : nil
+        let localModelName = descriptor.isLocal ? quickSetupModelName : nil
+        let displayName = quickSetupDisplayName(descriptor)
 
         isRunningQuickSetup = true
-        quickSetupStatusMessage = AppLocalization.format("Testing connection to %@...", bundle: bundle, descriptor.name)
+        quickSetupStatusMessage = AppLocalization.format("Testing connection to %@...", bundle: bundle, displayName)
 
         Task { @MainActor in
             defer { isRunningQuickSetup = false }
 
             do {
-                let apiKey: String
-                if typedAPIKey.isEmpty == false {
-                    apiKey = typedAPIKey
-                } else if let storedAPIKeyRef {
-                    apiKey = try loadStoredAPIKey(ref: storedAPIKeyRef)
-                } else {
-                    throw LLMProviderValidationError.emptyAPIKey
-                }
+                let baseURL = try localBaseURL.map(validator.normalizedBaseURL) ?? target.baseURL
+                let modelName = try localModelName.map(validator.validateModelName) ?? target.modelName
+                let apiKey = try apiKeyForTest(typed: typedAPIKey, storedRef: storedAPIKeyRef)
 
                 let result = try await validator.testConnection(
-                    baseURL: target.baseURL,
+                    baseURL: baseURL,
                     apiStyle: target.apiStyle,
                     apiKey: apiKey,
-                    model: target.modelName,
+                    model: modelName,
                     temperature: target.temperature,
                     topP: target.topP,
                     maxTokens: target.maxTokens,
@@ -2312,6 +2440,8 @@ private struct SettingsForm: View {
                 try quickSetup.apply(
                     descriptor: descriptor,
                     apiKey: typedAPIKey.isEmpty ? nil : typedAPIKey,
+                    baseURL: localBaseURL == nil ? nil : baseURL,
+                    modelName: localModelName == nil ? nil : modelName,
                     testedAt: Date(),
                     settings: settings,
                     modelContext: modelContext,
@@ -2322,7 +2452,9 @@ private struct SettingsForm: View {
 
                 quickSetupAPIKey = ""
                 showsQuickSetupForm = false
-                providerIDsWithStoredAPIKeys.insert(descriptor.id)
+                if descriptor.isLocal == false {
+                    providerIDsWithStoredAPIKeys.insert(descriptor.id)
+                }
                 if selectedProviderID == descriptor.id {
                     applySelectedProvider()
                 }
@@ -2332,7 +2464,7 @@ private struct SettingsForm: View {
                 quickSetupStatusMessage = AppLocalization.format(
                     "Connected to %1$@ in %2$d ms.",
                     bundle: bundle,
-                    descriptor.name,
+                    displayName,
                     result.latencyMs
                 )
             } catch {
@@ -2515,6 +2647,15 @@ private struct SettingsForm: View {
         return value
     }
 
+    /// The typed key, else the saved one, else "" — which the validator accepts only
+    /// for a local server (`LLMLocalEndpoint`).
+    private func apiKeyForTest(typed: String, storedRef: String?) throws -> String {
+        let trimmed = typed.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty == false { return trimmed }
+        guard let storedRef, hasStoredAPIKey(ref: storedRef) else { return "" }
+        return try loadStoredAPIKey(ref: storedRef)
+    }
+
     private func hasStoredAPIKey(ref: String) -> Bool {
         (try? keychainStore.contains(account: ref)) == true
     }
@@ -2527,9 +2668,20 @@ private struct SettingsForm: View {
         )
     }
 
+    /// The built-in local provider is stored as "Local"; show it in the app language
+    /// unless the user renamed it.
+    private func providerDisplayName(for model: LLMModelProfile) -> String {
+        guard let provider = providers.first(where: { $0.id == model.providerID }) else {
+            return String(localized: "Unknown Provider", bundle: bundle)
+        }
+        if provider.id == LLMDefaultProfiles.localProviderID, provider.name == "Local" {
+            return String(localized: "Local", bundle: bundle)
+        }
+        return provider.name
+    }
+
     private func modelDisplayName(_ model: LLMModelProfile) -> String {
-        let providerName = providers.first(where: { $0.id == model.providerID })?.name
-            ?? String(localized: "Unknown Provider", bundle: bundle)
+        let providerName = providerDisplayName(for: model)
         return "\(providerName) / \(model.name)"
     }
 

@@ -1,6 +1,86 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "Local" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "本地"
+          }
+        }
+      }
+    },
+    "Model" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "模型"
+          }
+        }
+      }
+    },
+    "Local Model" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "本地模型"
+          }
+        }
+      }
+    },
+    "Models on this server" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此服务上的模型"
+          }
+        }
+      }
+    },
+    "The server is running but lists no models." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "服务正在运行，但没有列出任何模型。"
+          }
+        }
+      }
+    },
+    "Could not list models: %@" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法列出模型：%@"
+          }
+        }
+      }
+    },
+    "The server did not list its models (HTTP %d)." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "服务没有返回模型列表（HTTP %d）。"
+          }
+        }
+      }
+    },
+    "No API key needed. Works with OpenAI-compatible servers on this Mac or your network, such as oMLX, LM Studio, Ollama, llama.cpp and vLLM." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无需 API 密钥。适用于本机或局域网内兼容 OpenAI 的服务，例如 oMLX、LM Studio、Ollama、llama.cpp 和 vLLM。"
+          }
+        }
+      }
+    },
     " (part %d/%d)" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -752,6 +832,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "API 密钥通过触控 ID 或设备密码保护。首次授权后，当前 Freddie 安装会保持授权，直到 App 更新或 API 密钥发生变化。编辑时将 API 密钥留空会保留已保存的密钥。"
+          }
+        }
+      }
+    },
+    "API keys are protected with Touch ID or your device password. After the first approval, this Freddie installation stays authorized until the app is updated or the key changes. Leaving the API key field blank while editing keeps the saved key. Servers on this Mac or your local network, such as http://127.0.0.1:18000/v1, work without a key." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "API 密钥通过触控 ID 或设备密码保护。首次授权后，当前 Freddie 安装会保持授权，直到 App 更新或 API 密钥发生变化。编辑时将 API 密钥留空会保留已保存的密钥。本机或局域网内的服务（例如 http://127.0.0.1:18000/v1）无需填写密钥。"
           }
         }
       }
@@ -5242,6 +5333,17 @@
         }
       }
     },
+    "Local server: no API key needed" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "本地服务：无需 API 密钥"
+          }
+        }
+      }
+    },
     "Localizing the paper body from %@ for reading and translation." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -6339,6 +6441,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在浏览器中打开网页"
+          }
+        }
+      }
+    },
+    "Optional for local servers" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "本地服务可不填"
           }
         }
       }

@@ -31,9 +31,14 @@ enum LLMDefaultProfiles {
         let baseURL: String
         let testModel: String
         let apiStyle: LLMAPIStyle
-        /// Where the quick setup sends people to create an API key.
-        let apiKeyPageURL: URL
+        /// Where the quick setup sends people to create an API key; nil for a
+        /// local server, which needs none.
+        let apiKeyPageURL: URL?
         let model: ModelDescriptor
+
+        /// A server on this Mac: no API key, and the quick setup lets people edit
+        /// the Base URL and model name instead.
+        var isLocal: Bool { LLMLocalEndpoint.isLocal(baseURL) }
     }
 
     struct ModelDescriptor: Sendable {
@@ -50,6 +55,8 @@ enum LLMDefaultProfiles {
     static let deepSeekModelID = UUID(uuidString: "6D6E7DC3-FF41-456A-B04D-30B943130968")!
     static let anthropicProviderID = UUID(uuidString: "E92E2D96-5184-4522-8FB5-DF1FC53621AC")!
     static let anthropicModelID = UUID(uuidString: "6FCEAC56-F86C-4300-915A-45029950510F")!
+    static let localProviderID = UUID(uuidString: "3F0C5D0E-8B7A-4C1E-9A55-6E2B1D4F7A10")!
+    static let localModelID = UUID(uuidString: "A7D2E4B1-5C39-4F86-8E0B-2C9F61D3B845")!
 
     static let providers: [ProviderDescriptor] = [
         ProviderDescriptor(
@@ -95,6 +102,27 @@ enum LLMDefaultProfiles {
                 modelName: "claude-opus-5-5",
                 // Claude Opus 5.5 rejects disabled thinking; leave thinking
                 // and effort at the model defaults.
+                thinkingMode: nil,
+                reasoningEffort: nil
+            )
+        ),
+        // An OpenAI-compatible server on this Mac (oMLX, LM Studio, Ollama, llama.cpp,
+        // vLLM…). Seeded like the others so it is ready to pick; the quick setup lets
+        // people point it at their own port and model.
+        ProviderDescriptor(
+            id: localProviderID,
+            name: "Local",
+            baseURL: "http://127.0.0.1:18000/v1",
+            testModel: "Inkling-2-Mini-oQ2.5e-mtp",
+            apiStyle: .chatCompletions,
+            apiKeyPageURL: nil,
+            model: ModelDescriptor(
+                id: localModelID,
+                // Shown as "Local / <name>", so the model ID is the clearest name.
+                name: "Inkling-2-Mini-oQ2.5e-mtp",
+                modelName: "Inkling-2-Mini-oQ2.5e-mtp",
+                // Local servers differ in how (and whether) thinking can be turned
+                // off; leave it to the server.
                 thinkingMode: nil,
                 reasoningEffort: nil
             )
@@ -278,7 +306,9 @@ struct LLMDefaultRouteActivator {
               let provider = providers.first(where: { $0.id == model.providerID }),
               provider.isEnabled
         else { return false }
-        return provider.id == newlyReadyProviderID || hasStoredAPIKey(provider.apiKeyRef)
+        return provider.id == newlyReadyProviderID
+            || LLMLocalEndpoint.isLocal(provider.baseURL)
+            || hasStoredAPIKey(provider.apiKeyRef)
     }
 }
 
@@ -329,11 +359,14 @@ struct LLMQuickSetup {
 
     /// Call only after the connection test passed. A nil `apiKey` keeps the
     /// provider's stored key. The key is saved before any model change, so a
-    /// Keychain failure leaves the store untouched.
+    /// Keychain failure leaves the store untouched. `baseURL` and `modelName`
+    /// replace the saved values (the local provider's quick setup edits them).
     @discardableResult
     func apply(
         descriptor: LLMDefaultProfiles.ProviderDescriptor,
         apiKey: String?,
+        baseURL: String? = nil,
+        modelName: String? = nil,
         testedAt: Date,
         settings: AppSettings,
         modelContext: ModelContext,
@@ -372,6 +405,12 @@ struct LLMQuickSetup {
         }
         provider.isEnabled = true
         provider.modifiedAt = testedAt
+        if let baseURL {
+            provider.baseURL = baseURL
+        }
+        if let modelName {
+            provider.testModel = modelName
+        }
 
         let model: LLMModelProfile
         if let existingModel {
@@ -390,6 +429,14 @@ struct LLMQuickSetup {
             modelContext.insert(model)
         }
         model.providerID = providerID
+        if let modelName {
+            // A profile still named after its model follows the new model; a name
+            // the user chose stays.
+            if model.name == model.modelName || model.name == descriptor.model.name {
+                model.name = modelName
+            }
+            model.modelName = modelName
+        }
         model.isEnabled = true
         model.lastTestedAt = testedAt
         model.modifiedAt = testedAt
@@ -438,7 +485,7 @@ enum LLMTranslationSetupStatus {
                   let provider = providers.first(where: { $0.id == model.providerID }),
                   provider.isEnabled
             else { return false }
-            return hasStoredAPIKey(provider.apiKeyRef)
+            return LLMLocalEndpoint.isLocal(provider.baseURL) || hasStoredAPIKey(provider.apiKeyRef)
         }
     }
 }
