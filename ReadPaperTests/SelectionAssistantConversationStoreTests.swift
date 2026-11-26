@@ -55,4 +55,32 @@ final class SelectionAssistantConversationStoreTests: XCTestCase {
         XCTAssertEqual(historyAnchor.quote, "Supporting evidence.")
         XCTAssertEqual(historyAnchor.htmlSelector, source.htmlSelector)
     }
+
+    @MainActor
+    func testDeleteRemovesOnlyThatConversationAndItsHistoryAnchor() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SelectionAssistantConversationStoreTests-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = SelectionAssistantConversationStore(fileStore: PaperFileStore(applicationSupportDirectory: root))
+        let paperID = UUID()
+        let attachmentID = UUID()
+        for (identity, quote) in [("first", "First passage."), ("second", "Second passage.")] {
+            try store.save(SelectionAssistantConversationSnapshot(
+                selectionIdentity: identity,
+                attachmentID: attachmentID,
+                quote: quote,
+                pageIndex: 0,
+                action: .explain,
+                scope: .nearby,
+                turns: [SelectionAssistantConversationTurn(question: "Explain.", answer: "An answer.")]
+            ), paperID: paperID)
+        }
+
+        try store.delete(paperID: paperID, selectionIdentity: "first")
+        try store.delete(paperID: paperID, selectionIdentity: "missing")
+
+        XCTAssertNil(try store.conversation(paperID: paperID, selectionIdentity: "first"))
+        XCTAssertNotNil(try store.conversation(paperID: paperID, selectionIdentity: "second"))
+        XCTAssertEqual(try store.historyAnchors(paperID: paperID).map(\.quote), ["Second passage."])
+    }
 }

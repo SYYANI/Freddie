@@ -90,8 +90,19 @@ struct SelectionAssistantOverlay: View {
     let onDismiss: @MainActor @Sendable () -> Void
     /// Adds the selection to the open writing; `true` adds only a citation (Option-click).
     var quoteInWriting: (@MainActor (NoteSelectionContext, Bool) -> Void)? = nil
+    /// What the reader's learning records already say about the terms in the selection.
+    var recall = LearningRecall()
+    var recallPaperTitles: [UUID: String] = [:]
+    var onOpenRecallEntry: (@MainActor (LearningConcept.Entry) -> Void)? = nil
+    /// Renames a recalled concept in every paper's record; the reader's name sticks.
+    var onRenameRecallConcept: (@MainActor (LearningConcept, String) -> Void)? = nil
+    /// Starts the quick translation and explanation for this selection without a click.
+    var autoRun: SelectionAssistantAutoRun? = nil
+    /// Deletes the saved conversation for this selection (and its history underline).
+    var deleteConversation: (@MainActor (NoteSelectionContext) -> Void)? = nil
 
     @State private var question = ""
+    @State private var isQuickGloss = false
     @State private var isEnteringQuestion = false
     @State private var isWorking = false
     @State private var activeAction: SelectionAssistantAction?
@@ -109,6 +120,11 @@ struct SelectionAssistantOverlay: View {
     @State private var userResultCardSize: CGSize?
     @State private var measuredResultCardSize: CGSize = .zero
     @State private var resizeStartSize: CGSize?
+    @State private var expandedRecallConceptID: String?
+    /// The name being typed while renaming the expanded concept.
+    @State private var recallRenameDraft: String?
+    @FocusState private var isRecallRenameFieldFocused: Bool
+    @State private var isConfirmingDelete = false
     @FocusState private var isQuestionFieldFocused: Bool
     @FocusState private var isFollowUpFieldFocused: Bool
 
@@ -143,6 +159,17 @@ struct SelectionAssistantOverlay: View {
                         )
                 }
 
+                if activeAction == nil, isEnteringQuestion == false, recall.isEmpty == false {
+                    recallArea
+                        .transition(.opacity.combined(with: .move(edge: .bottom)))
+                        .simultaneousGesture(
+                            DragGesture(minimumDistance: 0)
+                                .onChanged { _ in
+                                    onInteractionBegan()
+                                }
+                        )
+                }
+
                 actionCapsule
                     .simultaneousGesture(
                         DragGesture(minimumDistance: 0)
@@ -161,10 +188,21 @@ struct SelectionAssistantOverlay: View {
         }
         .animation(layoutAnimation, value: activeAction)
         .animation(layoutAnimation, value: isEnteringQuestion)
-        .onAppear(perform: restoreInitialConversation)
+        .animation(layoutAnimation, value: recall)
+        .animation(layoutAnimation, value: expandedRecallConceptID)
+        .onAppear {
+            restoreInitialConversation()
+            runAutoRunIfNeeded()
+        }
         .onChange(of: selection.selectionAssistantIdentity) { _, _ in
             resetForNewSelection()
             restoreInitialConversation()
+            // The reset above cancels a run started by the `autoRun` change below when
+            // both arrive in the same update.
+            runAutoRunIfNeeded()
+        }
+        .onChange(of: autoRun) { _, _ in
+            runAutoRunIfNeeded()
         }
         .onChange(of: initialConversation?.modifiedAt) { _, _ in
             restoreInitialConversation()
@@ -172,6 +210,167 @@ struct SelectionAssistantOverlay: View {
         .onDisappear {
             task?.cancel()
         }
+    }
+
+    /// One chip per concept the reader already has a record of; a chip opens what the
+    /// record says, without asking a model.
+    private var recallArea: some View {
+        VStack(spacing: 8) {
+            if let concept = recall.concepts.first(where: { $0.id == expandedRecallConceptID }) {
+                recallCard(concept)
+                    .frame(width: SelectionAssistantLayout.questionFieldWidth + 40, alignment: .leading)
+                    .selectionAssistantMaterial(cornerRadius: 14)
+                    .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .bottom)))
+            }
+            HStack(spacing: 6) {
+                ForEach(recall.concepts) { concept in
+                    let isExpanded = expandedRecallConceptID == concept.id
+                    Button {
+                        expandedRecallConceptID = isExpanded ? nil : concept.id
+                        recallRenameDraft = nil
+                    } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: "text.book.closed")
+                                .foregroundStyle(isExpanded ? Color.accentColor : Color.secondary)
+                            Text(concept.name)
+                                .fontWeight(.medium)
+                                .lineLimit(1)
+                            Text(recallCaption(concept))
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .layoutPriority(1)
+                        }
+                        .font(.system(size: 12))
+                        .padding(.horizontal, 11)
+                        .padding(.vertical, 6)
+                        .contentShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .selectionAssistantMaterial(cornerRadius: 15)
+                    .help(String(localized: "Show what your learning record says about this", bundle: bundle))
+                    .accessibilityLabel(
+                        AppLocalization.format("In your learning record: %@", bundle: bundle, concept.name)
+                    )
+                }
+            }
+        }
+    }
+
+    private func recallCaption(_ concept: LearningConcept) -> String {
+        var parts: [String] = []
+        if concept.lookupCount > 0 {
+            parts.append(AppLocalization.format("looked up %lld×", bundle: bundle, concept.lookupCount))
+        } else {
+            parts.append(String(localized: "in your record", bundle: bundle))
+        }
+        if concept.paperIDs.count > 1 {
+            parts.append(AppLocalization.format("%lld papers", bundle: bundle, concept.paperIDs.count))
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    private func recallCard(_ concept: LearningConcept) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if let draft = recallRenameDraft {
+                recallRenamer(concept, name: draft)
+            } else {
+                HStack(spacing: 7) {
+                    Image(systemName: "text.book.closed")
+                    Text(concept.name)
+                        .fontWeight(.semibold)
+                        .lineLimit(2)
+                    Spacer(minLength: 8)
+                    if onRenameRecallConcept != nil {
+                        Button {
+                            recallRenameDraft = concept.name
+                            isRecallRenameFieldFocused = true
+                        } label: {
+                            Image(systemName: "pencil")
+                        }
+                        .buttonStyle(.plain)
+                        .help(String(localized: "Rename…", bundle: bundle))
+                        .accessibilityLabel(String(localized: "Rename…", bundle: bundle))
+                    }
+                    Button {
+                        expandedRecallConceptID = nil
+                    } label: {
+                        Image(systemName: "xmark")
+                    }
+                    .buttonStyle(.plain)
+                    .help(String(localized: "Close", bundle: bundle))
+                }
+                .foregroundStyle(Color.accentColor)
+            }
+
+            ForEach(Array(concept.entries.prefix(3).enumerated()), id: \.offset) { _, entry in
+                Button {
+                    onOpenRecallEntry?(entry)
+                } label: {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(entry.item.detail ?? entry.item.title)
+                            .lineLimit(5)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Text(recallEntryCaption(entry))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                    .multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(onOpenRecallEntry == nil)
+                .help(String(localized: "Go to where this came from", bundle: bundle))
+            }
+        }
+        .font(.system(size: 13))
+        .lineSpacing(2)
+        .padding(14)
+    }
+
+    private func recallRenamer(_ concept: LearningConcept, name: String) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            TextField(
+                String(localized: "Name", bundle: bundle),
+                text: Binding(get: { recallRenameDraft ?? "" }, set: { recallRenameDraft = $0 })
+            )
+            .textFieldStyle(.plain)
+            .focused($isRecallRenameFieldFocused)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 5)
+            .readPaperFieldWell(isFocused: isRecallRenameFieldFocused)
+            .onSubmit { commitRecallRename(of: concept, to: name) }
+            .onExitCommand { recallRenameDraft = nil }
+            Text("Renames it in every paper. Give it the name of another concept to merge the two.", bundle: bundle)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 8) {
+                Spacer(minLength: 0)
+                Button(String(localized: "Cancel", bundle: bundle)) {
+                    recallRenameDraft = nil
+                }
+                Button(String(localized: "Rename", bundle: bundle)) {
+                    commitRecallRename(of: concept, to: name)
+                }
+                .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+            .controlSize(.small)
+        }
+    }
+
+    private func commitRecallRename(of concept: LearningConcept, to name: String) {
+        let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        recallRenameDraft = nil
+        guard name.isEmpty == false, name != concept.name else { return }
+        onRenameRecallConcept?(concept, name)
+    }
+
+    private func recallEntryCaption(_ entry: LearningConcept.Entry) -> String {
+        let title = recallPaperTitles[entry.paperID] ?? String(localized: "Deleted Paper", bundle: bundle)
+        return [title, entry.item.updatedAt.formatted(date: .abbreviated, time: .omitted)].joined(separator: " · ")
     }
 
     @ViewBuilder
@@ -277,6 +476,28 @@ struct SelectionAssistantOverlay: View {
                     }
                     .buttonStyle(.plain)
                     .help(String(localized: "Copy", bundle: bundle))
+                }
+
+                if deleteConversation != nil, conversation.isEmpty == false, isWorking == false {
+                    Button {
+                        onInteractionBegan()
+                        isConfirmingDelete = true
+                    } label: {
+                        Image(systemName: "trash")
+                    }
+                    .buttonStyle(.plain)
+                    .help(String(localized: "Delete This Conversation", bundle: bundle))
+                    .accessibilityLabel(String(localized: "Delete This Conversation", bundle: bundle))
+                    .confirmationDialog(
+                        String(localized: "Delete this conversation?", bundle: bundle),
+                        isPresented: $isConfirmingDelete
+                    ) {
+                        Button(String(localized: "Delete", bundle: bundle), role: .destructive) {
+                            deleteCurrentConversation()
+                        }
+                    } message: {
+                        Text("The answer and its underline in the paper are removed. This cannot be undone.", bundle: bundle)
+                    }
                 }
 
                 if isWorking {
@@ -457,13 +678,33 @@ struct SelectionAssistantOverlay: View {
         runInitialAction(.ask, question: normalized)
     }
 
-    private func runInitialAction(_ action: SelectionAssistantAction, question: String?) {
+    /// Runs the quick gloss once for the selection it was requested for. A conversation
+    /// already on screen for that selection (restored or in progress) is left alone, so
+    /// selecting the same passage again does not pay for a second answer.
+    private func runAutoRunIfNeeded() {
+        guard let autoRun,
+              autoRun.selectionIdentity == selection.selectionAssistantIdentity,
+              activeAction == nil,
+              isWorking == false else { return }
+        isEnteringQuestion = false
+        runInitialAction(.explain, question: nil, isQuickGloss: true)
+    }
+
+    private func runInitialAction(
+        _ action: SelectionAssistantAction,
+        question: String?,
+        isQuickGloss: Bool = false
+    ) {
         task?.cancel()
+        let instruction = isQuickGloss
+            ? "Translate the selected text and explain it in plain words."
+            : initialInstruction(for: action)
         withAnimation(layoutAnimation) {
+            self.isQuickGloss = isQuickGloss
             activeAction = action
             conversation = []
             completedRequests = []
-            pendingQuestion = question ?? initialInstruction(for: action)
+            pendingQuestion = question ?? instruction
             conversationScrollRequest = .init(turnIndex: 0)
             followUpQuestion = ""
             errorText = nil
@@ -479,7 +720,8 @@ struct SelectionAssistantOverlay: View {
             selection: selection.quote,
             localContext: selection.localContext,
             question: question,
-            scope: .automatic
+            scope: .automatic,
+            isQuickGloss: isQuickGloss
         )
         task = Task { @MainActor in
             do {
@@ -489,7 +731,7 @@ struct SelectionAssistantOverlay: View {
                 guard Task.isCancelled == false else { return }
                 withAnimation(layoutAnimation) {
                     conversation = [SelectionAssistantConversationTurn(
-                        question: pendingQuestion ?? initialInstruction(for: action),
+                        question: pendingQuestion ?? instruction,
                         result: result
                     )]
                     completedRequests = [request]
@@ -573,6 +815,7 @@ struct SelectionAssistantOverlay: View {
         task?.cancel()
         task = nil
         withAnimation(layoutAnimation) {
+            expandedRecallConceptID = nil
             question = ""
             followUpQuestion = ""
             conversation = []
@@ -584,6 +827,7 @@ struct SelectionAssistantOverlay: View {
             isEnteringQuestion = false
             isWorking = false
             activeAction = nil
+            isQuickGloss = false
             errorText = nil
             saveErrorText = nil
             isSavedAsNote = false
@@ -593,6 +837,12 @@ struct SelectionAssistantOverlay: View {
             measuredResultCardSize = .zero
             resizeStartSize = nil
         }
+    }
+
+    private func deleteCurrentConversation() {
+        let selection = selection
+        resetForNewSelection()
+        deleteConversation?(selection)
     }
 
     private func closeResultCard() {
@@ -673,6 +923,7 @@ struct SelectionAssistantOverlay: View {
               initialConversation.turns.isEmpty == false,
               isWorking == false else { return }
         activeAction = initialConversation.action
+        isQuickGloss = false
         conversation = initialConversation.turns
         completedRequests = []
         pendingQuestion = nil
@@ -796,7 +1047,9 @@ struct SelectionAssistantOverlay: View {
         case .translate:
             return String(localized: "Translation", bundle: bundle)
         case .explain:
-            return String(localized: "AI Explanation", bundle: bundle)
+            return isQuickGloss
+                ? String(localized: "Translation & Explanation", bundle: bundle)
+                : String(localized: "AI Explanation", bundle: bundle)
         case .ask:
             return String(localized: "Ask AI", bundle: bundle)
         case nil:
@@ -897,7 +1150,7 @@ struct SelectionAssistantConversationView: View {
                                 }
                             }
                             .id(SelectionAssistantConversationScrollTarget.turn(index))
-                            .measureConversationHeight(.turn(index))
+                            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { recordConversationHeight($0, for: .turn(index)) }
                         }
                     }
 
@@ -906,36 +1159,15 @@ struct SelectionAssistantConversationView: View {
                         .id(SelectionAssistantConversationScrollTarget.bottom)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .measureConversationHeight(.content)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { recordConversationHeight($0, for: .content) }
             }
             // Keep the viewport tied to the measured content height. Streaming
             // still follows the bottom, but a short first answer must not reserve
             // the entire maximum height and leave a large empty card behind.
             .frame(minHeight: 0, idealHeight: conversationViewportHeight, maxHeight: conversationViewportHeight)
             .clipped()
-            .measureConversationHeight(.viewport)
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { recordConversationHeight($0, for: .viewport) }
             .opacity(hasConversationAreaContent ? 1 : 0)
-            .onPreferenceChange(SelectionAssistantConversationHeightPreferenceKey.self) { height in
-                var normalizedHeights = height.mapValues { ceil(max(0, $0)) }
-                // Finalization replaces the streamed Markdown node and can report
-                // a shorter content height after trimming/citation normalization.
-                // Retain the largest content measurement already presented so the
-                // card never collapses at the end of generation.
-                normalizedHeights[.content] = max(
-                    normalizedHeights[.content] ?? 0,
-                    conversationHeights[.content] ?? 0
-                )
-                guard normalizedHeights != conversationHeights else { return }
-
-                // Streaming updates arrive much faster than a layout animation can
-                // finish. Keep geometry bookkeeping out of the surrounding card's
-                // animation transaction so successive tokens cannot make it pulse.
-                var transaction = Transaction()
-                transaction.animation = nil
-                withTransaction(transaction) {
-                    conversationHeights = normalizedHeights
-                }
-            }
             .task(id: conversationScrollUpdate) {
                 let update = conversationScrollUpdate
                 guard let target = update.target else { return }
@@ -968,6 +1200,33 @@ struct SelectionAssistantConversationView: View {
         .onChange(of: partialAnswer.isEmpty) { _, isEmpty in
             guard isEmpty == false else { return }
             streamingAnswerRequestID = conversationScrollRequest?.id
+        }
+    }
+
+    /// Heights come from `onGeometryChange` rather than a preference key: a preference
+    /// read across the scroll view sometimes missed the answer's Markdown growing after
+    /// its asynchronous parse, leaving a restored answer clipped to a sources-only viewport.
+    private func recordConversationHeight(
+        _ height: CGFloat,
+        for element: SelectionAssistantConversationGeometry
+    ) {
+        var normalizedHeight = ceil(max(0, height))
+        if element == .content {
+            // Finalization replaces the streamed Markdown node and can report a shorter
+            // content height after trimming/citation normalization. Retain the largest
+            // content measurement already presented so the card never collapses at the
+            // end of generation.
+            normalizedHeight = max(normalizedHeight, conversationHeights[.content] ?? 0)
+        }
+        guard conversationHeights[element] != normalizedHeight else { return }
+
+        // Streaming updates arrive much faster than a layout animation can finish. Keep
+        // geometry bookkeeping out of the surrounding card's animation transaction so
+        // successive tokens cannot make it pulse.
+        var transaction = Transaction()
+        transaction.animation = nil
+        withTransaction(transaction) {
+            conversationHeights[element] = normalizedHeight
         }
     }
 
@@ -1077,7 +1336,8 @@ struct SelectionAssistantConversationView: View {
         case .currentSelection: return "text.quote"
         case .paperHTML: return "doc.richtext"
         case .paperPDF: return "doc.text"
-        case .userNote: return "note.text"
+        case .userNote:
+            return source.id.hasPrefix(LearningAssistantContext.sourceIDPrefix) ? "text.book.closed" : "note.text"
         case .paperMetadata: return "info.circle"
         case .external: return "network"
         }
@@ -1164,17 +1424,6 @@ private struct SelectionAssistantConversationScrollUpdate: Equatable {
     }
 }
 
-private struct SelectionAssistantConversationHeightPreferenceKey: PreferenceKey {
-    static var defaultValue: [SelectionAssistantConversationGeometry: CGFloat] { [:] }
-
-    static func reduce(
-        value: inout [SelectionAssistantConversationGeometry: CGFloat],
-        nextValue: () -> [SelectionAssistantConversationGeometry: CGFloat]
-    ) {
-        value.merge(nextValue(), uniquingKeysWith: max)
-    }
-}
-
 private struct SelectionAssistantCircleButtonStyle: ButtonStyle {
     @Environment(\.isEnabled) private var isEnabled
 
@@ -1198,17 +1447,6 @@ private extension View {
                 Color.clear.preference(
                     key: SelectionAssistantResultCardSizePreferenceKey.self,
                     value: geometry.size
-                )
-            }
-        }
-    }
-
-    func measureConversationHeight(_ element: SelectionAssistantConversationGeometry) -> some View {
-        background {
-            GeometryReader { geometry in
-                Color.clear.preference(
-                    key: SelectionAssistantConversationHeightPreferenceKey.self,
-                    value: [element: geometry.size.height]
                 )
             }
         }

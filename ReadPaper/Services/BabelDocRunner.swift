@@ -379,6 +379,7 @@ struct BabelDocRunner {
             "--system-prompt", AcademicTranslationPrompt.systemPrompt(
                 targetLanguage: preferences.targetLanguage
             ),
+            "--prompt-style", route.translationModelKind.babelDocPromptStyle.rawValue,
         ]
         if let documentTitle = documentTitle?.trimmingCharacters(in: .whitespacesAndNewlines),
            documentTitle.isEmpty == false {

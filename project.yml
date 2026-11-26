@@ -121,8 +121,8 @@ targets:
         ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS: NO
         SWIFT_VERSION: 6.0
         CODE_SIGN_STYLE: Automatic
-        CURRENT_PROJECT_VERSION: 183
-        MARKETING_VERSION: 1.0.16
+        CURRENT_PROJECT_VERSION: 202
+        MARKETING_VERSION: 1.1.14
       configs:
         Debug:
           ENABLE_TESTABILITY: YES
@@ -149,6 +149,8 @@ targets:
       - path: ReadPaper/Views/LibrarySidebarView.swift
       - path: ReadPaper/Views/InspectorPaneView.swift
       - path: ReadPaper/Views/InspectorSupport.swift
+      - path: ReadPaper/Views/LearningPaneView.swift
+      - path: ReadPaper/Views/LearningEchoesView.swift
       - path: ReadPaper/Views/PaperTheme.swift
       - path: ReadPaper/Views/LiquidGlassStyle.swift
       - path: ReadPaper/Views/ReadPaperSegmentedPicker.swift
@@ -186,13 +188,14 @@ targets:
         PRODUCT_MODULE_NAME: ReadPaperiPad
         DEVELOPMENT_LANGUAGE: en
         INFOPLIST_FILE: ReadPaperiPad/Info.plist
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.books
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         SWIFT_VERSION: 6.0
         ENABLE_TESTABILITY: YES
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: 3VM5RUH8V5
-        CURRENT_PROJECT_VERSION: 183
-        MARKETING_VERSION: 1.0.16
+        CURRENT_PROJECT_VERSION: 202
+        MARKETING_VERSION: 1.1.14
         SUPPORTED_PLATFORMS: iphoneos iphonesimulator
         SUPPORTS_MACCATALYST: NO
         SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD: NO

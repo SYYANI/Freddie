@@ -11,11 +11,16 @@ struct PDFTranslationCoverage {
 }
 
 struct DualPDFPageIndexSync {
+    /// A count of 0 means the translated document's page count is not known yet, such as right
+    /// after a continued translation replaced the file. The page is then left unclamped (the
+    /// reader clamps it to the document it loads): clamping to 0 would send the translated
+    /// pane to the first page, and its page report could pull the original back there too.
     static func translatedPageIndex(
         forOriginalPageIndex originalPageIndex: Int,
         translatedPageCount: Int
     ) -> Int {
-        min(max(0, originalPageIndex), maxTranslatedPage(translatedPageCount))
+        guard translatedPageCount > 0 else { return max(0, originalPageIndex) }
+        return min(max(0, originalPageIndex), maxTranslatedPage(translatedPageCount))
     }
 
     static func originalPageIndex(

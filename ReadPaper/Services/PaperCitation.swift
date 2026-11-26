@@ -121,6 +121,12 @@ struct PaperCitation: Hashable, Sendable {
 
     /// Where the reader should go. `quote` is the full cited text when the link sits
     /// under its block quote; otherwise the prefix kept in the link is used.
+    /// False for a link to the paper as a whole: opening it should leave the reader where
+    /// the paper was last read instead of navigating.
+    var hasDestination: Bool {
+        pageIndex != nil || htmlSelector != nil || quotePrefix != nil
+    }
+
     func navigationRequest(quote: String? = nil) -> NoteNavigationRequest {
         NoteNavigationRequest(
             paperID: paperID,
@@ -152,6 +158,23 @@ struct PaperCitation: Hashable, Sendable {
     /// The empty quote line keeps the citation on its own line wherever the Markdown is rendered.
     static func quoteMarkdown(quote: String, label: String, citation: PaperCitation) -> String {
         "> \(MarkdownEscaping.escapedBlockText(quote))\n>\n> — \(inlineMarkdown(label: label, citation: citation))"
+    }
+
+    /// A concept the reader is about to put in their own words: its name on a line of its
+    /// own, then the passage it was met in, quoted with its citation. Without a quote the
+    /// citation follows the name; without a source there is only the name.
+    static func conceptMarkdown(name: String, quote: String?, source: (label: String, citation: PaperCitation)?) -> String {
+        let name = name
+            .components(separatedBy: .whitespacesAndNewlines)
+            .filter { $0.isEmpty == false }
+            .joined(separator: " ")
+        let heading = "**\(MarkdownEscaping.escapedInlineText(name))**"
+        guard let source else { return heading }
+        let quote = quote?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if quote.isEmpty {
+            return heading + " (" + inlineMarkdown(label: source.label, citation: source.citation) + ")"
+        }
+        return heading + "\n\n" + quoteMarkdown(quote: quote, label: source.label, citation: source.citation)
     }
 
     static func inlineMarkdown(label: String, citation: PaperCitation) -> String {

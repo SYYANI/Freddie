@@ -339,3 +339,96 @@ private final class ConversationFixture {
         }
     }
 }
+
+/// Clicking a history underline restores a saved answer when the overlay appears. The
+/// answer's Markdown grows after an asynchronous parse; the viewport used to miss that
+/// growth about one time in three and stay clipped to the sources below the answer.
+@MainActor
+final class SelectionAssistantRestoredConversationTests: XCTestCase {
+    func testRestoredAnswerIsNotClippedByTheConversationViewport() async throws {
+        let selection = NoteSelectionContext(attachmentID: UUID(), quote: "three things at once", pageIndex: 0)
+        let answer = String(repeating: "架构改动会同时影响下游任务能力、训练与推理成本，以及大规模训练是否保持最优和稳定。", count: 5)
+        let snapshot = SelectionAssistantConversationSnapshot(
+            selectionIdentity: selection.selectionAssistantIdentity,
+            action: .explain,
+            scope: .nearby,
+            turns: [SelectionAssistantConversationTurn(
+                question: "Explain the selected text.",
+                result: SelectionAssistantResult(
+                    answer: answer,
+                    sources: [AssistantSource(id: "s1", kind: .currentSelection, title: "Current passage", excerpt: "x")]
+                )
+            )]
+        )
+        let model = RestoreHarness.Model()
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 900, height: 700),
+            styleMask: [.titled], backing: .buffered, defer: false
+        )
+        window.isReleasedWhenClosed = false
+        window.contentView = NSHostingView(rootView: RestoreHarness(model: model))
+        window.orderFront(nil)
+        defer { window.close() }
+
+        for round in 0..<6 {
+            // Mirrors ReaderPaneView: the saved conversation and the selection arrive together.
+            model.initial = snapshot
+            model.selection = selection
+            let paragraph = try await waitForParagraph(in: window)
+            try await Task.sleep(for: .milliseconds(600))
+            let viewport = try XCTUnwrap(paragraph.enclosingScrollView?.contentView)
+            XCTAssertGreaterThanOrEqual(
+                viewport.bounds.height,
+                paragraph.frame.height,
+                "Round \(round): the restored answer is clipped by the conversation viewport."
+            )
+            model.selection = nil
+            model.initial = nil
+            try await Task.sleep(for: .milliseconds(200))
+        }
+    }
+
+    private func waitForParagraph(in window: NSWindow) async throws -> NSTextView {
+        for _ in 0..<100 {
+            if let paragraph = textViews(in: window.contentView!).first(where: { ($0.textStorage?.length ?? 0) > 0 }),
+               paragraph.frame.height > 20 {
+                return paragraph
+            }
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        throw XCTSkip("The restored answer was never laid out.")
+    }
+
+    private func textViews(in view: NSView) -> [NSTextView] {
+        ((view as? NSTextView).map { [$0] } ?? []) + view.subviews.flatMap(textViews)
+    }
+}
+
+private struct RestoreHarness: View {
+    @MainActor @Observable final class Model {
+        var selection: NoteSelectionContext?
+        var initial: SelectionAssistantConversationSnapshot?
+    }
+
+    let model: Model
+
+    var body: some View {
+        ZStack(alignment: .bottom) {
+            Color.white
+            if let selection = model.selection {
+                SelectionAssistantOverlay(
+                    selection: selection,
+                    progress: nil,
+                    initialConversation: model.initial,
+                    perform: { _, _ in SelectionAssistantResult(answer: "unused") },
+                    saveAsNote: { _, _, _ in UUID() },
+                    onSourceActivated: { _ in },
+                    onConversationChanged: { _ in },
+                    onInteractionBegan: {},
+                    onDismiss: {}
+                )
+            }
+        }
+        .environment(\.localizationBundle, AppLocalization.resolveBundle(for: "en"))
+    }
+}

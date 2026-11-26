@@ -248,11 +248,19 @@ extension PDFPreferredManualScaling {
 }
 
 enum PDFNoteNavigationTextMatcher {
+    /// Matches with collapsed whitespace first, then ignoring it: quotes saved before
+    /// `PDFWordSpacing` lack the spaces PDFKit drops on some PDFs, and newer quotes have
+    /// spaces the page text lacks.
     static func range(of quote: String, in pageText: String) -> NSRange? {
-        let normalizedQuote = normalize(quote).text
+        range(of: quote, in: pageText, keepsSpaces: true)
+            ?? range(of: quote, in: pageText, keepsSpaces: false)
+    }
+
+    private static func range(of quote: String, in pageText: String, keepsSpaces: Bool) -> NSRange? {
+        let normalizedQuote = normalize(quote, keepsSpaces: keepsSpaces).text
         guard normalizedQuote.isEmpty == false else { return nil }
 
-        let normalizedPage = normalize(pageText)
+        let normalizedPage = normalize(pageText, keepsSpaces: keepsSpaces)
         let match = (normalizedPage.text as NSString).range(of: normalizedQuote)
         guard match.location != NSNotFound,
               match.length > 0,
@@ -270,7 +278,7 @@ enum PDFNoteNavigationTextMatcher {
         )
     }
 
-    private static func normalize(_ text: String) -> (text: String, sourceRanges: [NSRange]) {
+    private static func normalize(_ text: String, keepsSpaces: Bool) -> (text: String, sourceRanges: [NSRange]) {
         let source = text as NSString
         var normalized = ""
         var sourceRanges: [NSRange] = []
@@ -282,6 +290,7 @@ enum PDFNoteNavigationTextMatcher {
         ) { substring, substringRange, _, _ in
             guard let substring else { return }
             if substring.rangeOfCharacter(from: .whitespacesAndNewlines) != nil {
+                guard keepsSpaces else { return }
                 if normalized.isEmpty == false, pendingWhitespaceRange == nil {
                     pendingWhitespaceRange = substringRange
                 } else if let currentWhitespaceRange = pendingWhitespaceRange {
@@ -414,7 +423,7 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
         if context.coordinator.lastSelectionResetToken != selectionResetToken {
             context.coordinator.lastSelectionResetToken = selectionResetToken
             view.clearSelection()
-            context.coordinator.publishSelection(nil)
+            context.coordinator.clearSelectionAfterViewUpdate()
         }
         #if os(macOS)
         if let interactiveView = view as? InteractivePDFView {
@@ -428,6 +437,7 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
             interactiveView.onDebugRegionSelected = onDebugRegionSelected
         }
         context.coordinator.attachScrollSync(scrollSync, side: scrollSyncSide, to: view)
+        context.coordinator.attachSelectionAnchor(context.environment.selectionAnchorModel, to: view)
         #else
         if let touchView = view as? TouchPDFView {
             touchView.annotationInteractionMode = annotationSession?.interactionMode ?? .browse
@@ -445,7 +455,7 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
                 view.document = nil
                 context.coordinator.clearLoadedAnnotations()
                 context.coordinator.clearProgrammaticPageRestore()
-                context.coordinator.publishSelection(nil)
+                context.coordinator.clearSelectionAfterViewUpdate()
             }
             context.coordinator.loadedURL = nil
             context.coordinator.loadedPaperID = paperID
@@ -495,7 +505,7 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
                 force: true
             )
             context.coordinator.loadAnnotations(in: view)
-            context.coordinator.publishSelection(nil)
+            context.coordinator.clearSelectionAfterViewUpdate()
             context.coordinator.restoreReadingPosition(
                 restorePosition,
                 in: view,
@@ -517,6 +527,8 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
         )
         context.coordinator.applyCitationMarks(citationMarks, in: view, force: shouldReloadDocument)
         context.coordinator.applyNoteNavigationIfNeeded(noteNavigationRequest, in: view)
+        context.coordinator.readingFocusSink = context.environment.readingFocusSink
+        context.coordinator.observeEchoMarks(in: view)
         context.coordinator.observeOutlineGeometry(in: view)
         context.coordinator.applyFindRequest(findRequest, in: view)
         context.coordinator.applySidenoteAnchors(
@@ -579,6 +591,22 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
         var onNoteSelectionChanged: ((NoteSelectionContext?) -> Void)?
         var onArxivLinkActivated: ((URL) -> Void)?
         var onOutlineLocationChanged: ((Int, Double) -> Void)?
+        /// Where the text on screen is reported for echoes of past reading.
+        var readingFocusSink: ReadingFocusSink?
+        private var readingFocusTask: Task<Void, Never>?
+        private var lastReadingFocusText: String?
+        /// Guessed paragraphs per page of `echoParagraphDocument`, for echo marks.
+        private var echoParagraphs: [Int: [PDFEchoParagraph]] = [:]
+        private weak var echoParagraphDocument: PDFDocument?
+        /// The marks to show, and where they sit on the pages of `echoMarkDocument`.
+        private var echoMarks: [LearningEchoMark] = []
+        private var echoMarkPlacements: [PDFEchoMarkPlacement] = []
+        private weak var echoMarkDocument: PDFDocument?
+        #if os(macOS)
+        /// The views drawing `echoMarkPlacements`, in the same order.
+        private var echoMarkViews: [PDFEchoMarkView] = []
+        private var echoMarkLayoutObservers: [NSObjectProtocol] = []
+        #endif
         private var outlineGeometryObservation: NSKeyValueObservation?
         #if os(macOS)
         private var outlineGeometryNotification: NSObjectProtocol?
@@ -642,6 +670,10 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
         private var isSidenotePositionUpdateScheduled = false
         #if os(macOS)
         private weak var observedSidenoteScrollView: NSScrollView?
+        private weak var selectionAnchor: SelectionAnchorModel?
+        private weak var selectionAnchorScrollView: NSScrollView?
+        private var selectionAnchorGeometryObservers: [NSObjectProtocol] = []
+        private var isSelectionAnchorUpdateScheduled = false
         private(set) weak var scrollSync: DualPDFScrollSync?
         private var scrollSyncSide: DualPDFSelectionSource = .original
         #endif
@@ -999,6 +1031,9 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
                 }
                 interactiveView.onBrowseClick = { [weak self] page, point in
                     guard let self else { return false }
+                    if self.handleEchoMarkClick(on: page, at: point) {
+                        return true
+                    }
                     self.flashSidenote(on: page, at: point)
                     return self.handleSelectionAssistantHistoryClick(on: page, at: point)
                 }
@@ -1051,6 +1086,10 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
         }
 
         func detach() {
+            readingFocusTask?.cancel()
+            readingFocusTask = nil
+            readingFocusSink?.model.stopObservingMarks(owner: self)
+            clearEchoMarks()
             #if os(macOS)
             if let outlineGeometryNotification { NotificationCenter.default.removeObserver(outlineGeometryNotification) }
             outlineGeometryNotification = nil
@@ -1061,6 +1100,9 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
             findTextLoadTask = nil
             #if os(macOS)
             stopObservingSidenoteGeometry()
+            stopObservingSelectionAnchorGeometry()
+            selectionAnchor?.clear(owner: self)
+            selectionAnchor = nil
             if let pdfView {
                 scrollSync?.unregister(pdfView, side: scrollSyncSide)
             }
@@ -1279,6 +1321,73 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
 
         @objc private func handleSidenoteGeometryChanged(_ notification: Notification) {
             scheduleSidenotePositionUpdate()
+        }
+
+        /// Reports where the current selection sits in the view, and keeps reporting while
+        /// the reader scrolls, zooms, or resizes, so a view shown next to the selection
+        /// moves with the text.
+        func attachSelectionAnchor(_ model: SelectionAnchorModel?, to pdfView: PDFView) {
+            if selectionAnchor !== model {
+                selectionAnchor?.clear(owner: self)
+                selectionAnchor = model
+                scheduleSelectionAnchorUpdate()
+            }
+            guard model != nil,
+                  let scrollView = pdfView.subviews.lazy.compactMap({ $0 as? NSScrollView }).first else {
+                stopObservingSelectionAnchorGeometry()
+                return
+            }
+            guard selectionAnchorScrollView !== scrollView else { return }
+            stopObservingSelectionAnchorGeometry()
+            selectionAnchorScrollView = scrollView
+            scrollView.contentView.postsBoundsChangedNotifications = true
+            // Block observers, so removing the sidenote observers registered for the same
+            // notifications on `self` leaves these in place.
+            let center = NotificationCenter.default
+            let handler: @Sendable (Notification) -> Void = { [weak self] _ in
+                MainActor.assumeIsolated {
+                    self?.scheduleSelectionAnchorUpdate()
+                }
+            }
+            selectionAnchorGeometryObservers = [
+                center.addObserver(forName: NSView.boundsDidChangeNotification, object: scrollView.contentView, queue: nil, using: handler),
+                center.addObserver(forName: NSView.frameDidChangeNotification, object: scrollView.contentView, queue: nil, using: handler),
+                center.addObserver(forName: Notification.Name.PDFViewScaleChanged, object: pdfView, queue: nil, using: handler)
+            ]
+        }
+
+        private func stopObservingSelectionAnchorGeometry() {
+            for observer in selectionAnchorGeometryObservers {
+                NotificationCenter.default.removeObserver(observer)
+            }
+            selectionAnchorGeometryObservers = []
+            selectionAnchorScrollView = nil
+        }
+
+        private func scheduleSelectionAnchorUpdate() {
+            guard selectionAnchor != nil, isSelectionAnchorUpdateScheduled == false else { return }
+            isSelectionAnchorUpdateScheduled = true
+            // After the current scroll event or view update, before the next frame.
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.isSelectionAnchorUpdateScheduled = false
+                self.updateSelectionAnchor()
+            }
+        }
+
+        func updateSelectionAnchor() {
+            guard let selectionAnchor else { return }
+            guard let pdfView, let selection = pdfView.currentSelection else {
+                selectionAnchor.clear(owner: self)
+                return
+            }
+            var bounds = CGRect.null
+            for page in selection.pages {
+                let pageBounds = selection.bounds(for: page)
+                guard pageBounds.isNull == false, pageBounds.isEmpty == false else { continue }
+                bounds = bounds.union(pdfView.convert(pageBounds, from: page))
+            }
+            selectionAnchor.update(bounds.intersection(pdfView.bounds), in: pdfView, owner: self)
         }
         #endif
 
@@ -1816,7 +1925,7 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
                     .intersection(page.bounds(for: .cropBox))
                     .standardized
                 guard bounds.width >= 1, bounds.height >= 1 else { return nil }
-                let quote = line.string?
+                let quote = PDFWordSpacing.text(of: line)?
                     .components(separatedBy: .whitespacesAndNewlines)
                     .filter { $0.isEmpty == false }
                     .joined(separator: " ")
@@ -2194,7 +2303,7 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
         }
 
         func observeOutlineGeometry(in view: PDFView) {
-            guard onOutlineLocationChanged != nil else { return }
+            guard onOutlineLocationChanged != nil || readingFocusSink != nil else { return }
             func findScroll(_ view: PlatformOutlineView) -> PlatformOutlineScrollView? {
                 if let scroll = view as? PlatformOutlineScrollView { return scroll }
                 return view.subviews.lazy.compactMap { findScroll($0) }.first
@@ -2246,8 +2355,172 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
                 self.isPageIndexUpdateScheduled = false
                 self.updateCurrentPageIndexIfNeeded()
                 self.publishOutlineLocation()
+                self.scheduleReadingFocusReport()
             }
         }
+
+        /// Reports the text on screen once scrolling has settled.
+        private func scheduleReadingFocusReport() {
+            guard readingFocusSink != nil else { return }
+            readingFocusTask?.cancel()
+            readingFocusTask = Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .milliseconds(450))
+                guard Task.isCancelled == false else { return }
+                self?.reportReadingFocus()
+            }
+        }
+
+        private func reportReadingFocus() {
+            guard let sink = readingFocusSink, let view = pdfView, let document = view.document else { return }
+            #if os(macOS)
+            let y = view.isFlipped ? view.bounds.minY + 100 : view.bounds.maxY - 100
+            #else
+            let y = view.bounds.minY + 100
+            #endif
+            let currentPage = view.page(for: CGPoint(x: view.bounds.midX, y: y), nearest: true)
+            let pageIndex = currentPage.map { document.index(for: $0) }.flatMap { $0 == NSNotFound ? nil : $0 }
+            // Whole paragraphs that are at least partly on screen.
+            var blocks: [ReadingBlock] = []
+            var length = 0
+            visiblePages: for page in view.visiblePages {
+                let index = document.index(for: page)
+                guard index != NSNotFound else { continue }
+                let visible = view.convert(view.bounds, to: page).intersection(page.bounds(for: .cropBox))
+                guard visible.isNull == false, visible.isEmpty == false else { continue }
+                for paragraph in echoParagraphs(onPageAt: index, in: document) where paragraph.bounds.intersects(visible) {
+                    blocks.append(ReadingBlock(id: paragraph.id, text: paragraph.text))
+                    length += paragraph.text.count + 1
+                    if length >= HTMLReadingFocus.textLimit { break visiblePages }
+                }
+            }
+            let text = String(blocks.map(\.text).joined(separator: "\n").prefix(HTMLReadingFocus.textLimit))
+            guard text != lastReadingFocusText else { return }
+            lastReadingFocusText = text
+            sink.report(attachmentID: attachmentID, pageIndex: pageIndex, text: text, blocks: blocks)
+        }
+
+        private func echoParagraphs(onPageAt index: Int, in document: PDFDocument) -> [PDFEchoParagraph] {
+            if echoParagraphDocument !== document {
+                echoParagraphDocument = document
+                echoParagraphs = [:]
+            }
+            if let cached = echoParagraphs[index] { return cached }
+            guard let page = document.page(at: index) else { return [] }
+            let paragraphs = PDFEchoParagraphs.paragraphs(on: page, pageIndex: index)
+            echoParagraphs[index] = paragraphs
+            return paragraphs
+        }
+
+        // MARK: Echo marks
+
+        /// Follows the paragraphs to mark for this attachment; nothing is marked without a
+        /// sink (tests, translations).
+        func observeEchoMarks(in view: PDFView) {
+            guard let readingFocusSink else {
+                if echoMarks.isEmpty == false {
+                    echoMarks = []
+                    clearEchoMarks()
+                }
+                return
+            }
+            readingFocusSink.observeMarks(owner: self, attachmentID: attachmentID) { [weak self, weak view] marks in
+                guard let self, marks != self.echoMarks else { return }
+                self.echoMarks = marks
+                if let view { self.renderEchoMarks(in: view) }
+            }
+            // A reloaded document has new pages: draw the marks on them again.
+            if echoMarks.isEmpty == false, echoMarkDocument !== view.document {
+                renderEchoMarks(in: view)
+            }
+        }
+
+        private func renderEchoMarks(in view: PDFView) {
+            clearEchoMarks()
+            guard let document = view.document else { return }
+            echoMarkDocument = document
+            for mark in echoMarks {
+                guard let pageIndex = PDFEchoParagraphs.pageIndex(of: mark.blockID),
+                      let page = document.page(at: pageIndex),
+                      let paragraph = echoParagraphs(onPageAt: pageIndex, in: document).first(where: { $0.id == mark.blockID }) else {
+                    continue
+                }
+                echoMarkPlacements.append(PDFEchoMarkPlacement(
+                    page: page,
+                    bounds: PDFEchoParagraphs.markRect(for: paragraph, pageBounds: page.bounds(for: .cropBox)),
+                    blockID: mark.blockID,
+                    isSeen: mark.isSeen
+                ))
+            }
+            #if os(macOS)
+            guard echoMarkPlacements.isEmpty == false else { return }
+            echoMarkViews = echoMarkPlacements.map { PDFEchoMarkView(blockID: $0.blockID, isSeen: $0.isSeen) }
+            layoutEchoMarkViews(in: view)
+            // Page positions in the document view change with the display mode or box, a
+            // resize or a new document view; zooming magnifies the document view as a whole.
+            let center = NotificationCenter.default
+            let handler: @Sendable (Notification) -> Void = { [weak self, weak view] _ in
+                MainActor.assumeIsolated {
+                    guard let self, let view else { return }
+                    self.layoutEchoMarkViews(in: view)
+                }
+            }
+            echoMarkLayoutObservers = [
+                Notification.Name.PDFViewDisplayModeChanged,
+                Notification.Name.PDFViewDisplayBoxChanged,
+                Notification.Name.PDFViewScaleChanged
+            ].map { center.addObserver(forName: $0, object: view, queue: nil, using: handler) }
+            if let documentView = view.documentView {
+                echoMarkLayoutObservers.append(
+                    center.addObserver(forName: NSView.frameDidChangeNotification, object: documentView, queue: nil, using: handler)
+                )
+            }
+            #endif
+        }
+
+        #if os(macOS)
+        private func layoutEchoMarkViews(in view: PDFView) {
+            guard let documentView = view.documentView else { return }
+            for (placement, markView) in zip(echoMarkPlacements, echoMarkViews) {
+                if markView.superview !== documentView {
+                    markView.removeFromSuperview()
+                    documentView.addSubview(markView)
+                }
+                let frame = documentView.convert(view.convert(placement.bounds, from: placement.page), from: view)
+                if markView.frame != frame {
+                    markView.frame = frame
+                }
+            }
+        }
+        #endif
+
+        private func clearEchoMarks() {
+            #if os(macOS)
+            for observer in echoMarkLayoutObservers {
+                NotificationCenter.default.removeObserver(observer)
+            }
+            echoMarkLayoutObservers = []
+            for markView in echoMarkViews {
+                markView.removeFromSuperview()
+            }
+            echoMarkViews = []
+            #endif
+            echoMarkPlacements = []
+            echoMarkDocument = nil
+        }
+
+        /// The echo mark under a click, if any.
+        func echoMark(on page: PDFPage, at point: CGPoint) -> PDFEchoMarkPlacement? {
+            echoMarkPlacements.last { $0.page === page && $0.bounds.insetBy(dx: -3, dy: -3).contains(point) }
+        }
+
+        #if os(macOS)
+        /// Opens the fan of a marked paragraph; true when the click was on a mark.
+        private func handleEchoMarkClick(on page: PDFPage, at point: CGPoint) -> Bool {
+            guard let mark = echoMark(on: page, at: point), let view = pdfView else { return false }
+            readingFocusSink?.openFan(blockID: mark.blockID, rect: view.convert(mark.bounds, from: page), in: view)
+            return true
+        }
+        #endif
 
         func scheduleDocumentPageCountUpdate(_ pageCount: Int, force: Bool = false) {
             pendingDocumentPageCount = max(0, pageCount)
@@ -2431,6 +2704,9 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
                 }
                 self.publishSelection(selection)
                 self.publishAnnotationCapabilities()
+                #if os(macOS)
+                self.updateSelectionAnchor()
+                #endif
             }
         }
 
@@ -2483,6 +2759,18 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
             onNoteSelectionChanged?(selection)
         }
 
+        /// Clears the published selection from `updateNSView`. The callback changes the
+        /// parent's SwiftUI state, which must not happen while SwiftUI is updating views, so it
+        /// runs after the update unless a new selection was published meanwhile.
+        func clearSelectionAfterViewUpdate() {
+            guard lastPublishedSelection != nil else { return }
+            lastPublishedSelection = nil
+            Task { @MainActor [weak self] in
+                guard let self, self.lastPublishedSelection == nil else { return }
+                self.onNoteSelectionChanged?(nil)
+            }
+        }
+
         private func currentSelectionContext() -> NoteSelectionContext? {
             guard let pdfView,
                   let document = pdfView.document,
@@ -2490,7 +2778,7 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
                 return nil
             }
 
-            let quote = selection.string?
+            let quote = PDFWordSpacing.text(of: selection)?
                 .components(separatedBy: .whitespacesAndNewlines)
                 .filter { !$0.isEmpty }
                 .joined(separator: " ") ?? ""
@@ -2504,7 +2792,7 @@ struct PDFReaderView: PlatformPDFViewRepresentable {
             let contextStart = max(0, pageIndex - 1)
             let contextEnd = min(document.pageCount - 1, pageIndex + 1)
             let localContext = (contextStart...contextEnd)
-                .compactMap { document.page(at: $0)?.string }
+                .compactMap { document.page(at: $0).flatMap(PDFWordSpacing.text(of:)) }
                 .joined(separator: "\n\n")
 
             return NoteSelectionContext(
@@ -2741,6 +3029,19 @@ private final class InteractivePDFView: PDFView, PDFPreferredManualScaling {
             return
         }
         super.perform(action)
+    }
+
+    /// PDFKit copies without the word spaces it drops on some PDFs.
+    override func copy(_ sender: Any?) {
+        guard let selection = currentSelection,
+              let text = PDFWordSpacing.text(of: selection),
+              text != selection.string else {
+            super.copy(sender)
+            return
+        }
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(text, forType: .string)
     }
 
     override func magnify(with event: NSEvent) {

@@ -328,6 +328,44 @@ final class PDFMergerTests: XCTestCase {
     }
 
     @MainActor
+    func testReplacedTranslationFileWithUnknownPageCountKeepsTranslatedPaneInPlace() throws {
+        // Continuing a translation writes a new merged file; the dual reader then resets the
+        // translated page count to 0 until the reloaded document reports its pages.
+        XCTAssertEqual(DualPDFPageIndexSync.translatedPageIndex(
+            forOriginalPageIndex: 12,
+            translatedPageCount: 0
+        ), 12)
+        XCTAssertNil(DualPDFPageIndexSync.originalPageIndex(
+            forTranslatedPageIndex: 0,
+            translatedPageCount: 0
+        ))
+
+        let document = createPDFDocument(withPageCount: 20)
+        let pdfView = PDFView()
+        pdfView.document = document
+        pdfView.go(to: try XCTUnwrap(document.page(at: 12)))
+        let originalPageIndex = 12
+        let translatedPageCount = 0
+        let translatedPageBinding = Binding(
+            get: {
+                DualPDFPageIndexSync.translatedPageIndex(
+                    forOriginalPageIndex: originalPageIndex,
+                    translatedPageCount: translatedPageCount
+                )
+            },
+            set: { _ in }
+        )
+        let coordinator = PDFReaderView.Coordinator(
+            attachmentID: nil,
+            pageIndex: translatedPageBinding,
+            onNoteSelectionChanged: nil
+        )
+        coordinator.attach(to: pdfView)
+
+        XCTAssertFalse(coordinator.shouldRestorePageIndex(translatedPageBinding.wrappedValue, in: pdfView))
+    }
+
+    @MainActor
     func testReopeningPartialTranslationRestoresAvailablePageInsteadOfFirstPage() throws {
         let savedState = ReadingState(paperID: UUID(), readerMode: .bilingualPDF, pageIndex: 14)
         let translatedDocument = createPDFDocument(withPageCount: 10)

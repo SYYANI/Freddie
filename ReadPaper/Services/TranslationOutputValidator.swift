@@ -137,6 +137,12 @@ extension AcademicTranslationContext {
     }
 }
 
+struct ValidatedTranslation: Equatable, Sendable {
+    var text: String
+    /// The model echoed the prompt envelope and only the plain prompt got a translation.
+    var neededPlainPrompt: Bool
+}
+
 extension TranslationLLMClientProtocol {
     /// Translates and validates the output, retrying when the model echoes the prompt, the source,
     /// or its context. Throws `TranslationOutputValidationError` when every attempt is unusable.
@@ -148,30 +154,67 @@ extension TranslationLLMClientProtocol {
         context: AcademicTranslationContext,
         maximumAttempts: Int = TranslationOutputValidator.maximumAttempts
     ) async throws -> String {
+        try await validatedTranslation(
+            text,
+            targetLanguage: targetLanguage,
+            route: route,
+            apiKey: apiKey,
+            context: context,
+            startsWithPlainPrompt: route.startsWithPlainTranslationPrompt,
+            maximumAttempts: maximumAttempts
+        ).text
+    }
+
+    /// Retries drop the neighbor segments, which weak models most often echo. An
+    /// echoed envelope means a translation-only model that translates every labelled
+    /// block, so the next attempt is the plain prompt; the last attempt always is.
+    func validatedTranslation(
+        _ text: String,
+        targetLanguage: String,
+        route: LLMModelRouteSnapshot,
+        apiKey: String,
+        context: AcademicTranslationContext,
+        startsWithPlainPrompt: Bool,
+        maximumAttempts: Int = TranslationOutputValidator.maximumAttempts
+    ) async throws -> ValidatedTranslation {
         let attempts = max(1, maximumAttempts)
         var lastIssue = TranslationOutputIssue.promptEcho
         var usableFallback: String?
+        var echoedEnvelope = false
+        var attemptContext = startsWithPlainPrompt ? context.asPlainPrompt : context
 
         for attempt in 1...attempts {
             try Task.checkCancellation()
+            if attempt > 1, attempt == attempts {
+                attemptContext = context.asPlainPrompt
+            }
             let translation = try await translate(
                 text,
                 targetLanguage: targetLanguage,
                 route: route,
                 apiKey: apiKey,
-                context: attempt == 1 ? context : context.withoutNeighborSegments
+                context: attemptContext
             )
             guard let issue = TranslationOutputValidator.issue(in: translation, source: text, context: context) else {
-                return translation
+                return ValidatedTranslation(
+                    text: translation,
+                    neededPlainPrompt: echoedEnvelope && attemptContext.promptStyle == .plain
+                )
             }
             lastIssue = issue
             if issue.isFatal == false {
                 usableFallback = translation
             }
+            if issue == .promptEcho {
+                echoedEnvelope = true
+            }
+            if attemptContext.promptStyle == .contextual {
+                attemptContext = issue == .promptEcho ? context.asPlainPrompt : context.withoutNeighborSegments
+            }
         }
 
         if let usableFallback {
-            return usableFallback
+            return ValidatedTranslation(text: usableFallback, neededPlainPrompt: false)
         }
         throw TranslationOutputValidationError(issue: lastIssue, attempts: attempts)
     }

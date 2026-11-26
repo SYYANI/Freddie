@@ -23,6 +23,7 @@ enum LLMProviderValidationError: LocalizedError, Equatable {
     case emptyAPIKey
     case webSearchRequiresServerSearchAPI
     case webSearchReturnedNoSources
+    case modelListUnavailable(Int)
 
     var errorDescription: String? {
         switch self {
@@ -38,15 +39,50 @@ enum LLMProviderValidationError: LocalizedError, Equatable {
             return AppLocalization.localized("Web search testing requires the Responses API or the Anthropic Messages API.")
         case .webSearchReturnedNoSources:
             return AppLocalization.localized("The model answered, but no web search source URL was returned.")
+        case .modelListUnavailable(let statusCode):
+            return AppLocalization.format("The server did not list its models (HTTP %d).", statusCode)
         }
     }
 }
 
 struct LLMProviderValidationUseCase {
     let provider: OpenAICompatibleLLMProvider
+    /// Used only to list a server's models (`GET {base}/models`).
+    let session: URLSession
 
-    init(provider: OpenAICompatibleLLMProvider = OpenAICompatibleLLMProvider()) {
+    init(
+        provider: OpenAICompatibleLLMProvider = OpenAICompatibleLLMProvider(),
+        session: URLSession = .shared
+    ) {
         self.provider = provider
+        self.session = session
+    }
+
+    /// The model IDs an OpenAI-compatible server reports at `{base}/models`, in the
+    /// server's order. Used to fill in the model name for a local server.
+    func listModels(
+        baseURL: String,
+        apiKey: String = "",
+        timeoutSeconds: TimeInterval = 5
+    ) async throws -> [String] {
+        let base = try validateBaseURLAsURL(baseURL)
+        var request = URLRequest(url: base.appendingPathComponent("models"), timeoutInterval: timeoutSeconds)
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        if let key = LLMLocalEndpoint.effectiveAPIKey(apiKey, baseURL: baseURL) {
+            request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+        }
+        let (data, response) = try await session.data(for: request)
+        if let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) == false {
+            throw LLMProviderValidationError.modelListUnavailable(http.statusCode)
+        }
+        struct Body: Decodable {
+            struct Entry: Decodable { let id: String }
+            let data: [Entry]
+        }
+        var seen = Set<String>()
+        return try JSONDecoder().decode(Body.self, from: data).data
+            .map { $0.id.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { $0.isEmpty == false && seen.insert($0).inserted }
     }
 
     func normalizedBaseURL(_ rawValue: String) throws -> String {
@@ -77,7 +113,7 @@ struct LLMProviderValidationUseCase {
     ) async throws -> LLMProviderConnectionTestResult {
         let normalizedBaseURL = try normalizedBaseURL(baseURL)
         let validatedModel = try validateModelName(model)
-        let validatedAPIKey = try validateAPIKey(apiKey)
+        let validatedAPIKey = try validateAPIKey(apiKey, baseURL: baseURL)
 
         let request = LLMCompletionRequest(
             baseURL: try validateBaseURLAsURL(baseURL),
@@ -126,7 +162,7 @@ struct LLMProviderValidationUseCase {
         }
         let normalizedBaseURL = try normalizedBaseURL(baseURL)
         let validatedModel = try validateModelName(model)
-        let validatedAPIKey = try validateAPIKey(apiKey)
+        let validatedAPIKey = try validateAPIKey(apiKey, baseURL: baseURL)
         let recorder = LLMProviderWebSearchTraceRecorder(apiKey: validatedAPIKey)
         let traceHandler: @Sendable (String) async -> Void = { entry in
             let appendedEntries = await recorder.append(entry)
@@ -235,9 +271,8 @@ struct LLMProviderValidationUseCase {
         return normalized
     }
 
-    private func validateAPIKey(_ rawValue: String) throws -> String {
-        let value = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard value.isEmpty == false else {
+    private func validateAPIKey(_ rawValue: String, baseURL: String) throws -> String {
+        guard let value = LLMLocalEndpoint.effectiveAPIKey(rawValue, baseURL: baseURL) else {
             throw LLMProviderValidationError.emptyAPIKey
         }
         return value
@@ -300,5 +335,61 @@ private actor LLMProviderWebSearchTraceRecorder {
         let drainedEntries = pendingEntries
         pendingEntries.removeAll(keepingCapacity: true)
         return drainedEntries
+    }
+}
+
+/// Servers on this Mac or the local network (llama.cpp, vLLM, LM Studio, Ollama, oMLX…)
+/// usually run without authentication, so their providers work without a saved API key.
+/// A key the user does save still wins: such servers may be started with one.
+enum LLMLocalEndpoint {
+    /// Sent when a local provider has no saved key. Every route consumer (requests,
+    /// the BabelDOC helper, LaTeX and scanned-page translation) expects a non-empty
+    /// key, and servers without authentication ignore the header.
+    static let placeholderAPIKey = "sk-no-key-required"
+
+    static func isLocal(_ baseURL: String) -> Bool {
+        let trimmed = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let url = URL(string: trimmed),
+              let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https",
+              var host = url.host?.lowercased(), host.isEmpty == false
+        else { return false }
+        if host.hasPrefix("["), host.hasSuffix("]") {
+            host = String(host.dropFirst().dropLast())
+        }
+        if host.hasSuffix(".") { host.removeLast() }
+
+        if host == "localhost" || host.hasSuffix(".localhost") || host.hasSuffix(".local") {
+            return true
+        }
+        if host.contains(":") {
+            // IPv6: loopback, unique local (fc00::/7) and link-local (fe80::/10).
+            return host == "::1"
+                || host.hasPrefix("fc") || host.hasPrefix("fd")
+                || host.hasPrefix("fe8") || host.hasPrefix("fe9")
+                || host.hasPrefix("fea") || host.hasPrefix("feb")
+        }
+        let octets = host.split(separator: ".", omittingEmptySubsequences: false).map { Int($0) }
+        guard octets.count == 4,
+              octets.allSatisfy({ $0.map { (0...255).contains($0) } ?? false })
+        else { return false }
+        let first = octets[0]!, second = octets[1]!
+        switch first {
+        case 127, 10: return true
+        case 192: return second == 168
+        case 172: return (16...31).contains(second)
+        case 169: return second == 254
+        // Shared address space (100.64.0.0/10): Tailscale and other overlay or
+        // carrier-grade NAT networks. 100.0–100.63 are public, so they stay remote.
+        case 100: return (64...127).contains(second)
+        default: return false
+        }
+    }
+
+    /// The key to send: the saved or typed one, otherwise the placeholder for a local
+    /// server; nil when the server needs a key and none is available.
+    static func effectiveAPIKey(_ key: String?, baseURL: String) -> String? {
+        let value = key?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if value.isEmpty == false { return value }
+        return isLocal(baseURL) ? placeholderAPIKey : nil
     }
 }

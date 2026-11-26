@@ -186,6 +186,17 @@ struct WritingEditorView: NSViewRepresentable {
             document.selectedRange = textView.selectedRange()
             textView.typingAttributes = document.textStorage.typingAttributes(at: textView.selectedRange().location)
             updateRevealedRange()
+            reportEchoFocus()
+        }
+
+        /// Tells the echo search which paragraph is being written; it waits for a pause.
+        private func reportEchoFocus() {
+            let text = document.textStorage.string
+            LearningEchoModel.shared.reportWriting(
+                writingID: document.id,
+                paragraph: WritingEchoFocus.paragraph(in: text, at: document.selectedRange.location),
+                fullText: text
+            )
         }
 
         func undoManager(for view: NSTextView) -> UndoManager? {

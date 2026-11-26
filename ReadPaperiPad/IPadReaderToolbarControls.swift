@@ -2,10 +2,12 @@ import SwiftUI
 
 /// The reader toolbar's centered control: the HTML/PDF format menu joined to the
 /// original/bilingual/translated picker in one capsule. Display mode changes far more
-/// often than format, so the format is the small menu at the leading end.
+/// often than format, so the format is the small menu at the leading end. A paper with
+/// a single format shows the picker alone.
 struct IPadReaderModeControl<Format: Hashable, Display: Hashable>: View {
     let formatLabel: String
     @Binding var format: Format
+    /// The HTML/PDF menu, offered only when the paper has more than one format.
     let formats: [ReadPaperSegmentedPicker<Format>.Option]
     let displayLabel: String
     @Binding var display: Display
@@ -17,34 +19,10 @@ struct IPadReaderModeControl<Format: Hashable, Display: Hashable>: View {
 
     var body: some View {
         HStack(spacing: 2) {
-            Menu {
-                Picker(formatLabel, selection: $format) {
-                    ForEach(formats, id: \.value) { option in
-                        Text(option.title).tag(option.value)
-                    }
-                }
-                .pickerStyle(.inline)
-            } label: {
-                HStack(spacing: 5) {
-                    Text(formatTitle)
-                        .font(.system(size: 15, weight: .semibold))
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundStyle(.secondary)
-                }
-                .foregroundStyle(.primary)
-                .padding(.leading, 14)
-                .padding(.trailing, 10)
-                .frame(height: ReadPaperSegmentedPicker<Display>.toolbarSegmentHeight)
-                .contentShape(Capsule())
+            if formats.count > 1 {
+                formatMenu
+                IPadToolbarCapsuleDivider()
             }
-            .menuStyle(.button)
-            .buttonStyle(.plain)
-            .menuIndicator(.hidden)
-            .accessibilityLabel(formatLabel)
-            .accessibilityValue(formatTitle)
-
-            IPadToolbarCapsuleDivider()
 
             ReadPaperSegmentedPicker(
                 label: displayLabel,
@@ -57,6 +35,35 @@ struct IPadReaderModeControl<Format: Hashable, Display: Hashable>: View {
         .padding(ReadPaperSegmentedPicker<Display>.toolbarInset)
         .readPaperGlassEffect(in: Capsule())
         .fixedSize()
+    }
+
+    private var formatMenu: some View {
+        Menu {
+            Picker(formatLabel, selection: $format) {
+                ForEach(formats, id: \.value) { option in
+                    Text(option.title).tag(option.value)
+                }
+            }
+            .pickerStyle(.inline)
+        } label: {
+            HStack(spacing: 5) {
+                Text(formatTitle)
+                    .font(.system(size: 15, weight: .semibold))
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(.secondary)
+            }
+            .foregroundStyle(.primary)
+            .padding(.leading, 14)
+            .padding(.trailing, 10)
+            .frame(height: ReadPaperSegmentedPicker<Display>.toolbarSegmentHeight)
+            .contentShape(Capsule())
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .accessibilityLabel(formatLabel)
+        .accessibilityValue(formatTitle)
     }
 }
 

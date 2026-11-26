@@ -60,6 +60,11 @@ struct InspectorPaneView: View {
     var onOpenCitation: (PaperCitation, String?) -> Void
     var onOpenWriting: (UUID) -> Void
     var onCreateWritingAboutPaper: (Paper) -> Void
+    /// Starts a paragraph about a concept in the open writing. Nil where writings cannot
+    /// take insertions from here.
+    var onWriteAboutConcept: ((String, PaperCitation, String?) -> Void)? = nil
+    /// Quotes a passage offered as an echo in the open writing.
+    var onQuoteEchoInWriting: ((LearningEvent) -> Void)? = nil
     var onQuoteInWriting: (() -> Void)? = nil
 
     var body: some View {
@@ -135,23 +140,80 @@ struct InspectorPaneView: View {
                 #else
                 IPadWritingPaneView(library: writingLibrary, onOpenCitation: onOpenCitation)
                 #endif
+            case .learning:
+                LearningPaneView(
+                    paper: paper,
+                    notes: notes,
+                    onOpenCitation: onOpenCitation,
+                    onWriteAboutConcept: onWriteAboutConcept,
+                    onQuoteEchoInWriting: onQuoteEchoInWriting
+                )
             }
         }
         .fontDesign(displayAppearance == .paper ? .serif : .default)
     }
 
     private var modePicker: some View {
-        ReadPaperSegmentedPicker(
-            label: String(localized: "Inspector", bundle: bundle),
-            selection: $mode,
-            options: [
-                .init(value: .paper, title: String(localized: "Paper", bundle: bundle)),
-                .init(value: .writing, title: String(localized: "Writing", bundle: bundle)),
-            ]
-        )
+        let label = String(localized: "Inspector", bundle: bundle)
+        let options: [ReadPaperSegmentedPicker<InspectorMode>.Option] = [
+            .init(value: .paper, title: String(localized: "Paper", bundle: bundle)),
+            .init(value: .writing, title: String(localized: "Writing", bundle: bundle)),
+            .init(
+                value: .learning,
+                title: String(localized: "Echoes", bundle: bundle),
+                showsBadge: paper != nil && mode != .learning
+                    && LearningEchoModel.shared.hasUnacknowledgedReadingEchoes
+            ),
+        ]
+        #if os(macOS)
+        return VStack(spacing: 0) {
+            Divider()
+            HStack(spacing: 22) {
+                ForEach(options, id: \.value) { option in
+                    let selected = mode == option.value
+                    Button {
+                        mode = option.value
+                    } label: {
+                        // Reserve the selected label's width so adjacent tabs stay put.
+                        Text(option.title).fontWeight(.semibold).hidden()
+                            .overlay {
+                                Text(option.title)
+                                    .fontWeight(selected ? .semibold : .regular)
+                                    .foregroundStyle(selected ? .primary : .secondary)
+                            }
+                            .overlay(alignment: .topTrailing) {
+                                if option.showsBadge {
+                                    Circle().fill(Color.accentColor)
+                                        .frame(width: 5, height: 5)
+                                        .offset(x: 7)
+                                }
+                            }
+                            .frame(minHeight: 40)
+                            .overlay(alignment: .bottom) {
+                                if selected {
+                                    Capsule().frame(height: 2)
+                                }
+                            }
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(option.title)
+                    .accessibilityAddTraits(selected ? .isSelected : [])
+                }
+            }
+            .font(.body)
+            .padding(.horizontal, 16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel(label)
+            Divider()
+        }
+        #else
+        return ReadPaperSegmentedPicker(label: label, selection: $mode, options: options)
         .frame(maxWidth: .infinity)
         .padding(.top, 10)
         .padding(.bottom, 6)
+        #endif
     }
 
     private func metadataSection(_ paper: Paper) -> some View {

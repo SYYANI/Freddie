@@ -46,6 +46,82 @@ final class LLMProviderValidationUseCaseTests: XCTestCase {
         }
     }
 
+    func testTestConnectionToLocalServerWorksWithoutAPIKey() async throws {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [LocalServerURLProtocol.self]
+        LocalServerURLProtocol.lastAuthorization = nil
+        let validator = LLMProviderValidationUseCase(
+            provider: OpenAICompatibleLLMProvider(sessionConfigurationOverride: configuration)
+        )
+
+        let result = try await validator.testConnection(
+            baseURL: "http://127.0.0.1:18000/v1",
+            apiKey: "",
+            model: "Inkling-2-Mini-oQ2.5e-mtp"
+        )
+
+        XCTAssertEqual(result.outputPreview, "ok")
+        XCTAssertEqual(
+            LocalServerURLProtocol.lastAuthorization,
+            "Bearer \(LLMLocalEndpoint.placeholderAPIKey)"
+        )
+    }
+
+    func testListModelsReadsOpenAICompatibleModelList() async throws {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [LocalServerURLProtocol.self]
+        LocalServerURLProtocol.lastAuthorization = nil
+        LocalServerURLProtocol.lastURL = nil
+        let validator = LLMProviderValidationUseCase(session: URLSession(configuration: configuration))
+
+        let models = try await validator.listModels(baseURL: "http://127.0.0.1:18000/v1/")
+
+        XCTAssertEqual(models, ["Inkling-2-Mini-oQ2.5e-mtp", "other-model"])
+        XCTAssertEqual(LocalServerURLProtocol.lastURL?.absoluteString, "http://127.0.0.1:18000/v1/models")
+        XCTAssertEqual(
+            LocalServerURLProtocol.lastAuthorization,
+            "Bearer \(LLMLocalEndpoint.placeholderAPIKey)"
+        )
+    }
+
+    func testLocalEndpointDetection() {
+        let local = [
+            "http://127.0.0.1:18000/v1",
+            "http://localhost:11434/v1",
+            "http://[::1]:8080/v1",
+            "http://192.168.1.20:8000/v1",
+            "http://10.0.0.5/v1",
+            "http://172.20.1.1:1234",
+            "http://studio.local:8000/v1",
+            "https://llm.localhost",
+            "http://100.64.0.1:8000/v1",
+            "http://100.101.102.103/v1",
+            "http://100.127.255.254/v1",
+        ]
+        let remote = [
+            "https://api.openai.com/v1",
+            "https://api.deepseek.com",
+            "http://172.32.0.1/v1",
+            "http://100.63.255.255/v1",
+            "http://100.128.0.1/v1",
+            "http://8.8.8.8/v1",
+            "http://127.0.0.1.example.com/v1",
+            "ftp://127.0.0.1/v1",
+            "not a url",
+        ]
+        for url in local {
+            XCTAssertTrue(LLMLocalEndpoint.isLocal(url), url)
+        }
+        for url in remote {
+            XCTAssertFalse(LLMLocalEndpoint.isLocal(url), url)
+        }
+        XCTAssertEqual(
+            LLMLocalEndpoint.effectiveAPIKey(" sk-own ", baseURL: "http://127.0.0.1:18000/v1"),
+            "sk-own"
+        )
+        XCTAssertNil(LLMLocalEndpoint.effectiveAPIKey("", baseURL: "https://api.openai.com/v1"))
+    }
+
     func testWebSearchRequiresServerSearchAPI() async {
         let validator = LLMProviderValidationUseCase()
 
@@ -204,6 +280,34 @@ private final class WebSearchValidationURLProtocol: URLProtocol {
         )!
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
         client?.urlProtocol(self, didLoad: Data(Self.responseBody.utf8))
+        client?.urlProtocolDidFinishLoading(self)
+    }
+
+    override func stopLoading() {}
+}
+
+private final class LocalServerURLProtocol: URLProtocol {
+    nonisolated(unsafe) static var lastAuthorization: String?
+    nonisolated(unsafe) static var lastURL: URL?
+
+    override class func canInit(with request: URLRequest) -> Bool { true }
+
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+    override func startLoading() {
+        Self.lastAuthorization = request.value(forHTTPHeaderField: "Authorization")
+        Self.lastURL = request.url
+        let response = HTTPURLResponse(
+            url: request.url!,
+            statusCode: 200,
+            httpVersion: nil,
+            headerFields: ["Content-Type": "application/json"]
+        )!
+        let body = request.url?.lastPathComponent == "models"
+            ? #"{"object":"list","data":[{"id":"Inkling-2-Mini-oQ2.5e-mtp"},{"id":"other-model"},{"id":"other-model"}]}"#
+            : #"{"id":"c1","object":"chat.completion","model":"local","choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}]}"#
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: Data(body.utf8))
         client?.urlProtocolDidFinishLoading(self)
     }
 

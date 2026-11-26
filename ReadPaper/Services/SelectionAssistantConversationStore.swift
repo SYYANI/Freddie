@@ -36,6 +36,17 @@ struct SelectionAssistantConversationStore {
         try data.write(to: archiveURL(paperID: paperID), options: .atomic)
     }
 
+    /// Removes the conversation for one selection, and with it the history underline
+    /// drawn from it. Learning events already derived from it stay in the learning log.
+    func delete(paperID: UUID, selectionIdentity: String) throws {
+        var archive = try loadArchive(paperID: paperID)
+        let count = archive.conversations.count
+        archive.conversations.removeAll { $0.selectionIdentity == selectionIdentity }
+        guard archive.conversations.count != count else { return }
+        let data = try JSONEncoder().encode(archive)
+        try data.write(to: archiveURL(paperID: paperID), options: .atomic)
+    }
+
     func historyAnchors(
         paperID: UUID,
         attachmentID: UUID? = nil
@@ -74,7 +85,19 @@ struct SelectionAssistantConversationStore {
 
     private func archiveURL(paperID: UUID) throws -> URL {
         try fileStore.notesDirectory(for: paperID)
-            .appendingPathComponent("assistant-conversations-v1.json")
+            .appendingPathComponent(Self.archiveFileName)
+    }
+
+    nonisolated static let archiveFileName = "assistant-conversations-v1.json"
+
+    /// The conversations in an archive file, for readers that work off the main actor.
+    nonisolated static func snapshots(at url: URL) -> [SelectionAssistantConversationSnapshot] {
+        guard let data = try? Data(contentsOf: url),
+              let archive = try? JSONDecoder().decode(Archive.self, from: data),
+              archive.version == 1 else {
+            return []
+        }
+        return archive.conversations
     }
 
     private static func normalized(

@@ -41,7 +41,11 @@ final class LocalizationBehaviorTests: XCTestCase {
         )
         XCTAssertEqual(AppLocalization.localized("PDF Annotations"), "PDF 标注")
         XCTAssertEqual(AppLocalization.localized("Retranslate PDF"), "重新翻译 PDF")
-        XCTAssertEqual(AppLocalization.localized("Export HTML as PDF"), "将 HTML 导出为 PDF")
+        XCTAssertEqual(AppLocalization.localized("Export as PDF (Bilingual)"), "导出为 PDF（双语）")
+        XCTAssertEqual(
+            AppLocalization.format("Export Translated PDF (First %d Pages, with Annotations)", 12),
+            "导出译文 PDF（前 12 页，含标注）"
+        )
         XCTAssertEqual(HTMLPDFExportError.renderingFailed.localizedDescription, "无法将 HTML 内容渲染为 PDF。")
         XCTAssertEqual(
             PDFAnnotationStoreError.sourceAndDestinationMatch.localizedDescription,
@@ -61,7 +65,7 @@ final class LocalizationBehaviorTests: XCTestCase {
         )
         XCTAssertEqual(AppLocalization.localized("PDF Annotations"), "PDF Annotations")
         XCTAssertEqual(AppLocalization.localized("Retranslate PDF"), "Retranslate PDF")
-        XCTAssertEqual(AppLocalization.localized("Export HTML as PDF"), "Export HTML as PDF")
+        XCTAssertEqual(AppLocalization.localized("Export as PDF (Bilingual)"), "Export as PDF (Bilingual)")
         XCTAssertEqual(HTMLPDFExportError.renderingFailed.localizedDescription, "Unable to render the HTML content as a PDF.")
     }
 }

@@ -79,4 +79,36 @@ final class NoteMarkdownRendererTests: XCTestCase {
         XCTAssertTrue(html.contains("&lt;script&gt;"))
         XCTAssertTrue(html.contains("<pre><code>&lt;b&gt;code&lt;/b&gt;</code></pre>"))
     }
+
+    /// An assistant answer as the Learning tab receives it: no `**` markers and no blank
+    /// line between the label and the translation.
+    func testPreviewRendersAnswerMarkdownCompactly() throws {
+        let preview = NoteMarkdownRenderer.preview("**翻译**\n\n一项架构改动会同时牵动三件事。")
+
+        XCTAssertEqual(String(preview.characters), "翻译\n一项架构改动会同时牵动三件事。")
+        let label = try XCTUnwrap(preview.range(of: "翻译"))
+        XCTAssertEqual(preview[label].inlinePresentationIntent, .stronglyEmphasized)
+    }
+
+    func testPreviewFlattensBlocksAndDropsLinks() throws {
+        let preview = NoteMarkdownRenderer.preview(
+            """
+            ## Summary
+
+            - First `item`
+            - See [docs](https://example.com)
+
+            ```
+            code()
+            ```
+            """
+        )
+
+        XCTAssertEqual(String(preview.characters), "Summary\n• First item\n• See docs\ncode()")
+        let heading = try XCTUnwrap(preview.range(of: "Summary"))
+        XCTAssertEqual(preview[heading].inlinePresentationIntent, .stronglyEmphasized)
+        let code = try XCTUnwrap(preview.range(of: "item"))
+        XCTAssertEqual(preview[code].inlinePresentationIntent, .code)
+        XCTAssertTrue(preview.runs.allSatisfy { $0.link == nil })
+    }
 }

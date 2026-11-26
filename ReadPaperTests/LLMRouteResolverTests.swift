@@ -36,13 +36,19 @@ final class LLMRouteResolverTests: XCTestCase {
         try keychainStore.save("sk-test", account: provider.apiKeyRef)
         XCTAssertTrue(try keychainStore.contains(account: provider.apiKeyRef))
         apiStyleStore.setAPIStyle(.responses, for: provider.id)
+        LLMTranslationModelKindStore(userDefaults: defaults).setKind(.translationOnly, for: htmlModel.id)
 
         let resolver = LLMRouteResolver(
             keychainStore: keychainStore,
-            apiStyleStore: apiStyleStore
+            apiStyleStore: apiStyleStore,
+            userDefaults: defaults
         )
         let htmlRoute = try resolver.resolveHTMLRoute(settings: settings, modelContext: modelContext)
         let pdfRoute = try resolver.resolvePDFRoute(settings: settings, modelContext: modelContext)
+        XCTAssertEqual(htmlRoute.snapshot.translationModelKind, .translationOnly)
+        XCTAssertTrue(htmlRoute.snapshot.startsWithPlainTranslationPrompt)
+        XCTAssertEqual(pdfRoute.snapshot.translationModelKind, .automatic)
+        XCTAssertFalse(pdfRoute.snapshot.startsWithPlainTranslationPrompt)
 
         XCTAssertEqual(htmlRoute.snapshot.modelProfileID, htmlModel.id)
         XCTAssertEqual(pdfRoute.snapshot.modelProfileID, pdfModel.id)
@@ -268,6 +274,56 @@ final class LLMRouteResolverTests: XCTestCase {
         XCTAssertThrowsError(try resolver.resolveHTMLRoute(settings: settings, modelContext: modelContext)) { error in
             XCTAssertEqual(error as? LLMRouteError, .missingAPIKey("Provider"))
         }
+    }
+
+    @MainActor
+    func testLocalProviderResolvesWithoutAPIKeyAndPrefersSavedKey() throws {
+        let keychainStore = KeychainStore(
+            service: "LLMRouteResolverTests.\(UUID().uuidString)",
+            accessPolicy: .unprotected
+        )
+        let container = try makeContainer()
+        let modelContext = ModelContext(container)
+
+        let provider = LLMProviderProfile(
+            name: "Local",
+            baseURL: "http://127.0.0.1:18000/v1",
+            apiKeyRef: "local-ref-\(UUID().uuidString)",
+            testModel: "Inkling-2-Mini-oQ2.5e-mtp"
+        )
+        let model = LLMModelProfile(
+            providerID: provider.id,
+            name: "Inkling",
+            modelName: "Inkling-2-Mini-oQ2.5e-mtp"
+        )
+        let settings = AppSettings(
+            selectedHTMLModelProfileID: model.id,
+            selectedPDFModelProfileID: model.id
+        )
+        modelContext.insert(provider)
+        modelContext.insert(model)
+        modelContext.insert(settings)
+        try modelContext.save()
+        defer { try? keychainStore.delete(account: provider.apiKeyRef) }
+
+        let resolver = LLMRouteResolver(keychainStore: keychainStore)
+        let route = try resolver.resolvePDFRoute(settings: settings, modelContext: modelContext)
+        XCTAssertEqual(route.apiKey, LLMLocalEndpoint.placeholderAPIKey)
+        XCTAssertEqual(route.snapshot.modelName, "Inkling-2-Mini-oQ2.5e-mtp")
+        XCTAssertNoThrow(try resolver.resolveSummaryRoute(settings: settings, modelContext: modelContext))
+        XCTAssertTrue(
+            LLMTranslationSetupStatus.hasUsableRoute(
+                settings: settings,
+                modelContext: modelContext,
+                hasStoredAPIKey: { _ in false }
+            )
+        )
+
+        try keychainStore.save("sk-local", account: provider.apiKeyRef)
+        XCTAssertEqual(
+            try resolver.resolveHTMLRoute(settings: settings, modelContext: modelContext).apiKey,
+            "sk-local"
+        )
     }
 
     @MainActor

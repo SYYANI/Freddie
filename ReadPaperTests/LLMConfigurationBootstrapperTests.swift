@@ -126,11 +126,13 @@ final class LLMDefaultProfilesTests: XCTestCase {
             LLMDefaultProfiles.openAIProviderID,
             LLMDefaultProfiles.deepSeekProviderID,
             LLMDefaultProfiles.anthropicProviderID,
+            LLMDefaultProfiles.localProviderID,
         ]))
         XCTAssertEqual(Set(models.map(\.id)), Set([
             LLMDefaultProfiles.openAIModelID,
             LLMDefaultProfiles.deepSeekModelID,
             LLMDefaultProfiles.anthropicModelID,
+            LLMDefaultProfiles.localModelID,
         ]))
         XCTAssertEqual(
             providers.first(where: { $0.id == LLMDefaultProfiles.openAIProviderID })?.baseURL,
@@ -262,6 +264,7 @@ final class LLMDefaultProfilesTests: XCTestCase {
         XCTAssertEqual(Set(remainingModels.map(\.id)), [
             LLMDefaultProfiles.openAIModelID,
             LLMDefaultProfiles.anthropicModelID,
+            LLMDefaultProfiles.localModelID,
         ])
     }
 
@@ -294,10 +297,12 @@ final class LLMDefaultProfilesTests: XCTestCase {
         XCTAssertEqual(Set(remainingProviders.map(\.id)), [
             LLMDefaultProfiles.deepSeekProviderID,
             LLMDefaultProfiles.anthropicProviderID,
+            LLMDefaultProfiles.localProviderID,
         ])
         XCTAssertEqual(Set(remainingModels.map(\.id)), [
             LLMDefaultProfiles.deepSeekModelID,
             LLMDefaultProfiles.anthropicModelID,
+            LLMDefaultProfiles.localModelID,
         ])
     }
 
@@ -618,6 +623,103 @@ final class LLMDefaultProfilesTests: XCTestCase {
         XCTAssertEqual(store.apiStyle(for: providerID), .responses)
         store.removeAPIStyle(for: providerID)
         XCTAssertEqual(store.apiStyle(for: providerID), .chatCompletions)
+    }
+
+    @MainActor
+    func testSeederPreparesLocalProviderThatNeedsNoKey() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let styleStore = LLMProviderAPIStyleStore(userDefaults: defaults)
+        try LLMDefaultProfileSeeder(
+            apiStyleStore: styleStore,
+            deletionStore: LLMDefaultProfileDeletionStore(userDefaults: defaults)
+        ).ensureDefaults(modelContext: context)
+
+        let provider = try XCTUnwrap(
+            context.fetch(FetchDescriptor<LLMProviderProfile>()).first { $0.id == LLMDefaultProfiles.localProviderID }
+        )
+        let model = try XCTUnwrap(
+            context.fetch(FetchDescriptor<LLMModelProfile>()).first { $0.id == LLMDefaultProfiles.localModelID }
+        )
+        XCTAssertEqual(provider.baseURL, "http://127.0.0.1:18000/v1")
+        XCTAssertEqual(model.modelName, "Inkling-2-Mini-oQ2.5e-mtp")
+        XCTAssertEqual(model.providerID, provider.id)
+        XCTAssertEqual(styleStore.apiStyle(for: provider.id), .chatCompletions)
+        let descriptor = try XCTUnwrap(LLMDefaultProfiles.provider(for: LLMDefaultProfiles.localProviderID))
+        XCTAssertTrue(descriptor.isLocal)
+        XCTAssertNil(descriptor.apiKeyPageURL)
+        XCTAssertTrue(LLMDefaultProfiles.providers.filter { $0.id != descriptor.id }.allSatisfy { !$0.isLocal })
+
+        // Seeding alone never routes translation to it.
+        let settings = AppSettings()
+        XCTAssertFalse(LLMTranslationSetupStatus.hasUsableRoute(
+            settings: settings,
+            providers: [provider],
+            models: [model],
+            hasStoredAPIKey: { _ in false }
+        ))
+        settings.selectedHTMLModelProfileID = model.id
+        XCTAssertTrue(LLMTranslationSetupStatus.hasUsableRoute(
+            settings: settings,
+            providers: [provider],
+            models: [model],
+            hasStoredAPIKey: { _ in false }
+        ))
+    }
+
+    @MainActor
+    func testQuickSetupForLocalServerSavesAddressAndModelWithoutKey() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let styleStore = LLMProviderAPIStyleStore(userDefaults: defaults)
+        try LLMDefaultProfileSeeder(
+            apiStyleStore: styleStore,
+            deletionStore: LLMDefaultProfileDeletionStore(userDefaults: defaults)
+        ).ensureDefaults(modelContext: context)
+        let settings = AppSettings()
+        context.insert(settings)
+        try context.save()
+        let descriptor = try XCTUnwrap(LLMDefaultProfiles.provider(for: LLMDefaultProfiles.localProviderID))
+        var savedKeys: [String: String] = [:]
+
+        let model = try LLMQuickSetup(apiStyleStore: styleStore).apply(
+            descriptor: descriptor,
+            apiKey: nil,
+            baseURL: "http://localhost:11434/v1",
+            modelName: "qwen3:8b",
+            testedAt: Date(timeIntervalSince1970: 1_800_000_000),
+            settings: settings,
+            modelContext: context,
+            saveAPIKey: { savedKeys[$1] = $0 }
+        )
+
+        XCTAssertTrue(savedKeys.isEmpty)
+        XCTAssertEqual(model.modelName, "qwen3:8b")
+        // Still named after its model, so the name follows the new model.
+        XCTAssertEqual(model.name, "qwen3:8b")
+        let provider = try XCTUnwrap(
+            ModelContext(container).fetch(FetchDescriptor<LLMProviderProfile>())
+                .first { $0.id == LLMDefaultProfiles.localProviderID }
+        )
+        XCTAssertEqual(provider.baseURL, "http://localhost:11434/v1")
+        XCTAssertEqual(provider.testModel, "qwen3:8b")
+        XCTAssertEqual(settings.selectedHTMLModelProfileID, LLMDefaultProfiles.localModelID)
+        XCTAssertEqual(settings.selectedPDFModelProfileID, LLMDefaultProfiles.localModelID)
+
+        // A name the user chose is kept when the model changes.
+        model.name = "My Local"
+        try LLMQuickSetup(apiStyleStore: styleStore).apply(
+            descriptor: descriptor,
+            apiKey: nil,
+            baseURL: "http://localhost:11434/v1",
+            modelName: "llama3.2",
+            testedAt: Date(timeIntervalSince1970: 1_800_000_100),
+            settings: settings,
+            modelContext: context,
+            saveAPIKey: { savedKeys[$1] = $0 }
+        )
+        XCTAssertEqual(model.name, "My Local")
+        XCTAssertEqual(model.modelName, "llama3.2")
     }
 
     @MainActor

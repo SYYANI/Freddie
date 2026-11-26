@@ -4,7 +4,6 @@ import AppKit
 import Foundation
 import SwiftUI
 
-#if os(macOS)
 enum NoteMarkdownRenderer {
     fileprivate enum Block {
         case heading(level: Int, text: String)
@@ -19,65 +18,50 @@ enum NoteMarkdownRenderer {
         failurePolicy: .returnPartiallyParsedIfPossible
     )
 
-    static func render(_ markdown: String) -> NSAttributedString {
-        let blocks = blocks(for: markdown)
-        let rendered = NSMutableAttributedString()
-
-        for (index, block) in blocks.enumerated() {
-            if index > 0 {
-                rendered.append(NSAttributedString(string: "\n\n"))
+    /// A compact rendering for rows that cap their line count, such as the Learning tab's
+    /// activity list: blocks become line breaks instead of spaced paragraphs, headings turn
+    /// bold, list items keep a bullet, fences drop. Inline emphasis and code stay; links
+    /// keep their text only, so the whole row remains one tap target.
+    static func preview(_ markdown: String) -> AttributedString {
+        var preview = AttributedString()
+        func appendLine(_ line: AttributedString) {
+            if preview.characters.isEmpty == false {
+                preview.append(AttributedString("\n"))
             }
-            rendered.append(render(block))
+            preview.append(line)
         }
 
-        return rendered
+        for block in blocks(for: markdown) {
+            switch block {
+            case let .heading(_, text):
+                var heading = inlinePreview(text)
+                for run in heading.runs {
+                    heading[run.range].inlinePresentationIntent =
+                        (run.inlinePresentationIntent ?? []).union(.stronglyEmphasized)
+                }
+                appendLine(heading)
+            case let .paragraph(text):
+                appendLine(inlinePreview(text))
+            case let .list(items):
+                for item in items {
+                    appendLine(AttributedString("• ") + inlinePreview(item))
+                }
+            case let .quote(lines):
+                for line in lines {
+                    appendLine(inlinePreview(line))
+                }
+            case let .code(text):
+                var code = AttributedString(text)
+                code.inlinePresentationIntent = .code
+                appendLine(code)
+            }
+        }
+        preview.link = nil
+        return preview
     }
 
-    /// Renders the same Markdown subset as `render(_:)` to escaped HTML for the
-    /// HTML reader's margin notes. Only http(s) and mailto links are kept.
-    static func html(_ markdown: String) -> String {
-        blocks(for: markdown).map(html(for:)).joined()
-    }
-
-    private static func html(for block: Block) -> String {
-        switch block {
-        case let .heading(level, text):
-            return "<h\(level)>\(inlineHTML(text))</h\(level)>"
-        case let .paragraph(text):
-            return "<p>\(inlineHTML(text))</p>"
-        case let .list(items):
-            return "<ul>" + items.map { "<li>\(inlineHTML($0))</li>" }.joined() + "</ul>"
-        case let .quote(lines):
-            return "<blockquote>" + lines.map(inlineHTML).joined(separator: "<br>") + "</blockquote>"
-        case let .code(text):
-            return "<pre><code>\(HTMLSidenote.escapedHTML(text))</code></pre>"
-        }
-    }
-
-    private static func inlineHTML(_ text: String) -> String {
-        guard let attributed = inlineAttributedString(text) else {
-            return HTMLSidenote.escapedHTML(text)
-        }
-
-        var rendered = ""
-        for run in attributed.runs {
-            var piece = HTMLSidenote.escapedHTML(String(attributed[run.range].characters))
-                .replacingOccurrences(of: "\n", with: "<br>")
-            let intent = run.inlinePresentationIntent ?? []
-            if intent.contains(.code) {
-                piece = "<code>\(piece)</code>"
-            } else {
-                if intent.contains(.stronglyEmphasized) { piece = "<strong>\(piece)</strong>" }
-                if intent.contains(.emphasized) { piece = "<em>\(piece)</em>" }
-                if intent.contains(.strikethrough) { piece = "<s>\(piece)</s>" }
-            }
-            if let link = run.link,
-               ["http", "https", "mailto"].contains(link.scheme?.lowercased() ?? "") {
-                piece = "<a href=\"\(HTMLSidenote.escapedHTML(link.absoluteString))\">\(piece)</a>"
-            }
-            rendered += piece
-        }
-        return rendered
+    private static func inlinePreview(_ text: String) -> AttributedString {
+        inlineAttributedString(text) ?? AttributedString(text)
     }
 
     fileprivate static func blocks(for markdown: String) -> [Block] {
@@ -182,6 +166,109 @@ enum NoteMarkdownRenderer {
         return blocks
     }
 
+    private static func inlineAttributedString(_ text: String) -> AttributedString? {
+        guard text.isEmpty == false else {
+            return AttributedString("")
+        }
+
+        return try? AttributedString(markdown: text, options: inlineMarkdownOptions)
+    }
+
+    private static func heading(from line: String) -> (level: Int, text: String)? {
+        let hashes = line.prefix { $0 == "#" }
+        let level = hashes.count
+        guard (1...6).contains(level) else { return nil }
+
+        let remainder = line.dropFirst(level)
+        guard remainder.first?.isWhitespace == true else { return nil }
+
+        let text = remainder.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard text.isEmpty == false else { return nil }
+        return (level, text)
+    }
+
+    private static func listItem(from line: String) -> String? {
+        guard line.count >= 2 else { return nil }
+        guard let marker = line.first, marker == "-" || marker == "*" else { return nil }
+        guard line.dropFirst().first?.isWhitespace == true else { return nil }
+
+        let text = line.dropFirst().trimmingCharacters(in: .whitespacesAndNewlines)
+        return text.isEmpty ? nil : text
+    }
+
+    private static func quoteLine(from line: String) -> String? {
+        guard line.first == ">" else { return nil }
+        return line.dropFirst().trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func isFence(_ line: String) -> Bool {
+        line.hasPrefix("```")
+    }
+}
+
+#if os(macOS)
+extension NoteMarkdownRenderer {
+    static func render(_ markdown: String) -> NSAttributedString {
+        let blocks = blocks(for: markdown)
+        let rendered = NSMutableAttributedString()
+
+        for (index, block) in blocks.enumerated() {
+            if index > 0 {
+                rendered.append(NSAttributedString(string: "\n\n"))
+            }
+            rendered.append(render(block))
+        }
+
+        return rendered
+    }
+
+    /// Renders the same Markdown subset as `render(_:)` to escaped HTML for the
+    /// HTML reader's margin notes. Only http(s) and mailto links are kept.
+    static func html(_ markdown: String) -> String {
+        blocks(for: markdown).map(html(for:)).joined()
+    }
+
+    private static func html(for block: Block) -> String {
+        switch block {
+        case let .heading(level, text):
+            return "<h\(level)>\(inlineHTML(text))</h\(level)>"
+        case let .paragraph(text):
+            return "<p>\(inlineHTML(text))</p>"
+        case let .list(items):
+            return "<ul>" + items.map { "<li>\(inlineHTML($0))</li>" }.joined() + "</ul>"
+        case let .quote(lines):
+            return "<blockquote>" + lines.map(inlineHTML).joined(separator: "<br>") + "</blockquote>"
+        case let .code(text):
+            return "<pre><code>\(HTMLSidenote.escapedHTML(text))</code></pre>"
+        }
+    }
+
+    private static func inlineHTML(_ text: String) -> String {
+        guard let attributed = inlineAttributedString(text) else {
+            return HTMLSidenote.escapedHTML(text)
+        }
+
+        var rendered = ""
+        for run in attributed.runs {
+            var piece = HTMLSidenote.escapedHTML(String(attributed[run.range].characters))
+                .replacingOccurrences(of: "\n", with: "<br>")
+            let intent = run.inlinePresentationIntent ?? []
+            if intent.contains(.code) {
+                piece = "<code>\(piece)</code>"
+            } else {
+                if intent.contains(.stronglyEmphasized) { piece = "<strong>\(piece)</strong>" }
+                if intent.contains(.emphasized) { piece = "<em>\(piece)</em>" }
+                if intent.contains(.strikethrough) { piece = "<s>\(piece)</s>" }
+            }
+            if let link = run.link,
+               ["http", "https", "mailto"].contains(link.scheme?.lowercased() ?? "") {
+                piece = "<a href=\"\(HTMLSidenote.escapedHTML(link.absoluteString))\">\(piece)</a>"
+            }
+            rendered += piece
+        }
+        return rendered
+    }
+
     private static func render(_ block: Block) -> NSAttributedString {
         switch block {
         case let .heading(level, text):
@@ -264,14 +351,6 @@ enum NoteMarkdownRenderer {
         }
     }
 
-    fileprivate static func inlineAttributedString(_ text: String) -> AttributedString? {
-        guard text.isEmpty == false else {
-            return AttributedString("")
-        }
-
-        return try? AttributedString(markdown: text, options: inlineMarkdownOptions)
-    }
-
     private static func applyInlinePresentationIntents(to rendered: NSMutableAttributedString) {
         let fullRange = NSRange(location: 0, length: rendered.length)
         guard fullRange.length > 0 else { return }
@@ -321,37 +400,6 @@ enum NoteMarkdownRenderer {
 
             rendered.addAttribute(.font, value: font, range: range)
         }
-    }
-
-    private static func heading(from line: String) -> (level: Int, text: String)? {
-        let hashes = line.prefix { $0 == "#" }
-        let level = hashes.count
-        guard (1...6).contains(level) else { return nil }
-
-        let remainder = line.dropFirst(level)
-        guard remainder.first?.isWhitespace == true else { return nil }
-
-        let text = remainder.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard text.isEmpty == false else { return nil }
-        return (level, text)
-    }
-
-    private static func listItem(from line: String) -> String? {
-        guard line.count >= 2 else { return nil }
-        guard let marker = line.first, marker == "-" || marker == "*" else { return nil }
-        guard line.dropFirst().first?.isWhitespace == true else { return nil }
-
-        let text = line.dropFirst().trimmingCharacters(in: .whitespacesAndNewlines)
-        return text.isEmpty ? nil : text
-    }
-
-    private static func quoteLine(from line: String) -> String? {
-        guard line.first == ">" else { return nil }
-        return line.dropFirst().trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    private static func isFence(_ line: String) -> Bool {
-        line.hasPrefix("```")
     }
 
     private static func headingFontSize(for level: Int) -> CGFloat {

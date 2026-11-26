@@ -168,4 +168,26 @@ enum SelectionAssistantProgress: Equatable, Sendable {
 enum SelectionAssistantPreferences {
     static let selectedModelProfileIDKey = "ReadPaper.SelectionAssistant.SelectedModelProfileID"
     static let externalSearchEnabledKey = "ReadPaper.SelectionAssistant.ExternalSearchEnabled"
+    /// Selecting a passage in the source PDF translates and explains it without a click.
+    static let quickGlossOnSelectionEnabledKey = "ReadPaper.SelectionAssistant.QuickGlossOnSelectionEnabled"
+    /// How long a selection has to stay unchanged, with the mouse button up, before the
+    /// quick gloss is requested. Dragging publishes a new selection on every move.
+    static let quickGlossSelectionDelay: Duration = .milliseconds(600)
+    /// Shorter selections are almost always a stray click or a single symbol.
+    static let quickGlossMinimumCharacterCount = 2
+    /// Selecting a passage shows only its translation in a small bubble next to it. Nothing
+    /// is stored: no conversation, no history underline. The two switches exclude each other.
+    static let quickTranslateOnSelectionEnabledKey = "ReadPaper.SelectionAssistant.QuickTranslateOnSelectionEnabled"
+    /// Shorter than the quick gloss delay: the bubble is small and costs one short request.
+    static let quickTranslateSelectionDelay: Duration = .milliseconds(250)
+    /// Longer selections would not fit next to the text; the Translate button still handles them.
+    static let quickTranslateMaximumCharacterCount = 2_000
+}
+
+/// Asks the selection overlay to start the quick translation and explanation for one
+/// selection without waiting for a click. `token` tells two requests for the same
+/// selection apart.
+struct SelectionAssistantAutoRun: Equatable, Sendable {
+    var selectionIdentity: String
+    var token: Int
 }

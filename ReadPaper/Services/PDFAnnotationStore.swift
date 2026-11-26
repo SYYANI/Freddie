@@ -264,6 +264,16 @@ struct PDFAnnotationStore {
         }
     }
 
+    /// A sidecar file read without knowing its attachment, or nil when it cannot be used.
+    static func sidecar(at url: URL) -> PDFAnnotationSidecar? {
+        guard let data = try? Data(contentsOf: url),
+              let sidecar = try? JSONDecoder.pdfAnnotationDecoder.decode(PDFAnnotationSidecar.self, from: data),
+              sidecar.version <= PDFAnnotationSidecar.currentVersion else {
+            return nil
+        }
+        return sidecar
+    }
+
     func save(_ annotations: [PDFAnnotationRecord], paperID: UUID, attachmentID: UUID) throws {
         let sidecar = PDFAnnotationSidecar(
             paperID: paperID,

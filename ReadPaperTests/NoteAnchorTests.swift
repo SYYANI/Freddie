@@ -51,6 +51,24 @@ final class NoteAnchorTests: XCTestCase {
         XCTAssertEqual((pageText as NSString).substring(with: range), "Selected\nquote\tcontinues.")
     }
 
+    func testPDFNavigationTextMatcherMatchesAcrossRestoredWordSpaces() throws {
+        // Quotes with restored spaces on a page whose PDFKit text lacks them, and old
+        // spaceless quotes on a page PDFKit spaces.
+        let spaceless = "Intro. Anarchitecturalchangetouches three"
+        let spacedRange = try XCTUnwrap(PDFNoteNavigationTextMatcher.range(
+            of: "An architectural change touches",
+            in: spaceless
+        ))
+        XCTAssertEqual((spaceless as NSString).substring(with: spacedRange), "Anarchitecturalchangetouches")
+
+        let spaced = "Intro. An architectural\nchange touches three"
+        let legacyRange = try XCTUnwrap(PDFNoteNavigationTextMatcher.range(
+            of: "Anarchitecturalchange",
+            in: spaced
+        ))
+        XCTAssertEqual((spaced as NSString).substring(with: legacyRange), "An architectural\nchange")
+    }
+
     func testPDFNavigationTextMatcherReturnsNilForMissingQuote() {
         XCTAssertNil(PDFNoteNavigationTextMatcher.range(of: "Missing", in: "Page text"))
     }

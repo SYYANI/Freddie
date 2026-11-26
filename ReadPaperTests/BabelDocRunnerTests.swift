@@ -309,6 +309,35 @@ final class BabelDocRunnerTests: XCTestCase {
         XCTAssertTrue(arguments(translatesFigureText: true).contains("--translate-figure-text"))
     }
 
+    func testNativeArgumentsSelectPromptStyleForTranslationModelKind() {
+        let tool = NativeBabelDocToolPaths(
+            executable: URL(fileURLWithPath: "/native/bin/babeldoc-native"),
+            runtimeRoot: URL(fileURLWithPath: "/native", isDirectory: true),
+            runtimeManifest: URL(fileURLWithPath: "/app/runtime-manifest.json"),
+            runtimeVersion: "1.0.0",
+            mupdfLibrary: URL(fileURLWithPath: "/native/lib/libmupdf.dylib"),
+            zstdLibrary: URL(fileURLWithPath: "/native/lib/libzstd.dylib"),
+            layoutModel: URL(fileURLWithPath: "/native/models/layout.mlmodel"),
+            fontDirectory: URL(fileURLWithPath: "/native/fonts", isDirectory: true)
+        )
+        func promptStyle(for kind: LLMTranslationModelKind) -> String? {
+            var route = Self.route
+            route.translationModelKind = kind
+            let arguments = BabelDocRunner.nativeArguments(
+                inputPDF: URL(fileURLWithPath: "/tmp/source.pdf"),
+                outputPDF: URL(fileURLWithPath: "/tmp/translated.pdf"),
+                preferences: Self.preferences,
+                route: route,
+                tool: tool
+            )
+            return arguments.firstIndex(of: "--prompt-style").map { arguments[$0 + 1] }
+        }
+
+        XCTAssertEqual(promptStyle(for: .automatic), "auto")
+        XCTAssertEqual(promptStyle(for: .translationOnly), "plain")
+        XCTAssertEqual(promptStyle(for: .general), "envelope")
+    }
+
     func testNativeArgumentsSelectAPIStyleForProviderProtocol() {
         let tool = NativeBabelDocToolPaths(
             executable: URL(fileURLWithPath: "/native/bin/babeldoc-native"),

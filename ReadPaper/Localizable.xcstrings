@@ -12,26 +12,6 @@
         }
       }
     },
-    "Translate text inside figures" : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "翻译图内文字"
-          }
-        }
-      }
-    },
-    "When off, PDF translation leaves chart labels, legends and tick values in figures exactly as they are. When on, figure titles and legends are translated too." : {
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "关闭时，PDF 翻译不会改动图表中的标签、图例和刻度数值；开启后，图内的标题和图例也会被翻译。"
-          }
-        }
-      }
-    },
     "“%@” and all of its local files, notes, reading state, and translation cache will be removed." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -67,6 +47,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "“%@”将移到最近删除，你可以稍后恢复。"
+          }
+        }
+      }
+    },
+    "(from the reader's record for “%@”)" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "（来自对《%@》的学习记录）"
           }
         }
       }
@@ -198,6 +188,27 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%1$d/%2$d"
+          }
+        }
+      }
+    },
+    "%lld echoes" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld 条回响"
+          }
+        }
+      }
+    },
+    "%lld papers" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld 篇论文"
           }
         }
       }
@@ -592,6 +603,17 @@
         }
       }
     },
+    "All Papers" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "全部论文"
+          }
+        }
+      }
+    },
     "All terms will be removed. This can’t be undone." : {
       "localizations" : {
         "zh-Hans" : {
@@ -730,6 +752,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "API 密钥通过触控 ID 或设备密码保护。首次授权后，当前 Freddie 安装会保持授权，直到 App 更新或 API 密钥发生变化。编辑时将 API 密钥留空会保留已保存的密钥。"
+          }
+        }
+      }
+    },
+    "API keys are protected with Touch ID or your device password. After the first approval, this Freddie installation stays authorized until the app is updated or the key changes. Leaving the API key field blank while editing keeps the saved key. Servers on this Mac or your local network, such as http://127.0.0.1:18000/v1, work without a key." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "API 密钥通过触控 ID 或设备密码保护。首次授权后，当前 Freddie 安装会保持授权，直到 App 更新或 API 密钥发生变化。编辑时将 API 密钥留空会保留已保存的密钥。本机或局域网内的服务（例如 http://127.0.0.1:18000/v1）无需填写密钥。"
           }
         }
       }
@@ -890,6 +923,16 @@
         }
       }
     },
+    "As you read, passages you highlighted, noted or asked about before appear here when they relate to what is on screen." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "阅读时，如果屏幕上的内容与你以前高亮、记过笔记或提问过的段落相关，它们会出现在这里。"
+          }
+        }
+      }
+    },
     "Ask a follow-up..." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -1011,6 +1054,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "作者"
+          }
+        }
+      }
+    },
+    "Automatic" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自动"
           }
         }
       }
@@ -1405,6 +1458,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "图书章节"
+          }
+        }
+      }
+    },
+    "Both mention %@" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "都提到 %@"
           }
         }
       }
@@ -2014,6 +2077,16 @@
         }
       }
     },
+    "Collapsed" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已折叠"
+          }
+        }
+      }
+    },
     "Collecting paper context..." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2042,6 +2115,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "完整联网搜索 Trace"
+          }
+        }
+      }
+    },
+    "Concept: %@" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "概念：%@"
           }
         }
       }
@@ -2265,6 +2348,17 @@
         }
       }
     },
+    "Could not list models: %@" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法列出模型：%@"
+          }
+        }
+      }
+    },
     "Could not parse the LaTeX source." : {
       "localizations" : {
         "zh-Hans" : {
@@ -2301,6 +2395,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "无法重建 LaTeX 译稿源码。"
+          }
+        }
+      }
+    },
+    "Could not tell the model type: %@. The setting was not changed." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法判断模型类型：%@。设置未更改。"
           }
         }
       }
@@ -2563,6 +2668,38 @@
         }
       }
     },
+    "Delete Record" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "删除记录"
+          }
+        }
+      }
+    },
+    "Delete This Conversation" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "删除这段对话"
+          }
+        }
+      }
+    },
+    "Delete this conversation?" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "删除这段对话？"
+          }
+        }
+      }
+    },
     "Delete Writing?" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2585,6 +2722,16 @@
         }
       }
     },
+    "Deleted Paper" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已删除的论文"
+          }
+        }
+      }
+    },
     "Deleted writings and their images stay on this iPad until you restore them or remove the app." : {
       "localizations" : {
         "en" : {
@@ -2597,6 +2744,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "已删除的写作稿及其图片会保留在这台 iPad 上，直到你恢复稿件或移除应用。"
+          }
+        }
+      }
+    },
+    "Detect" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "检测"
+          }
+        }
+      }
+    },
+    "Detecting..." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在检测…"
           }
         }
       }
@@ -2858,6 +3027,17 @@
         }
       }
     },
+    "Drag a card into the writing to quote it" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "把卡片拖进正文即可引用"
+          }
+        }
+      }
+    },
     "Drag to pan over images and blank areas; selectable text keeps the text-selection cursor. When disabled, non-text areas use the standard arrow cursor." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2897,6 +3077,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "电子邮件"
+          }
+        }
+      }
+    },
+    "Echoes" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "回响"
           }
         }
       }
@@ -3107,6 +3297,16 @@
         }
       }
     },
+    "Expanded" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已展开"
+          }
+        }
+      }
+    },
     "Explain Selected Text" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -3129,13 +3329,46 @@
         }
       }
     },
-    "Export Annotated PDF" : {
+    "Export as PDF (Bilingual)" : {
       "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "导出带标注的 PDF"
+            "value" : "导出为 PDF（双语）"
+          }
+        }
+      }
+    },
+    "Export as PDF (Original)" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "导出为 PDF（原文）"
+          }
+        }
+      }
+    },
+    "Export as PDF (Translated)" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "导出为 PDF（译文）"
+          }
+        }
+      }
+    },
+    "Export Corrected Transcription PDF (with Annotations)" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "导出矫正转写 PDF（含标注）"
           }
         }
       }
@@ -3183,23 +3416,6 @@
         }
       }
     },
-    "Export HTML as PDF" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Export HTML as PDF"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "将 HTML 导出为 PDF"
-          }
-        }
-      }
-    },
     "Export Markdown" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -3207,6 +3423,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "导出 Markdown"
+          }
+        }
+      }
+    },
+    "Export Original PDF (with Annotations)" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "导出原文 PDF（含标注）"
           }
         }
       }
@@ -3235,6 +3462,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "按当前的原文、双语或译文显示模式导出 HTML。"
+          }
+        }
+      }
+    },
+    "Export Translated PDF (First %d Pages, with Annotations)" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "导出译文 PDF（前 %d 页，含标注）"
+          }
+        }
+      }
+    },
+    "Export Translated PDF (with Annotations)" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "导出译文 PDF（含标注）"
           }
         }
       }
@@ -3709,6 +3958,16 @@
         }
       }
     },
+    "General model" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通用模型"
+          }
+        }
+      }
+    },
     "Generated by Freddie" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -3792,6 +4051,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "跳到标记位置"
+          }
+        }
+      }
+    },
+    "Go to where this came from" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "跳到它的出处"
           }
         }
       }
@@ -4345,6 +4615,28 @@
         }
       }
     },
+    "In your learning record: %@" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "学习记录里已有：%@"
+          }
+        }
+      }
+    },
+    "in your record" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已在记录中"
+          }
+        }
+      }
+    },
     "Increase Font Size" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -4374,6 +4666,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "插入图片…"
+          }
+        }
+      }
+    },
+    "Insert in Writing" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "插入写作稿"
           }
         }
       }
@@ -4804,6 +5106,37 @@
         }
       }
     },
+    "Learning" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "学习"
+          }
+        }
+      }
+    },
+    "Learning Record Model" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "学习记录模型"
+          }
+        }
+      }
+    },
+    "Learning record: %@" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "学习记录：%@"
+          }
+        }
+      }
+    },
     "Less" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -4973,6 +5306,27 @@
         }
       }
     },
+    "Local" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "本地"
+          }
+        }
+      }
+    },
+    "Local Model" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "本地模型"
+          }
+        }
+      }
+    },
     "Local PDF" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -4980,6 +5334,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "本地 PDF"
+          }
+        }
+      }
+    },
+    "Local server: no API key needed" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "本地服务：无需 API 密钥"
           }
         }
       }
@@ -5002,6 +5367,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "磁盘位置"
+          }
+        }
+      }
+    },
+    "looked up %lld×" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "查过 %lld 次"
           }
         }
       }
@@ -5199,6 +5575,17 @@
         }
       }
     },
+    "Model" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "模型"
+          }
+        }
+      }
+    },
     "Model deleted." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -5288,6 +5675,7 @@
       }
     },
     "Model Settings…" : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -5308,6 +5696,17 @@
         }
       }
     },
+    "Model type" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "模型类型"
+          }
+        }
+      }
+    },
     "Models" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -5315,6 +5714,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "模型"
+          }
+        }
+      }
+    },
+    "Models on this server" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此服务上的模型"
           }
         }
       }
@@ -5398,6 +5808,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "移到废纸篓"
+          }
+        }
+      }
+    },
+    "Name" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "名称"
           }
         }
       }
@@ -5527,6 +5948,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Provider “%1$@” 没有保存 API key。"
+          }
+        }
+      }
+    },
+    "No API key needed. Works with OpenAI-compatible servers on this Mac or your network, such as oMLX, LM Studio, Ollama, llama.cpp and vLLM." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无需 API 密钥。适用于本机或局域网内兼容 OpenAI 的服务，例如 oMLX、LM Studio、Ollama、llama.cpp 和 vLLM。"
           }
         }
       }
@@ -5823,6 +6255,16 @@
         }
       }
     },
+    "Not Related" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "不相关"
+          }
+        }
+      }
+    },
     "Not Selected" : {
       "localizations" : {
         "zh-Hans" : {
@@ -5948,6 +6390,16 @@
         }
       }
     },
+    "Open in Paper" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打开原文"
+          }
+        }
+      }
+    },
     "Open in Separate Window" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -5992,6 +6444,17 @@
         }
       }
     },
+    "Open questions from your last reading: %lld" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "上次阅读留下 %lld 个未解决的问题"
+          }
+        }
+      }
+    },
     "Open Source License" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -6031,12 +6494,34 @@
         }
       }
     },
+    "Optional for local servers" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "本地服务可不填"
+          }
+        }
+      }
+    },
     "Optional glossary" : {
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "可选术语表"
+          }
+        }
+      }
+    },
+    "Organize learning records automatically" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自动整理学习记录"
           }
         }
       }
@@ -6071,6 +6556,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "AI 整理"
+          }
+        }
+      }
+    },
+    "Organizing a learning record sends the passages you highlighted, your notes, and your questions with their answers to this model. The paper's full text is not sent." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "整理学习记录时，会把你高亮的段落、笔记，以及提问和对应的回答发送给这个模型，不会发送论文全文。"
           }
         }
       }
@@ -6115,6 +6611,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "位于 Freddie 论文库之外"
+          }
+        }
+      }
+    },
+    "p. %lld" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "第 %lld 页"
           }
         }
       }
@@ -6907,7 +7413,6 @@
       }
     },
     "Quote in Writing" : {
-      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -7294,6 +7799,16 @@
         }
       }
     },
+    "Renames it in every paper. Give it the name of another concept to merge the two." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "会在所有论文里改名。改成另一个概念的名字，即可把两者合并。"
+          }
+        }
+      }
+    },
     "Rendering scanned pages..." : {
       "localizations" : {
         "zh-Hans" : {
@@ -7560,6 +8075,17 @@
         }
       }
     },
+    "Save the model to keep this type." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "保存模型后生效。"
+          }
+        }
+      }
+    },
     "Saved to Notes" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -7721,6 +8247,16 @@
         }
       }
     },
+    "Seen" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已看过"
+          }
+        }
+      }
+    },
     "Select a paper from the library." : {
       "localizations" : {
         "zh-Hans" : {
@@ -7877,6 +8413,17 @@
         }
       }
     },
+    "Send one test translation to find out whether this model follows instructions." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "发一次测试翻译，看这个模型是否按指令翻译。"
+          }
+        }
+      }
+    },
     "Send Question" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -7884,6 +8431,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "发送提问"
+          }
+        }
+      }
+    },
+    "Sending a test translation..." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在发送测试翻译…"
           }
         }
       }
@@ -8010,6 +8568,39 @@
         }
       }
     },
+    "Shortly after you select a passage in the source PDF, show its translation and a plain-language explanation." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在原文 PDF 中选中文字后稍作停顿，显示这段文字的译文和通俗易懂的解释。"
+          }
+        }
+      }
+    },
+    "Shortly after you select text, show its translation next to it. Nothing is saved." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选中文字后稍作停顿，在文字旁边显示译文。不保存任何内容。"
+          }
+        }
+      }
+    },
+    "Show" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "查看"
+          }
+        }
+      }
+    },
     "Show a hidden region on the page" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -8017,6 +8608,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "在页面中定位已隐藏的区域"
+          }
+        }
+      }
+    },
+    "Show a translation next to text when I select it" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选中文字后在旁边显示译文"
           }
         }
       }
@@ -8083,6 +8685,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "显示 PDF 缩放按钮"
+          }
+        }
+      }
+    },
+    "Show what your learning record says about this" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "查看学习记录里关于它的内容"
           }
         }
       }
@@ -8611,6 +9224,16 @@
         }
       }
     },
+    "The answer and its underline in the paper are removed. This cannot be undone." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "回答和论文里对应的下划线都会被删除，无法撤销。"
+          }
+        }
+      }
+    },
     "The arXiv source archive exceeds the %lld-byte safety limit." : {
       "localizations" : {
         "zh-Hans" : {
@@ -8915,6 +9538,38 @@
         }
       }
     },
+    "The model translated only the requested paragraph, so it is a general model." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "模型只翻译了要求的那一段，是通用模型。"
+          }
+        }
+      }
+    },
+    "The model translated the whole prompt instead of following it, so it is a translation-only model. Translations will send only the source text." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "模型把整个提示词都翻译了，没有按指令只译那一段，是翻译专用模型。之后翻译只发送原文。"
+          }
+        }
+      }
+    },
+    "The model's answer could not be read as a learning record." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法把模型的回答解析为学习记录。"
+          }
+        }
+      }
+    },
     "The models that use “%@” and its saved API key will also be deleted. Translation routes that use them will be cleared." : {
       "localizations" : {
         "zh-Hans" : {
@@ -9127,6 +9782,16 @@
         }
       }
     },
+    "The server did not list its models (HTTP %d)." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "服务没有返回模型列表（HTTP %d）。"
+          }
+        }
+      }
+    },
     "The server history has changed. Review it before continuing sync." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -9140,6 +9805,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "服务器历史已变化。请先核对，再继续同步。"
+          }
+        }
+      }
+    },
+    "The server is running but lists no models." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "服务正在运行，但没有列出任何模型。"
           }
         }
       }
@@ -9578,6 +10254,16 @@
         }
       }
     },
+    "This learning record was written by a newer version of Freddie." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这份学习记录由更新版本的 Freddie 写入。"
+          }
+        }
+      }
+    },
     "This note will be permanently removed." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -9602,6 +10288,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "此页面需要浏览器验证。请在浏览器中打开并完成验证，再使用 Freddie 浏览器扩展保存。"
+          }
+        }
+      }
+    },
+    "This Paper" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "本篇"
           }
         }
       }
@@ -9803,6 +10499,17 @@
         }
       }
     },
+    "Translate & Explain on Selection" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选中后翻译并解释"
+          }
+        }
+      }
+    },
     "Translate All" : {
       "localizations" : {
         "zh-Hans" : {
@@ -9820,6 +10527,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "翻译全部 %1$d 页"
+          }
+        }
+      }
+    },
+    "Translate and explain text when I select it in a PDF" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在 PDF 中选中文字后自动翻译并解释"
           }
         }
       }
@@ -9890,6 +10608,17 @@
         }
       }
     },
+    "Translate on Selection" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选中后翻译"
+          }
+        }
+      }
+    },
     "Translate pages %@–%@" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -9952,6 +10681,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "翻译所选文字"
+          }
+        }
+      }
+    },
+    "Translate text inside figures" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "翻译图内文字"
           }
         }
       }
@@ -10120,6 +10860,17 @@
         }
       }
     },
+    "Translation & Explanation" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "翻译与解释"
+          }
+        }
+      }
+    },
     "Translation cancelled." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -10191,6 +10942,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "翻译不可用"
+          }
+        }
+      }
+    },
+    "Translation-only model" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "翻译专用模型"
+          }
+        }
+      }
+    },
+    "Translation-only models such as HY-MT or NLLB translate everything they receive instead of following instructions. For them, web page and abstract translation send only the text to translate, without the system prompt, titles or neighboring paragraphs. Detect sends one test translation with the full prompt and sets the type from the answer. Automatic starts with the full prompt and switches during a translation when the model keeps repeating it. PDF translation is not affected." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "HY-MT、NLLB 这类翻译专用模型会把收到的内容全部翻译出来，而不是按指令只译其中一段。对这类模型，网页和摘要翻译只发送要翻译的原文，不带系统提示词、标题和前后段落。“检测”会用完整提示词发一次测试翻译，按回答设置类型。“自动”先用完整提示词，翻译中模型反复复述提示词时再切换。PDF 翻译不受影响。"
+          }
+        }
+      }
+    },
+    "Translation: %@" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "译文：%@"
           }
         }
       }
@@ -10712,6 +11495,16 @@
         }
       }
     },
+    "Use Reading Assistant Model" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "使用阅读助手模型"
+          }
+        }
+      }
+    },
     "Use Server Version" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -10906,6 +11699,28 @@
         }
       }
     },
+    "When off, PDF translation leaves chart labels, legends and tick values in figures exactly as they are. When on, figure titles and legends are translated too." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "关闭时，PDF 翻译不会改动图表中的标签、图例和刻度数值；开启后，图内的标题和图例也会被翻译。"
+          }
+        }
+      }
+    },
+    "When off, records are organized only when you click Organize Now in the Learning tab." : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "关闭后，只有在“学习”页点击“立即整理”时才会整理。"
+          }
+        }
+      }
+    },
     "Whole Words" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -10945,6 +11760,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "写点笔记…"
+          }
+        }
+      }
+    },
+    "Write About It" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "写下来"
           }
         }
       }
@@ -11019,6 +11844,66 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "黄色"
+          }
+        }
+      }
+    },
+    "You asked" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你问过"
+          }
+        }
+      }
+    },
+    "You asked for an explanation" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你请求过解释"
+          }
+        }
+      }
+    },
+    "You highlighted" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你高亮过"
+          }
+        }
+      }
+    },
+    "You noted" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你记过笔记"
+          }
+        }
+      }
+    },
+    "You quoted" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你引用过"
+          }
+        }
+      }
+    },
+    "You translated" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你翻译过"
           }
         }
       }

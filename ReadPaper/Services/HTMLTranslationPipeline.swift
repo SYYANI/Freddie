@@ -42,6 +42,9 @@ struct HTMLTranslationSegmentUpdate: Equatable, Sendable {
 @MainActor
 final class HTMLTranslationPipeline {
     nonisolated private static let candidateSelector = "p, h1, h2, h3, h4, h5, h6, figcaption, blockquote, li"
+    /// Two rescues rather than one, so a single stray echo from an instruction-following
+    /// model does not cost the rest of the page its context.
+    nonisolated static let plainPromptRescuesBeforeSwitching = 2
 
     private let client: TranslationLLMClientProtocol
 
@@ -137,52 +140,73 @@ final class HTMLTranslationPipeline {
             isPagePrepared = true
             onDocumentPrepared?()
 
+            // A sliding window: a new request starts as soon as one finishes, so a
+            // slow segment holds up only its own slot instead of a whole batch.
             let concurrency = max(1, preferences.htmlTranslationConcurrency)
-            for batch in pendingCandidates.chunked(into: concurrency) {
-                try Task.checkCancellation()
-                try await withThrowingTaskGroup(of: (HTMLTranslationCandidate, String?).self) { group in
-                    for candidate in batch {
-                        group.addTask {
-                            do {
-                                let translated = try await client.validatedTranslate(
-                                    candidate.sourceText,
-                                    targetLanguage: preferences.targetLanguage,
-                                    route: route,
-                                    apiKey: apiKey,
-                                    context: candidate.translationContext(
-                                        documentTitle: documentTitle,
-                                        glossary: preferences.translationGlossary
-                                    )
-                                )
-                                return (candidate, translated)
-                            } catch is TranslationOutputValidationError {
-                                // An unstable model must not abort the whole document; the segment
-                                // stays untranslated and uncached so the next run retries it.
-                                return (candidate, nil)
-                            }
-                        }
-                    }
+            // Automatic model kind: after the plain prompt has rescued this many
+            // segments from an echoed envelope, start the rest with it.
+            var plainPromptRescues = 0
+            var startsWithPlainPrompt = route.startsWithPlainTranslationPrompt
+            try await withThrowingTaskGroup(of: (HTMLTranslationCandidate, ValidatedTranslation?).self) { group in
+                var remaining = pendingCandidates[...]
 
-                    for try await (candidate, translated) in group {
-                        try Task.checkCancellation()
-                        guard let translated else {
-                            failedSegments += 1
-                            try advanceProgress()
-                            continue
+                func startNext() {
+                    guard let candidate = remaining.popFirst() else { return }
+                    let startsPlain = startsWithPlainPrompt
+                    group.addTask {
+                        do {
+                            let translated = try await client.validatedTranslation(
+                                candidate.sourceText,
+                                targetLanguage: preferences.targetLanguage,
+                                route: route,
+                                apiKey: apiKey,
+                                context: candidate.translationContext(
+                                    documentTitle: documentTitle,
+                                    glossary: preferences.translationGlossary
+                                ),
+                                startsWithPlainPrompt: startsPlain
+                            )
+                            return (candidate, translated)
+                        } catch is TranslationOutputValidationError {
+                            // An unstable model must not abort the whole document; the segment
+                            // stays untranslated and uncached so the next run retries it.
+                            return (candidate, nil)
                         }
-                        modelContext.insert(TranslationSegment(
-                            paperID: paper.id,
-                            sourceType: "html",
-                            targetLanguage: preferences.targetLanguage,
-                            sourceHash: candidate.sourceHash,
-                            sourceText: candidate.sourceText,
-                            translatedText: translated,
-                            providerProfileID: route.providerProfileID,
-                            modelProfileID: route.modelProfileID,
-                            modelName: cacheIdentity
-                        ))
-                        try await applyTranslatedSegment(candidate, translated: translated)
                     }
+                }
+
+                for _ in 0..<concurrency {
+                    startNext()
+                }
+
+                while let result = try await group.next() {
+                    let (candidate, translated) = result
+                    try Task.checkCancellation()
+                    if translated?.neededPlainPrompt == true, route.adaptsTranslationPrompt {
+                        plainPromptRescues += 1
+                        if plainPromptRescues >= Self.plainPromptRescuesBeforeSwitching {
+                            startsWithPlainPrompt = true
+                        }
+                    }
+                    // Refill the slot before the page write, which is serial.
+                    startNext()
+                    guard let translated else {
+                        failedSegments += 1
+                        try advanceProgress()
+                        continue
+                    }
+                    modelContext.insert(TranslationSegment(
+                        paperID: paper.id,
+                        sourceType: "html",
+                        targetLanguage: preferences.targetLanguage,
+                        sourceHash: candidate.sourceHash,
+                        sourceText: candidate.sourceText,
+                        translatedText: translated.text,
+                        providerProfileID: route.providerProfileID,
+                        modelProfileID: route.modelProfileID,
+                        modelName: cacheIdentity
+                    ))
+                    try await applyTranslatedSegment(candidate, translated: translated.text)
                 }
             }
 
@@ -530,14 +554,5 @@ private actor HTMLTranslationPage {
             )
         }
         try HTMLTranslationPipeline.writeDocument(document, to: url)
-    }
-}
-
-private extension Array {
-    func chunked(into size: Int) -> [[Element]] {
-        guard size > 0 else { return [self] }
-        return stride(from: 0, to: count, by: size).map { start in
-            Array(self[start..<Swift.min(start + size, count)])
-        }
     }
 }

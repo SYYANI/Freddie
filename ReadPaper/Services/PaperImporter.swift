@@ -459,7 +459,7 @@ final class PaperImporter {
         let upperBound = min(document.pageCount, maxPages)
         guard upperBound > 0 else { return "" }
         return (0..<upperBound)
-            .compactMap { document.page(at: $0)?.string }
+            .compactMap { document.page(at: $0).flatMap(PDFWordSpacing.text(of:)) }
             .joined(separator: "\n")
     }
 

@@ -97,6 +97,10 @@ struct ReaderPaneView: View {
     private var didConfirmScannedPDFTranslation = false
     @AppStorage(ScannedPDFTranscription.displayedPaperIDsKey)
     private var transcriptionPaperIDsStorage = ""
+    @AppStorage(SelectionAssistantPreferences.quickGlossOnSelectionEnabledKey)
+    private var quickGlossOnSelectionEnabled = false
+    @AppStorage(SelectionAssistantPreferences.quickTranslateOnSelectionEnabledKey)
+    private var quickTranslateOnSelectionEnabled = false
 
     var paper: Paper?
     var attachments: [PaperAttachment]
@@ -121,6 +125,8 @@ struct ReaderPaneView: View {
     var onArxivLinkActivated: (URL) -> Void
     /// Opens the writing that cites a passage marked in the reader.
     var onRevealCitation: (WritingCitationMark) -> Void = { _ in }
+    /// Opens a passage of any paper, for learning records that point outside this one.
+    var onOpenCitation: (PaperCitation, String?) -> Void = { _, _ in }
     var writingLibrary: WritingLibrary = .shared
     /// Whether the library has no papers yet, for the empty reader's call to action.
     var isLibraryEmpty = false
@@ -182,6 +188,15 @@ struct ReaderPaneView: View {
     @State private var selectionAssistantProgress: SelectionAssistantProgress?
     @State private var selectionAssistantInitialConversation: SelectionAssistantConversationSnapshot?
     @State private var selectionAssistantHistoryAnchors: [SelectionAssistantHistoryAnchor] = []
+    @State private var selectionAssistantAutoRun: SelectionAssistantAutoRun?
+    @State private var selectionAssistantAutoRunTask: Task<Void, Never>?
+    @State private var quickTranslation = QuickTranslationModel()
+    @State private var selectionAnchor = SelectionAnchorModel()
+    @State private var selectionRecall = LearningRecall()
+    @State private var selectionRecallPaperTitles: [UUID: String] = [:]
+    @State private var selectionRecallTask: Task<Void, Never>?
+    @State private var openQuestionNotice: LearningOpenQuestionNotice?
+    @State private var isOpenQuestionListPresented = false
     @State private var htmlSelectionHighlightResetToken = 0
     @State private var htmlNativeSelectionClearToken = 0
     @State private var sidenotePendingDeletion: Note?
@@ -234,6 +249,14 @@ struct ReaderPaneView: View {
     private var showsScanTranscription: Bool {
         guard let paper, scanTranscriptionAttachment != nil else { return false }
         return ScannedPDFTranscription.decode(transcriptionPaperIDsStorage).contains(paper.id)
+    }
+
+    /// The paper's own text (not a translation) reports what is on screen, so the Learning
+    /// tab can echo what the reader marked or asked about before.
+    private var readingFocusSink: ReadingFocusSink? {
+        guard let paper else { return nil }
+        let ids = [htmlAttachment?.id, pdfAttachment?.id, scanTranscriptionAttachment?.id].compactMap { $0 }
+        return ReadingFocusSink(paperID: paper.id, attachmentIDs: Set(ids), model: .shared, anchorSpace: selectionAnchor)
     }
 
     /// The original as read: the PDF, or its corrected transcription when the reader chose it.
@@ -448,6 +471,10 @@ struct ReaderPaneView: View {
                         translationSetupNotice
                             .transition(.move(edge: .bottom).combined(with: .opacity))
                     }
+                    if let openQuestionNotice, selectionAssistantSelection == nil {
+                        openQuestionNoticeView(openQuestionNotice)
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
                     if let copyToastMessage {
                         copyToast(message: copyToastMessage)
                             .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -471,6 +498,7 @@ struct ReaderPaneView: View {
                 restoreReadingStateForCurrentPaper()
                 restorePDFTranslationDiagnostics()
                 refreshSelectionAssistantHistoryAnchors()
+                refreshOpenQuestionNotice()
             }
             .modifier(LibrarySyncReaderObserver(activity: LibrarySyncReaderActivity(paperID: paper?.id, isBusy: isWorking || isEditingHTMLRegions || pdfAnnotationSession.interactionMode != .browse)) {
                 htmlReloadToken += 1
@@ -496,6 +524,7 @@ struct ReaderPaneView: View {
                 restoreReadingStateForCurrentPaper()
                 revealNavigationArrivingWithPaper()
                 refreshSelectionAssistantHistoryAnchors()
+                refreshOpenQuestionNotice()
             }
             .onChange(of: readerAvailability) { _, newValue in
                 if newValue.hasHTML == false {
@@ -897,8 +926,12 @@ struct ReaderPaneView: View {
     @ToolbarContentBuilder
     private var readerToolbar: some ToolbarContent {
         if paper != nil {
-            segmentedPickerToolbarItem {
-                readerModePicker
+            // Only a paper with both HTML and PDF has a format to switch to. Adding or
+            // removing this one item leaves the other items in place (unlike replacing one).
+            if hasHTMLAndPDF {
+                segmentedPickerToolbarItem {
+                    readerModePicker
+                }
             }
 
             // The HTML and PDF readers share these items, and each keeps the same kind of
@@ -1081,6 +1114,11 @@ struct ReaderPaneView: View {
         return String(localized: "Select text in PDF or HTML to attach a note.", bundle: bundle)
     }
 
+    /// A paper with only HTML or only PDF has nothing to switch to.
+    private var hasHTMLAndPDF: Bool {
+        htmlAttachment != nil && pdfAttachment != nil
+    }
+
     private var readerModePicker: some View {
         ReadPaperSegmentedPicker(
             label: String(localized: "Reader", bundle: bundle),
@@ -1187,6 +1225,10 @@ struct ReaderPaneView: View {
             Label(String(localized: "Reset Font Size", bundle: bundle), systemImage: "arrow.counterclockwise")
         }
         .disabled(htmlReaderFontSize == HTMLReaderTypography.defaultFontSize)
+
+        Divider()
+
+        quickTranslateOnSelectionToggle
     }
 
     private var htmlRegionEditButton: some View {
@@ -1354,6 +1396,44 @@ struct ReaderPaneView: View {
         }
     }
 
+    private var quickTranslateOnSelectionToggle: some View {
+        Toggle(isOn: quickTranslateOnSelectionBinding) {
+            Label(
+                String(localized: "Translate on Selection", bundle: bundle),
+                systemImage: "translate"
+            )
+        }
+        .help(String(localized: "Shortly after you select text, show its translation next to it. Nothing is saved.", bundle: bundle))
+    }
+
+    /// The two "on selection" switches exclude each other: both answer the same selection.
+    private var quickTranslateOnSelectionBinding: Binding<Bool> {
+        Binding(
+            get: { quickTranslateOnSelectionEnabled },
+            set: { isOn in
+                quickTranslateOnSelectionEnabled = isOn
+                if isOn {
+                    quickGlossOnSelectionEnabled = false
+                } else {
+                    quickTranslation.dismiss()
+                }
+            }
+        )
+    }
+
+    private var quickGlossOnSelectionBinding: Binding<Bool> {
+        Binding(
+            get: { quickGlossOnSelectionEnabled },
+            set: { isOn in
+                quickGlossOnSelectionEnabled = isOn
+                if isOn {
+                    quickTranslateOnSelectionEnabled = false
+                    quickTranslation.dismiss()
+                }
+            }
+        )
+    }
+
     @ViewBuilder
     private var pdfAnnotationMenuItems: some View {
         annotationModeButton(
@@ -1399,6 +1479,18 @@ struct ReaderPaneView: View {
             Label(String(localized: "Strike Through Selection", bundle: bundle), systemImage: "strikethrough")
         }
         .disabled(pdfAnnotationSession.hasTextSelection == false)
+
+        Divider()
+
+        quickTranslateOnSelectionToggle
+
+        Toggle(isOn: quickGlossOnSelectionBinding) {
+            Label(
+                String(localized: "Translate & Explain on Selection", bundle: bundle),
+                systemImage: "sparkles"
+            )
+        }
+        .help(String(localized: "Shortly after you select a passage in the source PDF, show its translation and a plain-language explanation.", bundle: bundle))
 
         Divider()
 
@@ -1688,20 +1780,23 @@ struct ReaderPaneView: View {
                 Button {
                     exportHTMLPDF()
                 } label: {
-                    Label(String(localized: "Export HTML as PDF", bundle: bundle), systemImage: "doc.badge.arrow.up")
+                    Label(htmlPDFExportTitle, systemImage: "doc.badge.arrow.up")
                         .labelStyle(.titleAndIcon)
                 }
                 .disabled(htmlAttachment == nil || isExportingHTMLPDF)
             } else {
                 Divider()
 
-                Button {
-                    exportAnnotatedPDF()
-                } label: {
-                    Label(String(localized: "Export Annotated PDF", bundle: bundle), systemImage: "doc.badge.arrow.up")
-                        .labelStyle(.titleAndIcon)
+                // Each visible PDF gets its own item that names it, so the reader picks the
+                // original or the translation before the save panel, never by an implicit rule.
+                ForEach(annotatedPDFExportTargets, id: \.id) { attachment in
+                    Button {
+                        exportAnnotatedPDF(attachment)
+                    } label: {
+                        Label(annotatedPDFExportTitle(for: attachment), systemImage: "doc.badge.arrow.up")
+                            .labelStyle(.titleAndIcon)
+                    }
                 }
-                .disabled(currentPDFAnnotationExportAttachment == nil)
             }
         } label: {
             if isExportingHTMLPDF {
@@ -1725,9 +1820,12 @@ struct ReaderPaneView: View {
         panel.allowedContentTypes = [.pdf]
         panel.canCreateDirectories = true
         panel.isExtensionHidden = false
-        let title = paper.title.components(separatedBy: CharacterSet(charactersIn: "/:\n\r"))
-            .filter { !$0.isEmpty }.joined(separator: "-")
-        panel.nameFieldStringValue = (title.isEmpty ? "paper" : String(title.prefix(120))) + ".pdf"
+        let variant: String? = switch displayMode {
+        case .original: nil
+        case .bilingual: String(localized: "Bilingual", bundle: bundle)
+        case .translated: String(localized: "Translated", bundle: bundle)
+        }
+        panel.nameFieldStringValue = ExportFilename.pdf(title: paper.title, variant: variant)
         panel.prompt = String(localized: "Export", bundle: bundle)
         panel.message = String(localized: "Export the HTML using the current original, bilingual, or translated display mode.", bundle: bundle)
         guard panel.runModal() == .OK, let destinationURL = panel.url else { return }
@@ -1758,36 +1856,61 @@ struct ReaderPaneView: View {
         }
     }
 
-    private var currentPDFAnnotationExportAttachment: PaperAttachment? {
-        let visibleAttachments: [PaperAttachment]
-        switch readerMode {
-        case .html:
-            return nil
-        case .pdf:
-            visibleAttachments = [pdfAttachment].compactMap { $0 }
-        case .translatedPDF:
-            visibleAttachments = [translatedPDFAttachment].compactMap { $0 }
-        case .bilingualPDF:
-            visibleAttachments = [pdfAttachment, translatedPDFAttachment].compactMap { $0 }
+    private var htmlPDFExportTitle: String {
+        switch displayMode {
+        case .original: String(localized: "Export as PDF (Original)", bundle: bundle)
+        case .bilingual: String(localized: "Export as PDF (Bilingual)", bundle: bundle)
+        case .translated: String(localized: "Export as PDF (Translated)", bundle: bundle)
         }
-
-        if let activeAttachmentID = pdfAnnotationSession.activeAttachmentID,
-           let activeAttachment = visibleAttachments.first(where: { $0.id == activeAttachmentID }) {
-            return activeAttachment
-        }
-        return visibleAttachments.first
     }
 
-    private func exportAnnotatedPDF() {
-        guard let paper, let attachment = currentPDFAnnotationExportAttachment else { return }
+    /// The PDFs on screen, original first: one in single-column modes, both side by side.
+    private var annotatedPDFExportTargets: [PaperAttachment] {
+        switch readerMode {
+        case .html:
+            []
+        case .pdf:
+            [originalPDFAttachment].compactMap { $0 }
+        case .translatedPDF:
+            [translatedPDFAttachment].compactMap { $0 }
+        case .bilingualPDF:
+            [originalPDFAttachment, translatedPDFAttachment].compactMap { $0 }
+        }
+    }
+
+    private func annotatedPDFExportTitle(for attachment: PaperAttachment) -> String {
+        if attachment.kind == .translatedPDF {
+            // A partial translation only holds its first pages; say so before the export.
+            if isPartialPDFTranslation, let lastPage = attachment.translatedLastPage {
+                return AppLocalization.format(
+                    "Export Translated PDF (First %d Pages, with Annotations)",
+                    bundle: bundle,
+                    lastPage
+                )
+            }
+            return String(localized: "Export Translated PDF (with Annotations)", bundle: bundle)
+        }
+        if attachment.id == scanTranscriptionAttachment?.id {
+            return String(localized: "Export Corrected Transcription PDF (with Annotations)", bundle: bundle)
+        }
+        return String(localized: "Export Original PDF (with Annotations)", bundle: bundle)
+    }
+
+    private func exportAnnotatedPDF(_ attachment: PaperAttachment) {
+        guard let paper else { return }
 
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.pdf]
         panel.canCreateDirectories = true
         panel.isExtensionHidden = false
-        panel.nameFieldStringValue = attachment.fileURL
-            .deletingPathExtension()
-            .lastPathComponent + "-annotated.pdf"
+        let variant: String? = if attachment.kind == .translatedPDF {
+            String(localized: "Translated", bundle: bundle)
+        } else if attachment.id == scanTranscriptionAttachment?.id {
+            String(localized: "Corrected Transcription", bundle: bundle)
+        } else {
+            nil
+        }
+        panel.nameFieldStringValue = ExportFilename.pdf(title: paper.title, variant: variant)
         panel.prompt = String(localized: "Export", bundle: bundle)
 
         guard panel.runModal() == .OK, let destinationURL = panel.url else { return }
@@ -2114,6 +2237,24 @@ struct ReaderPaneView: View {
                     }
                 }
             }
+            .environment(\.selectionAnchorModel, selectionAnchor)
+            .environment(\.readingFocusSink, readingFocusSink)
+
+            QuickTranslationBubbleLayer(translation: quickTranslation, anchor: selectionAnchor)
+                .zIndex(9)
+
+            EchoFanLayer(
+                currentPaperID: paper?.id,
+                onOpenCitation: onOpenCitation,
+                onQuoted: { title in
+                    showCopyToast(message: AppLocalization.format(
+                        "Quoted in “%@”.",
+                        bundle: bundle,
+                        title.isEmpty ? String(localized: "Untitled Writing", bundle: bundle) : title
+                    ))
+                }
+            )
+            .zIndex(9)
 
             if let selection = selectionAssistantSelection,
                selection.trimmedQuote != nil,
@@ -2128,7 +2269,13 @@ struct ReaderPaneView: View {
                     onConversationChanged: persistSelectionAssistantConversation,
                     onInteractionBegan: pinSelectionAssistant,
                     onDismiss: clearSelectionAssistant,
-                    quoteInWriting: quoteInWriting
+                    quoteInWriting: quoteInWriting,
+                    recall: selectionRecall,
+                    recallPaperTitles: selectionRecallPaperTitles,
+                    onOpenRecallEntry: openRecallEntry,
+                    onRenameRecallConcept: renameRecallConcept,
+                    autoRun: selectionAssistantAutoRun,
+                    deleteConversation: deleteSelectionAssistantConversation
                 )
                 .transition(.move(edge: .bottom).combined(with: .opacity))
                 .zIndex(10)
@@ -3595,6 +3742,11 @@ struct ReaderPaneView: View {
         noteSelectionContext = selection
         selectionAssistantDismissTask?.cancel()
         selectionAssistantDismissTask = nil
+        selectionAssistantAutoRunTask?.cancel()
+        selectionAssistantAutoRunTask = nil
+        if selection?.selectionAssistantIdentity != selectionAssistantAutoRun?.selectionIdentity {
+            selectionAssistantAutoRun = nil
+        }
 
         if let selection {
             isSelectionAssistantPinned = false
@@ -3608,9 +3760,13 @@ struct ReaderPaneView: View {
                 selectionAssistantInitialConversation = nil
             }
             selectionAssistantSelection = selection
+            refreshSelectionRecall(for: selection)
+            scheduleQuickGloss(for: selection)
+            updateQuickTranslation(for: selection)
             return
         }
 
+        quickTranslation.dismiss()
         guard isSelectionAssistantPinned == false else { return }
         selectionAssistantDismissTask = Task { @MainActor in
             try? await Task.sleep(nanoseconds: 350_000_000)
@@ -3622,6 +3778,235 @@ struct ReaderPaneView: View {
         }
     }
 
+    /// With the reader's switch on, asks for the quick translation and explanation once a
+    /// selection in the source PDF has settled. Every change of the selection cancels the
+    /// pending request, so dragging across a paragraph sends one request, not one per move.
+    private func scheduleQuickGloss(for selection: NoteSelectionContext) {
+        guard quickGlossOnSelectionEnabled,
+              quickTranslateOnSelectionEnabled == false,
+              paper != nil,
+              let quote = selection.trimmedQuote,
+              quote.count >= SelectionAssistantPreferences.quickGlossMinimumCharacterCount,
+              let attachmentID = selection.attachmentID,
+              let attachment = attachments.first(where: { $0.id == attachmentID }),
+              attachment.kind != .translatedPDF,
+              attachment.kind != .html
+        else { return }
+
+        let identity = selection.selectionAssistantIdentity
+        guard selectionAssistantAutoRun?.selectionIdentity != identity else { return }
+        selectionAssistantAutoRunTask = Task { @MainActor in
+            repeat {
+                try? await Task.sleep(for: SelectionAssistantPreferences.quickGlossSelectionDelay)
+                guard Task.isCancelled == false else { return }
+                // A drag that pauses mid-way has not finished selecting.
+            } while NSEvent.pressedMouseButtons & 1 != 0
+            guard quickGlossOnSelectionEnabled,
+                  selectionAssistantSelection?.selectionAssistantIdentity == identity else { return }
+            selectionAssistantAutoRunTask = nil
+            selectionAssistantAutoRun = SelectionAssistantAutoRun(
+                selectionIdentity: identity,
+                token: (selectionAssistantAutoRun?.token ?? 0) &+ 1
+            )
+        }
+    }
+
+    /// With the reader's switch on, shows the selection's translation in a bubble next to
+    /// it. A selection that already has a saved conversation opens that instead.
+    private func updateQuickTranslation(for selection: NoteSelectionContext) {
+        guard quickTranslateOnSelectionEnabled,
+              paper != nil,
+              let settings,
+              isSelectionAssistantPinned == false,
+              selectionAssistantInitialConversation == nil,
+              let attachmentID = selection.attachmentID,
+              let attachment = attachments.first(where: { $0.id == attachmentID }),
+              QuickTranslationEligibility.canTranslate(
+                  quote: selection.quote,
+                  attachmentKind: attachment.kind,
+                  targetLanguage: settings.targetLanguage
+              )
+        else {
+            quickTranslation.dismiss()
+            return
+        }
+        quickTranslation.selectionChanged(
+            selection,
+            targetLanguage: settings.targetLanguage,
+            translate: performQuickTranslation
+        )
+    }
+
+    /// One short request with the neighbouring sentences as context. The answer goes to the
+    /// bubble only: it is never handed to `persistSelectionAssistantConversation`.
+    @MainActor
+    private func performQuickTranslation(
+        _ selection: NoteSelectionContext,
+        onPartialTranslation: @escaping @MainActor (String) -> Void
+    ) async throws -> String {
+        guard let paper, let settings else {
+            throw LLMProviderError.invalidConfiguration(
+                String(localized: "Translation settings are unavailable.", bundle: bundle)
+            )
+        }
+        let route = try LLMRouteResolver().resolveAssistantRoute(
+            settings: settings,
+            modelContext: modelContext
+        )
+        let request = SelectionAssistantRequest(
+            action: .translate,
+            selection: selection.quote,
+            localContext: QuickTranslationContext.nearby(quote: selection.quote, in: selection.localContext),
+            scope: .nearby
+        )
+        let result = try await SelectionAssistantService().perform(
+            request,
+            paperTitle: paper.title,
+            targetLanguage: settings.targetLanguage,
+            route: route,
+            onPartialAnswer: { partialTranslation in
+                await onPartialTranslation(partialTranslation)
+            }
+        )
+        return result.answer
+    }
+
+    /// Looks the selection up in the reader's learning records. Nothing is sent anywhere.
+    private func refreshSelectionRecall(for selection: NoteSelectionContext) {
+        selectionRecallTask?.cancel()
+        guard let quote = selection.trimmedQuote else {
+            selectionRecall = LearningRecall()
+            return
+        }
+        let identity = selection.selectionAssistantIdentity
+        selectionRecallTask = Task { @MainActor in
+            let recall = await LearningConceptIndex.shared.recall(mentionedIn: quote)
+            guard Task.isCancelled == false,
+                  selectionAssistantSelection?.selectionAssistantIdentity == identity else { return }
+            let paperIDs = Set(recall.concepts.flatMap(\.paperIDs))
+            if paperIDs.isEmpty == false {
+                let papers = (try? modelContext.fetch(
+                    FetchDescriptor<Paper>(predicate: #Predicate { paperIDs.contains($0.id) })
+                )) ?? []
+                selectionRecallPaperTitles = Dictionary(
+                    papers.map { ($0.id, $0.title) },
+                    uniquingKeysWith: { first, _ in first }
+                )
+            }
+            selectionRecall = recall
+        }
+    }
+
+    @MainActor
+    private func openRecallEntry(_ entry: LearningConcept.Entry) {
+        let target = selectionRecall.citation(for: entry)
+        clearSelectionAssistant()
+        onOpenCitation(target.citation, target.quote)
+    }
+
+    /// Renames the concept in every paper, then looks the selection up again so the chip
+    /// shows the reader's name.
+    @MainActor
+    private func renameRecallConcept(_ concept: LearningConcept, to name: String) {
+        Task { @MainActor in
+            await LearningOrganizer.shared.renameConcept(concept, to: name)
+            if let selection = selectionAssistantSelection {
+                refreshSelectionRecall(for: selection)
+            }
+        }
+    }
+
+    /// Questions the reader left open in this paper, offered once when it is opened again.
+    private func refreshOpenQuestionNotice() {
+        isOpenQuestionListPresented = false
+        openQuestionNotice = nil
+        guard let paperID = paper?.id else { return }
+        Task { @MainActor in
+            let notice = await LearningOpenQuestionNotice.load(paperID: paperID)
+            guard paper?.id == paperID else { return }
+            withAnimation(.easeOut(duration: 0.2)) {
+                openQuestionNotice = notice
+            }
+        }
+    }
+
+    private func dismissOpenQuestionNotice() {
+        isOpenQuestionListPresented = false
+        withAnimation(.easeOut(duration: 0.2)) {
+            openQuestionNotice = nil
+        }
+    }
+
+    private func openQuestionNoticeView(_ notice: LearningOpenQuestionNotice) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "questionmark.bubble")
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
+
+            Text(AppLocalization.format("Open questions from your last reading: %lld", bundle: bundle, notice.questions.count))
+                .font(.callout.weight(.medium))
+                .lineLimit(1)
+
+            Button(String(localized: "Show", bundle: bundle)) {
+                isOpenQuestionListPresented = true
+            }
+            .readPaperGlassButtonStyle(prominent: true)
+            .controlSize(.small)
+            .popover(isPresented: $isOpenQuestionListPresented, arrowEdge: .top) {
+                VStack(alignment: .leading, spacing: 12) {
+                    ForEach(notice.questions) { question in
+                        Button {
+                            dismissOpenQuestionNotice()
+                            if let target = question.target {
+                                onOpenCitation(target.citation, target.quote)
+                            }
+                        } label: {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(question.item.title)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                if let detail = question.item.detail {
+                                    Text(detail)
+                                        .font(.callout)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(3)
+                                }
+                            }
+                            .multilineTextAlignment(.leading)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(question.target == nil)
+                    }
+                }
+                .padding(16)
+                .frame(width: 340)
+            }
+
+            Button {
+                dismissOpenQuestionNotice()
+            } label: {
+                Label(String(localized: "Close", bundle: bundle), systemImage: "xmark")
+            }
+            .labelStyle(.iconOnly)
+            .buttonStyle(.borderless)
+            .controlSize(.small)
+            .help(String(localized: "Close", bundle: bundle))
+        }
+        .padding(.leading, 14)
+        .padding(.trailing, 10)
+        .padding(.vertical, 8)
+        .readPaperGlassEffect(in: Capsule())
+        .shadow(color: .black.opacity(0.14), radius: 10, y: 4)
+        .task(id: isOpenQuestionListPresented) {
+            // Leaves by itself unless the reader is looking at the list.
+            guard isOpenQuestionListPresented == false else { return }
+            try? await Task.sleep(for: .seconds(LearningOpenQuestionNotice.displayDuration))
+            guard Task.isCancelled == false else { return }
+            dismissOpenQuestionNotice()
+        }
+    }
+
     private func pinSelectionAssistant() {
         selectionAssistantDismissTask?.cancel()
         selectionAssistantDismissTask = nil
@@ -3629,6 +4014,8 @@ struct ReaderPaneView: View {
             htmlNativeSelectionClearToken &+= 1
         }
         isSelectionAssistantPinned = true
+        // The reader turned to the assistant's card; the bubble would only sit in its way.
+        quickTranslation.dismiss()
     }
 
     private func handleHTMLSelectionAssistantDismissal() {
@@ -3643,6 +4030,17 @@ struct ReaderPaneView: View {
         guard let paper else { return }
         try? SelectionAssistantConversationStore().save(snapshot, paperID: paper.id)
         refreshSelectionAssistantHistoryAnchors()
+    }
+
+    @MainActor
+    private func deleteSelectionAssistantConversation(_ selection: NoteSelectionContext) {
+        guard let paper else { return }
+        try? SelectionAssistantConversationStore().delete(
+            paperID: paper.id,
+            selectionIdentity: selection.selectionAssistantIdentity
+        )
+        refreshSelectionAssistantHistoryAnchors()
+        clearSelectionAssistant()
     }
 
     @MainActor
@@ -3661,7 +4059,13 @@ struct ReaderPaneView: View {
         selectionAssistantProgress = nil
         selectionAssistantInitialConversation = nil
         isSelectionAssistantPinned = false
+        selectionAssistantAutoRunTask?.cancel()
+        selectionAssistantAutoRunTask = nil
+        selectionAssistantAutoRun = nil
+        quickTranslation.dismiss()
         selectionAssistantSelection = nil
+        selectionRecallTask?.cancel()
+        selectionRecall = LearningRecall()
         htmlSelectionHighlightResetToken &+= 1
     }
 

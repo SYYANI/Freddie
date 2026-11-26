@@ -40,15 +40,19 @@ enum LLMRouteError: LocalizedError, Equatable {
 struct LLMRouteResolver {
     let keychainStore: KeychainStore
     let apiStyleStore: LLMProviderAPIStyleStore
+    let translationModelKindStore: LLMTranslationModelKindStore
     let userDefaults: UserDefaults
 
     init(
         keychainStore: KeychainStore = KeychainStore(),
         apiStyleStore: LLMProviderAPIStyleStore = LLMProviderAPIStyleStore(),
+        translationModelKindStore: LLMTranslationModelKindStore? = nil,
         userDefaults: UserDefaults = .standard
     ) {
         self.keychainStore = keychainStore
         self.apiStyleStore = apiStyleStore
+        self.translationModelKindStore = translationModelKindStore
+            ?? LLMTranslationModelKindStore(userDefaults: userDefaults)
         self.userDefaults = userDefaults
     }
 
@@ -98,9 +102,16 @@ struct LLMRouteResolver {
         }
     }
 
+    /// The saved key, or a placeholder for a local server that has none (see
+    /// `LLMLocalEndpoint`).
     func apiKey(for snapshot: LLMModelRouteSnapshot) throws -> String {
-        let apiKey = try keychainStore.load(account: snapshot.apiKeyRef)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        guard apiKey.isEmpty == false else {
+        let isLocal = LLMLocalEndpoint.isLocal(snapshot.baseURL)
+        // `contains` first so a local provider without a key never touches the vault.
+        if isLocal, try keychainStore.contains(account: snapshot.apiKeyRef) == false {
+            return LLMLocalEndpoint.placeholderAPIKey
+        }
+        let saved = try keychainStore.load(account: snapshot.apiKeyRef)
+        guard let apiKey = LLMLocalEndpoint.effectiveAPIKey(saved, baseURL: snapshot.baseURL) else {
             throw LLMRouteError.missingAPIKey(snapshot.providerName)
         }
         return apiKey
@@ -140,6 +151,38 @@ struct LLMRouteResolver {
         )
     }
 
+    /// The model that organizes learning records: the one chosen for it, otherwise the
+    /// reading assistant's. Only checks that a key is saved; read it with `apiKey(for:)`
+    /// right before a request, so showing the Learning tab never asks for Touch ID.
+    func resolveLearningRoute(
+        settings: AppSettings,
+        modelContext: ModelContext
+    ) throws -> LLMModelRouteSnapshot {
+        func stored(_ key: String) -> UUID? {
+            userDefaults.string(forKey: key).flatMap(UUID.init(uuidString:))
+        }
+        // A chosen model that was deleted or disabled falls back instead of stopping the
+        // organizer; the first choice's error is the one reported when nothing works.
+        let candidates = [
+            stored(LearningPreferences.modelProfileIDKey),
+            stored(SelectionAssistantPreferences.selectedModelProfileIDKey),
+            settings.selectedHTMLModelProfileID,
+        ]
+        var firstError: Error?
+        for modelID in candidates.compactMap({ $0 }) {
+            do {
+                return try resolveSnapshotWithSavedAPIKey(
+                    selectedModelID: modelID,
+                    missingSelectionError: .assistantModelNotSelected,
+                    modelContext: modelContext
+                )
+            } catch {
+                firstError = firstError ?? error
+            }
+        }
+        throw firstError ?? LLMRouteError.assistantModelNotSelected
+    }
+
     private func resolve(
         selectedModelID: UUID?,
         missingSelectionError: LLMRouteError,
@@ -163,7 +206,9 @@ struct LLMRouteResolver {
             missingSelectionError: missingSelectionError,
             modelContext: modelContext
         )
-        guard try keychainStore.contains(account: snapshot.apiKeyRef) else {
+        guard try LLMLocalEndpoint.isLocal(snapshot.baseURL)
+            || keychainStore.contains(account: snapshot.apiKeyRef)
+        else {
             throw LLMRouteError.missingAPIKey(snapshot.providerName)
         }
         return snapshot
@@ -210,7 +255,8 @@ struct LLMRouteResolver {
             topP: model.topP,
             maxTokens: model.maxTokens,
             thinkingMode: model.thinkingModeValue,
-            reasoningEffort: model.reasoningEffortValue
+            reasoningEffort: model.reasoningEffortValue,
+            translationModelKind: translationModelKindStore.kind(for: model.id)
         )
     }
 }
